@@ -33,3 +33,6 @@ export * from './mesh/index.js';
 
 // model: modeling operators (Phase 4+)
 export * from './model/index.js';
+
+// naming: persistent naming subsystem (Phase 6)
+export * from './naming/index.js';

@@ -4,6 +4,8 @@
  * Creates a solid body by extruding a 2D profile along a direction.
  * Supports both "add" (create new body) and "cut" (subtract from existing body)
  * operations.
+ * 
+ * Integrates with the persistent naming system to track created faces and edges.
  */
 
 import type { Vec2 } from '../num/vec2.js';
@@ -12,7 +14,7 @@ import { vec3, normalize3, add3, mul3, cross3 } from '../num/vec3.js';
 import { evalCurve2D } from '../geom/curve2d.js';
 import { createPlaneSurface } from '../geom/surface.js';
 import type { TopoModel } from '../topo/model.js';
-import type { BodyId, EdgeId, VertexId, HalfEdgeId } from '../topo/handles.js';
+import type { BodyId, EdgeId, VertexId, HalfEdgeId, FaceId } from '../topo/handles.js';
 import {
   addVertex,
   addEdge,
@@ -30,6 +32,19 @@ import {
 import type { SketchProfile, ProfileLoop } from './sketchProfile.js';
 import { getLoopVertices } from './sketchProfile.js';
 import { planeToWorld } from './planes.js';
+import type { NamingStrategy, FeatureId, PersistentRef } from '../naming/index.js';
+import {
+  faceRef,
+  edgeRef,
+  extrudeTopCapSelector,
+  extrudeBottomCapSelector,
+  extrudeSideSelector,
+  extrudeSideEdgeSelector,
+  extrudeTopEdgeSelector,
+  extrudeBottomEdgeSelector,
+  computeFaceFingerprint,
+  computeEdgeFingerprint,
+} from '../naming/index.js';
 
 /**
  * Extrude operation type
@@ -50,6 +65,10 @@ export interface ExtrudeOptions {
   targetBody?: BodyId;
   /** Whether to extrude symmetrically in both directions */
   symmetric?: boolean;
+  /** Optional naming strategy for persistent naming */
+  namingStrategy?: NamingStrategy;
+  /** Optional feature ID (allocated from namingStrategy if not provided) */
+  featureId?: FeatureId;
 }
 
 /**
@@ -62,6 +81,20 @@ export interface ExtrudeResult {
   body?: BodyId;
   /** Error message if failed */
   error?: string;
+  /** Feature ID assigned to this operation (if naming was enabled) */
+  featureId?: FeatureId;
+  /** Persistent refs for top cap faces (one per loop) */
+  topCapRefs?: PersistentRef[];
+  /** Persistent refs for bottom cap faces (one per loop) */
+  bottomCapRefs?: PersistentRef[];
+  /** Persistent refs for side faces (one per segment per loop) */
+  sideRefs?: PersistentRef[][];
+  /** Persistent refs for side edges (one per vertex per loop) */
+  sideEdgeRefs?: PersistentRef[][];
+  /** Persistent refs for top edges (one per segment per loop) */
+  topEdgeRefs?: PersistentRef[][];
+  /** Persistent refs for bottom edges (one per segment per loop) */
+  bottomEdgeRefs?: PersistentRef[][];
 }
 
 /**
@@ -95,6 +128,9 @@ interface ExtrudeEdgeData {
  * 3. Creating faces: bottom cap, top cap, and side faces
  * 4. For 'cut' operation: performs boolean subtraction (not yet implemented)
  * 
+ * Optionally integrates with the persistent naming system to track created
+ * faces and edges, enabling stable references across parametric edits.
+ * 
  * @param model The topology model to add the body to
  * @param profile The sketch profile to extrude
  * @param options Extrude options
@@ -105,7 +141,7 @@ export function extrude(
   profile: SketchProfile,
   options: ExtrudeOptions
 ): ExtrudeResult {
-  const { operation, distance } = options;
+  const { operation, distance, namingStrategy } = options;
   
   // Validate inputs
   if (profile.loops.length === 0) {
@@ -133,10 +169,23 @@ export function extrude(
     endOffset = Math.abs(distance) / 2;
   }
   
+  // Allocate feature ID if naming is enabled
+  const featureId = namingStrategy 
+    ? (options.featureId ?? namingStrategy.allocateFeatureId())
+    : undefined;
+  
   // Create the extruded body
   const body = addBody(model);
   const shell = addShell(model, true); // closed shell
   addShellToBody(model, body, shell);
+  
+  // Tracking arrays for created faces and edges (for naming)
+  const topCapFaces: FaceId[] = [];
+  const bottomCapFaces: FaceId[] = [];
+  const sideFaces: FaceId[][] = [];
+  const sideEdges: EdgeId[][] = [];
+  const topEdges: EdgeId[][] = [];
+  const bottomEdges: EdgeId[][] = [];
   
   // Process each loop
   for (let loopIdx = 0; loopIdx < profile.loops.length; loopIdx++) {
@@ -153,16 +202,86 @@ export function extrude(
     
     const edgeData = createExtrudeEdges(model, vertexData);
     
+    // Track edges for naming
+    sideEdges.push([...edgeData.sideEdges]);
+    topEdges.push([...edgeData.topEdges]);
+    bottomEdges.push([...edgeData.bottomEdges]);
+    
     // Create the faces
     const isOuterLoop = loop.isOuter;
     
-    createBottomFace(model, shell, profile, loop, vertices2D, vertexData, edgeData, isOuterLoop);
-    createTopFace(model, shell, profile, loop, vertices2D, vertexData, edgeData, direction, endOffset - startOffset, isOuterLoop);
-    createSideFaces(model, shell, profile, loop, vertexData, edgeData, direction, startOffset, endOffset, isOuterLoop);
+    const bottomFace = createBottomFace(model, shell, profile, loop, vertices2D, vertexData, edgeData, isOuterLoop);
+    bottomCapFaces.push(bottomFace);
+    
+    const topFace = createTopFace(model, shell, profile, loop, vertices2D, vertexData, edgeData, direction, endOffset - startOffset, isOuterLoop);
+    topCapFaces.push(topFace);
+    
+    const loopSideFaces = createSideFaces(model, shell, profile, loop, vertexData, edgeData, direction, startOffset, endOffset, isOuterLoop);
+    sideFaces.push(loopSideFaces);
   }
   
   // Set up twin half-edges
   setupTwinHalfEdges(model);
+  
+  // Record births with naming strategy
+  let topCapRefs: PersistentRef[] | undefined;
+  let bottomCapRefs: PersistentRef[] | undefined;
+  let sideRefs: PersistentRef[][] | undefined;
+  let sideEdgeRefs: PersistentRef[][] | undefined;
+  let topEdgeRefs: PersistentRef[][] | undefined;
+  let bottomEdgeRefs: PersistentRef[][] | undefined;
+  
+  if (namingStrategy && featureId !== undefined) {
+    // Record top cap faces
+    topCapRefs = topCapFaces.map((faceId, loopIdx) => {
+      const ref = faceRef(body, faceId);
+      const fingerprint = computeFaceFingerprint(model, faceId);
+      return namingStrategy.recordBirth(featureId, extrudeTopCapSelector(loopIdx), ref, fingerprint);
+    });
+    
+    // Record bottom cap faces
+    bottomCapRefs = bottomCapFaces.map((faceId, loopIdx) => {
+      const ref = faceRef(body, faceId);
+      const fingerprint = computeFaceFingerprint(model, faceId);
+      return namingStrategy.recordBirth(featureId, extrudeBottomCapSelector(loopIdx), ref, fingerprint);
+    });
+    
+    // Record side faces
+    sideRefs = sideFaces.map((loopFaces, loopIdx) => 
+      loopFaces.map((faceId, segIdx) => {
+        const ref = faceRef(body, faceId);
+        const fingerprint = computeFaceFingerprint(model, faceId);
+        return namingStrategy.recordBirth(featureId, extrudeSideSelector(loopIdx, segIdx), ref, fingerprint);
+      })
+    );
+    
+    // Record side edges
+    sideEdgeRefs = sideEdges.map((loopEdges, loopIdx) =>
+      loopEdges.map((edgeId, vertIdx) => {
+        const ref = edgeRef(body, edgeId);
+        const fingerprint = computeEdgeFingerprint(model, edgeId);
+        return namingStrategy.recordBirth(featureId, extrudeSideEdgeSelector(loopIdx, vertIdx), ref, fingerprint);
+      })
+    );
+    
+    // Record top edges
+    topEdgeRefs = topEdges.map((loopEdges, loopIdx) =>
+      loopEdges.map((edgeId, segIdx) => {
+        const ref = edgeRef(body, edgeId);
+        const fingerprint = computeEdgeFingerprint(model, edgeId);
+        return namingStrategy.recordBirth(featureId, extrudeTopEdgeSelector(loopIdx, segIdx), ref, fingerprint);
+      })
+    );
+    
+    // Record bottom edges
+    bottomEdgeRefs = bottomEdges.map((loopEdges, loopIdx) =>
+      loopEdges.map((edgeId, segIdx) => {
+        const ref = edgeRef(body, edgeId);
+        const fingerprint = computeEdgeFingerprint(model, edgeId);
+        return namingStrategy.recordBirth(featureId, extrudeBottomEdgeSelector(loopIdx, segIdx), ref, fingerprint);
+      })
+    );
+  }
   
   // For 'cut' operation, perform boolean subtraction
   if (operation === 'cut') {
@@ -171,11 +290,28 @@ export function extrude(
     return { 
       success: true, 
       body,
+      featureId,
+      topCapRefs,
+      bottomCapRefs,
+      sideRefs,
+      sideEdgeRefs,
+      topEdgeRefs,
+      bottomEdgeRefs,
       error: 'Note: Cut operation currently returns the tool body. Boolean subtraction pending.'
     };
   }
   
-  return { success: true, body };
+  return { 
+    success: true, 
+    body,
+    featureId,
+    topCapRefs,
+    bottomCapRefs,
+    sideRefs,
+    sideEdgeRefs,
+    topEdgeRefs,
+    bottomEdgeRefs,
+  };
 }
 
 /**
@@ -243,6 +379,7 @@ function createExtrudeEdges(
 
 /**
  * Create the bottom cap face
+ * @returns The created face ID
  */
 function createBottomFace(
   model: TopoModel,
@@ -253,7 +390,7 @@ function createBottomFace(
   vertexData: ExtrudeVertexData,
   edgeData: ExtrudeEdgeData,
   isOuterLoop: boolean
-): void {
+): FaceId {
   const n = vertexData.bottomVertices.length;
   
   // Bottom face surface: plane at bottom, normal pointing down (opposite to extrude direction)
@@ -283,10 +420,12 @@ function createBottomFace(
   const face = addFace(model, surface, false);
   addLoopToFace(model, face, loop);
   addFaceToShell(model, shell, face);
+  return face;
 }
 
 /**
  * Create the top cap face
+ * @returns The created face ID
  */
 function createTopFace(
   model: TopoModel,
@@ -299,7 +438,7 @@ function createTopFace(
   direction: Vec3,
   _totalDistance: number,
   isOuterLoop: boolean
-): void {
+): FaceId {
   const n = vertexData.topVertices.length;
   
   // Top face surface: plane at top, normal pointing in extrude direction
@@ -327,10 +466,12 @@ function createTopFace(
   const face = addFace(model, surface, false);
   addLoopToFace(model, face, loop);
   addFaceToShell(model, shell, face);
+  return face;
 }
 
 /**
  * Create side faces for extrusion
+ * @returns Array of created face IDs (one per profile segment)
  */
 function createSideFaces(
   model: TopoModel,
@@ -343,9 +484,10 @@ function createSideFaces(
   _startOffset: number,
   _endOffset: number,
   isOuterLoop: boolean
-): void {
+): FaceId[] {
   const n = vertexData.bottomVertices.length;
   const plane = profile.plane.surface;
+  const createdFaces: FaceId[] = [];
   
   // Create a side face for each edge in the profile
   for (let i = 0; i < n; i++) {
@@ -432,7 +574,10 @@ function createSideFaces(
     const face = addFace(model, surface, false);
     addLoopToFace(model, face, faceLoop);
     addFaceToShell(model, shell, face);
+    createdFaces.push(face);
   }
+  
+  return createdFaces;
 }
 
 /**

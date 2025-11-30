@@ -4,13 +4,15 @@
  * Creates a solid body by revolving a 2D profile around an axis.
  * Supports both "add" (create new body) and "cut" (subtract from existing body)
  * operations.
+ * 
+ * Integrates with the persistent naming system to track created faces and edges.
  */
 
 import type { Vec3 } from '../num/vec3.js';
 import { vec3, normalize3, add3, sub3, mul3, cross3, dot3, length3 } from '../num/vec3.js';
 import { createPlaneSurface } from '../geom/surface.js';
 import type { TopoModel } from '../topo/model.js';
-import type { BodyId, EdgeId, VertexId, HalfEdgeId } from '../topo/handles.js';
+import type { BodyId, EdgeId, VertexId, HalfEdgeId, FaceId } from '../topo/handles.js';
 import {
   addVertex,
   addEdge,
@@ -28,6 +30,14 @@ import {
 import type { SketchProfile } from './sketchProfile.js';
 import { getLoopVertices } from './sketchProfile.js';
 import { planeToWorld } from './planes.js';
+import type { NamingStrategy, FeatureId, PersistentRef } from '../naming/index.js';
+import {
+  faceRef,
+  revolveSideSelector,
+  revolveStartCapSelector,
+  revolveEndCapSelector,
+  computeFaceFingerprint,
+} from '../naming/index.js';
 
 /**
  * Revolve operation type
@@ -58,6 +68,10 @@ export interface RevolveOptions {
   segments?: number;
   /** Body to cut from (required for 'cut' operation) */
   targetBody?: BodyId;
+  /** Optional naming strategy for persistent naming */
+  namingStrategy?: NamingStrategy;
+  /** Optional feature ID (allocated from namingStrategy if not provided) */
+  featureId?: FeatureId;
 }
 
 /**
@@ -70,6 +84,14 @@ export interface RevolveResult {
   body?: BodyId;
   /** Error message if failed */
   error?: string;
+  /** Feature ID assigned to this operation (if naming was enabled) */
+  featureId?: FeatureId;
+  /** Persistent refs for side faces [profileSegment][ringSegment] */
+  sideRefs?: PersistentRef[][];
+  /** Persistent ref for start cap face (if not full revolution) */
+  startCapRef?: PersistentRef;
+  /** Persistent ref for end cap face (if not full revolution) */
+  endCapRef?: PersistentRef;
 }
 
 /**
@@ -101,7 +123,7 @@ export function revolve(
   profile: SketchProfile,
   options: RevolveOptions
 ): RevolveResult {
-  const { operation, axis } = options;
+  const { operation, axis, namingStrategy } = options;
   const angle = options.angle ?? 2 * Math.PI;
   
   // Validate inputs
@@ -116,6 +138,11 @@ export function revolve(
   if (operation === 'cut' && !options.targetBody) {
     return { success: false, error: 'Cut operation requires a target body' };
   }
+  
+  // Allocate feature ID if naming is enabled
+  const featureId = namingStrategy
+    ? (options.featureId ?? namingStrategy.allocateFeatureId())
+    : undefined;
   
   // Normalize axis direction
   const axisDir = normalize3(axis.direction);
@@ -135,6 +162,9 @@ export function revolve(
   const body = addBody(model);
   const shell = addShell(model, true); // closed shell
   addShellToBody(model, body, shell);
+  
+  // Track created faces for naming [profileSegment][ringSegment]
+  const sideFaces: FaceId[][] = [];
   
   // Process the outer loop only for now
   // TODO(agent): Handle holes (inner loops) properly
@@ -189,6 +219,11 @@ export function revolve(
   const nSegments = isFullRevolution ? segments : segments + 1;
   
   // Create side faces (quads connecting adjacent rings)
+  // Initialize sideFaces array: [profileSegment][ringSegment]
+  for (let v = 0; v < nProfile; v++) {
+    sideFaces.push([]);
+  }
+  
   for (let s = 0; s < segments; s++) {
     const ring0 = rings[s];
     const ring1 = rings[(s + 1) % nSegments];
@@ -262,20 +297,70 @@ export function revolve(
       const face = addFace(model, surface, false);
       addLoopToFace(model, face, faceLoop);
       addFaceToShell(model, shell, face);
+      
+      // Track face for naming
+      sideFaces[v].push(face);
     }
   }
   
   // Create end caps if not a full revolution
+  let startCapFace: FaceId | undefined;
+  let endCapFace: FaceId | undefined;
+  
   if (!isFullRevolution) {
     // Start cap (at angle = 0)
-    createRevolveCap(model, shell, profile, profileVertices3D, rings[0], true);
+    startCapFace = createRevolveCap(model, shell, profile, profileVertices3D, rings[0], true);
     
     // End cap (at angle = angle)
-    createRevolveCap(model, shell, profile, profileVertices3D, rings[segments], false);
+    endCapFace = createRevolveCap(model, shell, profile, profileVertices3D, rings[segments], false);
   }
   
   // Set up twin half-edges
   setupTwinHalfEdges(model);
+  
+  // Record births with naming strategy
+  let sideRefs: PersistentRef[][] | undefined;
+  let startCapRef: PersistentRef | undefined;
+  let endCapRef: PersistentRef | undefined;
+  
+  if (namingStrategy && featureId !== undefined) {
+    // Record side faces
+    sideRefs = sideFaces.map((profileFaces, profileSegment) =>
+      profileFaces.map((faceId, ringSegment) => {
+        const ref = faceRef(body, faceId);
+        const fingerprint = computeFaceFingerprint(model, faceId);
+        return namingStrategy.recordBirth(
+          featureId,
+          revolveSideSelector(profileSegment, ringSegment),
+          ref,
+          fingerprint
+        );
+      })
+    );
+    
+    // Record cap faces if present
+    if (startCapFace !== undefined) {
+      const ref = faceRef(body, startCapFace);
+      const fingerprint = computeFaceFingerprint(model, startCapFace);
+      startCapRef = namingStrategy.recordBirth(
+        featureId,
+        revolveStartCapSelector(),
+        ref,
+        fingerprint
+      );
+    }
+    
+    if (endCapFace !== undefined) {
+      const ref = faceRef(body, endCapFace);
+      const fingerprint = computeFaceFingerprint(model, endCapFace);
+      endCapRef = namingStrategy.recordBirth(
+        featureId,
+        revolveEndCapSelector(),
+        ref,
+        fingerprint
+      );
+    }
+  }
   
   // For 'cut' operation, perform boolean subtraction
   if (operation === 'cut') {
@@ -283,11 +368,22 @@ export function revolve(
     return {
       success: true,
       body,
+      featureId,
+      sideRefs,
+      startCapRef,
+      endCapRef,
       error: 'Note: Cut operation currently returns the tool body. Boolean subtraction pending.'
     };
   }
   
-  return { success: true, body };
+  return { 
+    success: true, 
+    body,
+    featureId,
+    sideRefs,
+    startCapRef,
+    endCapRef,
+  };
 }
 
 /**
@@ -360,6 +456,7 @@ function computePerpendicularToAxis(axisDir: Vec3): Vec3 {
 
 /**
  * Create an end cap face for revolve
+ * @returns The created face ID, or undefined if less than 3 vertices
  */
 function createRevolveCap(
   model: TopoModel,
@@ -368,9 +465,9 @@ function createRevolveCap(
   _profileVertices3D: Vec3[],
   ringVertices: VertexId[],
   isStart: boolean
-): void {
+): FaceId | undefined {
   const n = ringVertices.length;
-  if (n < 3) return;
+  if (n < 3) return undefined;
   
   // Get the actual 3D positions
   const positions: Vec3[] = ringVertices.map(v => [
@@ -421,6 +518,7 @@ function createRevolveCap(
   const face = addFace(model, surface, false);
   addLoopToFace(model, face, faceLoop);
   addFaceToShell(model, shell, face);
+  return face;
 }
 
 /**

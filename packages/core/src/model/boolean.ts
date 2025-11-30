@@ -10,6 +10,8 @@
  * 2. Build intersection curves as 3D edges
  * 3. Classify faces (inside/outside/overlapping) via point classification
  * 4. Construct result BREP by selecting and trimming faces
+ * 
+ * Integrates with the persistent naming system to track face evolution.
  */
 
 import type { Vec3 } from '../num/vec3.js';
@@ -45,6 +47,14 @@ import {
   addShellToBody,
   setHalfEdgeTwin,
 } from '../topo/model.js';
+import type { NamingStrategy, FeatureId, PersistentRef, EvolutionMapping, StepId } from '../naming/index.js';
+import {
+  faceRef,
+  booleanFaceFromASelector,
+  booleanFaceFromBSelector,
+  computeFaceFingerprint,
+  modifyMapping,
+} from '../naming/index.js';
 
 /**
  * Boolean operation type
@@ -57,6 +67,10 @@ export type BooleanOperation = 'union' | 'subtract' | 'intersect';
 export interface BooleanOptions {
   /** The type of boolean operation */
   operation: BooleanOperation;
+  /** Optional naming strategy for persistent naming */
+  namingStrategy?: NamingStrategy;
+  /** Optional feature ID (allocated from namingStrategy if not provided) */
+  featureId?: FeatureId;
 }
 
 /**
@@ -71,6 +85,16 @@ export interface BooleanResult {
   error?: string;
   /** Warning messages (operation succeeded but with caveats) */
   warnings?: string[];
+  /** Feature ID assigned to this operation (if naming was enabled) */
+  featureId?: FeatureId;
+  /** Step ID for evolution tracking */
+  stepId?: StepId;
+  /** Persistent refs for result faces from body A */
+  faceRefsFromA?: PersistentRef[];
+  /** Persistent refs for result faces from body B */
+  faceRefsFromB?: PersistentRef[];
+  /** Evolution mappings from the operation */
+  evolutionMappings?: EvolutionMapping[];
 }
 
 /**
@@ -106,8 +130,14 @@ export function booleanOperation(
   bodyB: BodyId,
   options: BooleanOptions
 ): BooleanResult {
-  const { operation } = options;
+  const { operation, namingStrategy } = options;
   const ctx = model.ctx;
+  
+  // Allocate feature and step IDs if naming is enabled
+  const featureId = namingStrategy
+    ? (options.featureId ?? namingStrategy.allocateFeatureId())
+    : undefined;
+  const stepId = namingStrategy ? namingStrategy.allocateStepId() : undefined;
   
   // Get bounding boxes
   const aabbA = computeBodyAABB(model, bodyA);
@@ -155,29 +185,53 @@ export function booleanOperation(
   let selectedFacesB: FaceId[];
   let flipFacesB = false;
   
+  // Track original face indices for evolution mapping
+  let selectedIndicesA: number[];
+  let selectedIndicesB: number[];
+  
   switch (operation) {
     case 'union':
       // Union: keep faces of A that are outside B, and faces of B that are outside A
-      selectedFacesA = facesA.filter((_, i) => classificationsA[i] !== 'inside');
-      selectedFacesB = facesB.filter((_, i) => classificationsB[i] !== 'inside');
+      selectedIndicesA = facesA.map((_, i) => i).filter(i => classificationsA[i] !== 'inside');
+      selectedIndicesB = facesB.map((_, i) => i).filter(i => classificationsB[i] !== 'inside');
+      selectedFacesA = selectedIndicesA.map(i => facesA[i]);
+      selectedFacesB = selectedIndicesB.map(i => facesB[i]);
       break;
       
     case 'subtract':
       // Subtract: keep faces of A that are outside B, and faces of B that are inside A (reversed)
-      selectedFacesA = facesA.filter((_, i) => classificationsA[i] !== 'inside');
-      selectedFacesB = facesB.filter((_, i) => classificationsB[i] === 'inside');
+      selectedIndicesA = facesA.map((_, i) => i).filter(i => classificationsA[i] !== 'inside');
+      selectedIndicesB = facesB.map((_, i) => i).filter(i => classificationsB[i] === 'inside');
+      selectedFacesA = selectedIndicesA.map(i => facesA[i]);
+      selectedFacesB = selectedIndicesB.map(i => facesB[i]);
       flipFacesB = true;
       break;
       
     case 'intersect':
       // Intersect: keep faces of A that are inside B, and faces of B that are inside A
-      selectedFacesA = facesA.filter((_, i) => classificationsA[i] === 'inside');
-      selectedFacesB = facesB.filter((_, i) => classificationsB[i] === 'inside');
+      selectedIndicesA = facesA.map((_, i) => i).filter(i => classificationsA[i] === 'inside');
+      selectedIndicesB = facesB.map((_, i) => i).filter(i => classificationsB[i] === 'inside');
+      selectedFacesA = selectedIndicesA.map(i => facesA[i]);
+      selectedFacesB = selectedIndicesB.map(i => facesB[i]);
       break;
   }
   
-  // Create the result body
-  return createResultBody(model, selectedFacesA, selectedFacesB, flipFacesB);
+  // Create the result body with naming tracking
+  const result = createResultBodyWithNaming(
+    model,
+    bodyA,
+    bodyB,
+    selectedFacesA,
+    selectedFacesB,
+    selectedIndicesA,
+    selectedIndicesB,
+    flipFacesB,
+    namingStrategy,
+    featureId,
+    stepId
+  );
+  
+  return result;
 }
 
 /**
@@ -509,6 +563,120 @@ function createResultBody(
 }
 
 /**
+ * Create the result body with naming integration
+ */
+function createResultBodyWithNaming(
+  model: TopoModel,
+  bodyA: BodyId,
+  bodyB: BodyId,
+  facesA: FaceId[],
+  facesB: FaceId[],
+  indicesA: number[],
+  indicesB: number[],
+  flipFacesB: boolean,
+  namingStrategy: NamingStrategy | undefined,
+  featureId: FeatureId | undefined,
+  stepId: StepId | undefined
+): BooleanResult {
+  if (facesA.length === 0 && facesB.length === 0) {
+    return { success: false, error: 'Boolean result has no faces' };
+  }
+  
+  // Create new body and shell
+  const body = addBody(model);
+  const shell = addShell(model, true);
+  addShellToBody(model, body, shell);
+  
+  // Track created faces for naming
+  const newFacesFromA: FaceId[] = [];
+  const newFacesFromB: FaceId[] = [];
+  
+  // Copy faces from A and track new face IDs
+  for (const faceId of facesA) {
+    const newFaceId = copyFaceToShellWithReturn(model, faceId, shell, false);
+    newFacesFromA.push(newFaceId);
+  }
+  
+  // Copy faces from B (potentially flipped) and track new face IDs
+  for (const faceId of facesB) {
+    const newFaceId = copyFaceToShellWithReturn(model, faceId, shell, flipFacesB);
+    newFacesFromB.push(newFaceId);
+  }
+  
+  // Set up twin half-edges
+  setupTwinHalfEdges(model);
+  
+  // Build naming information
+  let faceRefsFromA: PersistentRef[] | undefined;
+  let faceRefsFromB: PersistentRef[] | undefined;
+  let evolutionMappings: EvolutionMapping[] | undefined;
+  
+  if (namingStrategy && featureId !== undefined && stepId !== undefined) {
+    evolutionMappings = [];
+    
+    // Record faces from A
+    faceRefsFromA = newFacesFromA.map((newFaceId, i) => {
+      const oldFaceId = facesA[i];
+      const originalIndex = indicesA[i];
+      
+      // Record evolution mapping (old face -> new face)
+      evolutionMappings!.push(modifyMapping(
+        faceRef(bodyA, oldFaceId),
+        faceRef(body, newFaceId)
+      ));
+      
+      // Record birth with naming strategy
+      const ref = faceRef(body, newFaceId);
+      const fingerprint = computeFaceFingerprint(model, newFaceId);
+      return namingStrategy.recordBirth(
+        featureId,
+        booleanFaceFromASelector(originalIndex),
+        ref,
+        fingerprint
+      );
+    });
+    
+    // Record faces from B
+    faceRefsFromB = newFacesFromB.map((newFaceId, i) => {
+      const oldFaceId = facesB[i];
+      const originalIndex = indicesB[i];
+      
+      // Record evolution mapping (old face -> new face)
+      evolutionMappings!.push(modifyMapping(
+        faceRef(bodyB, oldFaceId),
+        faceRef(body, newFaceId)
+      ));
+      
+      // Record birth with naming strategy
+      const ref = faceRef(body, newFaceId);
+      const fingerprint = computeFaceFingerprint(model, newFaceId);
+      return namingStrategy.recordBirth(
+        featureId,
+        booleanFaceFromBSelector(originalIndex),
+        ref,
+        fingerprint
+      );
+    });
+    
+    // Record evolution with naming strategy
+    namingStrategy.recordEvolution(stepId, evolutionMappings);
+  }
+  
+  return {
+    success: true,
+    body,
+    featureId,
+    stepId,
+    faceRefsFromA,
+    faceRefsFromB,
+    evolutionMappings,
+    warnings: facesA.length === 0 || facesB.length === 0 
+      ? ['Some faces were eliminated in the boolean result']
+      : undefined,
+  };
+}
+
+/**
  * Copy a face to a new shell
  */
 function copyFaceToShell(
@@ -584,6 +752,85 @@ function copyFaceToShell(
   }
   
   addFaceToShell(model, targetShell, newFace);
+}
+
+/**
+ * Copy a face to a new shell and return the new face ID
+ */
+function copyFaceToShellWithReturn(
+  model: TopoModel,
+  sourceFaceId: FaceId,
+  targetShell: ShellId,
+  flip: boolean
+): FaceId {
+  // Get source face data
+  const surfaceIdx = getFaceSurfaceIndex(model, sourceFaceId);
+  const surface = getSurface(model, surfaceIdx);
+  let reversed = isFaceReversed(model, sourceFaceId);
+  
+  if (flip) {
+    reversed = !reversed;
+  }
+  
+  // Create new surface (copy)
+  let newSurface: ReturnType<typeof addSurface>;
+  if (surface.kind === 'plane') {
+    const plane = surface as PlaneSurface;
+    let normal = plane.normal;
+    if (flip) {
+      normal = mul3(normal, -1);
+    }
+    newSurface = addSurface(model, createPlaneSurface(plane.origin, normal, plane.xDir));
+  } else {
+    // For non-planar surfaces, just reference the same surface
+    newSurface = surfaceIdx;
+  }
+  
+  // Create new face
+  const newFace = addFace(model, newSurface, reversed);
+  
+  // Copy loops
+  const loops = getFaceLoops(model, sourceFaceId);
+  for (const loopId of loops) {
+    const firstHe = getLoopFirstHalfEdge(model, loopId);
+    if (isNullId(firstHe)) continue;
+    
+    // Collect vertices from the loop
+    const vertices: VertexId[] = [];
+    let he = firstHe;
+    do {
+      const vertex = getHalfEdgeStartVertex(model, he);
+      const pos = getVertexPosition(model, vertex);
+      // Create new vertex (could optimize to reuse)
+      vertices.push(addVertex(model, pos[0], pos[1], pos[2]));
+      he = getHalfEdgeNext(model, he);
+    } while (he !== firstHe && !isNullId(he));
+    
+    // Create edges and half-edges
+    const n = vertices.length;
+    const halfEdges: HalfEdgeId[] = [];
+    
+    if (flip) {
+      // Reverse winding order
+      for (let i = n - 1; i >= 0; i--) {
+        const j = (i - 1 + n) % n;
+        const edge = addEdge(model, vertices[i], vertices[j]);
+        halfEdges.push(addHalfEdge(model, edge, 1));
+      }
+    } else {
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        const edge = addEdge(model, vertices[i], vertices[j]);
+        halfEdges.push(addHalfEdge(model, edge, 1));
+      }
+    }
+    
+    const newLoop = addLoop(model, halfEdges);
+    addLoopToFace(model, newFace, newLoop);
+  }
+  
+  addFaceToShell(model, targetShell, newFace);
+  return newFace;
 }
 
 /**
