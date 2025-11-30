@@ -7,7 +7,7 @@
 
 import type { Vec2 } from '../num/vec2.js';
 import type { NumericContext } from '../num/tolerance.js';
-import type { Line2D, Arc2D, Curve2D } from './curve2d.js';
+import type { Line2D, Arc2D } from './curve2d.js';
 import { vec2, add2, sub2, mul2, dot2, cross2, length2, dist2 } from '../num/vec2.js';
 import { isZero, eqLength } from '../num/tolerance.js';
 import { evalCurve2D } from './curve2d.js';

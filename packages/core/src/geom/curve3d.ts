@@ -228,7 +228,7 @@ export function createCircle3D(
   radius: number,
   normal: Vec3,
   uDir?: Vec3,
-  ctx?: NumericContext
+  _ctx?: NumericContext
 ): Circle3D {
   const n = normalize3(normal);
   let u: Vec3;

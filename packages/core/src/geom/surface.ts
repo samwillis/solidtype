@@ -7,8 +7,7 @@
 
 import type { Vec3 } from '../num/vec3.js';
 import type { NumericContext } from '../num/tolerance.js';
-import { vec3, add3, sub3, mul3, cross3, dot3, normalize3, length3 } from '../num/vec3.js';
-import { isZero } from '../num/tolerance.js';
+import { vec3, add3, sub3, mul3, cross3, dot3, normalize3 } from '../num/vec3.js';
 
 /**
  * Type tag for surface kinds
@@ -291,7 +290,7 @@ export function createPlaneSurface(
   origin: Vec3,
   normal: Vec3,
   xDir?: Vec3,
-  ctx?: NumericContext
+  _ctx?: NumericContext
 ): PlaneSurface {
   const n = normalize3(normal);
   let x: Vec3;
