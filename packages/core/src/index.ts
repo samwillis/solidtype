@@ -27,3 +27,9 @@ export * from './geom/surface.js';
 
 // topo: BREP topology (Phase 3)
 export * from './topo/index.js';
+
+// mesh: tessellation (Phase 4)
+export * from './mesh/index.js';
+
+// model: modeling operators (Phase 4+)
+export * from './model/index.js';
