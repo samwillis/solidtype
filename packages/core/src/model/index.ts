@@ -3,8 +3,22 @@
  * 
  * Provides modeling operations on top of geom and topo:
  * - Primitives (box, cylinder, etc.)
- * - Extrude, revolve (coming in Phase 5)
- * - Booleans (coming in Phase 5)
+ * - Datum planes for sketch placement
+ * - Sketch profiles for 2D shapes
+ * - Extrude and revolve operations
+ * - Boolean operations (union, subtract, intersect)
  */
 
+// Primitives
 export * from './primitives.js';
+
+// Datum planes
+export * from './planes.js';
+
+// Sketch profiles
+export * from './sketchProfile.js';
+
+// Modeling operations
+export * from './extrude.js';
+export * from './revolve.js';
+export * from './boolean.js';
