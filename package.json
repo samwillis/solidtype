@@ -1,0 +1,28 @@
+{
+  "name": "solidtype",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Modern, history-capable, parametric CAD kernel written in pure TypeScript",
+  "private": true,
+  "scripts": {
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "keywords": [
+    "cad",
+    "brep",
+    "3d-modeling",
+    "typescript"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
