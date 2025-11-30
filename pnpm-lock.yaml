@@ -51,6 +51,9 @@ importers:
 
   packages/viewer:
     dependencies:
+      '@solidtype/core':
+        specifier: workspace:*
+        version: link:../core
       '@solidtype/oo':
         specifier: workspace:*
         version: link:../oo
