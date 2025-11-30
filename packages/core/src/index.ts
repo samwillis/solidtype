@@ -24,3 +24,6 @@ export * from './geom/curve2d.js';
 export * from './geom/intersect2d.js';
 export * from './geom/curve3d.js';
 export * from './geom/surface.js';
+
+// topo: BREP topology (Phase 3)
+export * from './topo/index.js';

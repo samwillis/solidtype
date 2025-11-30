@@ -9,7 +9,7 @@
 import type { Vec2 } from '../num/vec2.js';
 import type { NumericContext } from '../num/tolerance.js';
 import { vec2, add2, sub2, mul2, dot2, length2, normalize2, dist2 } from '../num/vec2.js';
-import { eqLength, isZero } from '../num/tolerance.js';
+import { isZero } from '../num/tolerance.js';
 
 /**
  * Type tag for 2D curve kinds
