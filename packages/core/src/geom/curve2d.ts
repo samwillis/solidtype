@@ -49,8 +49,9 @@ export type Curve2D = Line2D | Arc2D;
 /**
  * Evaluate a 2D curve at parameter t
  * 
- * For lines: t ∈ [0, 1] maps linearly from p0 to p1
- * For arcs: t ∈ [0, 1] maps from startAngle to endAngle (normalized by angle span)
+ * Parameter ranges:
+ * - Lines: t ∈ [0, 1] maps linearly from p0 to p1
+ * - Arcs: t ∈ [0, 1] maps from startAngle to endAngle (normalized by angle span)
  * 
  * @param curve The curve to evaluate
  * @param t Parameter value in [0, 1]

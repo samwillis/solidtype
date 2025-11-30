@@ -22,8 +22,8 @@ export type SurfaceType = 'plane' | 'cylinder' | 'cone' | 'sphere';
  * that define the local u and v axes.
  * 
  * Parameterization:
- * - u: unbounded (typically clamped by trimming)
- * - v: unbounded (typically clamped by trimming)
+ * - u: u ∈ (-∞, ∞), unbounded (typically clamped by trimming)
+ * - v: v ∈ (-∞, ∞), unbounded (typically clamped by trimming)
  * - Point: origin + u * xDir + v * yDir
  */
 export interface PlaneSurface {
@@ -40,8 +40,8 @@ export interface PlaneSurface {
  * Defined by center point on axis, axis direction, and radius.
  * 
  * Parameterization:
- * - u: along axis (height), typically unbounded
- * - v: around circumference [0, 2π)
+ * - u: along axis (height), u ∈ (-∞, ∞), typically unbounded
+ * - v: around circumference, v ∈ [0, 2π)
  * - Point: center + u * axis + radius * (cos(v) * uPerp + sin(v) * vPerp)
  *   where uPerp and vPerp are orthonormal vectors perpendicular to axis
  */
@@ -61,8 +61,8 @@ export interface CylinderSurface {
  * Defined by apex point, axis direction, and half-angle.
  * 
  * Parameterization:
- * - u: along axis from apex, typically [0, height] or unbounded
- * - v: around circumference [0, 2π)
+ * - u: along axis from apex, u ∈ [0, ∞), typically [0, height] or unbounded
+ * - v: around circumference, v ∈ [0, 2π)
  * - Point: apex + u * axis + u * tan(halfAngle) * (cos(v) * uPerp + sin(v) * vPerp)
  */
 export interface ConeSurface {
@@ -81,8 +81,8 @@ export interface ConeSurface {
  * Defined by center and radius.
  * 
  * Parameterization (spherical coordinates):
- * - u: polar angle (colatitude) [0, π], 0 = north pole, π = south pole
- * - v: azimuthal angle [0, 2π)
+ * - u: polar angle (colatitude), u ∈ [0, π], 0 = north pole, π = south pole
+ * - v: azimuthal angle, v ∈ [0, 2π)
  * - Point: center + radius * (sin(u) * cos(v) * xAxis + sin(u) * sin(v) * yAxis + cos(u) * zAxis)
  */
 export interface SphereSurface {
@@ -98,6 +98,12 @@ export type Surface = PlaneSurface | CylinderSurface | ConeSurface | SphereSurfa
 
 /**
  * Evaluate a surface at parameters (u, v)
+ * 
+ * Parameter ranges:
+ * - Plane: u ∈ (-∞, ∞), v ∈ (-∞, ∞) (typically clamped by trimming)
+ * - Cylinder: u ∈ (-∞, ∞) (along axis), v ∈ [0, 2π) (around circumference)
+ * - Cone: u ∈ [0, ∞) (along axis from apex), v ∈ [0, 2π) (around circumference)
+ * - Sphere: u ∈ [0, π] (polar angle, 0 = north pole), v ∈ [0, 2π) (azimuthal angle)
  * 
  * @param surface The surface
  * @param u First parameter
@@ -133,9 +139,11 @@ export function evalSurface(surface: Surface, u: number, v: number): Vec3 {
       const basis = getConeBasis(surface);
       const cosV = Math.cos(v);
       const sinV = Math.sin(v);
+      // Standard convention: at v=0, radial points in +X direction (same as cylinder)
+      // So: radial = cos(v) * vPerp + sin(v) * uPerp
       const radial = add3(
-        mul3(basis.uPerp, cosV),
-        mul3(basis.vPerp, sinV)
+        mul3(basis.vPerp, cosV),
+        mul3(basis.uPerp, sinV)
       );
       const radiusAtU = u * Math.tan(surface.halfAngle);
       return add3(
@@ -161,6 +169,8 @@ export function evalSurface(surface: Surface, u: number, v: number): Vec3 {
 
 /**
  * Compute the surface normal at parameters (u, v)
+ * 
+ * Parameter ranges: same as evalSurface
  * 
  * @param surface The surface
  * @param u First parameter
@@ -188,9 +198,10 @@ export function surfaceNormal(surface: Surface, u: number, v: number): Vec3 {
       const basis = getConeBasis(surface);
       const cosV = Math.cos(v);
       const sinV = Math.sin(v);
+      // Normal points radially outward (same convention as evalSurface)
       const radial = normalize3(add3(
-        mul3(basis.uPerp, cosV),
-        mul3(basis.vPerp, sinV)
+        mul3(basis.vPerp, cosV),
+        mul3(basis.uPerp, sinV)
       ));
       // Normal is perpendicular to both axis and radial direction
       // For a cone, normal = normalize(radial - (radial · axis) * axis)

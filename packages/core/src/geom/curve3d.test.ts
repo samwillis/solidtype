@@ -179,4 +179,45 @@ describe('curve3d', () => {
       expect(circle.vDir).toBeDefined();
     });
   });
+
+  describe('edge cases', () => {
+    it('handles zero-radius circle', () => {
+      const circle: Circle3D = {
+        kind: 'circle',
+        center: vec3(1, 2, 3),
+        radius: 0,
+        normal: Z_AXIS,
+        uDir: X_AXIS,
+        vDir: Y_AXIS,
+      };
+
+      const p = evalCurve3D(circle, 0);
+      expect(p[0]).toBeCloseTo(1, 10);
+      expect(p[1]).toBeCloseTo(2, 10);
+      expect(p[2]).toBeCloseTo(3, 10);
+
+      const len = curveLength3D(circle);
+      expect(len).toBeCloseTo(0, 10);
+    });
+
+    it('handles zero-length line', () => {
+      const line: Line3D = {
+        kind: 'line',
+        p0: vec3(5, 5, 5),
+        p1: vec3(5, 5, 5),
+      };
+
+      const p = evalCurve3D(line, 0.5);
+      expect(p[0]).toBeCloseTo(5, 10);
+      expect(p[1]).toBeCloseTo(5, 10);
+      expect(p[2]).toBeCloseTo(5, 10);
+
+      const len = curveLength3D(line);
+      expect(len).toBeCloseTo(0, 10);
+
+      const tangent = curveTangent3D(line, 0.5);
+      // Should handle gracefully
+      expect(length3(tangent)).toBeLessThanOrEqual(1);
+    });
+  });
 });

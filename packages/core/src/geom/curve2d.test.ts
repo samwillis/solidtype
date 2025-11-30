@@ -10,7 +10,7 @@ import {
   curveLength2D,
   closestPointOnCurve2D,
 } from './curve2d.js';
-import { vec2 } from '../num/vec2.js';
+import { vec2, length2 } from '../num/vec2.js';
 import { createNumericContext } from '../num/tolerance.js';
 
 describe('curve2d', () => {
@@ -178,6 +178,64 @@ describe('curve2d', () => {
       const query = vec2(5 * Math.cos(Math.PI / 4), 5 * Math.sin(Math.PI / 4));
       const result = closestPointOnCurve2D(arc, query, ctx);
       expect(result.t).toBeCloseTo(0.5, 5);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('handles zero-radius arc', () => {
+      const arc: Arc2D = {
+        kind: 'arc',
+        center: vec2(1, 2),
+        radius: 0,
+        startAngle: 0,
+        endAngle: Math.PI / 2,
+        ccw: true,
+      };
+
+      const p = evalCurve2D(arc, 0);
+      expect(p[0]).toBeCloseTo(1, 10);
+      expect(p[1]).toBeCloseTo(2, 10);
+
+      const len = curveLength2D(arc);
+      expect(len).toBeCloseTo(0, 10);
+    });
+
+    it('handles degenerate arc (zero angle span)', () => {
+      const arc: Arc2D = {
+        kind: 'arc',
+        center: vec2(0, 0),
+        radius: 5,
+        startAngle: 0,
+        endAngle: 0,
+        ccw: true,
+      };
+
+      const p0 = evalCurve2D(arc, 0);
+      const p1 = evalCurve2D(arc, 1);
+      expect(p0[0]).toBeCloseTo(p1[0], 10);
+      expect(p0[1]).toBeCloseTo(p1[1], 10);
+
+      const len = curveLength2D(arc);
+      expect(len).toBeCloseTo(0, 10);
+    });
+
+    it('handles zero-length line', () => {
+      const line: Line2D = {
+        kind: 'line',
+        p0: vec2(5, 5),
+        p1: vec2(5, 5),
+      };
+
+      const p = evalCurve2D(line, 0.5);
+      expect(p[0]).toBeCloseTo(5, 10);
+      expect(p[1]).toBeCloseTo(5, 10);
+
+      const len = curveLength2D(line);
+      expect(len).toBeCloseTo(0, 10);
+
+      const tangent = curveTangent2D(line, 0.5);
+      // Should handle gracefully (returns zero vector or normalized zero)
+      expect(length2(tangent)).toBeLessThanOrEqual(1);
     });
   });
 });

@@ -48,8 +48,9 @@ export type Curve3D = Line3D | Circle3D;
 /**
  * Evaluate a 3D curve at parameter t
  * 
- * For lines: t ∈ [0, 1] maps linearly from p0 to p1
- * For circles: t ∈ [0, 1] maps from 0 to 2π (one full revolution)
+ * Parameter ranges:
+ * - Lines: t ∈ [0, 1] maps linearly from p0 to p1
+ * - Circles: t ∈ [0, 1] maps from 0 to 2π (one full revolution)
  * 
  * @param curve The curve to evaluate
  * @param t Parameter value in [0, 1]

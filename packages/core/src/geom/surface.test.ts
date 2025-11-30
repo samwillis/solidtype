@@ -107,6 +107,22 @@ describe('surface', () => {
       expect(length3(normal)).toBeCloseTo(1, 10);
     });
 
+    it('computes cone normal', () => {
+      const cone: ConeSurface = {
+        kind: 'cone',
+        apex: vec3(0, 0, 0),
+        axis: Z_AXIS,
+        halfAngle: Math.PI / 4, // 45 degrees
+      };
+
+      // At v=0, normal should point in +X direction (perpendicular to axis)
+      const normal = surfaceNormal(cone, 1, 0);
+      expect(normal[0]).toBeCloseTo(1, 10);
+      expect(normal[1]).toBeCloseTo(0, 10);
+      expect(normal[2]).toBeCloseTo(0, 10);
+      expect(length3(normal)).toBeCloseTo(1, 10);
+    });
+
     it('computes sphere normal', () => {
       const sphere: SphereSurface = {
         kind: 'sphere',
@@ -137,6 +153,73 @@ describe('surface', () => {
       expect(dot3(plane.xDir, plane.normal)).toBeCloseTo(0, 5);
       expect(dot3(plane.yDir, plane.normal)).toBeCloseTo(0, 5);
       expect(dot3(plane.xDir, plane.yDir)).toBeCloseTo(0, 5);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('handles zero-radius cylinder', () => {
+      const cylinder: CylinderSurface = {
+        kind: 'cylinder',
+        center: vec3(0, 0, 0),
+        axis: Z_AXIS,
+        radius: 0,
+      };
+
+      const p = evalSurface(cylinder, 0, 0);
+      expect(p[0]).toBeCloseTo(0, 10);
+      expect(p[1]).toBeCloseTo(0, 10);
+      expect(p[2]).toBeCloseTo(0, 10);
+    });
+
+    it('handles zero-radius sphere', () => {
+      const sphere: SphereSurface = {
+        kind: 'sphere',
+        center: vec3(1, 2, 3),
+        radius: 0,
+      };
+
+      const p = evalSurface(sphere, 0, 0);
+      expect(p[0]).toBeCloseTo(1, 10);
+      expect(p[1]).toBeCloseTo(2, 10);
+      expect(p[2]).toBeCloseTo(3, 10);
+    });
+
+    it('handles cone at apex (u=0)', () => {
+      const cone: ConeSurface = {
+        kind: 'cone',
+        apex: vec3(0, 0, 0),
+        axis: Z_AXIS,
+        halfAngle: Math.PI / 4,
+      };
+
+      const p = evalSurface(cone, 0, 0);
+      expect(p[0]).toBeCloseTo(0, 10);
+      expect(p[1]).toBeCloseTo(0, 10);
+      expect(p[2]).toBeCloseTo(0, 10);
+
+      // Normal at apex should still be valid (perpendicular to axis)
+      const normal = surfaceNormal(cone, 0, 0);
+      expect(length3(normal)).toBeCloseTo(1, 10);
+      expect(dot3(normal, cone.axis)).toBeCloseTo(0, 5);
+    });
+
+    it('handles sphere at south pole (u=π)', () => {
+      const sphere: SphereSurface = {
+        kind: 'sphere',
+        center: vec3(0, 0, 0),
+        radius: 5,
+      };
+
+      const p = evalSurface(sphere, Math.PI, 0);
+      expect(p[0]).toBeCloseTo(0, 10);
+      expect(p[1]).toBeCloseTo(0, 10);
+      expect(p[2]).toBeCloseTo(-5, 10);
+
+      const normal = surfaceNormal(sphere, Math.PI, 0);
+      expect(normal[0]).toBeCloseTo(0, 10);
+      expect(normal[1]).toBeCloseTo(0, 10);
+      expect(normal[2]).toBeCloseTo(-1, 10);
+      expect(length3(normal)).toBeCloseTo(1, 10);
     });
   });
 });
