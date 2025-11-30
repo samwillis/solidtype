@@ -47,14 +47,14 @@ export function createNumericContext(tol?: Partial<Tolerances>): NumericContext 
  * Check if a value is effectively zero (within length tolerance)
  */
 export function isZero(value: number, ctx: NumericContext): boolean {
-  return Math.abs(value) < ctx.tol.length;
+  return Math.abs(value) <= ctx.tol.length;
 }
 
 /**
  * Check if two lengths are equal within tolerance
  */
 export function eqLength(a: number, b: number, ctx: NumericContext): boolean {
-  return Math.abs(a - b) < ctx.tol.length;
+  return Math.abs(a - b) <= ctx.tol.length;
 }
 
 /**
@@ -64,7 +64,7 @@ export function eqAngle(a: number, b: number, ctx: NumericContext): boolean {
   const diff = Math.abs(a - b);
   // Handle wrap-around (angles modulo 2π)
   const wrapped = Math.abs(diff - 2 * Math.PI);
-  return Math.min(diff, wrapped) < ctx.tol.angle;
+  return Math.min(diff, wrapped) <= ctx.tol.angle;
 }
 
 /**

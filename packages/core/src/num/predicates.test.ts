@@ -166,4 +166,53 @@ describe('predicates', () => {
       expect(isPointOnSegment3D(point, start, end, ctx)).toBe(false);
     });
   });
+
+  describe('property tests with random triangles', () => {
+    it('should correctly orient points for random triangles (property test)', () => {
+      // Generate random triangles and verify orientation is consistent
+      for (let i = 0; i < 50; i++) {
+        // Create a random triangle
+        const a = vec2(Math.random() * 100, Math.random() * 100);
+        const b = vec2(Math.random() * 100, Math.random() * 100);
+        const c = vec2(Math.random() * 100, Math.random() * 100);
+        
+        // Skip degenerate cases (collinear points)
+        const orient = orient2D(a, b, c, ctx);
+        if (orient === 0) continue; // Skip collinear
+        
+        // Create a point known to be inside the triangle
+        // (using barycentric coordinates: center of triangle)
+        const center = vec2(
+          (a[0] + b[0] + c[0]) / 3,
+          (a[1] + b[1] + c[1]) / 3
+        );
+        
+        // The center should have the same orientation relative to each edge
+        // as the opposite vertex
+        const orientAB = orient2D(a, b, center, ctx);
+        const orientBC = orient2D(b, c, center, ctx);
+        const orientCA = orient2D(c, a, center, ctx);
+        
+        // All should have the same sign (all positive or all negative)
+        const signs = [orientAB, orientBC, orientCA].filter(s => s !== 0);
+        if (signs.length > 0) {
+          const firstSign = Math.sign(signs[0]);
+          for (const sign of signs) {
+            expect(Math.sign(sign)).toBe(firstSign);
+          }
+        }
+      }
+    });
+
+    it('should handle near-degenerate triangles', () => {
+      // Test with triangles that are almost collinear
+      const a = vec2(0, 0);
+      const b = vec2(1, 0);
+      const c = vec2(2, ctx.tol.length * 0.1); // Very close to collinear
+      
+      const orient = orient2D(a, b, c, ctx);
+      // Should be considered collinear (within tolerance)
+      expect(orient).toBe(0);
+    });
+  });
 });

@@ -120,5 +120,28 @@ describe('tolerance', () => {
       const tol = ctx.tol.length;
       expect(eqLength(1.0, 1.0 + tol * 1.1, ctx)).toBe(false);
     });
+
+    it('should handle very small values', () => {
+      const ctx = createNumericContext({ length: 1e-6 });
+      expect(isZero(1e-10, ctx)).toBe(true);
+      expect(isZero(1e-5, ctx)).toBe(false);
+    });
+
+    it('should handle very large values', () => {
+      const ctx = createNumericContext({ length: 1e-6 });
+      const large = 1e10;
+      expect(eqLength(large, large + 1e-5, ctx)).toBe(false); // Difference is significant
+      expect(eqLength(large, large + 1e-7, ctx)).toBe(true); // Difference is within tolerance
+    });
+
+    it('should handle zero tolerance edge case', () => {
+      const ctx = createNumericContext({ length: 0 });
+      // With zero tolerance, only exact equality should pass
+      expect(eqLength(1.0, 1.0, ctx)).toBe(true);
+      // Note: With zero tolerance, any non-zero difference fails
+      // But due to floating point precision, 1.0 + 1e-15 might still compare equal
+      // depending on how JavaScript handles it
+      expect(eqLength(1.0, 1.0 + Number.EPSILON, ctx)).toBe(false);
+    });
   });
 });

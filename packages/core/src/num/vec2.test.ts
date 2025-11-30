@@ -114,6 +114,20 @@ describe('vec2', () => {
       }
     });
 
+    it('should satisfy: ||normalize(v)|| ≈ 1 for random vectors (property test)', () => {
+      // Generate random vectors and verify normalization property
+      for (let i = 0; i < 100; i++) {
+        const x = (Math.random() - 0.5) * 1000;
+        const y = (Math.random() - 0.5) * 1000;
+        const v = vec2(x, y);
+        
+        if (length2(v) > 1e-10) {
+          const normalized = normalize2(v);
+          expect(length2(normalized)).toBeCloseTo(1, 10);
+        }
+      }
+    });
+
     it('should satisfy: a · b = ||a|| ||b|| cos(θ)', () => {
       const a = vec2(1, 0);
       const b = vec2(Math.cos(Math.PI / 4), Math.sin(Math.PI / 4));

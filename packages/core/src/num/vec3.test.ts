@@ -119,6 +119,21 @@ describe('vec3', () => {
       }
     });
 
+    it('should satisfy: ||normalize(v)|| ≈ 1 for random vectors (property test)', () => {
+      // Generate random vectors and verify normalization property
+      for (let i = 0; i < 100; i++) {
+        const x = (Math.random() - 0.5) * 1000;
+        const y = (Math.random() - 0.5) * 1000;
+        const z = (Math.random() - 0.5) * 1000;
+        const v = vec3(x, y, z);
+        
+        if (length3(v) > 1e-10) {
+          const normalized = normalize3(v);
+          expect(length3(normalized)).toBeCloseTo(1, 10);
+        }
+      }
+    });
+
     it('should satisfy: a × b = -(b × a)', () => {
       const a = vec3(1, 2, 3);
       const b = vec3(4, 5, 6);
