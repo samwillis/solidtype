@@ -163,5 +163,85 @@ describe('@solidtype/oo', () => {
       expect(result.success).toBe(true);
       expect(result.body).toBeInstanceOf(Body);
     });
+    
+    it('should select face by ray and find existing ref', () => {
+      const session = new SolidSession();
+      const plane = session.getXYPlane();
+      const profile = session.createRectangleProfile(plane, 10, 10);
+      
+      const result = session.extrude(profile, {
+        operation: 'add',
+        distance: 5,
+      });
+      
+      expect(result.success).toBe(true);
+      
+      // Ray pointing down at the top face (from above)
+      const selection = result.body!.selectFaceByRay({
+        origin: vec3(0, 0, 10),
+        direction: vec3(0, 0, -1),
+      });
+      
+      expect(selection).not.toBeNull();
+      expect(selection!.face).toBeInstanceOf(Face);
+      expect(selection!.distance).toBeGreaterThan(0);
+      
+      // The face was created by extrude, so it should have a PersistentRef
+      expect(selection!.persistentRef).not.toBeNull();
+    });
+    
+    it('should use getRefForFace to find refs directly', () => {
+      const session = new SolidSession();
+      const plane = session.getXYPlane();
+      const profile = session.createRectangleProfile(plane, 10, 10);
+      
+      const result = session.extrude(profile, {
+        operation: 'add',
+        distance: 5,
+      });
+      
+      expect(result.success).toBe(true);
+      
+      // Get all faces
+      const faces = result.body!.getFaces();
+      expect(faces.length).toBe(6);
+      
+      // Each face should have a PersistentRef
+      for (const face of faces) {
+        const ref = result.body!.getRefForFace(face.id);
+        expect(ref).not.toBeNull();
+      }
+    });
+    
+    it('should track refs through boolean operations', () => {
+      const session = new SolidSession();
+      const plane = session.getXYPlane();
+      
+      // Create first box
+      const profile1 = session.createRectangleProfile(plane, 10, 10, 0, 0);
+      const result1 = session.extrude(profile1, {
+        operation: 'add',
+        distance: 5,
+      });
+      
+      // Save the top cap ref from first extrude
+      const originalTopCapRef = result1.topCapRefs![0];
+      
+      // Create second overlapping box
+      const profile2 = session.createRectangleProfile(plane, 10, 10, 5, 0);
+      const result2 = session.extrude(profile2, {
+        operation: 'add',
+        distance: 5,
+      });
+      
+      // Union them
+      const unionResult = session.union(result1.body!, result2.body!);
+      expect(unionResult.success).toBe(true);
+      
+      // The original ref should still resolve to a face in the result body
+      const resolved = unionResult.body!.resolve(originalTopCapRef);
+      expect(resolved).not.toBeNull();
+      expect(resolved).toBeInstanceOf(Face);
+    });
   });
 });

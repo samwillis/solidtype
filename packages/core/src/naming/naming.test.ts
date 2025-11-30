@@ -501,4 +501,173 @@ describe('Naming System', () => {
       expect(side.data.segment).toBe(2);
     });
   });
+  
+  describe('Parametric rebuild scenario', () => {
+    it('should resolve refs after body ID change via updateBodyMapping', () => {
+      // Step 1: Create initial extrude
+      const profile = createRectangleProfile(XY_PLANE, 10, 10);
+      const result1 = extrude(model, profile, {
+        operation: 'add',
+        distance: 5,
+        namingStrategy: naming,
+      });
+      
+      expect(result1.success).toBe(true);
+      const topCapRef = result1.topCapRefs![0];
+      const originalBody = result1.body!;
+      
+      // Step 2: Verify initial resolution
+      const resolved1 = naming.resolve(topCapRef, model);
+      expect(resolved1.status).toBe('found');
+      if (resolved1.status === 'found') {
+        expect(resolved1.ref.body).toBe(originalBody);
+      }
+      
+      // Step 3: "Rebuild" - create a new extrude with different height
+      // This simulates what happens when parameters change
+      const result2 = extrude(model, profile, {
+        operation: 'add',
+        distance: 10, // Different height
+        namingStrategy: naming,
+      });
+      
+      expect(result2.success).toBe(true);
+      const newBody = result2.body!;
+      
+      // The old body and new body are different
+      expect(newBody).not.toBe(originalBody);
+      
+      // Step 4: Update body mapping (simulating rebuild tracking)
+      (naming as DefaultNamingStrategy).updateBodyMapping(originalBody, newBody);
+      
+      // Step 5: The original ref should now resolve to the new body
+      const resolved2 = naming.resolve(topCapRef, model);
+      expect(resolved2.status).toBe('found');
+      if (resolved2.status === 'found') {
+        expect(resolved2.ref.body).toBe(newBody);
+      }
+    });
+    
+    it('should track refs through evolution after boolean operation', () => {
+      // Step 1: Create first box
+      const profile1 = createRectangleProfile(XY_PLANE, 10, 10, 0, 0);
+      const result1 = extrude(model, profile1, {
+        operation: 'add',
+        distance: 5,
+        namingStrategy: naming,
+      });
+      
+      expect(result1.success).toBe(true);
+      const topCapRef1 = result1.topCapRefs![0];
+      const body1 = result1.body!;
+      
+      // Step 2: Verify initial resolution
+      const resolvedBefore = naming.resolve(topCapRef1, model);
+      expect(resolvedBefore.status).toBe('found');
+      if (resolvedBefore.status === 'found') {
+        expect(resolvedBefore.ref.body).toBe(body1);
+      }
+      
+      // Step 3: Create second overlapping box
+      const profile2 = createRectangleProfile(XY_PLANE, 10, 10, 5, 0);
+      const result2 = extrude(model, profile2, {
+        operation: 'add',
+        distance: 5,
+        namingStrategy: naming,
+      });
+      
+      expect(result2.success).toBe(true);
+      
+      // Step 4: Union the boxes
+      const boolResult = booleanOperation(model, body1, result2.body!, {
+        operation: 'union',
+        namingStrategy: naming,
+      });
+      
+      expect(boolResult.success).toBe(true);
+      const resultBody = boolResult.body!;
+      
+      // Step 5: The original top cap ref should now resolve to the result body
+      // through evolution tracking
+      const resolvedAfter = naming.resolve(topCapRef1, model);
+      expect(resolvedAfter.status).toBe('found');
+      if (resolvedAfter.status === 'found') {
+        expect(resolvedAfter.ref.body).toBe(resultBody);
+        expect(resolvedAfter.ref.type).toBe('face');
+      }
+    });
+    
+    it('should provide reverse lookup for subshapes', () => {
+      // Create extrude with naming
+      const profile = createRectangleProfile(XY_PLANE, 10, 10);
+      const result = extrude(model, profile, {
+        operation: 'add',
+        distance: 5,
+        namingStrategy: naming,
+      });
+      
+      expect(result.success).toBe(true);
+      const topCapRef = result.topCapRefs![0];
+      const body = result.body!;
+      
+      // Resolve to get the face ID
+      const resolved = naming.resolve(topCapRef, model);
+      expect(resolved.status).toBe('found');
+      
+      if (resolved.status === 'found') {
+        // Now use reverse lookup
+        const lookupResult = naming.lookupRefForSubshape(resolved.ref);
+        
+        expect(lookupResult).not.toBeNull();
+        expect(lookupResult?.originFeatureId).toBe(topCapRef.originFeatureId);
+        expect(lookupResult?.localSelector.kind).toBe(topCapRef.localSelector.kind);
+      }
+    });
+    
+    it('should update reverse lookup through evolution', () => {
+      // Step 1: Create first box
+      const profile1 = createRectangleProfile(XY_PLANE, 10, 10, 0, 0);
+      const result1 = extrude(model, profile1, {
+        operation: 'add',
+        distance: 5,
+        namingStrategy: naming,
+      });
+      
+      expect(result1.success).toBe(true);
+      const topCapRef = result1.topCapRefs![0];
+      const body1 = result1.body!;
+      
+      // Step 2: Get the original face ID
+      const resolvedOriginal = naming.resolve(topCapRef, model);
+      expect(resolvedOriginal.status).toBe('found');
+      
+      // Step 3: Create overlapping box and union
+      const profile2 = createRectangleProfile(XY_PLANE, 10, 10, 5, 0);
+      const result2 = extrude(model, profile2, {
+        operation: 'add',
+        distance: 5,
+        namingStrategy: naming,
+      });
+      
+      const boolResult = booleanOperation(model, body1, result2.body!, {
+        operation: 'union',
+        namingStrategy: naming,
+      });
+      
+      expect(boolResult.success).toBe(true);
+      const resultBody = boolResult.body!;
+      
+      // Step 4: Resolve to get the new face location
+      const resolvedAfterBool = naming.resolve(topCapRef, model);
+      expect(resolvedAfterBool.status).toBe('found');
+      
+      if (resolvedAfterBool.status === 'found') {
+        // Step 5: Reverse lookup should find the original ref
+        const lookupResult = naming.lookupRefForSubshape(resolvedAfterBool.ref);
+        
+        expect(lookupResult).not.toBeNull();
+        expect(lookupResult?.originFeatureId).toBe(topCapRef.originFeatureId);
+      }
+    });
+  });
 });

@@ -107,7 +107,11 @@ export interface Ray {
  */
 export interface FaceSelectionResult {
   face: Face;
-  persistentRef: PersistentRef;
+  /** 
+   * The PersistentRef for the selected face, if one exists.
+   * Will be null if the face was not created by a tracked feature.
+   */
+  persistentRef: PersistentRef | null;
   hitPoint: Vec3;
   distance: number;
 }
@@ -228,6 +232,10 @@ export class Body {
   /**
    * Select a face by ray intersection
    * 
+   * Returns the existing PersistentRef for the face if one exists,
+   * otherwise returns null for the persistentRef (the face wasn't
+   * created by a tracked feature).
+   * 
    * @param ray The ray to test
    * @returns Selection result with face and PersistentRef, or null if no hit
    */
@@ -258,15 +266,13 @@ export class Body {
     
     const face = new Face(this.session, this.id, closestFace);
     
-    // Create a PersistentRef for the selected face
-    // For now, we use a simple selector based on the face ID
-    // In a more complete implementation, this would look up
-    // any existing PersistentRef or create one
-    const persistentRef = this.createFaceRef(closestFace);
+    // Look up existing PersistentRef for this face
+    // This returns the ref from the feature that created the face
+    const persistentRef = this.lookupExistingRef(closestFace);
     
     return {
       face,
-      persistentRef,
+      persistentRef: persistentRef ?? null,
       hitPoint: closestHitPoint,
       distance: closestDistance,
     };
@@ -411,23 +417,25 @@ export class Body {
   }
   
   /**
-   * Create a PersistentRef for a face (ad-hoc reference)
+   * Look up an existing PersistentRef for a face
+   * 
+   * Returns the ref from the feature that created the face, or null if
+   * no ref exists (face wasn't created by a tracked feature).
    */
-  private createFaceRef(faceId: FaceId): PersistentRef {
+  private lookupExistingRef(faceId: FaceId): PersistentRef | null {
     const naming = this.session.getNamingStrategy();
-    const featureId = naming.allocateFeatureId();
-    
-    // Create a simple selector for the face
-    const selector = {
-      kind: 'selection.face',
-      data: { faceId: faceId as number },
-    };
-    
-    const model = this.session.getModel();
-    const ref = faceRef(this.id, faceId);
-    
-    // Record the birth
-    return naming.recordBirth(featureId, selector, ref);
+    const subshape = faceRef(this.id, faceId);
+    return naming.lookupRefForSubshape(subshape);
+  }
+  
+  /**
+   * Get the PersistentRef for a face by its ID
+   * 
+   * @param faceId The face ID to look up
+   * @returns The PersistentRef or null if not found
+   */
+  getRefForFace(faceId: FaceId): PersistentRef | null {
+    return this.lookupExistingRef(faceId);
   }
 }
 

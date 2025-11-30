@@ -111,6 +111,22 @@ export interface NamingStrategy {
   getFeatureRefs(featureId: FeatureId): PersistentRef[];
 
   /**
+   * Look up an existing PersistentRef for a subshape (reverse lookup)
+   * 
+   * @param subshape The current subshape reference
+   * @returns The PersistentRef if one exists, or null
+   */
+  lookupRefForSubshape(subshape: SubshapeRef): PersistentRef | null;
+
+  /**
+   * Update body ID mapping (call when bodies are recreated during rebuild)
+   * 
+   * @param oldBody The old body ID
+   * @param newBody The new body ID
+   */
+  updateBodyMapping(oldBody: BodyId, newBody: BodyId): void;
+
+  /**
    * Clear all naming data (for testing or reset)
    */
   clear(): void;
@@ -160,6 +176,7 @@ interface EvolutionStep {
  * - Tracks evolution mappings per step
  * - Resolves refs by walking the evolution graph from birth to current
  * - Uses fingerprint similarity as tie-breaker for splits
+ * - Maintains reverse lookup from (BodyId, SubshapeId) → PersistentRef
  */
 export class DefaultNamingStrategy implements NamingStrategy {
   /** Birth records indexed by feature ID */
@@ -167,6 +184,9 @@ export class DefaultNamingStrategy implements NamingStrategy {
   
   /** All birth records indexed by a key derived from selector */
   private birthsBySelector: Map<string, BirthRecord> = new Map();
+  
+  /** Reverse lookup: (body:type:id) → PersistentRef */
+  private refsBySubshape: Map<string, PersistentRef> = new Map();
   
   /** Evolution steps in order */
   private evolutionSteps: EvolutionStep[] = [];
@@ -190,6 +210,13 @@ export class DefaultNamingStrategy implements NamingStrategy {
    */
   private birthKey(featureId: FeatureId, selector: FeatureLocalSelector): string {
     return `${featureId}:${selector.kind}:${JSON.stringify(selector.data)}`;
+  }
+
+  /**
+   * Generate a key for a subshape reference (for reverse lookup)
+   */
+  private subshapeKey(ref: SubshapeRef): string {
+    return `${ref.body}:${ref.type}:${ref.id}`;
   }
 
   /**
@@ -227,13 +254,39 @@ export class DefaultNamingStrategy implements NamingStrategy {
     const key = this.birthKey(featureId, selector);
     this.birthsBySelector.set(key, record);
 
+    // Index by subshape for reverse lookup
+    const subshapeKeyStr = this.subshapeKey(subshape);
+    this.refsBySubshape.set(subshapeKeyStr, persistentRef);
+
     return persistentRef;
   }
 
   /**
    * Record the evolution of subshapes through a modeling step
+   * 
+   * This updates the reverse lookup to track where PersistentRefs moved to
    */
   recordEvolution(stepId: StepId, mappings: EvolutionMapping[]): void {
+    // Update reverse lookup based on evolution mappings
+    for (const mapping of mappings) {
+      if (mapping.old && mapping.news.length > 0) {
+        const oldKey = this.subshapeKey(mapping.old);
+        const existingRef = this.refsBySubshape.get(oldKey);
+        
+        if (existingRef) {
+          // Remove old mapping
+          this.refsBySubshape.delete(oldKey);
+          
+          // Add new mappings for each evolved subshape
+          // If split, they all point to the same original ref
+          for (const newSubshape of mapping.news) {
+            const newKey = this.subshapeKey(newSubshape);
+            this.refsBySubshape.set(newKey, existingRef);
+          }
+        }
+      }
+    }
+    
     this.evolutionSteps.push({ stepId, mappings });
   }
 
@@ -363,6 +416,25 @@ export class DefaultNamingStrategy implements NamingStrategy {
    */
   updateBodyMapping(oldBody: BodyId, newBody: BodyId): void {
     this.currentBodyMap.set(oldBody, newBody);
+    
+    // Also update the reverse lookup to use new body IDs
+    const keysToUpdate: Array<{ oldKey: string; newKey: string; ref: PersistentRef }> = [];
+    
+    for (const [key, ref] of this.refsBySubshape) {
+      // Parse the key to check if it references the old body
+      const [bodyStr, type, id] = key.split(':');
+      const body = parseInt(bodyStr, 10) as BodyId;
+      
+      if (body === oldBody) {
+        const newKey = `${newBody}:${type}:${id}`;
+        keysToUpdate.push({ oldKey: key, newKey, ref });
+      }
+    }
+    
+    for (const { oldKey, newKey, ref } of keysToUpdate) {
+      this.refsBySubshape.delete(oldKey);
+      this.refsBySubshape.set(newKey, ref);
+    }
   }
 
   /**
@@ -373,11 +445,25 @@ export class DefaultNamingStrategy implements NamingStrategy {
   }
 
   /**
+   * Look up an existing PersistentRef for a subshape
+   * 
+   * This is the reverse lookup - given a current subshape, find its PersistentRef
+   * 
+   * @param subshape The current subshape reference
+   * @returns The PersistentRef if one exists, or null
+   */
+  lookupRefForSubshape(subshape: SubshapeRef): PersistentRef | null {
+    const key = this.subshapeKey(subshape);
+    return this.refsBySubshape.get(key) ?? null;
+  }
+
+  /**
    * Clear all naming data
    */
   clear(): void {
     this.birthsByFeature.clear();
     this.birthsBySelector.clear();
+    this.refsBySubshape.clear();
     this.evolutionSteps = [];
     this.currentBodyMap.clear();
     this.nextFeatureId = 0;
@@ -552,30 +638,54 @@ export function computeEdgeFingerprint(
 /**
  * Compute the distance between two fingerprints
  * Lower is more similar
+ * 
+ * Weighting rationale:
+ * - Centroid position is the most reliable discriminator (weight 1.0)
+ * - Relative size difference is less reliable due to mesh variations (weight 0.5)
+ * - Normal direction is highly reliable for faces (weight 2.0)
+ * - Adjacent count can help but varies with topology changes (weight 0.2)
+ * 
+ * All values are normalized to roughly similar scales before weighting.
  */
 export function fingerprintDistance(
   a: GeometryTopologyFingerprint,
   b: GeometryTopologyFingerprint
 ): number {
-  // Centroid distance
+  // Centroid distance (in model units)
   const dx = a.centroid[0] - b.centroid[0];
   const dy = a.centroid[1] - b.centroid[1];
   const dz = a.centroid[2] - b.centroid[2];
   const centroidDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-  // Size difference (relative)
-  const sizeDiff = Math.abs(a.approxAreaOrLength - b.approxAreaOrLength) /
-    Math.max(a.approxAreaOrLength, b.approxAreaOrLength, 0.001);
+  // Size difference (normalized to 0-1 range)
+  const maxSize = Math.max(a.approxAreaOrLength, b.approxAreaOrLength, 0.001);
+  const sizeRatio = Math.abs(a.approxAreaOrLength - b.approxAreaOrLength) / maxSize;
 
-  // Normal difference (if both have normals)
+  // Normal difference (0 for same direction, 2 for opposite)
   let normalDiff = 0;
   if (a.normal && b.normal) {
-    // 1 - dot product (0 for same direction, 2 for opposite)
     normalDiff = 1 - dot3(a.normal, b.normal);
   }
 
-  // Weight the components
-  return centroidDist + sizeDiff * 10 + normalDiff * 5;
+  // Adjacent count difference (normalized)
+  let adjacentDiff = 0;
+  if (a.adjacentCount !== undefined && b.adjacentCount !== undefined) {
+    const maxAdj = Math.max(a.adjacentCount, b.adjacentCount, 1);
+    adjacentDiff = Math.abs(a.adjacentCount - b.adjacentCount) / maxAdj;
+  }
+
+  // Weighted sum with documented rationale
+  const WEIGHT_CENTROID = 1.0;
+  const WEIGHT_SIZE = 0.5;
+  const WEIGHT_NORMAL = 2.0;
+  const WEIGHT_ADJACENT = 0.2;
+
+  return (
+    centroidDist * WEIGHT_CENTROID +
+    sizeRatio * WEIGHT_SIZE +
+    normalDiff * WEIGHT_NORMAL +
+    adjacentDiff * WEIGHT_ADJACENT
+  );
 }
 
 // ============================================================================
