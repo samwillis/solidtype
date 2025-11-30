@@ -457,39 +457,5 @@ function setupTwinHalfEdges(model: TopoModel): void {
   }
 }
 
-/**
- * Convenience function to extrude a rectangular profile
- * 
- * @param model The topology model
- * @param width Rectangle width
- * @param height Rectangle height  
- * @param depth Extrusion depth
- * @param center Optional center point in 2D
- * @returns The created body or undefined on failure
- */
-export function extrudeRectangle(
-  model: TopoModel,
-  width: number,
-  height: number,
-  depth: number,
-  center?: Vec2
-): BodyId | undefined {
-  // Import here to avoid circular dependency
-  const { XY_PLANE } = require('./planes.js');
-  const { createRectangleProfile } = require('./sketchProfile.js');
-  
-  const profile = createRectangleProfile(
-    XY_PLANE,
-    width,
-    height,
-    center?.[0] ?? 0,
-    center?.[1] ?? 0
-  );
-  
-  const result = extrude(model, profile, {
-    operation: 'add',
-    distance: depth,
-  });
-  
-  return result.success ? result.body : undefined;
-}
+// Note: extrudeRectangle convenience function removed to avoid circular dependency.
+// Use createRectangleProfile + extrude directly instead.
