@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { createNumericContext } from '../num/tolerance.js';
 import { vec3, type Vec3 } from '../num/vec3.js';
-import { createPlaneSurface, type PlaneSurface } from '../geom/surface.js';
+import { createPlaneSurface } from '../geom/surface.js';
 import {
   createEmptyModel,
   addVertex,
@@ -14,6 +14,8 @@ import {
   addEdge,
   getEdgeStartVertex,
   getEdgeEndVertex,
+  getEdgeTStart,
+  getEdgeTEnd,
   addHalfEdge,
   setHalfEdgeTwin,
   linkHalfEdges,
@@ -25,35 +27,35 @@ import {
   getHalfEdgeStartVertex,
   getHalfEdgeEndVertex,
   addLoop,
+  addLoopToFace,
   getLoopFirstHalfEdge,
   getLoopHalfEdgeCount,
   iterateLoopHalfEdges,
   addFace,
-  setFaceLoops,
-  getFaceFirstLoop,
+  addFaceToShell,
+  getFaceOuterLoop,
+  getFaceLoops,
   getFaceLoopCount,
   addShell,
-  setShellFaces,
+  addShellToBody,
+  getShellFaces,
   getShellFaceCount,
   isShellClosed,
   setShellClosed,
   addBody,
-  setBodyShells,
+  getBodyShells,
   getBodyShellCount,
   iterateBodies,
   addSurface,
   getModelStats,
   type TopoModel,
   type BodyId,
-  type ShellId,
-  type FaceId,
   type LoopId,
   type HalfEdgeId,
-  type EdgeId,
-  type VertexId,
   NULL_ID,
   asVertexId,
   asFaceId,
+  asLoopId,
 } from './model.js';
 
 describe('TopoModel', () => {
@@ -72,6 +74,9 @@ describe('TopoModel', () => {
       expect(model.bodies.count).toBe(0);
       expect(model.curves).toHaveLength(0);
       expect(model.surfaces).toHaveLength(0);
+      expect(model.faceLoops).toHaveLength(0);
+      expect(model.shellFaces).toHaveLength(0);
+      expect(model.bodyShells).toHaveLength(0);
     });
   });
 
@@ -118,6 +123,23 @@ describe('TopoModel', () => {
       expect(getEdgeEndVertex(model, e1)).toBe(v2);
       
       expect(model.edges.count).toBe(2);
+    });
+
+    it('should support edge parameter bounds', () => {
+      const model = createEmptyModel(ctx);
+      
+      const v0 = addVertex(model, 0, 0, 0);
+      const v1 = addVertex(model, 1, 0, 0);
+      
+      // Default bounds
+      const e0 = addEdge(model, v0, v1);
+      expect(getEdgeTStart(model, e0)).toBe(0);
+      expect(getEdgeTEnd(model, e0)).toBe(1);
+      
+      // Custom bounds
+      const e1 = addEdge(model, v0, v1, NULL_ID, 0.25, 0.75);
+      expect(getEdgeTStart(model, e1)).toBe(0.25);
+      expect(getEdgeTEnd(model, e1)).toBe(0.75);
     });
   });
 
@@ -208,14 +230,8 @@ describe('TopoModel', () => {
       const he1 = addHalfEdge(model, e1, 1);
       const he2 = addHalfEdge(model, e2, 1);
       
-      // Need a placeholder face for the loop
-      const surface = createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1));
-      const surfaceIdx = addSurface(model, surface);
-      const body = addBody(model);
-      const shell = addShell(model, body);
-      const face = addFace(model, shell, surfaceIdx);
-      
-      const loop = addLoop(model, face, [he0, he1, he2]);
+      // Create the loop (addLoop now auto-links half-edges)
+      const loop = addLoop(model, [he0, he1, he2]);
       
       expect(getLoopFirstHalfEdge(model, loop)).toBe(he0);
       expect(getLoopHalfEdgeCount(model, loop)).toBe(3);
@@ -246,15 +262,66 @@ describe('TopoModel', () => {
       const surface = createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1));
       const surfaceIdx = addSurface(model, surface);
       
-      const body = addBody(model);
-      const shell = addShell(model, body);
-      const face = addFace(model, shell, surfaceIdx);
-      const loop = addLoop(model, face, [he0, he1, he2]);
+      // Create face and add loop to it
+      const face = addFace(model, surfaceIdx);
+      const loop = addLoop(model, [he0, he1, he2]);
+      addLoopToFace(model, face, loop);
       
-      setFaceLoops(model, face, [loop]);
-      
-      expect(getFaceFirstLoop(model, face)).toBe(loop);
+      expect(getFaceOuterLoop(model, face)).toBe(loop);
       expect(getFaceLoopCount(model, face)).toBe(1);
+      expect(getFaceLoops(model, face)).toEqual([loop]);
+    });
+
+    it('should support faces with multiple loops (holes)', () => {
+      const model = createEmptyModel(ctx);
+      
+      const surface = createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1));
+      const surfaceIdx = addSurface(model, surface);
+      
+      // Create face
+      const face = addFace(model, surfaceIdx);
+      
+      // Create outer loop (square)
+      const v0 = addVertex(model, 0, 0, 0);
+      const v1 = addVertex(model, 1, 0, 0);
+      const v2 = addVertex(model, 1, 1, 0);
+      const v3 = addVertex(model, 0, 1, 0);
+      
+      const e01 = addEdge(model, v0, v1);
+      const e12 = addEdge(model, v1, v2);
+      const e23 = addEdge(model, v2, v3);
+      const e30 = addEdge(model, v3, v0);
+      
+      const he01 = addHalfEdge(model, e01, 1);
+      const he12 = addHalfEdge(model, e12, 1);
+      const he23 = addHalfEdge(model, e23, 1);
+      const he30 = addHalfEdge(model, e30, 1);
+      
+      const outerLoop = addLoop(model, [he01, he12, he23, he30]);
+      addLoopToFace(model, face, outerLoop);
+      
+      // Create inner loop (hole)
+      const h0 = addVertex(model, 0.25, 0.25, 0);
+      const h1 = addVertex(model, 0.75, 0.25, 0);
+      const h2 = addVertex(model, 0.75, 0.75, 0);
+      const h3 = addVertex(model, 0.25, 0.75, 0);
+      
+      const eh01 = addEdge(model, h0, h1);
+      const eh12 = addEdge(model, h1, h2);
+      const eh23 = addEdge(model, h2, h3);
+      const eh30 = addEdge(model, h3, h0);
+      
+      const hh01 = addHalfEdge(model, eh01, -1); // reversed for hole
+      const hh12 = addHalfEdge(model, eh30, -1);
+      const hh23 = addHalfEdge(model, eh23, -1);
+      const hh30 = addHalfEdge(model, eh12, -1);
+      
+      const innerLoop = addLoop(model, [hh01, hh12, hh23, hh30]);
+      addLoopToFace(model, face, innerLoop);
+      
+      expect(getFaceOuterLoop(model, face)).toBe(outerLoop);
+      expect(getFaceLoopCount(model, face)).toBe(2);
+      expect(getFaceLoops(model, face)).toEqual([outerLoop, innerLoop]);
     });
   });
 
@@ -264,25 +331,26 @@ describe('TopoModel', () => {
       
       // Create a simple body/shell structure
       const body = addBody(model);
-      const shell = addShell(model, body);
+      const shell = addShell(model);
+      addShellToBody(model, body, shell);
       
       // Create two faces
       const surface = createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1));
       const surfaceIdx = addSurface(model, surface);
       
-      const face0 = addFace(model, shell, surfaceIdx);
-      const face1 = addFace(model, shell, surfaceIdx);
-      
-      setShellFaces(model, shell, [face0, face1]);
+      const face0 = addFace(model, surfaceIdx);
+      const face1 = addFace(model, surfaceIdx);
+      addFaceToShell(model, shell, face0);
+      addFaceToShell(model, shell, face1);
       
       expect(getShellFaceCount(model, shell)).toBe(2);
+      expect(getShellFaces(model, shell)).toEqual([face0, face1]);
     });
 
     it('should track closed/open shell state', () => {
       const model = createEmptyModel(ctx);
       
-      const body = addBody(model);
-      const shell = addShell(model, body, false);
+      const shell = addShell(model, false);
       
       expect(isShellClosed(model, shell)).toBe(false);
       
@@ -299,12 +367,13 @@ describe('TopoModel', () => {
       const model = createEmptyModel(ctx);
       
       const body = addBody(model);
-      const shell1 = addShell(model, body);
-      const shell2 = addShell(model, body);
-      
-      setBodyShells(model, body, [shell1, shell2]);
+      const shell1 = addShell(model);
+      const shell2 = addShell(model);
+      addShellToBody(model, body, shell1);
+      addShellToBody(model, body, shell2);
       
       expect(getBodyShellCount(model, body)).toBe(2);
+      expect(getBodyShells(model, body)).toEqual([shell1, shell2]);
     });
 
     it('should iterate over bodies', () => {
@@ -343,6 +412,65 @@ describe('TopoModel', () => {
       expect(stats.faces).toBe(0);
       expect(stats.shells).toBe(0);
       expect(stats.bodies).toBe(0);
+    });
+  });
+
+  describe('Non-contiguous entity ordering', () => {
+    it('should correctly handle faces added to shell in any order', () => {
+      const model = createEmptyModel(ctx);
+      
+      const body = addBody(model);
+      const shell = addShell(model);
+      addShellToBody(model, body, shell);
+      
+      const surface = createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1));
+      const surfaceIdx = addSurface(model, surface);
+      
+      // Create faces with IDs 0, 1, 2 but add to shell in order 2, 0, 1
+      const face0 = addFace(model, surfaceIdx);
+      const face1 = addFace(model, surfaceIdx);
+      const face2 = addFace(model, surfaceIdx);
+      
+      addFaceToShell(model, shell, face2);
+      addFaceToShell(model, shell, face0);
+      addFaceToShell(model, shell, face1);
+      
+      expect(getShellFaceCount(model, shell)).toBe(3);
+      expect(getShellFaces(model, shell)).toEqual([face2, face0, face1]);
+    });
+
+    it('should correctly handle loops added to face in any order', () => {
+      const model = createEmptyModel(ctx);
+      
+      const surface = createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1));
+      const surfaceIdx = addSurface(model, surface);
+      const face = addFace(model, surfaceIdx);
+      
+      // Create some dummy loops
+      const v0 = addVertex(model, 0, 0, 0);
+      const v1 = addVertex(model, 1, 0, 0);
+      const e01 = addEdge(model, v0, v1);
+      const e10 = addEdge(model, v1, v0);
+      
+      const he0 = addHalfEdge(model, e01, 1);
+      const he1 = addHalfEdge(model, e10, 1);
+      linkHalfEdges(model, he0, he1);
+      linkHalfEdges(model, he1, he0);
+      const loop0 = addLoop(model, [he0, he1]);
+      
+      const he2 = addHalfEdge(model, e01, -1);
+      const he3 = addHalfEdge(model, e10, -1);
+      linkHalfEdges(model, he2, he3);
+      linkHalfEdges(model, he3, he2);
+      const loop1 = addLoop(model, [he2, he3]);
+      
+      // Add loops to face (first is outer, second is hole)
+      addLoopToFace(model, face, loop0);
+      addLoopToFace(model, face, loop1);
+      
+      expect(getFaceLoopCount(model, face)).toBe(2);
+      expect(getFaceLoops(model, face)).toEqual([loop0, loop1]);
+      expect(getFaceOuterLoop(model, face)).toBe(loop0);
     });
   });
 });
@@ -403,7 +531,8 @@ describe('Building a cube', () => {
     
     // Create body and shell
     const body = addBody(model);
-    const shell = addShell(model, body, true); // closed shell
+    const shell = addShell(model, true); // closed shell
+    addShellToBody(model, body, shell);
     
     // Create surfaces for each face (all planar)
     const surfBottom = addSurface(model, createPlaneSurface(vec3(0, 0, 0), vec3(0, -1, 0)));
@@ -413,16 +542,20 @@ describe('Building a cube', () => {
     const surfLeft = addSurface(model, createPlaneSurface(vec3(0, 0, 0), vec3(-1, 0, 0)));
     const surfRight = addSurface(model, createPlaneSurface(vec3(s, 0, 0), vec3(1, 0, 0)));
     
-    // Create 6 faces
-    const faceBottom = addFace(model, shell, surfBottom);
-    const faceTop = addFace(model, shell, surfTop);
-    const faceFront = addFace(model, shell, surfFront);
-    const faceBack = addFace(model, shell, surfBack);
-    const faceLeft = addFace(model, shell, surfLeft);
-    const faceRight = addFace(model, shell, surfRight);
+    // Create 6 faces and add to shell
+    const faceBottom = addFace(model, surfBottom);
+    const faceTop = addFace(model, surfTop);
+    const faceFront = addFace(model, surfFront);
+    const faceBack = addFace(model, surfBack);
+    const faceLeft = addFace(model, surfLeft);
+    const faceRight = addFace(model, surfRight);
     
-    setShellFaces(model, shell, [faceBottom, faceTop, faceFront, faceBack, faceLeft, faceRight]);
-    setBodyShells(model, body, [shell]);
+    addFaceToShell(model, shell, faceBottom);
+    addFaceToShell(model, shell, faceTop);
+    addFaceToShell(model, shell, faceFront);
+    addFaceToShell(model, shell, faceBack);
+    addFaceToShell(model, shell, faceLeft);
+    addFaceToShell(model, shell, faceRight);
     
     // Create half-edges for each face (outward-facing normal convention)
     // Each edge needs 2 half-edges (one for each adjacent face)
@@ -432,48 +565,48 @@ describe('Building a cube', () => {
     const he_bottom_12 = addHalfEdge(model, e12, 1);
     const he_bottom_23 = addHalfEdge(model, e23, 1);
     const he_bottom_30 = addHalfEdge(model, e30, 1);
-    const loopBottom = addLoop(model, faceBottom, [he_bottom_01, he_bottom_12, he_bottom_23, he_bottom_30]);
-    setFaceLoops(model, faceBottom, [loopBottom]);
+    const loopBottom = addLoop(model, [he_bottom_01, he_bottom_12, he_bottom_23, he_bottom_30]);
+    addLoopToFace(model, faceBottom, loopBottom);
     
     // Top face (4,7,6,5) - normal pointing up, CCW when viewed from above
     const he_top_47 = addHalfEdge(model, e74, -1);
     const he_top_76 = addHalfEdge(model, e67, -1);
     const he_top_65 = addHalfEdge(model, e56, -1);
     const he_top_54 = addHalfEdge(model, e45, -1);
-    const loopTop = addLoop(model, faceTop, [he_top_47, he_top_76, he_top_65, he_top_54]);
-    setFaceLoops(model, faceTop, [loopTop]);
+    const loopTop = addLoop(model, [he_top_47, he_top_76, he_top_65, he_top_54]);
+    addLoopToFace(model, faceTop, loopTop);
     
     // Front face (3,2,6,7) - normal pointing +Z
     const he_front_32 = addHalfEdge(model, e23, -1);
     const he_front_26 = addHalfEdge(model, e26, 1);
     const he_front_67 = addHalfEdge(model, e67, 1);
     const he_front_73 = addHalfEdge(model, e37, -1);
-    const loopFront = addLoop(model, faceFront, [he_front_32, he_front_26, he_front_67, he_front_73]);
-    setFaceLoops(model, faceFront, [loopFront]);
+    const loopFront = addLoop(model, [he_front_32, he_front_26, he_front_67, he_front_73]);
+    addLoopToFace(model, faceFront, loopFront);
     
     // Back face (0,4,5,1) - normal pointing -Z
     const he_back_04 = addHalfEdge(model, e04, 1);
     const he_back_45 = addHalfEdge(model, e45, 1);
     const he_back_51 = addHalfEdge(model, e15, -1);
     const he_back_10 = addHalfEdge(model, e01, -1);
-    const loopBack = addLoop(model, faceBack, [he_back_04, he_back_45, he_back_51, he_back_10]);
-    setFaceLoops(model, faceBack, [loopBack]);
+    const loopBack = addLoop(model, [he_back_04, he_back_45, he_back_51, he_back_10]);
+    addLoopToFace(model, faceBack, loopBack);
     
     // Left face (0,3,7,4) - normal pointing -X
     const he_left_03 = addHalfEdge(model, e30, -1);
     const he_left_37 = addHalfEdge(model, e37, 1);
     const he_left_74 = addHalfEdge(model, e74, 1);
     const he_left_40 = addHalfEdge(model, e04, -1);
-    const loopLeft = addLoop(model, faceLeft, [he_left_03, he_left_37, he_left_74, he_left_40]);
-    setFaceLoops(model, faceLeft, [loopLeft]);
+    const loopLeft = addLoop(model, [he_left_03, he_left_37, he_left_74, he_left_40]);
+    addLoopToFace(model, faceLeft, loopLeft);
     
     // Right face (1,5,6,2) - normal pointing +X
     const he_right_15 = addHalfEdge(model, e15, 1);
     const he_right_56 = addHalfEdge(model, e56, 1);
     const he_right_62 = addHalfEdge(model, e26, -1);
     const he_right_21 = addHalfEdge(model, e12, -1);
-    const loopRight = addLoop(model, faceRight, [he_right_15, he_right_56, he_right_62, he_right_21]);
-    setFaceLoops(model, faceRight, [loopRight]);
+    const loopRight = addLoop(model, [he_right_15, he_right_56, he_right_62, he_right_21]);
+    addLoopToFace(model, faceRight, loopRight);
     
     // Set up twins (each edge should have exactly 2 half-edges)
     setHalfEdgeTwin(model, he_bottom_01, he_back_10);
@@ -520,12 +653,14 @@ describe('Building a cube', () => {
       const loopCount = getFaceLoopCount(model, faceId);
       expect(loopCount).toBe(1);
       
-      const firstLoop = getFaceFirstLoop(model, faceId);
-      const heCount = getLoopHalfEdgeCount(model, firstLoop);
+      const outerLoop = getFaceOuterLoop(model, faceId);
+      expect(outerLoop).not.toBeNull();
+      
+      const heCount = getLoopHalfEdgeCount(model, outerLoop!);
       expect(heCount).toBe(4);
       
       // Verify the loop is closed (iterating returns to start)
-      const halfEdges = [...iterateLoopHalfEdges(model, firstLoop)];
+      const halfEdges = [...iterateLoopHalfEdges(model, outerLoop!)];
       expect(halfEdges).toHaveLength(4);
       
       // Verify next/prev consistency
@@ -567,7 +702,7 @@ describe('Building a cube', () => {
     
     // For each loop, the end vertex of each half-edge should equal start of next
     for (let loopIdx = 0; loopIdx < model.loops.count; loopIdx++) {
-      const loopId = loopIdx as LoopId;
+      const loopId = asLoopId(loopIdx);
       const halfEdges = [...iterateLoopHalfEdges(model, loopId)];
       
       for (let i = 0; i < halfEdges.length; i++) {

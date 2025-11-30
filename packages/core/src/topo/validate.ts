@@ -39,15 +39,12 @@ import {
   getLoopFirstHalfEdge,
   getLoopHalfEdgeCount,
   getFaceShell,
-  getFaceFirstLoop,
-  getFaceLoopCount,
   getFaceSurfaceIndex,
+  getFaceLoops,
   getShellBody,
-  getShellFirstFace,
-  getShellFaceCount,
+  getShellFaces,
   isShellClosed,
-  getBodyFirstShell,
-  getBodyShellCount,
+  getBodyShells,
 } from './model.js';
 
 /**
@@ -61,6 +58,7 @@ export type ValidationIssueKind =
   | 'loopNotClosed'
   | 'halfEdgePairMismatch'
   | 'twinMismatch'
+  | 'twinDirectionMismatch'
   | 'nonManifoldEdge'
   | 'boundaryEdge'
   | 'zeroLengthEdge'
@@ -69,7 +67,10 @@ export type ValidationIssueKind =
   | 'orphanedEntity'
   | 'surfaceMissing'
   | 'curveMissing'
-  | 'vertexMismatch';
+  | 'vertexMismatch'
+  | 'loopFaceMismatch'
+  | 'faceShellMismatch'
+  | 'shellBodyMismatch';
 
 /**
  * Severity levels for validation issues
@@ -186,25 +187,25 @@ export function validateModel(
   const report = createReport();
   
   // Validate vertices
-  validateVertices(model, report, opts);
+  validateVertices(model, report);
   
   // Validate edges
   validateEdges(model, report, opts);
   
   // Validate half-edges
-  validateHalfEdges(model, report, opts);
+  validateHalfEdges(model, report);
   
   // Validate loops
   validateLoops(model, report, opts);
   
   // Validate faces
-  validateFaces(model, report, opts);
+  validateFaces(model, report);
   
   // Validate shells
-  validateShells(model, report, opts);
+  validateShells(model, report);
   
   // Validate bodies
-  validateBodies(model, report, opts);
+  validateBodies(model, report);
   
   // Check manifold conditions if requested
   if (opts.checkManifold) {
@@ -219,8 +220,7 @@ export function validateModel(
  */
 function validateVertices(
   model: TopoModel,
-  report: ValidationReport,
-  _opts: Required<ValidationOptions>
+  report: ValidationReport
 ): void {
   const table = model.vertices;
   
@@ -346,6 +346,19 @@ function validateEdges(
         { type: 'edge', id: i }
       );
     }
+    
+    // Check parameter bounds
+    const tStart = model.edges.tStart[i];
+    const tEnd = model.edges.tEnd[i];
+    if (!Number.isFinite(tStart) || !Number.isFinite(tEnd)) {
+      addIssue(
+        report,
+        'invalidIndex',
+        'error',
+        `Edge ${i} has invalid parameter bounds: [${tStart}, ${tEnd}]`,
+        { type: 'edge', id: i }
+      );
+    }
   }
 }
 
@@ -354,8 +367,7 @@ function validateEdges(
  */
 function validateHalfEdges(
   model: TopoModel,
-  report: ValidationReport,
-  _opts: Required<ValidationOptions>
+  report: ValidationReport
 ): void {
   const table = model.halfEdges;
   
@@ -500,7 +512,7 @@ function validateHalfEdges(
         if (dir === twinDir) {
           addIssue(
             report,
-            'halfEdgePairMismatch',
+            'twinDirectionMismatch',
             'error',
             `Half-edge ${i} and twin ${twin} have the same direction`,
             { type: 'halfEdge', id: i },
@@ -565,6 +577,19 @@ function validateLoops(
         { type: 'loop', id: i },
         [{ type: 'face', id: face }]
       );
+    } else {
+      // Check that the face's loops include this loop
+      const faceLoops = getFaceLoops(model, face);
+      if (!faceLoops.includes(id)) {
+        addIssue(
+          report,
+          'loopFaceMismatch',
+          'error',
+          `Loop ${i} claims face ${face}, but face doesn't list this loop`,
+          { type: 'loop', id: i },
+          [{ type: 'face', id: face }]
+        );
+      }
     }
     
     // Check first half-edge reference
@@ -634,7 +659,7 @@ function validateLoops(
       if (heLoop !== i) {
         addIssue(
           report,
-          'halfEdgePairMismatch',
+          'loopFaceMismatch',
           'error',
           `Half-edge ${current} in loop ${i} claims to belong to loop ${heLoop}`,
           { type: 'loop', id: i },
@@ -670,8 +695,7 @@ function validateLoops(
  */
 function validateFaces(
   model: TopoModel,
-  report: ValidationReport,
-  _opts: Required<ValidationOptions>
+  report: ValidationReport
 ): void {
   const table = model.faces;
   
@@ -681,8 +705,7 @@ function validateFaces(
     
     const shell = getFaceShell(model, id);
     const surfaceIdx = getFaceSurfaceIndex(model, id);
-    const firstLoop = getFaceFirstLoop(model, id);
-    const loopCount = getFaceLoopCount(model, id);
+    const loops = getFaceLoops(model, id);
     
     // Check shell reference
     if (isNullId(shell)) {
@@ -702,6 +725,19 @@ function validateFaces(
         { type: 'face', id: i },
         [{ type: 'shell', id: shell }]
       );
+    } else {
+      // Check that the shell's faces include this face
+      const shellFaces = getShellFaces(model, shell);
+      if (!shellFaces.includes(id)) {
+        addIssue(
+          report,
+          'faceShellMismatch',
+          'error',
+          `Face ${i} claims shell ${shell}, but shell doesn't list this face`,
+          { type: 'face', id: i },
+          [{ type: 'shell', id: shell }]
+        );
+      }
     }
     
     // Check surface reference
@@ -724,7 +760,7 @@ function validateFaces(
     }
     
     // Check loops
-    if (loopCount === 0) {
+    if (loops.length === 0) {
       addIssue(
         report,
         'nullReference',
@@ -732,37 +768,28 @@ function validateFaces(
         `Face ${i} has no loops`,
         { type: 'face', id: i }
       );
-    } else if (isNullId(firstLoop)) {
-      addIssue(
-        report,
-        'nullReference',
-        'error',
-        `Face ${i} has ${loopCount} loops but null first loop reference`,
-        { type: 'face', id: i }
-      );
     } else {
       // Check each loop references this face
-      for (let j = 0; j < loopCount; j++) {
-        const loopIdx = firstLoop + j;
-        if (loopIdx >= model.loops.count) {
+      for (const loopId of loops) {
+        if (loopId >= model.loops.count) {
           addIssue(
             report,
             'invalidIndex',
             'error',
-            `Face ${i} references invalid loop ${loopIdx}`,
+            `Face ${i} references invalid loop ${loopId}`,
             { type: 'face', id: i },
-            [{ type: 'loop', id: loopIdx }]
+            [{ type: 'loop', id: loopId }]
           );
         } else {
-          const loopFace = getLoopFace(model, asLoopId(loopIdx));
+          const loopFace = getLoopFace(model, loopId);
           if (loopFace !== i) {
             addIssue(
               report,
-              'halfEdgePairMismatch',
+              'loopFaceMismatch',
               'error',
-              `Face ${i} loop ${loopIdx} claims to belong to face ${loopFace}`,
+              `Face ${i} lists loop ${loopId}, but loop claims face ${loopFace}`,
               { type: 'face', id: i },
-              [{ type: 'loop', id: loopIdx }]
+              [{ type: 'loop', id: loopId }]
             );
           }
         }
@@ -776,8 +803,7 @@ function validateFaces(
  */
 function validateShells(
   model: TopoModel,
-  report: ValidationReport,
-  _opts: Required<ValidationOptions>
+  report: ValidationReport
 ): void {
   const table = model.shells;
   
@@ -786,8 +812,7 @@ function validateShells(
     if ((table.flags[i] & 1) !== 0) continue; // deleted
     
     const body = getShellBody(model, id);
-    const firstFace = getShellFirstFace(model, id);
-    const faceCount = getShellFaceCount(model, id);
+    const faces = getShellFaces(model, id);
     
     // Check body reference
     if (isNullId(body)) {
@@ -807,10 +832,23 @@ function validateShells(
         { type: 'shell', id: i },
         [{ type: 'body', id: body }]
       );
+    } else {
+      // Check that the body's shells include this shell
+      const bodyShells = getBodyShells(model, body);
+      if (!bodyShells.includes(id)) {
+        addIssue(
+          report,
+          'shellBodyMismatch',
+          'error',
+          `Shell ${i} claims body ${body}, but body doesn't list this shell`,
+          { type: 'shell', id: i },
+          [{ type: 'body', id: body }]
+        );
+      }
     }
     
     // Check faces
-    if (faceCount === 0) {
+    if (faces.length === 0) {
       addIssue(
         report,
         'nullReference',
@@ -818,37 +856,28 @@ function validateShells(
         `Shell ${i} has no faces`,
         { type: 'shell', id: i }
       );
-    } else if (isNullId(firstFace)) {
-      addIssue(
-        report,
-        'nullReference',
-        'error',
-        `Shell ${i} has ${faceCount} faces but null first face reference`,
-        { type: 'shell', id: i }
-      );
     } else {
       // Check each face references this shell
-      for (let j = 0; j < faceCount; j++) {
-        const faceIdx = firstFace + j;
-        if (faceIdx >= model.faces.count) {
+      for (const faceId of faces) {
+        if (faceId >= model.faces.count) {
           addIssue(
             report,
             'invalidIndex',
             'error',
-            `Shell ${i} references invalid face ${faceIdx}`,
+            `Shell ${i} references invalid face ${faceId}`,
             { type: 'shell', id: i },
-            [{ type: 'face', id: faceIdx }]
+            [{ type: 'face', id: faceId }]
           );
         } else {
-          const faceShell = getFaceShell(model, asFaceId(faceIdx));
+          const faceShell = getFaceShell(model, faceId);
           if (faceShell !== i) {
             addIssue(
               report,
-              'halfEdgePairMismatch',
+              'faceShellMismatch',
               'error',
-              `Shell ${i} face ${faceIdx} claims to belong to shell ${faceShell}`,
+              `Shell ${i} lists face ${faceId}, but face claims shell ${faceShell}`,
               { type: 'shell', id: i },
-              [{ type: 'face', id: faceIdx }]
+              [{ type: 'face', id: faceId }]
             );
           }
         }
@@ -862,8 +891,7 @@ function validateShells(
  */
 function validateBodies(
   model: TopoModel,
-  report: ValidationReport,
-  _opts: Required<ValidationOptions>
+  report: ValidationReport
 ): void {
   const table = model.bodies;
   
@@ -871,11 +899,10 @@ function validateBodies(
     const id = asBodyId(i);
     if (isBodyDeleted(model, id)) continue;
     
-    const firstShell = getBodyFirstShell(model, id);
-    const shellCount = getBodyShellCount(model, id);
+    const shells = getBodyShells(model, id);
     
     // Check shells
-    if (shellCount === 0) {
+    if (shells.length === 0) {
       addIssue(
         report,
         'nullReference',
@@ -883,37 +910,28 @@ function validateBodies(
         `Body ${i} has no shells`,
         { type: 'body', id: i }
       );
-    } else if (isNullId(firstShell)) {
-      addIssue(
-        report,
-        'nullReference',
-        'error',
-        `Body ${i} has ${shellCount} shells but null first shell reference`,
-        { type: 'body', id: i }
-      );
     } else {
       // Check each shell references this body
-      for (let j = 0; j < shellCount; j++) {
-        const shellIdx = firstShell + j;
-        if (shellIdx >= model.shells.count) {
+      for (const shellId of shells) {
+        if (shellId >= model.shells.count) {
           addIssue(
             report,
             'invalidIndex',
             'error',
-            `Body ${i} references invalid shell ${shellIdx}`,
+            `Body ${i} references invalid shell ${shellId}`,
             { type: 'body', id: i },
-            [{ type: 'shell', id: shellIdx }]
+            [{ type: 'shell', id: shellId }]
           );
         } else {
-          const shellBody = getShellBody(model, asShellId(shellIdx));
+          const shellBody = getShellBody(model, shellId);
           if (shellBody !== i) {
             addIssue(
               report,
-              'halfEdgePairMismatch',
+              'shellBodyMismatch',
               'error',
-              `Body ${i} shell ${shellIdx} claims to belong to body ${shellBody}`,
+              `Body ${i} lists shell ${shellId}, but shell claims body ${shellBody}`,
               { type: 'body', id: i },
-              [{ type: 'shell', id: shellIdx }]
+              [{ type: 'shell', id: shellId }]
             );
           }
         }
@@ -976,21 +994,17 @@ function validateManifold(
       // For a closed shell, all edges should have exactly 2 half-edges
       const shellEdges = new Map<number, number>();
       
-      const firstFace = model.shells.firstFace[i];
-      const faceCount = model.shells.faceCount[i];
+      const faces = getShellFaces(model, id);
       
-      for (let j = 0; j < faceCount; j++) {
-        const faceIdx = firstFace + j;
-        if (faceIdx >= model.faces.count) continue;
+      for (const faceId of faces) {
+        if (faceId >= model.faces.count) continue;
         
-        const firstLoop = model.faces.firstLoop[faceIdx];
-        const loopCount = model.faces.loopCount[faceIdx];
+        const loops = getFaceLoops(model, faceId);
         
-        for (let k = 0; k < loopCount; k++) {
-          const loopIdx = firstLoop + k;
-          if (loopIdx >= model.loops.count) continue;
+        for (const loopId of loops) {
+          if (loopId >= model.loops.count) continue;
           
-          const firstHe = model.loops.firstHalfEdge[loopIdx];
+          const firstHe = model.loops.firstHalfEdge[loopId];
           if (isNullId(firstHe)) continue;
           
           let current = firstHe;
