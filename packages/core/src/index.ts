@@ -11,5 +11,10 @@
  * - mesh: tessellation
  */
 
-// Placeholder export for Phase 0
-export const core = 'core';
+// num: numeric backbone & tolerances (Phase 1)
+export * from './num/vec2.js';
+export * from './num/vec3.js';
+export * from './num/mat4.js';
+export * from './num/tolerance.js';
+export * from './num/predicates.js';
+export * from './num/rootFinding.js';
