@@ -2,8 +2,11 @@
  * @solidtype/viewer - SolidType WebGL Viewer
  * 
  * Demonstrates tessellation of BREP bodies using three.js.
- * This viewer shows a box primitive created by createBox and
- * tessellated using the mesh module.
+ * 
+ * Phase 9: Added Web Worker support for off-main-thread modeling.
+ * The viewer can run in two modes:
+ * - Direct mode: Uses @solidtype/core directly (faster startup)
+ * - Worker mode: Uses kernel worker for off-main-thread modeling
  */
 
 import * as THREE from 'three';
@@ -15,6 +18,14 @@ import {
   tessellateBody,
 } from '@solidtype/core';
 import { createThreeMesh } from './MeshAdapter.js';
+import { KernelClient, type SerializedMesh } from './worker/index.js';
+
+// ============================================================================
+// Configuration
+// ============================================================================
+
+/** Whether to use the worker for modeling */
+const USE_WORKER = true;
 
 // ============================================================================
 // Scene Setup
@@ -96,13 +107,24 @@ axesHelper.position.set(-4, -1, -4);
 scene.add(axesHelper);
 
 // ============================================================================
-// SolidType Model Creation and Tessellation
+// Material
+// ============================================================================
+
+const material = new THREE.MeshStandardMaterial({
+  color: 0x4a90e2,
+  metalness: 0.4,
+  roughness: 0.3,
+  flatShading: false,
+});
+
+// ============================================================================
+// Model Building Functions
 // ============================================================================
 
 /**
- * Build and tessellate a demo box using SolidType
+ * Build demo model directly using core (no worker)
  */
-function buildDemoModel(): THREE.Mesh {
+function buildDemoModelDirect(): THREE.Mesh {
   // Create numeric context with tolerances
   const ctx = createNumericContext();
   
@@ -120,18 +142,11 @@ function buildDemoModel(): THREE.Mesh {
   // Tessellate the body to get a triangle mesh
   const mesh = tessellateBody(model, bodyId);
   
-  console.log('SolidType Model Created:');
+  console.log('SolidType Model Created (Direct):');
   console.log(`  Vertices: ${mesh.positions.length / 3}`);
   console.log(`  Triangles: ${mesh.indices.length / 3}`);
   
   // Create THREE.Mesh with a nice material
-  const material = new THREE.MeshStandardMaterial({
-    color: 0x4a90e2,
-    metalness: 0.4,
-    roughness: 0.3,
-    flatShading: false,
-  });
-  
   const threeMesh = createThreeMesh(mesh, material);
   threeMesh.castShadow = true;
   threeMesh.receiveShadow = true;
@@ -139,9 +154,69 @@ function buildDemoModel(): THREE.Mesh {
   return threeMesh;
 }
 
-// Create and add the demo model
-const demoMesh = buildDemoModel();
-scene.add(demoMesh);
+/**
+ * Build demo model using the kernel worker
+ */
+async function buildDemoModelWorker(): Promise<THREE.Mesh> {
+  console.log('Initializing kernel worker...');
+  const startTime = performance.now();
+  
+  // Create and initialize the kernel client
+  const client = new KernelClient();
+  await client.init();
+  
+  const initTime = performance.now() - startTime;
+  console.log(`Worker initialized in ${initTime.toFixed(2)}ms`);
+  
+  // Create a box using the worker
+  const modelStartTime = performance.now();
+  const bodyId = await client.createBox({
+    width: 2,
+    depth: 1.5,
+    height: 1,
+    center: [0, 0, 0],
+  });
+  
+  const modelTime = performance.now() - modelStartTime;
+  console.log(`Box created in ${modelTime.toFixed(2)}ms`);
+  
+  // Get the mesh from the worker
+  const meshStartTime = performance.now();
+  const serializedMesh = await client.getMesh(bodyId);
+  const meshTime = performance.now() - meshStartTime;
+  console.log(`Mesh retrieved in ${meshTime.toFixed(2)}ms`);
+  
+  console.log('SolidType Model Created (Worker):');
+  console.log(`  Vertices: ${serializedMesh.positions.length / 3}`);
+  console.log(`  Triangles: ${serializedMesh.indices.length / 3}`);
+  
+  // Convert to THREE.Mesh
+  const threeMesh = createThreeMeshFromSerialized(serializedMesh, material);
+  threeMesh.castShadow = true;
+  threeMesh.receiveShadow = true;
+  
+  // Dispose the worker (we don't need it anymore for this demo)
+  // In a real app, you'd keep it alive for parameter updates
+  await client.dispose();
+  
+  return threeMesh;
+}
+
+/**
+ * Create THREE.Mesh from serialized mesh data
+ */
+function createThreeMeshFromSerialized(
+  mesh: SerializedMesh,
+  material: THREE.Material
+): THREE.Mesh {
+  const geometry = new THREE.BufferGeometry();
+  
+  geometry.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(mesh.normals, 3));
+  geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
+  
+  return new THREE.Mesh(geometry, material);
+}
 
 // ============================================================================
 // UI Overlay
@@ -166,11 +241,12 @@ infoDiv.innerHTML = `
   <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #4a90e2;">
     SolidType Viewer
   </div>
-  <div style="color: #888;">Phase 4 Demo</div>
+  <div style="color: #888;">Phase 9 Demo</div>
   <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0;">
   <div><span style="color: #6c6;">✓</span> BREP Box Primitive</div>
   <div><span style="color: #6c6;">✓</span> Planar Face Tessellation</div>
   <div><span style="color: #6c6;">✓</span> three.js Integration</div>
+  <div><span style="color: #f90;">●</span> Web Worker Mode: <span id="worker-mode">Loading...</span></div>
   <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0;">
   <div style="color: #888; font-size: 11px;">
     Drag to orbit • Scroll to zoom
@@ -192,6 +268,8 @@ window.addEventListener('resize', () => {
 // Animation Loop
 // ============================================================================
 
+let demoMesh: THREE.Mesh | null = null;
+
 function animate() {
   requestAnimationFrame(animate);
   
@@ -199,9 +277,59 @@ function animate() {
   controls.update();
   
   // Gentle rotation of the demo mesh
-  demoMesh.rotation.y += 0.002;
+  if (demoMesh) {
+    demoMesh.rotation.y += 0.002;
+  }
   
   renderer.render(scene, camera);
 }
 
+// ============================================================================
+// Main Initialization
+// ============================================================================
+
+async function init() {
+  const workerModeSpan = document.getElementById('worker-mode');
+  
+  try {
+    if (USE_WORKER) {
+      demoMesh = await buildDemoModelWorker();
+      if (workerModeSpan) {
+        workerModeSpan.textContent = 'Enabled';
+        workerModeSpan.style.color = '#6c6';
+      }
+    } else {
+      demoMesh = buildDemoModelDirect();
+      if (workerModeSpan) {
+        workerModeSpan.textContent = 'Disabled (Direct)';
+        workerModeSpan.style.color = '#888';
+      }
+    }
+    
+    scene.add(demoMesh);
+    
+    console.log('Demo model added to scene');
+  } catch (error) {
+    console.error('Failed to build demo model:', error);
+    if (workerModeSpan) {
+      workerModeSpan.textContent = 'Error';
+      workerModeSpan.style.color = '#f44';
+    }
+    
+    // Fall back to direct mode
+    console.log('Falling back to direct mode...');
+    demoMesh = buildDemoModelDirect();
+    scene.add(demoMesh);
+    
+    if (workerModeSpan) {
+      workerModeSpan.textContent = 'Fallback (Direct)';
+      workerModeSpan.style.color = '#f90';
+    }
+  }
+}
+
+// Start the animation loop immediately
 animate();
+
+// Initialize the model
+init();

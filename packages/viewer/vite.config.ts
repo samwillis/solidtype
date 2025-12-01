@@ -5,4 +5,10 @@ export default defineConfig({
     port: 3000,
     open: true,
   },
+  worker: {
+    format: 'es',
+  },
+  optimizeDeps: {
+    exclude: ['@solidtype/core', '@solidtype/oo'],
+  },
 });
