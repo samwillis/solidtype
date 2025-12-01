@@ -15,7 +15,6 @@ import {
   verticalLine,
   distance,
   equalLength,
-  allocateConstraintId,
   vec3,
   type Sketch,
   type Constraint,
@@ -47,14 +46,14 @@ function createRectangleSketch(): { sketch: Sketch; constraints: Constraint[] } 
   const l2 = addLine(sketch, p2, p3);
   const l3 = addLine(sketch, p3, p0);
   
-  // Create constraints
+  // Create constraints (factory functions auto-allocate IDs)
   const constraints: Constraint[] = [
-    horizontalLine(allocateConstraintId(), l0),
-    verticalLine(allocateConstraintId(), l1),
-    horizontalLine(allocateConstraintId(), l2),
-    verticalLine(allocateConstraintId(), l3),
-    distance(allocateConstraintId(), p0, p1, 10),
-    distance(allocateConstraintId(), p1, p2, 8),
+    horizontalLine(l0),
+    verticalLine(l1),
+    horizontalLine(l2),
+    verticalLine(l3),
+    distance(p0, p1, 10),
+    distance(p1, p2, 8),
   ];
   
   return { sketch, constraints };
@@ -79,9 +78,9 @@ function createTriangleSketch(): { sketch: Sketch; constraints: Constraint[] } {
   
   // Create constraints
   const constraints: Constraint[] = [
-    horizontalLine(allocateConstraintId(), l0),
-    equalLength(allocateConstraintId(), l1, l2),
-    distance(allocateConstraintId(), p0, p1, 10),
+    horizontalLine(l0),
+    equalLength(l1, l2),
+    distance(p0, p1, 10),
   ];
   
   return { sketch, constraints };
@@ -119,15 +118,14 @@ function createComplexSketch(
   
   // Equal length for all edges
   for (let i = 1; i < numPoints; i++) {
-    constraints.push(equalLength(allocateConstraintId(), lines[0], lines[i]));
+    constraints.push(equalLength(lines[0], lines[i]));
   }
   
   // Fix the first line to be horizontal
-  constraints.push(horizontalLine(allocateConstraintId(), lines[0]));
+  constraints.push(horizontalLine(lines[0]));
   
   // Add distance constraint
   constraints.push(distance(
-    allocateConstraintId(),
     points[0],
     points[1],
     2 * radius * Math.sin(Math.PI / numPoints)
@@ -148,7 +146,8 @@ function benchmarkRectangleSolve(): BenchmarkResult {
   
   return runBenchmark('solve rect', () => {
     // Perturb points slightly
-    for (const point of sketch.points.values()) {
+    const points = Array.from(sketch.points.values());
+    for (const point of points) {
       if (!point.fixed) {
         point.x += (Math.random() - 0.5) * 0.1;
         point.y += (Math.random() - 0.5) * 0.1;
@@ -165,7 +164,8 @@ function benchmarkTriangleSolve(): BenchmarkResult {
   const { sketch, constraints } = createTriangleSketch();
   
   return runBenchmark('solve triangle', () => {
-    for (const point of sketch.points.values()) {
+    const points = Array.from(sketch.points.values());
+    for (const point of points) {
       if (!point.fixed) {
         point.x += (Math.random() - 0.5) * 0.1;
         point.y += (Math.random() - 0.5) * 0.1;
@@ -186,7 +186,8 @@ function benchmarkHexagonSolve(): BenchmarkResult {
   const { sketch, constraints } = createComplexSketch(6);
   
   return runBenchmark('solve hexagon', () => {
-    for (const point of sketch.points.values()) {
+    const points = Array.from(sketch.points.values());
+    for (const point of points) {
       if (!point.fixed) {
         point.x += (Math.random() - 0.5) * 0.1;
         point.y += (Math.random() - 0.5) * 0.1;
@@ -203,7 +204,8 @@ function benchmarkDodecagonSolve(): BenchmarkResult {
   const { sketch, constraints } = createComplexSketch(12);
   
   return runBenchmark('solve 12-gon', () => {
-    for (const point of sketch.points.values()) {
+    const points = Array.from(sketch.points.values());
+    for (const point of points) {
       if (!point.fixed) {
         point.x += (Math.random() - 0.5) * 0.1;
         point.y += (Math.random() - 0.5) * 0.1;
@@ -220,7 +222,8 @@ function benchmarkIcosagonSolve(): BenchmarkResult {
   const { sketch, constraints } = createComplexSketch(20);
   
   return runBenchmark('solve 20-gon', () => {
-    for (const point of sketch.points.values()) {
+    const points = Array.from(sketch.points.values());
+    for (const point of points) {
       if (!point.fixed) {
         point.x += (Math.random() - 0.5) * 0.1;
         point.y += (Math.random() - 0.5) * 0.1;
