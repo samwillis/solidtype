@@ -61,8 +61,11 @@ export type ValidationIssueKind =
   | 'twinDirectionMismatch'
   | 'nonManifoldEdge'
   | 'boundaryEdge'
+  | 'crack'
   | 'zeroLengthEdge'
+  | 'shortEdge'
   | 'zeroAreaFace'
+  | 'sliverFace'
   | 'inconsistentLoopOrientation'
   | 'orphanedEntity'
   | 'surfaceMissing'
@@ -70,7 +73,9 @@ export type ValidationIssueKind =
   | 'vertexMismatch'
   | 'loopFaceMismatch'
   | 'faceShellMismatch'
-  | 'shellBodyMismatch';
+  | 'shellBodyMismatch'
+  | 'duplicateVertex'
+  | 'inconsistentShellOrientation';
 
 /**
  * Severity levels for validation issues
@@ -78,9 +83,13 @@ export type ValidationIssueKind =
 export type ValidationSeverity = 'error' | 'warning' | 'info';
 
 /**
- * Subshape reference for validation issues
+ * Entity reference for validation issues
+ * 
+ * Note: This is distinct from naming/types.ts SubshapeRef, which is specifically
+ * for persistent naming. This type covers all entity types (including shells, loops, etc.)
+ * that can have validation issues.
  */
-export interface SubshapeRef {
+export interface ValidationEntityRef {
   type: 'body' | 'shell' | 'face' | 'loop' | 'halfEdge' | 'edge' | 'vertex';
   id: number;
 }
@@ -95,10 +104,10 @@ export interface ValidationIssue {
   severity: ValidationSeverity;
   /** Human-readable description */
   message: string;
-  /** The subshape where the issue was found */
-  subshape: SubshapeRef;
-  /** Related subshapes involved in the issue */
-  related?: SubshapeRef[];
+  /** The entity where the issue was found */
+  subshape: ValidationEntityRef;
+  /** Related entities involved in the issue */
+  related?: ValidationEntityRef[];
 }
 
 /**
@@ -125,15 +134,27 @@ export interface ValidationOptions {
   checkManifold?: boolean;
   /** Check for boundary edges (edges with only one face) */
   checkBoundary?: boolean;
+  /** Check for sliver faces (faces with poor aspect ratio) */
+  checkSlivers?: boolean;
+  /** Check for near-coincident vertices */
+  checkDuplicateVertices?: boolean;
   /** Maximum iterations when traversing loops (to prevent infinite loops) */
   maxLoopIterations?: number;
+  /** Multiplier for short edge threshold (shortEdge if length < tol * multiplier) */
+  shortEdgeMultiplier?: number;
+  /** Minimum aspect ratio for sliver face detection (smaller = more strict) */
+  sliverAspectRatioThreshold?: number;
 }
 
 const DEFAULT_OPTIONS: Required<ValidationOptions> = {
   checkDegenerate: true,
   checkManifold: true,
   checkBoundary: true,
+  checkSlivers: true,
+  checkDuplicateVertices: false, // disabled by default as it can be expensive
   maxLoopIterations: 10000,
+  shortEdgeMultiplier: 10, // edges shorter than 10 * tol are flagged
+  sliverAspectRatioThreshold: 0.01, // faces with aspect ratio < 1% are slivers
 };
 
 /**
@@ -157,8 +178,8 @@ function addIssue(
   kind: ValidationIssueKind,
   severity: ValidationSeverity,
   message: string,
-  subshape: SubshapeRef,
-  related?: SubshapeRef[]
+  subshape: ValidationEntityRef,
+  related?: ValidationEntityRef[]
 ): void {
   report.issues.push({ kind, severity, message, subshape, related });
   
@@ -189,6 +210,11 @@ export function validateModel(
   // Validate vertices
   validateVertices(model, report);
   
+  // Check for duplicate vertices if requested
+  if (opts.checkDuplicateVertices) {
+    validateDuplicateVertices(model, report);
+  }
+  
   // Validate edges
   validateEdges(model, report, opts);
   
@@ -200,6 +226,11 @@ export function validateModel(
   
   // Validate faces
   validateFaces(model, report);
+  
+  // Check for sliver faces if requested
+  if (opts.checkSlivers) {
+    validateSliverFaces(model, report, opts);
+  }
   
   // Validate shells
   validateShells(model, report);
@@ -317,7 +348,7 @@ function validateEdges(
       );
     }
     
-    // Check for degenerate (zero-length) edges
+    // Check for degenerate (zero-length) and short edges
     if (opts.checkDegenerate && !isNullId(vStart) && !isNullId(vEnd)) {
       const p0 = getVertexPosition(model, vStart);
       const p1 = getVertexPosition(model, vEnd);
@@ -332,6 +363,19 @@ function validateEdges(
           { type: 'edge', id: i },
           [{ type: 'vertex', id: vStart }, { type: 'vertex', id: vEnd }]
         );
+      } else {
+        // Check for short edges (longer than zero but still very small)
+        const shortEdgeThreshold = model.ctx.tol.length * opts.shortEdgeMultiplier;
+        if (len < shortEdgeThreshold && len > model.ctx.tol.length) {
+          addIssue(
+            report,
+            'shortEdge',
+            'warning',
+            `Edge ${i} is very short (length ${len.toExponential(3)}, threshold ${shortEdgeThreshold.toExponential(3)})`,
+            { type: 'edge', id: i },
+            [{ type: 'vertex', id: vStart }, { type: 'vertex', id: vEnd }]
+          );
+        }
       }
     }
     
@@ -1042,6 +1086,183 @@ function validateManifold(
 }
 
 /**
+ * Validate for duplicate (near-coincident) vertices
+ * 
+ * Finds vertices that are within tolerance of each other,
+ * which may indicate geometry issues or need for healing.
+ */
+function validateDuplicateVertices(
+  model: TopoModel,
+  report: ValidationReport
+): void {
+  const table = model.vertices;
+  const tol = model.ctx.tol.length;
+  
+  // Build list of live vertices
+  const liveVertices: Array<{ id: number; x: number; y: number; z: number }> = [];
+  for (let i = 0; i < table.count; i++) {
+    if (isVertexDeleted(model, asVertexId(i))) continue;
+    liveVertices.push({
+      id: i,
+      x: table.x[i],
+      y: table.y[i],
+      z: table.z[i],
+    });
+  }
+  
+  // O(n²) check for duplicates (could be optimized with spatial indexing)
+  for (let i = 0; i < liveVertices.length; i++) {
+    for (let j = i + 1; j < liveVertices.length; j++) {
+      const a = liveVertices[i];
+      const b = liveVertices[j];
+      
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const dz = a.z - b.z;
+      const distSq = dx * dx + dy * dy + dz * dz;
+      
+      if (distSq < tol * tol) {
+        addIssue(
+          report,
+          'duplicateVertex',
+          'warning',
+          `Vertices ${a.id} and ${b.id} are nearly coincident (distance ${Math.sqrt(distSq).toExponential(3)})`,
+          { type: 'vertex', id: a.id },
+          [{ type: 'vertex', id: b.id }]
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Validate for sliver faces (faces with very poor aspect ratio or very small area)
+ * 
+ * A sliver face is typically a very thin triangle or quad that may cause
+ * numerical issues or visual artifacts in rendering.
+ */
+function validateSliverFaces(
+  model: TopoModel,
+  report: ValidationReport,
+  opts: Required<ValidationOptions>
+): void {
+  for (let i = 0; i < model.faces.count; i++) {
+    const faceId = asFaceId(i);
+    if (isFaceDeleted(model, faceId)) continue;
+    
+    const loops = getFaceLoops(model, faceId);
+    if (loops.length === 0) continue;
+    
+    const outerLoop = loops[0];
+    const firstHe = getLoopFirstHalfEdge(model, outerLoop);
+    if (isNullId(firstHe)) continue;
+    
+    // Collect vertices from outer loop
+    const vertices: Array<{ x: number; y: number; z: number }> = [];
+    let he = firstHe;
+    let iterations = 0;
+    
+    do {
+      if (iterations++ > opts.maxLoopIterations) break;
+      
+      const vertex = getHalfEdgeStartVertex(model, he);
+      const pos = getVertexPosition(model, vertex);
+      vertices.push({ x: pos[0], y: pos[1], z: pos[2] });
+      he = getHalfEdgeNext(model, he);
+    } while (he !== firstHe && !isNullId(he));
+    
+    if (vertices.length < 3) continue;
+    
+    // Compute approximate area using shoelace-like formula for 3D polygon
+    // Project to best-fit plane and compute 2D area
+    const areaAndPerimeter = computePolygonAreaAndPerimeter(vertices);
+    const { area, perimeter } = areaAndPerimeter;
+    
+    // Check for zero area
+    if (area < model.ctx.tol.length * model.ctx.tol.length) {
+      addIssue(
+        report,
+        'zeroAreaFace',
+        'warning',
+        `Face ${i} has near-zero area (${area.toExponential(3)})`,
+        { type: 'face', id: i }
+      );
+      continue;
+    }
+    
+    // Check for sliver face using isoperimetric ratio
+    // For a circle (best ratio): ratio = 4π*area/perimeter² = 1
+    // For a square: ratio ≈ 0.785
+    // For very thin shapes: ratio → 0
+    if (perimeter > 0) {
+      const isoperimetricRatio = (4 * Math.PI * area) / (perimeter * perimeter);
+      
+      if (isoperimetricRatio < opts.sliverAspectRatioThreshold) {
+        addIssue(
+          report,
+          'sliverFace',
+          'warning',
+          `Face ${i} is a sliver face (isoperimetric ratio ${isoperimetricRatio.toFixed(4)}, threshold ${opts.sliverAspectRatioThreshold})`,
+          { type: 'face', id: i }
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Compute the approximate area and perimeter of a 3D polygon
+ * by projecting to its best-fit plane.
+ */
+function computePolygonAreaAndPerimeter(
+  vertices: Array<{ x: number; y: number; z: number }>
+): { area: number; perimeter: number } {
+  const n = vertices.length;
+  if (n < 3) return { area: 0, perimeter: 0 };
+  
+  // Compute centroid
+  let cx = 0, cy = 0, cz = 0;
+  for (const v of vertices) {
+    cx += v.x;
+    cy += v.y;
+    cz += v.z;
+  }
+  cx /= n;
+  cy /= n;
+  cz /= n;
+  
+  // Compute approximate normal using Newell's method
+  let nx = 0, ny = 0, nz = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const vi = vertices[i];
+    const vj = vertices[j];
+    
+    nx += (vi.y - cy) * (vj.z - cz) - (vi.z - cz) * (vj.y - cy);
+    ny += (vi.z - cz) * (vj.x - cx) - (vi.x - cx) * (vj.z - cz);
+    nz += (vi.x - cx) * (vj.y - cy) - (vi.y - cy) * (vj.x - cx);
+  }
+  
+  // Area is half the magnitude of the normal vector from Newell's method
+  const area = 0.5 * Math.sqrt(nx * nx + ny * ny + nz * nz);
+  
+  // Compute perimeter
+  let perimeter = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const vi = vertices[i];
+    const vj = vertices[j];
+    
+    const dx = vj.x - vi.x;
+    const dy = vj.y - vi.y;
+    const dz = vj.z - vi.z;
+    perimeter += Math.sqrt(dx * dx + dy * dy + dz * dz);
+  }
+  
+  return { area, perimeter };
+}
+
+/**
  * Quick validation check - returns true if model is valid
  * 
  * This is a lighter check than full validateModel, suitable for assertions.
@@ -1050,6 +1271,7 @@ export function isValidModel(model: TopoModel): boolean {
   const report = validateModel(model, {
     checkDegenerate: false,
     checkBoundary: false,
+    checkSlivers: false,
   });
   return report.isValid;
 }

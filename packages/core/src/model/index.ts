@@ -7,7 +7,11 @@
  * - Sketch profiles for 2D shapes
  * - Extrude and revolve operations
  * - Boolean operations (union, subtract, intersect)
+ * - Robust error handling types (ModelingResult, ModelingError)
  */
+
+// Result types and error handling
+export * from './types.js';
 
 // Primitives
 export * from './primitives.js';
