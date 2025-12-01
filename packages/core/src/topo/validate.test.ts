@@ -574,4 +574,101 @@ describe('Validation', () => {
       expect(mismatch.length).toBeGreaterThan(0);
     });
   });
+
+  describe('Duplicate vertices', () => {
+    it('should detect near-coincident vertices', () => {
+      const model = createEmptyModel(ctx);
+      
+      // Create two vertices at nearly the same position
+      addVertex(model, 0, 0, 0);
+      addVertex(model, 1e-8, 1e-8, 0); // within tolerance
+      addVertex(model, 1, 0, 0); // far away
+      
+      const report = validateModel(model, { checkDuplicateVertices: true });
+      
+      const duplicates = report.issues.filter(i => i.kind === 'duplicateVertex');
+      expect(duplicates.length).toBe(1);
+    });
+
+    it('should not flag vertices that are far apart', () => {
+      const model = createEmptyModel(ctx);
+      
+      addVertex(model, 0, 0, 0);
+      addVertex(model, 1, 0, 0);
+      addVertex(model, 0, 1, 0);
+      
+      const report = validateModel(model, { checkDuplicateVertices: true });
+      
+      const duplicates = report.issues.filter(i => i.kind === 'duplicateVertex');
+      expect(duplicates.length).toBe(0);
+    });
+  });
+
+  describe('Short edges', () => {
+    it('should detect short edges', () => {
+      const model = createEmptyModel(ctx);
+      
+      const v0 = addVertex(model, 0, 0, 0);
+      const v1 = addVertex(model, 1e-5, 0, 0); // very short edge
+      const v2 = addVertex(model, 1, 0, 0); // normal length
+      
+      addEdge(model, v0, v1); // short edge
+      addEdge(model, v1, v2); // normal edge
+      
+      const report = validateModel(model, { checkDegenerate: true, shortEdgeMultiplier: 1000 });
+      
+      const shortEdges = report.issues.filter(i => i.kind === 'shortEdge');
+      expect(shortEdges.length).toBe(1);
+    });
+  });
+
+  describe('Sliver faces', () => {
+    it('should detect sliver faces with very poor aspect ratio', () => {
+      const model = createEmptyModel(ctx);
+      
+      // Create a very thin triangle (sliver)
+      const v0 = addVertex(model, 0, 0, 0);
+      const v1 = addVertex(model, 10, 0, 0); // long edge
+      const v2 = addVertex(model, 5, 0.001, 0); // very thin
+      
+      const e0 = addEdge(model, v0, v1);
+      const e1 = addEdge(model, v1, v2);
+      const e2 = addEdge(model, v2, v0);
+      
+      const he0 = addHalfEdge(model, e0, 1);
+      const he1 = addHalfEdge(model, e1, 1);
+      const he2 = addHalfEdge(model, e2, 1);
+      
+      const surface = createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1));
+      const surfaceIdx = addSurface(model, surface);
+      
+      const body = addBody(model);
+      const shell = addShell(model, false);
+      addShellToBody(model, body, shell);
+      
+      const face = addFace(model, surfaceIdx);
+      addFaceToShell(model, shell, face);
+      
+      const loop = addLoop(model, [he0, he1, he2]);
+      addLoopToFace(model, face, loop);
+      
+      const report = validateModel(model, { 
+        checkSlivers: true,
+        sliverAspectRatioThreshold: 0.1 // 10% threshold
+      });
+      
+      const slivers = report.issues.filter(i => i.kind === 'sliverFace');
+      expect(slivers.length).toBe(1);
+    });
+
+    it('should not flag normal faces as slivers', () => {
+      const model = createEmptyModel(ctx);
+      createTriangleFace(model); // normal equilateral-ish triangle
+      
+      const report = validateModel(model, { checkSlivers: true });
+      
+      const slivers = report.issues.filter(i => i.kind === 'sliverFace');
+      expect(slivers.length).toBe(0);
+    });
+  });
 });
