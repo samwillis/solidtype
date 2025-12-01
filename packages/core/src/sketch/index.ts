@@ -70,6 +70,11 @@ export type {
   PointOnArcConstraint,
   EqualRadiusConstraint,
   ConcentricConstraint,
+  SymmetricConstraint,
+  MidpointConstraint,
+  ArcArcTangentConstraint,
+  RadiusDimensionConstraint,
+  PointToLineDistanceConstraint,
   Constraint,
 } from './constraints.js';
 
@@ -92,6 +97,11 @@ export {
   pointOnArc,
   equalRadius,
   concentric,
+  symmetric,
+  midpoint,
+  arcArcTangent,
+  radiusDimension,
+  pointToLineDistance,
   getConstraintPoints,
   getConstraintResidualCount,
   describeConstraint,
@@ -131,3 +141,51 @@ export {
   solveSketch,
   analyzeDOF,
 } from './solver.js';
+
+// Graph analysis and partitioning
+export type {
+  GraphNode,
+  GraphComponent,
+  GraphAnalysis,
+  ConstraintConflict,
+} from './graph.js';
+
+export {
+  buildConstraintGraph,
+  findConnectedComponents,
+  getComponentConstraints,
+  analyzeComponentDOF,
+  detectConflicts,
+  analyzeConstraintGraph,
+  partitionForSolving,
+  canSolve,
+} from './graph.js';
+
+// External attachment resolution
+export type {
+  AttachmentType,
+  ResolvedAttachment,
+  AttachmentConstraintData,
+  AttachmentResolutionResult,
+} from './attachment.js';
+
+export {
+  projectToSketchPlane,
+  sketchToWorld,
+  getEdgeEndpoints,
+  getEdgePointAtParameter,
+  projectPointOntoEdge,
+  resolveAttachment,
+  resolveAllAttachments,
+  applyResolvedAttachments,
+  hasExternalAttachments,
+  getAttachedPoints,
+  createAttachmentConstraints,
+} from './attachment.js';
+
+// ID allocation
+export {
+  IdAllocator,
+  getGlobalAllocator,
+  resetAllIds,
+} from './idAllocator.js';

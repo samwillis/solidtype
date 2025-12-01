@@ -51,7 +51,12 @@ export type ConstraintKind =
   | 'pointOnLine'
   | 'pointOnArc'
   | 'equalRadius'
-  | 'concentric';
+  | 'concentric'
+  | 'symmetric'
+  | 'midpoint'
+  | 'arcArcTangent'
+  | 'radiusDimension'
+  | 'pointToLineDistance';
 
 // ============================================================================
 // Base Constraint Interface
@@ -318,6 +323,84 @@ export interface ConcentricConstraint extends BaseConstraint {
 }
 
 // ============================================================================
+// Additional Constraints
+// ============================================================================
+
+/**
+ * Symmetric constraint: two points are symmetric about a line
+ * 
+ * Residuals: 
+ * - Midpoint of p1-p2 lies on the symmetry line
+ * - Line p1-p2 is perpendicular to the symmetry line
+ */
+export interface SymmetricConstraint extends BaseConstraint {
+  kind: 'symmetric';
+  /** First point */
+  p1: SketchPointId;
+  /** Second point */
+  p2: SketchPointId;
+  /** Symmetry line entity */
+  symmetryLine: SketchEntityId;
+}
+
+/**
+ * Midpoint constraint: a point is at the midpoint of a line
+ * 
+ * Residuals: [p.x - (start.x + end.x)/2, p.y - (start.y + end.y)/2]
+ */
+export interface MidpointConstraint extends BaseConstraint {
+  kind: 'midpoint';
+  /** Point to constrain */
+  point: SketchPointId;
+  /** Line entity */
+  line: SketchEntityId;
+}
+
+/**
+ * Arc-Arc tangent constraint: two arcs are tangent to each other
+ * 
+ * For external tangency: distance between centers = r1 + r2
+ * For internal tangency: distance between centers = |r1 - r2|
+ */
+export interface ArcArcTangentConstraint extends BaseConstraint {
+  kind: 'arcArcTangent';
+  /** First arc entity */
+  arc1: SketchEntityId;
+  /** Second arc entity */
+  arc2: SketchEntityId;
+  /** Whether tangency is internal (one arc inside the other) */
+  internal: boolean;
+}
+
+/**
+ * Radius dimension constraint: an arc has a specific radius
+ * 
+ * Residual: [actual_radius - target_radius]
+ */
+export interface RadiusDimensionConstraint extends BaseConstraint {
+  kind: 'radiusDimension';
+  /** Arc entity */
+  arc: SketchEntityId;
+  /** Target radius */
+  radius: number;
+}
+
+/**
+ * Point to line distance constraint: distance from a point to a line
+ * 
+ * Residual: [actual_distance - target_distance]
+ */
+export interface PointToLineDistanceConstraint extends BaseConstraint {
+  kind: 'pointToLineDistance';
+  /** Point */
+  point: SketchPointId;
+  /** Line entity */
+  line: SketchEntityId;
+  /** Target distance */
+  distance: number;
+}
+
+// ============================================================================
 // Union type for all constraints
 // ============================================================================
 
@@ -343,28 +426,38 @@ export type Constraint =
   | PointOnLineConstraint
   | PointOnArcConstraint
   | EqualRadiusConstraint
-  | ConcentricConstraint;
+  | ConcentricConstraint
+  | SymmetricConstraint
+  | MidpointConstraint
+  | ArcArcTangentConstraint
+  | RadiusDimensionConstraint
+  | PointToLineDistanceConstraint;
 
 // ============================================================================
 // Constraint Creation Helpers
 // ============================================================================
 
-/** Counter for generating unique constraint IDs */
-let nextConstraintId = 0;
+import { getGlobalAllocator, resetAllIds } from './idAllocator.js';
 
 /**
  * Allocate a new constraint ID
+ * 
+ * Uses the global allocator. For session-scoped allocation,
+ * use an IdAllocator instance directly.
  */
 export function allocateConstraintId(): ConstraintId {
-  return asConstraintId(nextConstraintId++);
+  return getGlobalAllocator().allocateConstraintId();
 }
 
 /**
  * Reset constraint ID counter (for testing)
  * @internal
+ * @deprecated Use resetAllIds() for full reset
  */
 export function resetConstraintIdCounter(): void {
-  nextConstraintId = 0;
+  // For backward compatibility, this still works but only resets constraints
+  // In practice, tests should use resetAllIds()
+  resetAllIds();
 }
 
 /**
@@ -566,6 +659,81 @@ export function concentric(arc1: SketchEntityId, arc2: SketchEntityId): Concentr
   };
 }
 
+/**
+ * Create a symmetric constraint
+ */
+export function symmetric(
+  p1: SketchPointId,
+  p2: SketchPointId,
+  symmetryLine: SketchEntityId
+): SymmetricConstraint {
+  return {
+    id: allocateConstraintId(),
+    kind: 'symmetric',
+    p1,
+    p2,
+    symmetryLine,
+  };
+}
+
+/**
+ * Create a midpoint constraint
+ */
+export function midpoint(point: SketchPointId, line: SketchEntityId): MidpointConstraint {
+  return {
+    id: allocateConstraintId(),
+    kind: 'midpoint',
+    point,
+    line,
+  };
+}
+
+/**
+ * Create an arc-arc tangent constraint
+ */
+export function arcArcTangent(
+  arc1: SketchEntityId,
+  arc2: SketchEntityId,
+  internal: boolean = false
+): ArcArcTangentConstraint {
+  return {
+    id: allocateConstraintId(),
+    kind: 'arcArcTangent',
+    arc1,
+    arc2,
+    internal,
+  };
+}
+
+/**
+ * Create a radius dimension constraint
+ */
+export function radiusDimension(arc: SketchEntityId, radius: number): RadiusDimensionConstraint {
+  return {
+    id: allocateConstraintId(),
+    kind: 'radiusDimension',
+    arc,
+    radius,
+  };
+}
+
+/**
+ * Create a point to line distance constraint
+ */
+export function pointToLineDistance(
+  point: SketchPointId,
+  line: SketchEntityId,
+  dist: number
+): PointToLineDistanceConstraint {
+  return {
+    id: allocateConstraintId(),
+    kind: 'pointToLineDistance',
+    point,
+    line,
+    distance: dist,
+  };
+}
+
 // ============================================================================
 // Constraint Evaluation
 // ============================================================================
@@ -650,6 +818,48 @@ export function getConstraintPoints(constraint: Constraint, sketch: Sketch): Ske
       }
       break;
     }
+    case 'symmetric': {
+      points.push(constraint.p1, constraint.p2);
+      const line = getSketchEntity(sketch, constraint.symmetryLine);
+      if (line && line.kind === 'line') {
+        points.push(line.start, line.end);
+      }
+      break;
+    }
+    case 'midpoint': {
+      points.push(constraint.point);
+      const line = getSketchEntity(sketch, constraint.line);
+      if (line && line.kind === 'line') {
+        points.push(line.start, line.end);
+      }
+      break;
+    }
+    case 'arcArcTangent': {
+      const a1 = getSketchEntity(sketch, constraint.arc1);
+      const a2 = getSketchEntity(sketch, constraint.arc2);
+      if (a1 && a1.kind === 'arc') {
+        points.push(a1.start, a1.center);
+      }
+      if (a2 && a2.kind === 'arc') {
+        points.push(a2.start, a2.center);
+      }
+      break;
+    }
+    case 'radiusDimension': {
+      const arc = getSketchEntity(sketch, constraint.arc);
+      if (arc && arc.kind === 'arc') {
+        points.push(arc.start, arc.center);
+      }
+      break;
+    }
+    case 'pointToLineDistance': {
+      points.push(constraint.point);
+      const line = getSketchEntity(sketch, constraint.line);
+      if (line && line.kind === 'line') {
+        points.push(line.start, line.end);
+      }
+      break;
+    }
   }
   
   return points;
@@ -684,6 +894,16 @@ export function getConstraintResidualCount(constraint: Constraint): number {
       return 1;
     case 'concentric':
       return 2; // dx, dy of centers
+    case 'symmetric':
+      return 2; // midpoint on line + perpendicularity
+    case 'midpoint':
+      return 2; // dx, dy from midpoint
+    case 'arcArcTangent':
+      return 1; // distance between centers = sum/diff of radii
+    case 'radiusDimension':
+      return 1; // radius difference
+    case 'pointToLineDistance':
+      return 1; // distance difference
     default:
       return 0;
   }
@@ -728,6 +948,16 @@ export function describeConstraint(constraint: Constraint): string {
       return `EqualRadius(${constraint.arc1}, ${constraint.arc2})`;
     case 'concentric':
       return `Concentric(${constraint.arc1}, ${constraint.arc2})`;
+    case 'symmetric':
+      return `Symmetric(${constraint.p1}, ${constraint.p2}, line ${constraint.symmetryLine})`;
+    case 'midpoint':
+      return `Midpoint(${constraint.point}, line ${constraint.line})`;
+    case 'arcArcTangent':
+      return `ArcArcTangent(${constraint.arc1}, ${constraint.arc2}, ${constraint.internal ? 'internal' : 'external'})`;
+    case 'radiusDimension':
+      return `RadiusDimension(arc ${constraint.arc}, ${constraint.radius.toFixed(2)})`;
+    case 'pointToLineDistance':
+      return `PointToLineDistance(${constraint.point}, line ${constraint.line}, ${constraint.distance.toFixed(2)})`;
     default:
       return 'Unknown constraint';
   }

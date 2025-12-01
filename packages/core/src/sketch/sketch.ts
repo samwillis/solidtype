@@ -37,25 +37,28 @@ import { vec2 } from '../num/vec2.js';
 import { createEmptyProfile, addLoopToProfile } from '../model/sketchProfile.js';
 
 // ============================================================================
-// Sketch ID Counter
+// Sketch ID Allocation
 // ============================================================================
 
-/** Counter for generating unique sketch IDs */
-let nextSketchId = 0;
+import { getGlobalAllocator, resetAllIds } from './idAllocator.js';
 
 /**
  * Allocate a new sketch ID
+ * 
+ * Uses the global allocator. For session-scoped allocation,
+ * use an IdAllocator instance directly.
  */
 export function allocateSketchId(): SketchId {
-  return asSketchId(nextSketchId++);
+  return getGlobalAllocator().allocateSketchId();
 }
 
 /**
  * Reset sketch ID counter (for testing)
  * @internal
+ * @deprecated Use resetAllIds() for full reset
  */
 export function resetSketchIdCounter(): void {
-  nextSketchId = 0;
+  resetAllIds();
 }
 
 // ============================================================================

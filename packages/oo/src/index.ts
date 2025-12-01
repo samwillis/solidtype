@@ -127,6 +127,17 @@ import {
   pointOnArc,
   equalRadius,
   concentric,
+  symmetric,
+  midpoint,
+  arcArcTangent,
+  radiusDimension,
+  pointToLineDistance,
+  
+  // Graph analysis
+  analyzeConstraintGraph,
+  canSolve,
+  type GraphAnalysis,
+  type ConstraintConflict,
 } from '@solidtype/core';
 
 // Re-export useful types
@@ -173,7 +184,16 @@ export {
   pointOnArc,
   equalRadius,
   concentric,
+  symmetric,
+  midpoint,
+  arcArcTangent,
+  radiusDimension,
+  pointToLineDistance,
 };
+
+// Re-export graph analysis
+export { analyzeConstraintGraph, canSolve };
+export type { GraphAnalysis, ConstraintConflict };
 
 /**
  * Ray for intersection tests

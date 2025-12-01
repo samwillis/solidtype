@@ -544,6 +544,107 @@ function computeConstraintResiduals(state: SolverState, constraint: Constraint):
       return [0, 0];
     }
     
+    case 'symmetric': {
+      const p1 = getPointPosition(state, constraint.p1);
+      const p2 = getPointPosition(state, constraint.p2);
+      const line = getSketchEntity(state.sketch, constraint.symmetryLine);
+      if (line?.kind === 'line') {
+        const lineStart = getPointPosition(state, line.start);
+        const lineEnd = getPointPosition(state, line.end);
+        
+        // Midpoint of p1-p2
+        const mid: Vec2 = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+        
+        // Line direction
+        const lineDir = sub2(lineEnd, lineStart);
+        const lineLen = length2(lineDir);
+        if (lineLen < 1e-10) return [0, 0];
+        
+        // Vector from p1 to p2
+        const p1p2 = sub2(p2, p1);
+        
+        // 1. Midpoint should lie on the line (distance from midpoint to line = 0)
+        const toMid = sub2(mid, lineStart);
+        const midDist = cross2(lineDir, toMid) / lineLen;
+        
+        // 2. Line p1-p2 should be perpendicular to symmetry line
+        const perpResidual = dot2(normalize2(lineDir), normalize2(p1p2));
+        
+        return [
+          weight * midDist,
+          weight * perpResidual,
+        ];
+      }
+      return [0, 0];
+    }
+    
+    case 'midpoint': {
+      const p = getPointPosition(state, constraint.point);
+      const line = getSketchEntity(state.sketch, constraint.line);
+      if (line?.kind === 'line') {
+        const start = getPointPosition(state, line.start);
+        const end = getPointPosition(state, line.end);
+        const expectedMid: Vec2 = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
+        return [
+          weight * (p[0] - expectedMid[0]),
+          weight * (p[1] - expectedMid[1]),
+        ];
+      }
+      return [0, 0];
+    }
+    
+    case 'arcArcTangent': {
+      const a1 = getSketchEntity(state.sketch, constraint.arc1);
+      const a2 = getSketchEntity(state.sketch, constraint.arc2);
+      if (a1?.kind === 'arc' && a2?.kind === 'arc') {
+        const c1 = getPointPosition(state, a1.center);
+        const s1 = getPointPosition(state, a1.start);
+        const c2 = getPointPosition(state, a2.center);
+        const s2 = getPointPosition(state, a2.start);
+        
+        const r1 = length2(sub2(s1, c1));
+        const r2 = length2(sub2(s2, c2));
+        const centerDist = length2(sub2(c2, c1));
+        
+        // For external tangency: centerDist = r1 + r2
+        // For internal tangency: centerDist = |r1 - r2|
+        const expectedDist = constraint.internal 
+          ? Math.abs(r1 - r2) 
+          : r1 + r2;
+        
+        return [weight * (centerDist - expectedDist)];
+      }
+      return [0];
+    }
+    
+    case 'radiusDimension': {
+      const arc = getSketchEntity(state.sketch, constraint.arc);
+      if (arc?.kind === 'arc') {
+        const center = getPointPosition(state, arc.center);
+        const start = getPointPosition(state, arc.start);
+        const actualRadius = length2(sub2(start, center));
+        return [weight * (actualRadius - constraint.radius)];
+      }
+      return [0];
+    }
+    
+    case 'pointToLineDistance': {
+      const p = getPointPosition(state, constraint.point);
+      const line = getSketchEntity(state.sketch, constraint.line);
+      if (line?.kind === 'line') {
+        const start = getPointPosition(state, line.start);
+        const end = getPointPosition(state, line.end);
+        const lineDir = sub2(end, start);
+        const lineLen = length2(lineDir);
+        if (lineLen < 1e-10) return [0];
+        const toPoint = sub2(p, start);
+        // Absolute distance from point to line
+        const actualDist = Math.abs(cross2(lineDir, toPoint) / lineLen);
+        return [weight * (actualDist - constraint.distance)];
+      }
+      return [0];
+    }
+    
     default:
       return [];
   }
