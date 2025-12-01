@@ -36,3 +36,6 @@ export * from './model/index.js';
 
 // naming: persistent naming subsystem (Phase 6)
 export * from './naming/index.js';
+
+// sketch: sketch representation & constraint solver (Phase 7)
+export * from './sketch/index.js';
