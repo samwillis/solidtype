@@ -10,6 +10,8 @@
  * 2. Build intersection curves as 3D edges
  * 3. Classify faces (inside/outside/overlapping) via point classification
  * 4. Construct result BREP by selecting and trimming faces
+ * 
+ * Integrates with the persistent naming system to track face evolution.
  */
 
 import type { Vec3 } from '../num/vec3.js';
@@ -45,6 +47,14 @@ import {
   addShellToBody,
   setHalfEdgeTwin,
 } from '../topo/model.js';
+import type { NamingStrategy, FeatureId, PersistentRef, EvolutionMapping, StepId } from '../naming/index.js';
+import {
+  faceRef,
+  booleanFaceFromASelector,
+  booleanFaceFromBSelector,
+  computeFaceFingerprint,
+  modifyMapping,
+} from '../naming/index.js';
 
 /**
  * Boolean operation type
@@ -57,6 +67,10 @@ export type BooleanOperation = 'union' | 'subtract' | 'intersect';
 export interface BooleanOptions {
   /** The type of boolean operation */
   operation: BooleanOperation;
+  /** Optional naming strategy for persistent naming */
+  namingStrategy?: NamingStrategy;
+  /** Optional feature ID (allocated from namingStrategy if not provided) */
+  featureId?: FeatureId;
 }
 
 /**
@@ -71,6 +85,16 @@ export interface BooleanResult {
   error?: string;
   /** Warning messages (operation succeeded but with caveats) */
   warnings?: string[];
+  /** Feature ID assigned to this operation (if naming was enabled) */
+  featureId?: FeatureId;
+  /** Step ID for evolution tracking */
+  stepId?: StepId;
+  /** Persistent refs for result faces from body A */
+  faceRefsFromA?: PersistentRef[];
+  /** Persistent refs for result faces from body B */
+  faceRefsFromB?: PersistentRef[];
+  /** Evolution mappings from the operation */
+  evolutionMappings?: EvolutionMapping[];
 }
 
 /**
@@ -106,8 +130,14 @@ export function booleanOperation(
   bodyB: BodyId,
   options: BooleanOptions
 ): BooleanResult {
-  const { operation } = options;
+  const { operation, namingStrategy } = options;
   const ctx = model.ctx;
+  
+  // Allocate feature and step IDs if naming is enabled
+  const featureId = namingStrategy
+    ? (options.featureId ?? namingStrategy.allocateFeatureId())
+    : undefined;
+  const stepId = namingStrategy ? namingStrategy.allocateStepId() : undefined;
   
   // Get bounding boxes
   const aabbA = computeBodyAABB(model, bodyA);
@@ -155,29 +185,53 @@ export function booleanOperation(
   let selectedFacesB: FaceId[];
   let flipFacesB = false;
   
+  // Track original face indices for evolution mapping
+  let selectedIndicesA: number[];
+  let selectedIndicesB: number[];
+  
   switch (operation) {
     case 'union':
       // Union: keep faces of A that are outside B, and faces of B that are outside A
-      selectedFacesA = facesA.filter((_, i) => classificationsA[i] !== 'inside');
-      selectedFacesB = facesB.filter((_, i) => classificationsB[i] !== 'inside');
+      selectedIndicesA = facesA.map((_, i) => i).filter(i => classificationsA[i] !== 'inside');
+      selectedIndicesB = facesB.map((_, i) => i).filter(i => classificationsB[i] !== 'inside');
+      selectedFacesA = selectedIndicesA.map(i => facesA[i]);
+      selectedFacesB = selectedIndicesB.map(i => facesB[i]);
       break;
       
     case 'subtract':
       // Subtract: keep faces of A that are outside B, and faces of B that are inside A (reversed)
-      selectedFacesA = facesA.filter((_, i) => classificationsA[i] !== 'inside');
-      selectedFacesB = facesB.filter((_, i) => classificationsB[i] === 'inside');
+      selectedIndicesA = facesA.map((_, i) => i).filter(i => classificationsA[i] !== 'inside');
+      selectedIndicesB = facesB.map((_, i) => i).filter(i => classificationsB[i] === 'inside');
+      selectedFacesA = selectedIndicesA.map(i => facesA[i]);
+      selectedFacesB = selectedIndicesB.map(i => facesB[i]);
       flipFacesB = true;
       break;
       
     case 'intersect':
       // Intersect: keep faces of A that are inside B, and faces of B that are inside A
-      selectedFacesA = facesA.filter((_, i) => classificationsA[i] === 'inside');
-      selectedFacesB = facesB.filter((_, i) => classificationsB[i] === 'inside');
+      selectedIndicesA = facesA.map((_, i) => i).filter(i => classificationsA[i] === 'inside');
+      selectedIndicesB = facesB.map((_, i) => i).filter(i => classificationsB[i] === 'inside');
+      selectedFacesA = selectedIndicesA.map(i => facesA[i]);
+      selectedFacesB = selectedIndicesB.map(i => facesB[i]);
       break;
   }
   
-  // Create the result body
-  return createResultBody(model, selectedFacesA, selectedFacesB, flipFacesB);
+  // Create the result body with naming tracking
+  const result = createResultBodyWithNaming(
+    model,
+    bodyA,
+    bodyB,
+    selectedFacesA,
+    selectedFacesB,
+    selectedIndicesA,
+    selectedIndicesB,
+    flipFacesB,
+    namingStrategy,
+    featureId,
+    stepId
+  );
+  
+  return result;
 }
 
 /**
@@ -509,14 +563,14 @@ function createResultBody(
 }
 
 /**
- * Copy a face to a new shell
+ * Copy a face to a new shell and return the new face ID
  */
 function copyFaceToShell(
   model: TopoModel,
   sourceFaceId: FaceId,
   targetShell: ShellId,
   flip: boolean
-): void {
+): FaceId {
   // Get source face data
   const surfaceIdx = getFaceSurfaceIndex(model, sourceFaceId);
   const surface = getSurface(model, surfaceIdx);
@@ -584,6 +638,115 @@ function copyFaceToShell(
   }
   
   addFaceToShell(model, targetShell, newFace);
+  return newFace;
+}
+
+/**
+ * Create the result body with naming integration
+ * 
+ * Boolean operations modify existing topology, so we use evolution tracking
+ * rather than birth recording. The faces in the result body evolved from
+ * faces in the input bodies, and their existing PersistentRefs should
+ * continue to resolve correctly via the evolution graph.
+ */
+function createResultBodyWithNaming(
+  model: TopoModel,
+  bodyA: BodyId,
+  bodyB: BodyId,
+  facesA: FaceId[],
+  facesB: FaceId[],
+  _indicesA: number[],
+  _indicesB: number[],
+  flipFacesB: boolean,
+  namingStrategy: NamingStrategy | undefined,
+  featureId: FeatureId | undefined,
+  stepId: StepId | undefined
+): BooleanResult {
+  if (facesA.length === 0 && facesB.length === 0) {
+    return { success: false, error: 'Boolean result has no faces' };
+  }
+  
+  // Create new body and shell
+  const body = addBody(model);
+  const shell = addShell(model, true);
+  addShellToBody(model, body, shell);
+  
+  // Track created faces for naming
+  const newFacesFromA: FaceId[] = [];
+  const newFacesFromB: FaceId[] = [];
+  
+  // Copy faces from A and track new face IDs
+  for (const faceId of facesA) {
+    const newFaceId = copyFaceToShell(model, faceId, shell, false);
+    newFacesFromA.push(newFaceId);
+  }
+  
+  // Copy faces from B (potentially flipped) and track new face IDs
+  for (const faceId of facesB) {
+    const newFaceId = copyFaceToShell(model, faceId, shell, flipFacesB);
+    newFacesFromB.push(newFaceId);
+  }
+  
+  // Set up twin half-edges
+  setupTwinHalfEdges(model);
+  
+  // Build evolution mappings - NO birth records for boolean results
+  // The faces evolved from existing faces, so we track that evolution
+  let faceRefsFromA: PersistentRef[] | undefined;
+  let faceRefsFromB: PersistentRef[] | undefined;
+  let evolutionMappings: EvolutionMapping[] | undefined;
+  
+  if (namingStrategy && stepId !== undefined) {
+    evolutionMappings = [];
+    
+    // Build evolution mappings for faces from A
+    for (let i = 0; i < newFacesFromA.length; i++) {
+      const oldFaceId = facesA[i];
+      const newFaceId = newFacesFromA[i];
+      
+      evolutionMappings.push(modifyMapping(
+        faceRef(bodyA, oldFaceId),
+        faceRef(body, newFaceId)
+      ));
+    }
+    
+    // Build evolution mappings for faces from B
+    for (let i = 0; i < newFacesFromB.length; i++) {
+      const oldFaceId = facesB[i];
+      const newFaceId = newFacesFromB[i];
+      
+      evolutionMappings.push(modifyMapping(
+        faceRef(bodyB, oldFaceId),
+        faceRef(body, newFaceId)
+      ));
+    }
+    
+    // Record evolution - this updates the reverse lookup so existing
+    // PersistentRefs now point to the new faces
+    namingStrategy.recordEvolution(stepId, evolutionMappings);
+    
+    // Collect existing refs that now point to the result faces
+    faceRefsFromA = newFacesFromA
+      .map(faceId => namingStrategy.lookupRefForSubshape(faceRef(body, faceId)))
+      .filter((ref): ref is PersistentRef => ref !== null);
+    
+    faceRefsFromB = newFacesFromB
+      .map(faceId => namingStrategy.lookupRefForSubshape(faceRef(body, faceId)))
+      .filter((ref): ref is PersistentRef => ref !== null);
+  }
+  
+  return {
+    success: true,
+    body,
+    featureId,
+    stepId,
+    faceRefsFromA,
+    faceRefsFromB,
+    evolutionMappings,
+    warnings: facesA.length === 0 || facesB.length === 0 
+      ? ['Some faces were eliminated in the boolean result']
+      : undefined,
+  };
 }
 
 /**
