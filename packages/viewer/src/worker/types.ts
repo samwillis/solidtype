@@ -562,6 +562,14 @@ export function getTransferables(response: WorkerResponse): Transferable[] {
         mesh.indices.buffer
       );
     }
+  } else if (response.kind === 'buildSequence' && response.success && response.meshes) {
+    for (const mesh of response.meshes) {
+      transferables.push(
+        mesh.positions.buffer,
+        mesh.normals.buffer,
+        mesh.indices.buffer
+      );
+    }
   }
   
   return transferables;

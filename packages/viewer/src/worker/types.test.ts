@@ -15,6 +15,7 @@ import {
   type MeshResponse,
   type MeshesResponse,
   type BodyCreatedResponse,
+  type BuildSequenceResponse,
 } from './types.js';
 
 describe('Worker Types', () => {
@@ -152,6 +153,43 @@ describe('Worker Types', () => {
         requestId: 'test-123',
         success: false,
         error: 'Something went wrong',
+      };
+      
+      const transferables = getTransferables(response);
+      expect(transferables).toEqual([]);
+    });
+    
+    it('should return mesh buffers for buildSequence response with meshes', () => {
+      const mesh: SerializedMesh = {
+        bodyId: 0,
+        positions: new Float32Array([0, 1, 2]),
+        normals: new Float32Array([0, 0, 1]),
+        indices: new Uint32Array([0, 1, 2]),
+      };
+      
+      const response: BuildSequenceResponse = {
+        kind: 'buildSequence',
+        requestId: 'test-123',
+        success: true,
+        results: { box: 0 },
+        bodyIds: [0],
+        meshes: [mesh],
+      };
+      
+      const transferables = getTransferables(response);
+      expect(transferables).toHaveLength(3);
+      expect(transferables).toContain(mesh.positions.buffer);
+      expect(transferables).toContain(mesh.normals.buffer);
+      expect(transferables).toContain(mesh.indices.buffer);
+    });
+    
+    it('should return empty array for buildSequence response without meshes', () => {
+      const response: BuildSequenceResponse = {
+        kind: 'buildSequence',
+        requestId: 'test-123',
+        success: true,
+        results: { box: 0 },
+        bodyIds: [0],
       };
       
       const transferables = getTransferables(response);
