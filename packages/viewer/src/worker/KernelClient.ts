@@ -16,6 +16,10 @@ import type {
   RevolveParams,
   BooleanParams,
   DragPoint,
+  ParamValue,
+  BuildSequence,
+  ParamsResponse,
+  BuildSequenceResponse,
 } from './types.js';
 import { generateRequestId, isErrorResponse } from './types.js';
 
@@ -394,6 +398,145 @@ export class KernelClient {
     }
     
     return response.result;
+  }
+  
+  // ==========================================================================
+  // Parametric Editing
+  // ==========================================================================
+  
+  /**
+   * Set parameters for parametric editing
+   * 
+   * @param params Parameters to set (id → value)
+   * @returns Current parameter values
+   */
+  async setParams(params: Record<string, ParamValue>): Promise<Record<string, ParamValue>> {
+    this.ensureInitialized();
+    
+    const response = await this.sendCommand({
+      kind: 'setParams',
+      requestId: generateRequestId(),
+      params,
+    }) as ParamsResponse;
+    
+    if (response.kind !== 'params') {
+      throw new Error(`Unexpected response kind: ${response.kind}`);
+    }
+    
+    return response.params;
+  }
+  
+  /**
+   * Get current parameter values
+   * 
+   * @param paramIds Optional specific parameter IDs to get (empty = all)
+   * @returns Current parameter values
+   */
+  async getParams(paramIds?: string[]): Promise<Record<string, ParamValue>> {
+    this.ensureInitialized();
+    
+    const response = await this.sendCommand({
+      kind: 'getParams',
+      requestId: generateRequestId(),
+      paramIds,
+    }) as ParamsResponse;
+    
+    if (response.kind !== 'params') {
+      throw new Error(`Unexpected response kind: ${response.kind}`);
+    }
+    
+    return response.params;
+  }
+  
+  /**
+   * Build a parametric model from a sequence of operations
+   * 
+   * This is the main entry point for parametric editing. The sequence
+   * describes the model as a list of operations that reference parameters.
+   * When parameters change, call this again to rebuild the model.
+   * 
+   * @param sequence Build sequence to execute
+   * @param options Build options
+   * @returns Build result with body IDs and optional meshes
+   */
+  async buildSequence(
+    sequence: BuildSequence,
+    options?: { returnMeshes?: boolean }
+  ): Promise<{
+    results: Record<string, number>;
+    bodyIds: number[];
+    meshes?: SerializedMesh[];
+  }> {
+    this.ensureInitialized();
+    
+    const response = await this.sendCommand({
+      kind: 'buildSequence',
+      requestId: generateRequestId(),
+      sequence,
+      returnMeshes: options?.returnMeshes,
+    }) as BuildSequenceResponse;
+    
+    if (response.kind !== 'buildSequence') {
+      throw new Error(`Unexpected response kind: ${response.kind}`);
+    }
+    
+    return {
+      results: response.results,
+      bodyIds: response.bodyIds,
+      meshes: response.meshes,
+    };
+  }
+  
+  /**
+   * Update a parameter and rebuild the model
+   * 
+   * Convenience method that combines setParams and buildSequence.
+   * 
+   * @param paramId Parameter ID to update
+   * @param value New value
+   * @param sequence Build sequence to execute
+   * @param options Build options
+   * @returns Build result with body IDs and optional meshes
+   */
+  async updateParam(
+    paramId: string,
+    value: ParamValue,
+    sequence: BuildSequence,
+    options?: { returnMeshes?: boolean }
+  ): Promise<{
+    results: Record<string, number>;
+    bodyIds: number[];
+    meshes?: SerializedMesh[];
+  }> {
+    // Set the parameter
+    await this.setParams({ [paramId]: value });
+    
+    // Rebuild the model
+    return this.buildSequence(sequence, options);
+  }
+  
+  /**
+   * Batch update multiple parameters and rebuild the model
+   * 
+   * @param params Parameters to update
+   * @param sequence Build sequence to execute
+   * @param options Build options
+   * @returns Build result with body IDs and optional meshes
+   */
+  async updateParams(
+    params: Record<string, ParamValue>,
+    sequence: BuildSequence,
+    options?: { returnMeshes?: boolean }
+  ): Promise<{
+    results: Record<string, number>;
+    bodyIds: number[];
+    meshes?: SerializedMesh[];
+  }> {
+    // Set the parameters
+    await this.setParams(params);
+    
+    // Rebuild the model
+    return this.buildSequence(sequence, options);
   }
   
   // ==========================================================================

@@ -74,8 +74,11 @@ import type {
   DragPoint,
   BoxParams,
   BooleanParams,
+  ParamValue,
+  BuildSequence,
+  BuildOperation,
 } from './types.js';
-import { getTransferables } from './types.js';
+import { getTransferables, isParamRef } from './types.js';
 
 // ============================================================================
 // Worker State
@@ -85,6 +88,12 @@ let ctx: NumericContext | null = null;
 let model: TopoModel | null = null;
 let naming: NamingStrategy | null = null;
 let initialized = false;
+
+/** Parameter storage for parametric editing */
+const params = new Map<string, ParamValue>();
+
+/** Result ID to body ID mapping for build sequences */
+const resultIds = new Map<string, number>();
 
 // ============================================================================
 // Message Handler
@@ -145,6 +154,15 @@ function handleCommand(command: WorkerCommand): WorkerResponse {
     case 'solveSketch':
       return handleSolveSketch(command.requestId, command.sketch, command.dragPoint, command.options);
     
+    case 'setParams':
+      return handleSetParams(command.requestId, command.params);
+    
+    case 'getParams':
+      return handleGetParams(command.requestId, command.paramIds);
+    
+    case 'buildSequence':
+      return handleBuildSequence(command.requestId, command.sequence, command.returnMeshes);
+    
     default:
       return {
         kind: 'error',
@@ -190,12 +208,231 @@ function handleReset(requestId: string): WorkerResponse {
   // Create fresh model and naming strategy
   model = createEmptyModel(ctx!);
   naming = createNamingStrategy();
+  resultIds.clear();
   
   return {
     kind: 'reset',
     requestId,
     success: true,
   };
+}
+
+function handleSetParams(
+  requestId: string,
+  newParams: Record<string, ParamValue>
+): WorkerResponse {
+  for (const [key, value] of Object.entries(newParams)) {
+    params.set(key, value);
+  }
+  
+  return {
+    kind: 'params',
+    requestId,
+    success: true,
+    params: Object.fromEntries(params),
+  };
+}
+
+function handleGetParams(
+  requestId: string,
+  paramIds?: string[]
+): WorkerResponse {
+  const result: Record<string, ParamValue> = {};
+  
+  if (paramIds && paramIds.length > 0) {
+    for (const id of paramIds) {
+      const value = params.get(id);
+      if (value !== undefined) {
+        result[id] = value;
+      }
+    }
+  } else {
+    for (const [key, value] of params) {
+      result[key] = value;
+    }
+  }
+  
+  return {
+    kind: 'params',
+    requestId,
+    success: true,
+    params: result,
+  };
+}
+
+function handleBuildSequence(
+  requestId: string,
+  sequence: BuildSequence,
+  returnMeshes?: boolean
+): WorkerResponse {
+  ensureInitialized();
+  
+  // Reset model for clean rebuild
+  model = createEmptyModel(ctx!);
+  naming = createNamingStrategy();
+  resultIds.clear();
+  
+  const bodyIds: number[] = [];
+  const results: Record<string, number> = {};
+  
+  // Execute each operation in sequence
+  for (const op of sequence.operations) {
+    try {
+      const bodyId = executeOperation(op);
+      bodyIds.push(bodyId);
+      
+      if (op.resultId) {
+        resultIds.set(op.resultId, bodyId);
+        results[op.resultId] = bodyId;
+      }
+    } catch (error) {
+      return {
+        kind: 'error',
+        requestId,
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        details: `Failed at operation: ${op.kind}`,
+      };
+    }
+  }
+  
+  // Optionally get meshes for all bodies
+  let meshes: SerializedMesh[] | undefined;
+  if (returnMeshes) {
+    meshes = [];
+    for (const bodyId of bodyIds) {
+      const mesh = tessellateBody(model!, bodyId as BodyId);
+      meshes.push({
+        bodyId,
+        positions: mesh.positions,
+        normals: mesh.normals,
+        indices: mesh.indices,
+      });
+    }
+  }
+  
+  return {
+    kind: 'buildSequence',
+    requestId,
+    success: true,
+    results,
+    bodyIds,
+    meshes,
+  };
+}
+
+function executeOperation(op: BuildOperation): number {
+  // Resolve any parameter references in the operation params
+  const resolvedParams = resolveParams(op.params);
+  
+  switch (op.kind) {
+    case 'createBox': {
+      const boxParams = resolvedParams as BoxParams;
+      return createBox(model!, boxParams) as number;
+    }
+    
+    case 'extrude': {
+      const extrudeParams = resolvedParams as ExtrudeParams;
+      const plane = resolvePlane(extrudeParams.plane);
+      const profile = createProfile(extrudeParams.profile, plane);
+      
+      const result = extrude(model!, profile, {
+        distance: extrudeParams.distance,
+        direction: extrudeParams.direction,
+        operation: extrudeParams.operation ?? 'add',
+        targetBody: extrudeParams.targetBodyId as BodyId | undefined,
+        namingStrategy: naming!,
+      });
+      
+      if (!result.success) {
+        throw new Error(result.error ?? 'Extrude failed');
+      }
+      return result.body as number;
+    }
+    
+    case 'revolve': {
+      const revolveParams = resolvedParams as RevolveParams;
+      const plane = resolvePlane(revolveParams.plane);
+      const profile = createProfile(revolveParams.profile, plane);
+      const axis = resolveAxis(revolveParams.axis, plane);
+      
+      const result = revolve(model!, profile, {
+        axis,
+        angle: revolveParams.angle ?? Math.PI * 2,
+        operation: revolveParams.operation ?? 'add',
+        targetBody: revolveParams.targetBodyId as BodyId | undefined,
+        namingStrategy: naming!,
+      });
+      
+      if (!result.success) {
+        throw new Error(result.error ?? 'Revolve failed');
+      }
+      return result.body as number;
+    }
+    
+    case 'boolean': {
+      const boolParams = resolvedParams as BooleanParams;
+      
+      // Resolve body references
+      const bodyAId = resolveBodyRef(boolParams.bodyAId);
+      const bodyBId = resolveBodyRef(boolParams.bodyBId);
+      
+      const result = booleanOperation(model!, bodyAId as BodyId, bodyBId as BodyId, {
+        operation: boolParams.operation,
+        namingStrategy: naming!,
+      });
+      
+      if (!result.success) {
+        throw new Error(result.error ?? 'Boolean failed');
+      }
+      return result.body as number;
+    }
+  }
+}
+
+/**
+ * Resolve parameter references in an object
+ */
+function resolveParams<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  
+  if (isParamRef(obj)) {
+    const value = params.get(obj.paramId);
+    if (value === undefined) {
+      throw new Error(`Parameter not found: ${obj.paramId}`);
+    }
+    return value as unknown as T;
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(resolveParams) as unknown as T;
+  }
+  
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = resolveParams(value);
+    }
+    return result as T;
+  }
+  
+  return obj;
+}
+
+/**
+ * Resolve a body reference (could be a number or a result ID string)
+ */
+function resolveBodyRef(ref: number | string): number {
+  if (typeof ref === 'string') {
+    const bodyId = resultIds.get(ref);
+    if (bodyId === undefined) {
+      throw new Error(`Result ID not found: ${ref}`);
+    }
+    return bodyId;
+  }
+  return ref;
 }
 
 function handleCreateBox(requestId: string, params: BoxParams): WorkerResponse {

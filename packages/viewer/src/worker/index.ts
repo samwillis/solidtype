@@ -18,6 +18,9 @@ export type {
   GetMeshCommand,
   GetAllMeshesCommand,
   SolveSketchCommand,
+  SetParamsCommand,
+  GetParamsCommand,
+  BuildSequenceCommand,
   
   // Responses
   WorkerResponse,
@@ -28,6 +31,8 @@ export type {
   MeshResponse,
   MeshesResponse,
   SolveSketchResponse,
+  ParamsResponse,
+  BuildSequenceResponse,
   ErrorResponse,
   
   // Data types
@@ -42,6 +47,10 @@ export type {
   RevolveParams,
   BooleanParams,
   DragPoint,
+  ParamValue,
+  ParamRef,
+  BuildOperation,
+  BuildSequence,
 } from './types.js';
 
 // Type guards and utilities
@@ -50,6 +59,8 @@ export {
   isSuccessResponse,
   generateRequestId,
   getTransferables,
+  isParamRef,
+  paramRef,
 } from './types.js';
 
 // Client

@@ -184,6 +184,54 @@ export interface DragPoint {
 }
 
 // ============================================================================
+// Parametric Editing Types
+// ============================================================================
+
+/**
+ * Parameter value (number, boolean, or string)
+ */
+export type ParamValue = number | boolean | string;
+
+/**
+ * Parameter reference - used in operation params to reference stored parameters
+ */
+export interface ParamRef {
+  __paramRef: true;
+  paramId: string;
+}
+
+/**
+ * Check if a value is a parameter reference
+ */
+export function isParamRef(value: unknown): value is ParamRef {
+  return typeof value === 'object' && value !== null && '__paramRef' in value;
+}
+
+/**
+ * Create a parameter reference
+ */
+export function paramRef(paramId: string): ParamRef {
+  return { __paramRef: true, paramId };
+}
+
+/**
+ * Operation in a build sequence
+ */
+export type BuildOperation =
+  | { kind: 'createBox'; params: BoxParams; resultId?: string }
+  | { kind: 'extrude'; params: ExtrudeParams; resultId?: string }
+  | { kind: 'revolve'; params: RevolveParams; resultId?: string }
+  | { kind: 'boolean'; params: BooleanParams; resultId?: string };
+
+/**
+ * Build sequence - a list of operations to execute
+ */
+export interface BuildSequence {
+  /** Operations to execute in order */
+  operations: BuildOperation[];
+}
+
+// ============================================================================
 // Worker Commands (Main → Worker)
 // ============================================================================
 
@@ -294,6 +342,41 @@ export interface SolveSketchCommand {
 }
 
 /**
+ * Set parameters for parametric editing
+ */
+export interface SetParamsCommand {
+  kind: 'setParams';
+  requestId: string;
+  /** Parameters to set (id → value) */
+  params: Record<string, ParamValue>;
+}
+
+/**
+ * Get current parameter values
+ */
+export interface GetParamsCommand {
+  kind: 'getParams';
+  requestId: string;
+  /** Parameter IDs to get (empty = all) */
+  paramIds?: string[];
+}
+
+/**
+ * Execute a build sequence (parametric model definition)
+ * 
+ * This resets the model and executes all operations in order,
+ * resolving parameter references to their current values.
+ */
+export interface BuildSequenceCommand {
+  kind: 'buildSequence';
+  requestId: string;
+  /** The build sequence to execute */
+  sequence: BuildSequence;
+  /** Whether to return meshes for all created bodies */
+  returnMeshes?: boolean;
+}
+
+/**
  * Union type of all worker commands
  */
 export type WorkerCommand =
@@ -306,7 +389,10 @@ export type WorkerCommand =
   | BooleanCommand
   | GetMeshCommand
   | GetAllMeshesCommand
-  | SolveSketchCommand;
+  | SolveSketchCommand
+  | SetParamsCommand
+  | GetParamsCommand
+  | BuildSequenceCommand;
 
 // ============================================================================
 // Worker Responses (Worker → Main)
@@ -380,6 +466,29 @@ export interface SolveSketchResponse extends BaseResponse {
 }
 
 /**
+ * Parameters response
+ */
+export interface ParamsResponse extends BaseResponse {
+  kind: 'params';
+  success: true;
+  params: Record<string, ParamValue>;
+}
+
+/**
+ * Build sequence response
+ */
+export interface BuildSequenceResponse extends BaseResponse {
+  kind: 'buildSequence';
+  success: true;
+  /** Map of resultId to bodyId for operations that specified resultId */
+  results: Record<string, number>;
+  /** All body IDs created */
+  bodyIds: number[];
+  /** Meshes if returnMeshes was true */
+  meshes?: SerializedMesh[];
+}
+
+/**
  * Error response
  */
 export interface ErrorResponse extends BaseResponse {
@@ -400,6 +509,8 @@ export type WorkerResponse =
   | MeshResponse
   | MeshesResponse
   | SolveSketchResponse
+  | ParamsResponse
+  | BuildSequenceResponse
   | ErrorResponse;
 
 // ============================================================================

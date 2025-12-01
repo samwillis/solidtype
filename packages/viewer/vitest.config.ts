@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import { resolve } from 'path';
 
 export default defineConfig({
   test: {
@@ -7,8 +8,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@solidtype/core': '../core/src',
-      '@solidtype/oo': '../oo/src',
+      '@solidtype/core': resolve(__dirname, '../core/src'),
+      '@solidtype/oo': resolve(__dirname, '../oo/src'),
     },
   },
 });
