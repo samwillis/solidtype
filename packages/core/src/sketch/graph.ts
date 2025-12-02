@@ -11,8 +11,8 @@
  * - DOF analysis: computing degrees of freedom for each component
  */
 
-import type { Sketch, SketchPointId, SketchEntityId } from './types.js';
-import { getSketchPoint, getSketchEntity, getAllSketchPoints } from './types.js';
+import type { Sketch, SketchPointId } from './types.js';
+import { getSketchPoint } from './types.js';
 import type { Constraint } from './constraints.js';
 import { getConstraintPoints, getConstraintResidualCount } from './constraints.js';
 
@@ -246,7 +246,7 @@ export function analyzeComponentDOF(
  * - Obvious geometric conflicts
  */
 export function detectConflicts(
-  sketch: Sketch,
+  _sketch: Sketch,
   constraints: Constraint[]
 ): ConstraintConflict[] {
   const conflicts: ConstraintConflict[] = [];
