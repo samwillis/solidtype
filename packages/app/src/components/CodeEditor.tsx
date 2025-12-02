@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import * as Y from 'yjs';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { javascript } from '@codemirror/lang-javascript';
@@ -10,6 +9,7 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
 import { lintKeymap } from '@codemirror/lint';
 import { useYFile } from '../hooks/useYFile';
+import { useYTextCodeMirror, createYjsSyncExtension } from '../hooks/useYTextCodeMirror';
 import './CodeEditor.css';
 
 const CodeEditor: React.FC = () => {
@@ -23,24 +23,6 @@ const CodeEditor: React.FC = () => {
 
     const initialState = yText.toString();
 
-    // Create update listener for Yjs sync
-    const createYjsSyncExtension = (yText: Y.Text) => {
-      return EditorView.updateListener.of((update) => {
-        if (isUpdatingRef.current) return;
-        if (update.docChanged) {
-          isUpdatingRef.current = true;
-          const newContent = update.state.doc.toString();
-          const currentYText = yText.toString();
-          if (newContent !== currentYText) {
-            // For simplicity, full replace. In production, compute proper diffs.
-            yText.delete(0, yText.length);
-            yText.insert(0, newContent);
-          }
-          isUpdatingRef.current = false;
-        }
-      });
-    };
-
     const state = EditorState.create({
       doc: initialState,
       extensions: [
@@ -52,7 +34,7 @@ const CodeEditor: React.FC = () => {
         autocompletion(),
         highlightSelectionMatches(),
         syntaxHighlighting(defaultHighlightStyle),
-        createYjsSyncExtension(yText),
+        createYjsSyncExtension(yText, isUpdatingRef),
         keymap.of([
           ...defaultKeymap,
           ...historyKeymap,
@@ -84,31 +66,13 @@ const CodeEditor: React.FC = () => {
 
     viewRef.current = view;
 
-    // Listen to Yjs changes and update CodeMirror
-    const yObserver = () => {
-      if (isUpdatingRef.current || !viewRef.current) return;
-      const newContent = yText.toString();
-      const currentContent = viewRef.current.state.doc.toString();
-      if (newContent !== currentContent) {
-        isUpdatingRef.current = true;
-        viewRef.current.dispatch({
-          changes: {
-            from: 0,
-            to: viewRef.current.state.doc.length,
-            insert: newContent,
-          },
-        });
-        isUpdatingRef.current = false;
-      }
-    };
-
-    yText.observe(yObserver);
-
     return () => {
-      yText.unobserve(yObserver);
       view.destroy();
     };
   }, [yText]);
+
+  // Bind Y.Text to CodeMirror (handles Yjs -> CodeMirror direction)
+  useYTextCodeMirror(viewRef.current, yText);
 
   return <div ref={editorRef} className="code-editor" />;
 };

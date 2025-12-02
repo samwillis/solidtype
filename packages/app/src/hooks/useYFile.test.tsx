@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import * as Y from 'yjs';
+import { ProjectProvider } from '../contexts/ProjectContext';
 import { useYFile } from './useYFile';
 import { useProject } from './useProject';
 
@@ -18,7 +19,9 @@ describe('useYFile', () => {
 
     (useProject as any).mockReturnValue({ doc, files });
 
-    const { result } = renderHook(() => useYFile('test.tsx'));
+    const { result } = renderHook(() => useYFile('test.tsx'), {
+      wrapper: ProjectProvider,
+    });
 
     await waitFor(() => {
       expect(result.current).toBeInstanceOf(Y.Text);
@@ -32,7 +35,9 @@ describe('useYFile', () => {
 
     (useProject as any).mockReturnValue({ doc, files });
 
-    const { result } = renderHook(() => useYFile('nonexistent.tsx'));
+    const { result } = renderHook(() => useYFile('nonexistent.tsx'), {
+      wrapper: ProjectProvider,
+    });
 
     await waitFor(() => {
       expect(result.current).toBeNull();
@@ -45,18 +50,25 @@ describe('useYFile', () => {
 
     (useProject as any).mockReturnValue({ doc, files });
 
-    const { result } = renderHook(() => useYFile('new.tsx'));
+    const { result } = renderHook(() => useYFile('new.tsx'), {
+      wrapper: ProjectProvider,
+    });
 
     await waitFor(() => {
       expect(result.current).toBeNull();
     });
 
-    const newText = new Y.Text('new content');
-    files.set('new.tsx', newText);
-
-    await waitFor(() => {
-      expect(result.current).toBeInstanceOf(Y.Text);
-      expect(result.current?.toString()).toBe('new content');
+    act(() => {
+      const newText = new Y.Text('new content');
+      files.set('new.tsx', newText);
     });
+
+    await waitFor(
+      () => {
+        expect(result.current).toBeInstanceOf(Y.Text);
+        expect(result.current?.toString()).toBe('new content');
+      },
+      { timeout: 1000 }
+    );
   });
 });

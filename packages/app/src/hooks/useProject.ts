@@ -1,12 +1,7 @@
-import { useState } from 'react';
-import { createProject, initializeProject, Project } from '../lib/project';
+import { useProjectContext } from '../contexts/ProjectContext';
+import { Project } from '../lib/project';
 
 export function useProject(): Project {
-  const [project] = useState(() => {
-    const proj = createProject();
-    initializeProject(proj);
-    return proj;
-  });
-
+  const { project } = useProjectContext();
   return project;
 }
