@@ -20,15 +20,12 @@ import { sub2, dot2, length2, normalize2, cross2 } from '../num/vec2.js';
 import type {
   Sketch,
   SketchPointId,
-  SketchPoint,
   SolveResult,
   SolveOptions,
-  SolveStatus,
 } from './types.js';
 import {
   getSketchPoint,
   getSketchEntity,
-  getAllSketchPoints,
   DEFAULT_SOLVE_OPTIONS,
 } from './types.js';
 import type { Constraint } from './constraints.js';
@@ -437,8 +434,6 @@ function computeConstraintResiduals(state: SolverState, constraint: Constraint):
     }
     
     case 'distance': {
-      const p1 = getPointPosition(state, constraint.p1);
-      const p2 = getPointPosition(state, constraint.p2);
       const d = getLineLength(state, constraint.p1, constraint.p2);
       return [weight * (d - constraint.distance)];
     }
@@ -463,8 +458,7 @@ function computeConstraintResiduals(state: SolverState, constraint: Constraint):
       const line = getSketchEntity(state.sketch, constraint.line);
       const arc = getSketchEntity(state.sketch, constraint.arc);
       if (line?.kind === 'line' && arc?.kind === 'arc') {
-        // Get the connection point on the line
-        const lineEndpoint = constraint.lineEndpoint === 'start' ? line.start : line.end;
+        // Get the connection point on the arc side
         const arcEndpoint = constraint.arcEndpoint === 'start' ? arc.start : arc.end;
         
         // The line direction should be perpendicular to the radius at the connection

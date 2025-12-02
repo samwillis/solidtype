@@ -15,9 +15,6 @@ import {
   vec2,
   sub3,
   dot3,
-  cross3,
-  normalize3,
-  length3,
   
   // Tolerance
   type NumericContext,
@@ -28,8 +25,6 @@ import {
   type BodyId,
   type FaceId,
   type EdgeId,
-  type VertexId,
-  type ShellId,
   createEmptyModel,
   getBodyShells,
   getShellFaces,
@@ -62,13 +57,12 @@ import {
   type ExtrudeResult,
   type RevolveOptions,
   type RevolveResult,
-  type RevolveAxis,
   type BooleanOptions,
   type BooleanResult,
   extrude,
   revolve,
   booleanOperation,
-  createDatumPlane,
+  createDatumPlaneFromNormal,
   XY_PLANE,
   YZ_PLANE,
   ZX_PLANE,
@@ -77,6 +71,7 @@ import {
   
   // Mesh
   type Mesh,
+  type TessellationOptions,
   tessellateBody,
   
   // Sketch types and functions
@@ -84,8 +79,6 @@ import {
   type SketchPointId,
   type SketchEntityId,
   type SketchPoint,
-  type SketchLine as CoreSketchLine,
-  type SketchArc as CoreSketchArc,
   type SketchEntity,
   type Constraint,
   type ConstraintId,
@@ -325,7 +318,7 @@ export class Body {
   /**
    * Tessellate this body into a triangle mesh
    */
-  tessellate(options?: { tolerance?: number }): Mesh {
+  tessellate(options?: TessellationOptions): Mesh {
     const model = this.session.getModel();
     return tessellateBody(model, this.id, options);
   }
@@ -342,7 +335,6 @@ export class Body {
    */
   selectFaceByRay(ray: Ray): FaceSelectionResult | null {
     const model = this.session.getModel();
-    const naming = this.session.getNamingStrategy();
     
     let closestFace: FaceId | null = null;
     let closestDistance = Infinity;
@@ -805,8 +797,8 @@ export class SolidSession {
   /**
    * Create a datum plane
    */
-  createDatumPlane(origin: Vec3, normal: Vec3, xDir: Vec3): DatumPlane {
-    return createDatumPlane(origin, normal, xDir);
+  createDatumPlane(origin: Vec3, normal: Vec3, xDir?: Vec3): DatumPlane {
+    return createDatumPlaneFromNormal('custom', origin, normal, xDir);
   }
   
   /**
@@ -855,11 +847,8 @@ export class SolidSession {
     const profile = sketch.toProfile();
     if (!profile) {
       return {
-        ok: false,
-        error: {
-          type: 'invalid_profile',
-          message: 'Could not convert sketch to profile - ensure sketch forms closed loops',
-        },
+        success: false,
+        error: 'Could not convert sketch to profile - ensure sketch forms closed loops',
       };
     }
     return this.extrude(profile, options);
@@ -885,10 +874,9 @@ export class SolidSession {
     plane: DatumPlane,
     radius: number,
     centerX: number = 0,
-    centerY: number = 0,
-    segments?: number
+    centerY: number = 0
   ): SketchProfile {
-    return createCircleProfile(plane, radius, centerX, centerY, segments);
+    return createCircleProfile(plane, radius, centerX, centerY);
   }
   
   /**

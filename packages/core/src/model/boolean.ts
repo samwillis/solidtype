@@ -50,11 +50,11 @@ import {
 import type { NamingStrategy, FeatureId, PersistentRef, EvolutionMapping, StepId } from '../naming/index.js';
 import {
   faceRef,
-  booleanFaceFromASelector,
-  booleanFaceFromBSelector,
-  computeFaceFingerprint,
   modifyMapping,
 } from '../naming/index.js';
+
+// Note: booleanFaceFromASelector, booleanFaceFromBSelector, computeFaceFingerprint
+// are available for future naming integration when full boolean face tracking is implemented
 
 /**
  * Boolean operation type
@@ -519,46 +519,6 @@ function createCompoundBody(
     success: true,
     body: bodyA,
     warnings: ['Non-overlapping union creates disjoint body (returning bodyA only)'],
-  };
-}
-
-/**
- * Create the result body from selected faces
- */
-function createResultBody(
-  model: TopoModel,
-  facesA: FaceId[],
-  facesB: FaceId[],
-  flipFacesB: boolean
-): BooleanResult {
-  if (facesA.length === 0 && facesB.length === 0) {
-    return { success: false, error: 'Boolean result has no faces' };
-  }
-  
-  // Create new body and shell
-  const body = addBody(model);
-  const shell = addShell(model, true);
-  addShellToBody(model, body, shell);
-  
-  // Copy faces from A
-  for (const faceId of facesA) {
-    copyFaceToShell(model, faceId, shell, false);
-  }
-  
-  // Copy faces from B (potentially flipped)
-  for (const faceId of facesB) {
-    copyFaceToShell(model, faceId, shell, flipFacesB);
-  }
-  
-  // Set up twin half-edges
-  setupTwinHalfEdges(model);
-  
-  return {
-    success: true,
-    body,
-    warnings: facesA.length === 0 || facesB.length === 0 
-      ? ['Some faces were eliminated in the boolean result']
-      : undefined,
   };
 }
 

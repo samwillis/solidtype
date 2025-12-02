@@ -40,7 +40,6 @@ import type {
   EvolutionMapping,
   GeometryTopologyFingerprint,
   ResolveResult,
-  SubshapeType,
 } from './types.js';
 import {
   asFeatureId,
