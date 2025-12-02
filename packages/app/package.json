@@ -1,0 +1,43 @@
+{
+  "name": "@solidtype/app",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "SolidType CAD application with React, CodeMirror, and three.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@radix-ui/react-tabs": "^1.0.4",
+    "yjs": "^13.6.8",
+    "@codemirror/lang-javascript": "^6.2.2",
+    "@codemirror/view": "^6.24.0",
+    "@codemirror/state": "^6.4.0",
+    "@codemirror/commands": "^6.3.0",
+    "@codemirror/language": "^6.10.0",
+    "@codemirror/search": "^6.5.4",
+    "@codemirror/autocomplete": "^6.10.0",
+    "@codemirror/lint": "^6.4.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "three": "^0.161.0"
+  },
+  "devDependencies": {
+    "@solidtype/core": "workspace:*",
+    "@solidtype/oo": "workspace:*",
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/three": "^0.161.2",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/jest-dom": "^6.1.5",
+    "@vitejs/plugin-react": "^4.2.1",
+    "jsdom": "^24.0.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.0",
+    "vitest": "^1.2.0"
+  }
+}
