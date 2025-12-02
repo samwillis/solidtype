@@ -27,6 +27,11 @@
   overflow: hidden;
 }
 
+.app-right-panel > * {
+  flex: 1;
+  min-height: 0;
+}
+
 /* Radix UI Tabs styling */
 .tabs-root {
   display: flex;

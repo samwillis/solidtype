@@ -53,9 +53,9 @@ importers:
       three:
         specifier: ^0.161.0
         version: 0.161.0
-      y-codemirror.next:
-        specifier: ^0.1.0
-        version: 0.1.4(@codemirror/state@6.5.2)(@codemirror/view@6.38.8)(yjs@13.6.27)
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
       yjs:
         specifier: ^13.6.8
         version: 13.6.27
@@ -90,9 +90,6 @@ importers:
       jsdom:
         specifier: ^24.0.0
         version: 24.1.3
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
       vite:
         specifier: ^5.1.0
         version: 5.4.21(@types/node@20.19.25)
@@ -2118,13 +2115,6 @@ packages:
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
-  y-codemirror.next@0.1.4:
-    resolution: {integrity: sha512-0mekvY+hlqauyqvfXGc4ooT5kHSUIkROzO7WjGoE7pcEvRFhSbGmg1vJFvZcLBCy1KOvSE7NlcO0sKfQWdZenw==}
-    peerDependencies:
-      '@codemirror/state': ^0.19.0
-      '@codemirror/view': ^0.19.0
-      yjs: ^13.5.6
-
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
@@ -4013,13 +4003,6 @@ snapshots:
   xml-name-validator@5.0.0: {}
 
   xmlchars@2.2.0: {}
-
-  y-codemirror.next@0.1.4(@codemirror/state@6.5.2)(@codemirror/view@6.38.8)(yjs@13.6.27):
-    dependencies:
-      '@codemirror/state': 6.5.2
-      '@codemirror/view': 6.38.8
-      lib0: 0.2.114
-      yjs: 13.6.27
 
   yallist@3.1.1: {}
 

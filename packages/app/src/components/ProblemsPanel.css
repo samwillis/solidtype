@@ -1,0 +1,94 @@
+.problems-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-top: 1px solid #e0e0e0;
+}
+
+.problems-panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f5f5f5;
+}
+
+.problems-panel-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.problems-panel-content {
+  flex: 1;
+  overflow: auto;
+  font-size: 12px;
+}
+
+.problems-loading,
+.problems-empty {
+  padding: 20px;
+  text-align: center;
+  color: #999;
+}
+
+.problems-list {
+  padding: 8px 0;
+}
+
+.problem-item {
+  display: flex;
+  padding: 8px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.problem-item:hover {
+  background-color: #f9f9f9;
+}
+
+.problem-icon {
+  margin-right: 8px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.problem-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.problem-file {
+  font-weight: 500;
+  color: #666;
+  margin-bottom: 2px;
+  font-size: 11px;
+}
+
+.problem-location {
+  color: #999;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.problem-message {
+  color: #333;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.problem-error {
+  border-left: 3px solid #e74c3c;
+}
+
+.problem-warning {
+  border-left: 3px solid #f39c12;
+}
+
+.problem-suggestion {
+  border-left: 3px solid #3498db;
+}
+
+.problem-message {
+  border-left: 3px solid #95a5a6;
+}

@@ -4,6 +4,7 @@ import Viewer from './components/Viewer';
 import CodeEditor from './components/CodeEditor';
 import FeatureTree from './components/FeatureTree';
 import PropertiesPanel from './components/PropertiesPanel';
+import ProblemsPanel from './components/ProblemsPanel';
 import './App.css';
 
 const App: React.FC = () => {
@@ -32,6 +33,7 @@ const App: React.FC = () => {
       </div>
       <div className="app-right-panel">
         <PropertiesPanel />
+        <ProblemsPanel />
       </div>
     </div>
   );

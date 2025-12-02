@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@radix-ui/react-tabs": "^1.0.4",
+    "typescript": "^5.3.3",
     "yjs": "^13.6.8",
     "@codemirror/lang-javascript": "^6.2.2",
     "@codemirror/view": "^6.24.0",
