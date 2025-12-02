@@ -229,11 +229,22 @@ function handleExtrude(
   }
   
   try {
+    // Resolve plane - can be string literal or custom object
+    let planeOrigin: [number, number, number] = [0, 0, 0];
+    let planeNormal: [number, number, number] = [0, 0, 1];
+    let planeXDir: [number, number, number] = [1, 0, 0];
+    
+    if (params.plane && typeof params.plane === 'object') {
+      planeOrigin = params.plane.origin as [number, number, number];
+      planeNormal = params.plane.normal as [number, number, number];
+      planeXDir = params.plane.xDir as [number, number, number];
+    }
+    
     const plane = createDatumPlaneFromNormal(
       'sketch',
-      params.plane?.origin ?? vec3(0, 0, 0),
-      params.plane?.normal ?? vec3(0, 0, 1),
-      params.plane?.xDir ?? vec3(1, 0, 0)
+      vec3(planeOrigin[0], planeOrigin[1], planeOrigin[2]),
+      vec3(planeNormal[0], planeNormal[1], planeNormal[2]),
+      vec3(planeXDir[0], planeXDir[1], planeXDir[2])
     );
     
     let profile;
@@ -242,13 +253,15 @@ function handleExtrude(
         plane,
         params.profile.width,
         params.profile.height,
-        params.profile.center
+        params.profile.centerX ?? 0,
+        params.profile.centerY ?? 0
       );
     } else {
       profile = createCircleProfile(
         plane,
         params.profile.radius,
-        params.profile.center
+        params.profile.centerX ?? 0,
+        params.profile.centerY ?? 0
       );
     }
     
@@ -473,11 +486,23 @@ function handleBuildSequence(
         bodyId = createBox(state.model!, resolvedParams as BoxParams) as number;
       } else if (op.kind === 'extrude') {
         const extrudeParams = resolvedParams as ExtrudeParams;
+        
+        // Resolve plane - can be string literal or custom object
+        let planeOrigin: [number, number, number] = [0, 0, 0];
+        let planeNormal: [number, number, number] = [0, 0, 1];
+        let planeXDir: [number, number, number] = [1, 0, 0];
+        
+        if (extrudeParams.plane && typeof extrudeParams.plane === 'object') {
+          planeOrigin = extrudeParams.plane.origin as [number, number, number];
+          planeNormal = extrudeParams.plane.normal as [number, number, number];
+          planeXDir = extrudeParams.plane.xDir as [number, number, number];
+        }
+        
         const plane = createDatumPlaneFromNormal(
           'sketch',
-          extrudeParams.plane?.origin ?? vec3(0, 0, 0),
-          extrudeParams.plane?.normal ?? vec3(0, 0, 1),
-          extrudeParams.plane?.xDir ?? vec3(1, 0, 0)
+          vec3(planeOrigin[0], planeOrigin[1], planeOrigin[2]),
+          vec3(planeNormal[0], planeNormal[1], planeNormal[2]),
+          vec3(planeXDir[0], planeXDir[1], planeXDir[2])
         );
         
         let profile;
@@ -486,13 +511,15 @@ function handleBuildSequence(
             plane,
             extrudeParams.profile.width,
             extrudeParams.profile.height,
-            extrudeParams.profile.center
+            extrudeParams.profile.centerX ?? 0,
+            extrudeParams.profile.centerY ?? 0
           );
         } else {
           profile = createCircleProfile(
             plane,
             extrudeParams.profile.radius,
-            extrudeParams.profile.center
+            extrudeParams.profile.centerX ?? 0,
+            extrudeParams.profile.centerY ?? 0
           );
         }
         
@@ -652,7 +679,8 @@ describe('Worker Integration', () => {
             kind: 'rectangle',
             width: 2,
             height: 1,
-            center: [0, 0],
+            centerX: 0,
+            centerY: 0,
           },
           distance: 5,
         },
@@ -873,14 +901,16 @@ describe('Worker Integration', () => {
         params: { boxWidth: 5, boxHeight: 3, boxDepth: 2 },
       });
       
+      // Note: Using type assertion because the runtime supports ParamRef
+      // but the static types expect numbers (resolved at runtime)
       const sequence: BuildSequence = {
         operations: [
           {
             kind: 'createBox',
             params: {
-              width: paramRef('boxWidth'),
-              height: paramRef('boxHeight'),
-              depth: paramRef('boxDepth'),
+              width: paramRef('boxWidth') as unknown as number,
+              height: paramRef('boxHeight') as unknown as number,
+              depth: paramRef('boxDepth') as unknown as number,
             },
           },
         ],
@@ -907,7 +937,7 @@ describe('Worker Integration', () => {
           {
             kind: 'createBox',
             params: {
-              width: paramRef('missingParam'),
+              width: paramRef('missingParam') as unknown as number,
             },
           },
         ],
@@ -937,9 +967,9 @@ describe('Worker Integration', () => {
           {
             kind: 'createBox',
             params: {
-              width: paramRef('size'),
-              height: paramRef('size'),
-              depth: paramRef('size'),
+              width: paramRef('size') as unknown as number,
+              height: paramRef('size') as unknown as number,
+              depth: paramRef('size') as unknown as number,
             },
             resultId: 'cube',
           },
@@ -995,7 +1025,7 @@ describe('Worker Integration', () => {
             kind: 'createBox',
             params: {
               width: 5, // literal
-              height: paramRef('customHeight'), // from parameter
+              height: paramRef('customHeight') as unknown as number, // from parameter
               depth: 3, // literal
             },
           },

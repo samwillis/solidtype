@@ -15,6 +15,7 @@
     "build": "tsdown src/index.ts --format esm --outDir dist",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "bench": "tsx bench/index.ts",
     "bench:model": "tsx bench/model.bench.ts",
@@ -23,10 +24,10 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "^1.6.1",
     "tsdown": "^0.16.8",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "vitest": "^1.2.0"
-  },
-  "dependencies": {}
+  }
 }

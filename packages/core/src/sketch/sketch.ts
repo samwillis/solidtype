@@ -10,8 +10,8 @@
 
 import type { Vec2 } from '../num/vec2.js';
 import type { DatumPlane } from '../model/planes.js';
-import type { Curve2D, Line2D, Arc2D } from '../geom/curve2d.js';
-import type { SketchProfile, ProfileLoop } from '../model/sketchProfile.js';
+import type { Curve2D } from '../geom/curve2d.js';
+import type { SketchProfile } from '../model/sketchProfile.js';
 import type { PersistentRef } from '../naming/types.js';
 import type {
   Sketch,
@@ -23,15 +23,11 @@ import type {
   SketchArc,
   SketchEntity,
 } from './types.js';
-import type { Constraint } from './constraints.js';
 import {
-  asSketchId,
   asSketchPointId,
   asSketchEntityId,
   getSketchPoint,
   getSketchEntity,
-  getAllSketchPoints,
-  getAllSketchEntities,
 } from './types.js';
 import { vec2 } from '../num/vec2.js';
 import { createEmptyProfile, addLoopToProfile } from '../model/sketchProfile.js';

@@ -24,10 +24,9 @@ import type { TopoModel } from '../topo/model.js';
 import { getVertexPosition, getEdgeStartVertex, getEdgeEndVertex } from '../topo/model.js';
 import type { EdgeId, VertexId } from '../topo/handles.js';
 import type { DatumPlane } from '../model/planes.js';
-import type { PersistentRef, SubshapeRef, ResolveResult } from '../naming/types.js';
+import type { SubshapeRef } from '../naming/types.js';
 import type { NamingStrategy } from '../naming/evolution.js';
 import type { Sketch, SketchPointId, SketchPoint } from './types.js';
-import { getSketchPoint, getAllSketchPoints } from './types.js';
 
 // ============================================================================
 // Types
@@ -94,10 +93,10 @@ export interface AttachmentResolutionResult {
  *   2D_coords = [(P - origin) · xAxis, (P - origin) · yAxis]
  */
 export function projectToSketchPlane(worldPoint: Vec3, plane: DatumPlane): Vec2 {
-  const relative = sub3(worldPoint, plane.origin);
+  const relative = sub3(worldPoint, plane.surface.origin);
   return [
-    dot3(relative, plane.xAxis),
-    dot3(relative, plane.yAxis),
+    dot3(relative, plane.surface.xDir),
+    dot3(relative, plane.surface.yDir),
   ];
 }
 
@@ -105,9 +104,9 @@ export function projectToSketchPlane(worldPoint: Vec3, plane: DatumPlane): Vec2 
  * Convert a 2D sketch coordinate back to 3D world coordinates
  */
 export function sketchToWorld(sketchPoint: Vec2, plane: DatumPlane): Vec3 {
-  const xContrib = mul3(plane.xAxis, sketchPoint[0]);
-  const yContrib = mul3(plane.yAxis, sketchPoint[1]);
-  return add3(add3(plane.origin, xContrib), yContrib);
+  const xContrib = mul3(plane.surface.xDir, sketchPoint[0]);
+  const yContrib = mul3(plane.surface.yDir, sketchPoint[1]);
+  return add3(add3(plane.surface.origin, xContrib), yContrib);
 }
 
 // ============================================================================

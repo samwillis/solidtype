@@ -26,9 +26,8 @@
  */
 
 import type { Vec2 } from '../num/vec2.js';
-import type { SketchPointId, SketchEntityId, ConstraintId, Sketch, SketchPoint } from './types.js';
-import { asConstraintId, getSketchPoint, getSketchEntity } from './types.js';
-import { sub2, dot2, length2, normalize2, cross2 } from '../num/vec2.js';
+import type { SketchPointId, SketchEntityId, ConstraintId, Sketch } from './types.js';
+import { getSketchEntity } from './types.js';
 
 // ============================================================================
 // Constraint Kinds
