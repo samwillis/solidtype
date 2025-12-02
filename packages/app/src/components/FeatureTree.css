@@ -1,0 +1,21 @@
+.feature-tree {
+  height: 100%;
+  width: 100%;
+}
+
+.feature-tree-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #999;
+  text-align: center;
+  padding: 20px;
+}
+
+.feature-tree-hint {
+  font-size: 12px;
+  margin-top: 8px;
+  color: #bbb;
+}

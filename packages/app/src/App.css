@@ -1,0 +1,76 @@
+.app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+.app-left-panel {
+  width: 300px;
+  border-right: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-right-panel {
+  width: 300px;
+  border-left: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-right-panel > * {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Radix UI Tabs styling */
+.tabs-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tabs-list {
+  display: flex;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f5f5f5;
+}
+
+.tabs-trigger {
+  flex: 1;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.tabs-trigger:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.tabs-trigger[data-state='active'] {
+  color: #0066cc;
+  border-bottom-color: #0066cc;
+  background: white;
+}
+
+.tabs-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
