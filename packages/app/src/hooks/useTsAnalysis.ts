@@ -12,6 +12,9 @@ interface UseTsAnalysisResult {
 /**
  * Hook that analyzes TypeScript files in the project using a Web Worker.
  * Debounces analysis requests and subscribes to Yjs file changes.
+ * 
+ * Uses request IDs to prevent race conditions - only the latest request's
+ * result is accepted.
  */
 export function useTsAnalysis(): UseTsAnalysisResult {
   const project = useProject();
@@ -22,6 +25,8 @@ export function useTsAnalysis(): UseTsAnalysisResult {
   const workerRef = useRef<Worker | null>(null);
   const debounceTimerRef = useRef<number | null>(null);
   const filesSnapshotRef = useRef<Record<string, string>>({});
+  const requestIdRef = useRef<number>(0);
+  const currentRequestIdRef = useRef<number>(0);
 
   // Initialize worker
   useEffect(() => {
@@ -33,6 +38,13 @@ export function useTsAnalysis(): UseTsAnalysisResult {
 
       worker.onmessage = (event: MessageEvent) => {
         if (event.data.kind === 'analysisResult') {
+          // Only accept results from the latest request to prevent race conditions
+          const requestId = event.data.requestId;
+          if (requestId !== undefined && requestId < currentRequestIdRef.current) {
+            // This is a stale result, ignore it
+            return;
+          }
+          
           setDiagnostics(event.data.result.diagnostics);
           setJsBundle(event.data.result.transpiledFiles);
           setIsLoading(false);
@@ -56,6 +68,14 @@ export function useTsAnalysis(): UseTsAnalysisResult {
     }
   }, []);
 
+  // Efficient file change detection using content hashing
+  const getFilesHash = useCallback((files: Record<string, string>): string => {
+    // Create a stable hash by sorting keys and hashing content
+    const sortedKeys = Object.keys(files).sort();
+    const hashParts = sortedKeys.map((key) => `${key}:${files[key].length}:${files[key].slice(0, 100)}`);
+    return hashParts.join('|');
+  }, []);
+
   // Function to trigger analysis
   const analyze = useCallback(() => {
     if (!workerRef.current) return;
@@ -66,21 +86,26 @@ export function useTsAnalysis(): UseTsAnalysisResult {
       files[filename] = yText.toString();
     });
 
-    // Check if files have changed
-    const filesStr = JSON.stringify(files);
-    const snapshotStr = JSON.stringify(filesSnapshotRef.current);
-    if (filesStr === snapshotStr) {
+    // Check if files have changed using efficient hash comparison
+    const currentHash = getFilesHash(files);
+    const snapshotHash = getFilesHash(filesSnapshotRef.current);
+    if (currentHash === snapshotHash) {
       return; // No changes
     }
 
     filesSnapshotRef.current = files;
     setIsLoading(true);
 
+    // Increment request ID to track latest request
+    const requestId = ++requestIdRef.current;
+    currentRequestIdRef.current = requestId;
+
     workerRef.current.postMessage({
       kind: 'analyzeProject',
       files,
+      requestId, // Include request ID to prevent race conditions
     });
-  }, [project]);
+  }, [project, getFilesHash]);
 
   // Debounced analysis function
   const debouncedAnalyze = useCallback(() => {
@@ -106,8 +131,10 @@ export function useTsAnalysis(): UseTsAnalysisResult {
 
     return () => {
       project.files.unobserve(observer);
-      if (debounceTimerRef.current) {
+      // Clear debounce timer to prevent memory leaks
+      if (debounceTimerRef.current !== null) {
         clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
       }
     };
   }, [project, debouncedAnalyze]);

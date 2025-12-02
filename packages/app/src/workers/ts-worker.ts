@@ -3,9 +3,12 @@
  * 
  * This worker receives file contents, parses and type-checks them,
  * and returns diagnostics and transpiled JavaScript.
+ * 
+ * Note: TypeScript lib files are not included. We use skipLibCheck: true
+ * and isolatedModules: true to work around this limitation. For full type
+ * checking with standard library types, lib files would need to be bundled.
  */
 
-// @ts-ignore - typescript module will be available at runtime
 import * as ts from 'typescript';
 import type {
   AnalyzeProjectMessage,
@@ -70,27 +73,40 @@ function analyzeProject(files: Record<string, string>): TsAnalysisResult {
     isolatedModules: true,
   };
 
-  // Create source files
-  const sourceFiles: ts.SourceFile[] = [];
+  // Create file map
   const fileMap = new Map<string, string>();
 
   for (const [filename, content] of Object.entries(files)) {
     fileMap.set(filename, content);
-    const sourceFile = ts.createSourceFile(
-      filename,
-      content,
-      ts.ScriptTarget.ES2020,
-      true,
-      filename.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
-    );
-    sourceFiles.push(sourceFile);
   }
 
   // Create a compiler host that provides file contents
+  // Note: TypeScript lib files are not available in the worker.
+  // We rely on skipLibCheck: true to avoid needing them for basic checking.
   const host: ts.CompilerHost = {
     getSourceFile: (fileName: string) => {
+      // Check if this is a lib file request
+      if (fileName.startsWith('lib.') && fileName.endsWith('.d.ts')) {
+        // Return undefined for lib files - we use skipLibCheck to avoid needing them
+        return undefined;
+      }
+      
       const content = fileMap.get(fileName);
-      if (content === undefined) return undefined;
+      if (content === undefined) {
+        // Try to resolve relative imports within the project
+        // This is a simple implementation - full module resolution would be more complex
+        const resolved = resolveModuleName(fileName, fileMap);
+        if (resolved) {
+          return ts.createSourceFile(
+            resolved,
+            fileMap.get(resolved)!,
+            ts.ScriptTarget.ES2020,
+            true,
+            resolved.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+          );
+        }
+        return undefined;
+      }
       return ts.createSourceFile(
         fileName,
         content,
@@ -103,15 +119,71 @@ function analyzeProject(files: Record<string, string>): TsAnalysisResult {
       // Not used in this context
     },
     getCurrentDirectory: () => '/',
-    getDirectories: () => [],
-    fileExists: (fileName: string) => fileMap.has(fileName),
-    readFile: (fileName: string) => fileMap.get(fileName),
+    getDirectories: (path: string) => {
+      // Return directories that exist in our file map
+      const dirs = new Set<string>();
+      for (const file of fileMap.keys()) {
+        const dir = file.substring(0, file.lastIndexOf('/'));
+        if (dir && dir.startsWith(path)) {
+          dirs.add(dir);
+        }
+      }
+      return Array.from(dirs);
+    },
+    fileExists: (fileName: string) => {
+      // Check if it's a lib file (we don't have those)
+      if (fileName.startsWith('lib.') && fileName.endsWith('.d.ts')) {
+        return false;
+      }
+      // Check our file map or try to resolve relative imports
+      return fileMap.has(fileName) || resolveModuleName(fileName, fileMap) !== null;
+    },
+    readFile: (fileName: string) => {
+      // Lib files not available
+      if (fileName.startsWith('lib.') && fileName.endsWith('.d.ts')) {
+        return undefined;
+      }
+      const resolved = resolveModuleName(fileName, fileMap) || fileName;
+      return fileMap.get(resolved);
+    },
     getCanonicalFileName: (fileName: string) => fileName,
     useCaseSensitiveFileNames: () => true,
     getNewLine: () => '\n',
     getDefaultLibFileName: (options: ts.CompilerOptions) =>
       ts.getDefaultLibFilePath(options),
   };
+
+  // Simple module resolution helper - resolves relative imports within the project
+  function resolveModuleName(
+    moduleName: string,
+    files: Map<string, string>
+  ): string | null {
+    // If it's already in the map, return it
+    if (files.has(moduleName)) {
+      return moduleName;
+    }
+
+    // Try common extensions
+    const extensions = ['.ts', '.tsx', '.js', '.jsx'];
+    for (const ext of extensions) {
+      if (moduleName.endsWith(ext)) {
+        const withoutExt = moduleName.slice(0, -ext.length);
+        for (const ext2 of extensions) {
+          const candidate = withoutExt + ext2;
+          if (files.has(candidate)) {
+            return candidate;
+          }
+        }
+      } else {
+        const candidate = moduleName + ext;
+        if (files.has(candidate)) {
+          return candidate;
+        }
+      }
+    }
+
+    return null;
+  }
 
   // Create a program
   const program = ts.createProgram(
@@ -152,11 +224,13 @@ function analyzeProject(files: Record<string, string>): TsAnalysisResult {
 // Worker message handler
 self.addEventListener('message', (event: MessageEvent<AnalyzeProjectMessage>) => {
   if (event.data.kind === 'analyzeProject') {
+    const requestId = event.data.requestId;
     try {
       const result = analyzeProject(event.data.files);
       const response: AnalysisResultMessage = {
         kind: 'analysisResult',
         result,
+        requestId, // Echo back request ID
       };
       self.postMessage(response);
     } catch (error) {
@@ -172,6 +246,7 @@ self.addEventListener('message', (event: MessageEvent<AnalyzeProjectMessage>) =>
       const response: AnalysisResultMessage = {
         kind: 'analysisResult',
         result: errorResult,
+        requestId, // Echo back request ID
       };
       self.postMessage(response);
     }

@@ -45,6 +45,7 @@ describe('useTsAnalysis', () => {
         files: expect.objectContaining({
           'Part.tsx': expect.any(String),
         }),
+        requestId: expect.any(Number),
       })
     );
   });
@@ -75,6 +76,7 @@ describe('useTsAnalysis', () => {
           'Part.tsx': 'export function Part() {}',
         },
       },
+      requestId: 1,
     };
 
     if (mockWorker.onmessage) {

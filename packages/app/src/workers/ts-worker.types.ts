@@ -25,11 +25,13 @@ export interface TsAnalysisResult {
 export interface AnalyzeProjectMessage {
   kind: 'analyzeProject';
   files: Record<string, string>; // filename -> content
+  requestId?: number; // Optional request ID to prevent race conditions
 }
 
 export interface AnalysisResultMessage {
   kind: 'analysisResult';
   result: TsAnalysisResult;
+  requestId?: number; // Echo back request ID
 }
 
 export type WorkerMessage = AnalyzeProjectMessage | AnalysisResultMessage;

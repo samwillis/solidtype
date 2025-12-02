@@ -1,9 +1,44 @@
 import React from 'react';
 import { useTsAnalysis } from '../hooks/useTsAnalysis';
+import { useActiveFileContext } from '../contexts/ActiveFileContext';
+import type { TsDiagnostic } from '../workers/ts-worker.types';
 import './ProblemsPanel.css';
 
-const ProblemsPanel: React.FC = () => {
+interface ProblemsPanelProps {
+  onNavigateToError?: (diagnostic: TsDiagnostic) => void;
+}
+
+const ProblemsPanel: React.FC<ProblemsPanelProps> = ({ onNavigateToError }) => {
   const { diagnostics, isLoading, error } = useTsAnalysis();
+  const { setActiveFilename } = useActiveFileContext();
+
+  const handleProblemClick = (diagnostic: TsDiagnostic) => {
+    // Navigate to the file if it's different from current
+    if (diagnostic.file) {
+      setActiveFilename(diagnostic.file);
+    }
+    
+    // Wait a bit for file to load, then navigate to position
+    setTimeout(() => {
+      const navigateFn = (window as any).__codeEditorNavigateToError;
+      if (navigateFn) {
+        navigateFn(diagnostic);
+      }
+    }, 100);
+    
+    // Call custom navigation handler if provided
+    if (onNavigateToError) {
+      onNavigateToError(diagnostic);
+    }
+  };
+
+  // Generate stable key for diagnostic
+  const getDiagnosticKey = (diagnostic: TsDiagnostic, index: number): string => {
+    if (diagnostic.file && diagnostic.start) {
+      return `${diagnostic.file}-${diagnostic.start.line}-${diagnostic.start.column}-${diagnostic.code || index}`;
+    }
+    return `diagnostic-${index}-${diagnostic.message.slice(0, 20)}`;
+  };
 
   const getIcon = (category: string) => {
     switch (category) {
@@ -82,9 +117,18 @@ const ProblemsPanel: React.FC = () => {
         <div className="problems-list">
           {diagnostics.map((diagnostic, index) => (
             <div
-              key={index}
+              key={getDiagnosticKey(diagnostic, index)}
               className={`problem-item ${getSeverityClass(diagnostic.category)}`}
               title={diagnostic.message}
+              onClick={() => handleProblemClick(diagnostic)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleProblemClick(diagnostic);
+                }
+              }}
             >
               <span className="problem-icon">{getIcon(diagnostic.category)}</span>
               <div className="problem-details">
