@@ -12,9 +12,12 @@ export function createProject(): Project {
 }
 
 export function initializeProject(project: Project): void {
-  // Initialize with a default Part.tsx file
+  // Initialize with a default Part.tsx file that demonstrates the DSL
   const partFile = new Y.Text();
-  const sampleCode = `export type PartProps = {
+  const sampleCode = `/** @jsx sjsx */
+import { sjsx, Model, Sketch, Rectangle, Extrude } from '@solidtype/dsl';
+
+export type PartProps = {
   width?: number;
   height?: number;
   depth?: number;
@@ -22,12 +25,15 @@ export function initializeProject(project: Project): void {
 
 export function Part(props: PartProps = {}) {
   const width = props.width ?? 10;
-  const height = props.height ?? 10;
-  const depth = props.depth ?? 10;
+  const height = props.height ?? 8;
+  const depth = props.depth ?? 5;
 
   return (
     <Model>
-      {/* TODO: Add sketch and extrude operations */}
+      <Sketch id="base" plane="XY">
+        <Rectangle width={width} height={height} />
+      </Sketch>
+      <Extrude sketch="base" distance={depth} />
     </Model>
   );
 }
