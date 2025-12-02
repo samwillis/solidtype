@@ -87,8 +87,8 @@ const FeatureTree: React.FC = () => {
   }, [checkpoints, setCheckpoints]);
 
   // Build set of feature IDs that have errors
-  const errorFeatureIds = new Set(
-    errors.filter(e => e.featureId).map(e => e.featureId)
+  const errorFeatureIds = new Set<string>(
+    errors.filter((e): e is typeof e & { featureId: string } => !!e.featureId).map(e => e.featureId)
   );
 
   if (isBuilding) {

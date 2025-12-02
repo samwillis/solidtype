@@ -71,6 +71,26 @@ function createDSLRuntime() {
 }
 
 /**
+ * Strip import/export statements from transpiled code
+ * 
+ * The transpiled code may contain import statements that won't work
+ * in the Function() context. We need to strip them since we provide
+ * the DSL runtime as function arguments.
+ */
+function stripModuleStatements(code: string): string {
+  // Remove import statements (handles multiline imports too)
+  let result = code.replace(/^import\s+.*?['"].*?['"];?\s*$/gm, '');
+  result = result.replace(/^import\s*\{[^}]*\}\s*from\s*['"].*?['"];?\s*$/gm, '');
+  result = result.replace(/^import\s+\*\s+as\s+\w+\s+from\s+['"].*?['"];?\s*$/gm, '');
+  
+  // Remove export keywords but keep the function/variable declarations
+  result = result.replace(/^export\s+(?=function|const|let|var|class|type|interface)/gm, '');
+  result = result.replace(/^export\s+default\s+/gm, '');
+  
+  return result;
+}
+
+/**
  * Execute transpiled JS code and extract the Part function
  */
 function executeCode(
@@ -83,12 +103,15 @@ function executeCode(
   const argNames = Object.keys(runtime);
   const argValues = Object.values(runtime);
   
+  // Strip imports/exports since we provide the runtime
+  const cleanCode = stripModuleStatements(jsCode);
+  
   // Wrap code to export the Part function
-  // The transpiled code should have: export function Part(props) { ... }
-  // We need to capture it
+  // The transpiled code should have: function Part(props) { ... }
+  // (after stripping exports)
   const wrappedCode = `
     "use strict";
-    ${jsCode}
+    ${cleanCode}
     return typeof ${entryFunction} === 'function' ? ${entryFunction} : null;
   `;
   

@@ -122,9 +122,19 @@ export function useModelBuild(): ModelBuildState {
   }, []);
 
   // Create a hash of the bundle for change detection
+  // Uses a simple but effective hash that considers actual content
   const getBundleHash = useCallback((bundle: Record<string, string>): string => {
     const keys = Object.keys(bundle).sort();
-    return keys.map(k => `${k}:${bundle[k].length}`).join('|');
+    return keys.map(k => {
+      const content = bundle[k];
+      // Simple hash: combine length with first/last chars and a sample from middle
+      const len = content.length;
+      if (len === 0) return `${k}:0`;
+      const sample = content.charAt(0) + 
+                     content.charAt(Math.floor(len / 2)) + 
+                     content.charAt(len - 1);
+      return `${k}:${len}:${sample}`;
+    }).join('|');
   }, []);
 
   // Build when bundle changes and there are no TS errors
@@ -180,12 +190,17 @@ export function useModelRebuild() {
   const [isRebuilding, setIsRebuilding] = useState(false);
 
   useEffect(() => {
-    const worker = new Worker(
-      new URL('../workers/model-worker.ts', import.meta.url),
-      { type: 'module' }
-    );
-    workerRef.current = worker;
-    return () => worker.terminate();
+    try {
+      const worker = new Worker(
+        new URL('../workers/model-worker.ts', import.meta.url),
+        { type: 'module' }
+      );
+      workerRef.current = worker;
+      return () => worker.terminate();
+    } catch (err) {
+      console.error('[useModelRebuild] Failed to create worker:', err);
+      return undefined;
+    }
   }, []);
 
   const rebuild = useCallback((
