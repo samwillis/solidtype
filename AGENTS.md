@@ -5,9 +5,9 @@ This document tells you how to work inside the SolidType repo.
 
 Before you write *any* code, read:
 
-- [`docs/OVERVIEW.md`](docs/OVERVIEW.md) – **What** SolidType is and why it exists.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) – **How** it is structured (packages, layers, data flow).
-- [`docs/PLAN.md`](docs/PLAN.md) – The **phase-by-phase implementation plan** you must follow.
+- [`OVERVIEW.md`](OVERVIEW.md) – **What** SolidType is and why it exists.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) – **How** it is structured (packages, layers, data flow).
+- [`/plan/*`](plan/*) – The **phase-by-phase implementation plan** you must follow.
 
 Treat those three documents as the source of truth. If they conflict with existing code, the docs win and the code should be brought back into line.
 
@@ -126,6 +126,14 @@ When implementing:
    * Keep the deviation **minimal**.
    * Add a clear comment in the code explaining why (and, if possible, point back to the relevant section in `PLAN.md`).
 
+4. **If you make architectural or plan changes**, you MUST update the documentation:
+
+   * `ARCHITECTURE.md` – for structural changes (new modules, changed APIs, new packages)
+   * `OVERVIEW.md` – for changes to vision, goals, or technical approach
+   * `/plan/*` – for changes to the implementation plan or phase structure
+   
+   The docs are the source of truth. If you change the code in ways that conflict with the docs, update the docs to match.
+
 ---
 
 ## 6. Things You Should Not Do
@@ -144,7 +152,7 @@ If you need functionality that doesn't fit these guidelines, leave a TODO and im
 
 ## 7. Summary
 
-* Read `OVERVIEW.md`, `ARCHITECTURE.md`, and `PLAN.md` first.
+* Read `OVERVIEW.md`, `ARCHITECTURE.md`, and `/plan/*` first.
 * Respect package boundaries and layer responsibilities.
 * Write small, well-typed, test-backed TypeScript.
 * Keep `@solidtype/core` clean, deterministic, and environment-neutral.
