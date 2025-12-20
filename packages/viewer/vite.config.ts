@@ -9,6 +9,6 @@ export default defineConfig({
     format: 'es',
   },
   optimizeDeps: {
-    exclude: ['@solidtype/core', '@solidtype/oo'],
+    exclude: ['@solidtype/core'],
   },
 });

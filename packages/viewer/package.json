@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@solidtype/core": "workspace:*",
-    "@solidtype/oo": "workspace:*",
     "three": "^0.161.0"
   },
   "devDependencies": {

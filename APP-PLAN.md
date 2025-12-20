@@ -2,7 +2,7 @@
 
 Target stack recap:
 
-* **CAD kernel:** SolidType (`@solidtype/core`, `@solidtype/oo`).
+* **CAD kernel:** SolidType (`@solidtype/core`).
 * **App:** React + Radix UI, CodeMirror, three.js viewer.
 * **Collab/storage:** Yjs (client-only for now).
 * **Model format:** **Full TypeScript** + JSX, *model-as-code*, pure function `Part(props)` returning a strict `<Model>` DSL tree.
@@ -244,7 +244,7 @@ Later, we’ll extend with annotation structures, but v1 keeps it simple.
 
 1. **Define the DSL types**
 
-* In `@solidtype/oo` or a new `@solidtype/dsl` package, define:
+* In `@solidtype/core` or a new `@solidtype/dsl` package, define:
 
   ```ts
   // Pseudocode
@@ -286,7 +286,7 @@ Later, we’ll extend with annotation structures, but v1 keeps it simple.
 
 3. **Interpreting the DSL tree**
 
-* From `ModelNode`, use `@solidtype/oo` API to:
+* From `ModelNode`, use `@solidtype/core`'s OO API to:
 
   * Create sketches (mapping `<Sketch>` children to sketch definitions).
   * Apply extrudes/revolves/sweeps and build bodies.
@@ -426,7 +426,7 @@ Later, we’ll extend with annotation structures, but v1 keeps it simple.
 * For the currently selected `<Sketch>` feature:
 
   * Show a 2D sketch canvas (center or overlay).
-  * Use the sketch data from SolidType (via `@solidtype/oo`).
+  * Use the sketch data from SolidType (via `@solidtype/core`).
 
 * Allow:
 

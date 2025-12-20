@@ -16,7 +16,8 @@ import type {
   SolveResult,
   SolveOptions,
 } from '../sketch/types.js';
-import type { Constraint, ConstraintId } from '../sketch/constraints.js';
+import type { Constraint } from '../sketch/constraints.js';
+import type { ConstraintId } from '../sketch/types.js';
 import {
   createSketch as coreCreateSketch,
   addPoint as coreAddPoint,

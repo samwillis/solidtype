@@ -23,4 +23,12 @@ export class Edge {
   getBodyId(): BodyId {
     return this.bodyId;
   }
+  
+  /**
+   * Get the session this edge belongs to
+   * @internal For advanced use
+   */
+  getSession(): SolidSession {
+    return this.session;
+  }
 }

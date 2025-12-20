@@ -19,15 +19,22 @@ This document explains how the kernel is structured, how data flows, and where m
 
 SolidType is a pnpm monorepo with a **small number of packages**:
 
-* `@solidtype/core` – lower-level, functional, data-oriented kernel.
-* `@solidtype/oo` – higher-level object-oriented façade.
+* `@solidtype/core` – the CAD kernel with an object-oriented API.
 * `@solidtype/viewer` – WebGL/three.js demo app and playground.
 
 Everything is ESM-only. `@solidtype/core` has no DOM/browser dependencies and is designed to run in **Node** or in a **Web Worker**.
 
-### 2.1 Layered Architecture
+### 2.1 Public API (Object-Oriented)
 
-Inside `@solidtype/core` we have logical submodules:
+`@solidtype/core` exposes an ergonomic, class-based API as the primary interface:
+
+* `SolidSession` – main entry point for modeling operations.
+* `Body`, `Face`, `Edge` – wrappers for topological entities.
+* `Sketch` – 2D sketch with constraint solving.
+
+### 2.2 Internal Modules (Data-Oriented)
+
+Inside `@solidtype/core` we have logical submodules that use data-oriented design for performance:
 
 * `num` – numeric utilities, tolerances, predicates, root-finding.
 * `geom` – curves & surfaces (analytic, v1), evaluators, intersections.
@@ -36,8 +43,9 @@ Inside `@solidtype/core` we have logical submodules:
 * `naming` – persistent naming & evolution graph.
 * `sketch` – 2D sketch entities + constraint system + solver.
 * `mesh` – tessellation (BREP → triangle meshes).
+* `api` – object-oriented wrappers that delegate to the internal modules.
 
-`@solidtype/oo` wraps that with classes (`SolidSession`, `Body`, `Face`, `Sketch`, …) for ergonomics, while `@solidtype/viewer` provides a real-time playground and visual debugging.
+The `@solidtype/viewer` uses the OO API from core to provide a real-time playground and visual debugging.
 
 ---
 
@@ -385,41 +393,46 @@ The solver is intended to run in a **worker** for responsive UI.
 
 ---
 
-## 4. `@solidtype/oo` – Object-Oriented Façade
+## 4. Object-Oriented API (in `@solidtype/core/api`)
 
 **Responsibility**
 
-* Provide a more ergonomic, class-based API for applications while delegating to `@solidtype/core`.
+* Provide an ergonomic, class-based API as the primary interface for applications.
 * Abstract away handles and low-level details for typical usage.
+* Delegate to the internal data-oriented modules for actual operations.
 
-**Examples**
+**Key Classes**
 
 ```ts
 class SolidSession {
-  createBody(): Body;
-  createSketch(plane: PlaneRef): Sketch;
-  extrude(sketch: Sketch, distance: number, options: ExtrudeOptions): Body;
-  boolean(op: "union" | "subtract" | "intersect", a: Body, b: Body): Body;
+  createSketch(plane: DatumPlane): Sketch;
+  extrude(profile: SketchProfile, options: ExtrudeOptions): ExtrudeResult & { body?: Body };
+  revolve(profile: SketchProfile, options: RevolveOptions): RevolveResult & { body?: Body };
+  union(bodyA: Body, bodyB: Body): BooleanResult & { body?: Body };
+  subtract(bodyA: Body, bodyB: Body): BooleanResult & { body?: Body };
+  intersect(bodyA: Body, bodyB: Body): BooleanResult & { body?: Body };
 }
 
 class Body {
   getFaces(): Face[];
   tessellate(options?): Mesh;
-  selectFaceByRay(ray: Ray): PersistentRef | null;
-  resolve(ref: PersistentRef): Face | Edge | null;
+  selectFaceByRay(ray: Ray): FaceSelectionResult | null;
+  resolve(ref: PersistentRef): Face | null;
 }
 
 class Sketch {
-  addLine(p1: Vec2, p2: Vec2): SketchLine;
-  addArc(...): SketchArc;
-  addConstraint(...): Constraint;
-  solve(): void;
+  addPoint(x: number, y: number): SketchPointId;
+  addLine(start: SketchPointId, end: SketchPointId): SketchEntityId;
+  addArc(...): SketchEntityId;
+  addConstraint(constraint: Constraint): void;
+  solve(): SolveResult;
+  toProfile(): SketchProfile | null;
 }
 ```
 
 The OO layer:
 
-* Never stores raw BREP handles directly; it keeps IDs and delegates to core APIs.
+* Never stores raw BREP handles directly; it keeps IDs and delegates to internal APIs.
 * Provides the main host for **app-level behaviour** like scriptable models, simple history management, and selection tools.
 
 ---
@@ -435,7 +448,7 @@ The OO layer:
 **Viewer**
 
 * Vite + TS + three.js app.
-* Uses `@solidtype/oo` as the modeling API.
+* Uses `@solidtype/core`'s OO API for modeling operations.
 * Code-driven examples:
 
   * “Create a sketch on XY, draw rectangle, extrude, boolean union with another box.”
@@ -508,6 +521,6 @@ The architecture is designed to support future work without major rewrites:
   * CRDT-backed model format for collaborative editing.
 * **High-level API**:
 
-  * A JSX-style composition layer on top of `@solidtype/oo` for declarative models.
+  * A JSX-style composition layer on top of `@solidtype/core` for declarative models.
 
-SolidType’s core constraint is: **keep the functional core clean, explicit, and well-tested**, so higher-level layers and future research can safely build on it.
+SolidType’s core constraint is: **keep the internal data-oriented modules clean, explicit, and well-tested**, so the OO API and future research can safely build on them.

@@ -4,18 +4,18 @@
 
 Monorepo (pnpm), ESM-only, with a **small number of packages**:
 
-* `@solidtype/core` – functional, data-oriented kernel:
+* `@solidtype/core` – CAD kernel with OO API:
 
-  * `num` – math, tolerances, predicates.
-  * `geom` – curves/surfaces, evaluators.
-  * `topo` – BREP representation, validation, healing.
-  * `model` – modeling ops: primitives, extrude, revolve, booleans.
-  * `sketch` – 2D sketch entities + constraint graph + solver.
-  * `naming` – persistent naming, evolution graph, fingerprints.
-  * `mesh` – tessellation to triangle meshes.
-* `@solidtype/oo` – thin OO façade:
-
-  * `SolidSession`, `Body`, `Face`, `Edge`, `Sketch` etc. wrapping core.
+  * **Primary API (Object-Oriented)**:
+    * `api/` – `SolidSession`, `Body`, `Face`, `Edge`, `Sketch` classes.
+  * **Internal Modules (Data-Oriented)**:
+    * `num` – math, tolerances, predicates.
+    * `geom` – curves/surfaces, evaluators.
+    * `topo` – BREP representation, validation, healing.
+    * `model` – modeling ops: primitives, extrude, revolve, booleans.
+    * `sketch` – 2D sketch entities + constraint graph + solver.
+    * `naming` – persistent naming, evolution graph, fingerprints.
+    * `mesh` – tessellation to triangle meshes.
 * `@solidtype/viewer` – WebGL/three.js demo app:
 
   * Code-driven examples, parameter sliders, basic inspection.
@@ -23,10 +23,10 @@ Monorepo (pnpm), ESM-only, with a **small number of packages**:
 Tooling:
 
 * **Tests**: Vitest in each package, `strict` TS.
-* **Build**: tsdown for `@solidtype/core` and `@solidtype/oo`.
+* **Build**: tsdown for `@solidtype/core`.
 * **App**: Vite for `@solidtype/viewer`.
 
-Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses serialisable data; `@solidtype/oo` / `@solidtype/viewer` provide worker wrappers later.
+Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses serialisable data; `@solidtype/viewer` provides worker wrappers later.
 
 ---
 
@@ -45,7 +45,6 @@ Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses se
    * Packages:
 
      * `packages/core`
-     * `packages/oo`
      * `packages/viewer`
 
 2. **Shared TS config**
@@ -55,12 +54,12 @@ Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses se
 
 3. **Vitest setup**
 
-   * Add Vitest config to `@solidtype/core` and `@solidtype/oo`.
+   * Add Vitest config to `@solidtype/core`.
    * Ensure `pnpm test` runs all tests across the workspace.
 
 4. **Build tooling**
 
-   * Configure tsdown for `@solidtype/core` and `@solidtype/oo`:
+   * Configure tsdown for `@solidtype/core`:
 
      * ESM output only.
      * Preserve source maps for debugging.
@@ -618,7 +617,7 @@ Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses se
 
 5. **OO façade hooks**
 
-   * In `@solidtype/oo`:
+   * In `@solidtype/core`'s OO API:
 
      * `Body.selectFaceByRay(...)` returns `PersistentRef`.
      * `Body.resolve(ref)` returns an OO `Face` or `null`.
@@ -764,7 +763,7 @@ Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses se
 
 6. **Integration with modeling**
 
-   * Add helper in `@solidtype/oo`:
+   * Add helper in `@solidtype/core`'s OO API:
 
      * `session.createSketch(plane)` → returns an OO `Sketch`.
      * `Sketch.addLine`, `Sketch.addArc`, `Sketch.addConstraint`.

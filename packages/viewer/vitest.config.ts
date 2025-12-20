@@ -9,7 +9,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@solidtype/core': resolve(__dirname, '../core/src'),
-      '@solidtype/oo': resolve(__dirname, '../oo/src'),
     },
   },
 });

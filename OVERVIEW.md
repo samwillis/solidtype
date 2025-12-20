@@ -71,22 +71,23 @@ It’s explicitly **not** just a toy or teaching kernel: the design is aimed at 
 
 SolidType uses a **small number of packages**, each roughly mapping to a conceptual layer:
 
-1. `@solidtype/core` – functional, data-oriented kernel:
+1. `@solidtype/core` – the CAD kernel:
 
-   * `num` – numeric helpers, tolerances, basic predicates.
-   * `geom` – analytic curves/surfaces and evaluators.
-   * `topo` – BREP topology, validation, healing.
-   * `model` – modeling operators (extrude, revolve, booleans, primitives).
-   * `sketch` – sketch graph + constraints + numeric solver.
-   * `naming` – persistent naming, evolution graph, fingerprints.
-   * `mesh` – tessellation to triangle meshes.
+   * **Primary API (Object-Oriented)**:
+     * `SolidSession` – main entry point for modeling operations.
+     * `Body`, `Face`, `Edge` – wrappers for topological entities.
+     * `Sketch` – 2D sketch with constraint solving.
+   
+   * **Internal Modules** (data-oriented, for performance):
+     * `num` – numeric helpers, tolerances, basic predicates.
+     * `geom` – analytic curves/surfaces and evaluators.
+     * `topo` – BREP topology, validation, healing.
+     * `model` – modeling operators (extrude, revolve, booleans, primitives).
+     * `sketch` – sketch graph + constraints + numeric solver.
+     * `naming` – persistent naming, evolution graph, fingerprints.
+     * `mesh` – tessellation to triangle meshes.
 
-2. `@solidtype/oo` – OO façade:
-
-   * Thin wrappers like `SolidSession`, `Body`, `Face`, `Sketch` over the functional core.
-   * Ergonomic API for applications and scripting.
-
-3. `@solidtype/viewer` – demo / visualization:
+2. `@solidtype/viewer` – demo / visualization:
 
    * Vite app using three.js.
    * Code-driven demos and simple parameterised models.
