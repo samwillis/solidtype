@@ -286,13 +286,21 @@ const Viewer: React.FC = () => {
     needsRenderRef.current = true;
 
     // Handle resize (both window and container)
+    let lastWidth = containerRef.current.clientWidth;
+    let lastHeight = containerRef.current.clientHeight;
+    
     const handleResize = () => {
       if (!containerRef.current || !cameraRef.current || !renderer) return;
       const currentCamera = cameraRef.current;
       const width = containerRef.current.clientWidth;
       const height = containerRef.current.clientHeight;
       
+      // Skip if size hasn't actually changed or is zero
       if (width === 0 || height === 0) return;
+      if (width === lastWidth && height === lastHeight) return;
+      
+      lastWidth = width;
+      lastHeight = height;
       
       const aspect = width / height;
       
@@ -307,8 +315,10 @@ const Viewer: React.FC = () => {
         currentCamera.bottom = -frustumSize;
       }
       currentCamera.updateProjectionMatrix();
-      renderer.setSize(width, height);
-      needsRenderRef.current = true;
+      renderer.setSize(width, height, false); // false = don't update style, prevents flashing
+      
+      // Immediately render to prevent black flash
+      renderer.render(scene, currentCamera);
     };
     
     // Use ResizeObserver to detect container size changes (panel resize, AI panel toggle)

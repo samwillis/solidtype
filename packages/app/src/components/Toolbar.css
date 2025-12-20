@@ -72,8 +72,9 @@
 }
 
 .toolbar-button.active {
-  background: var(--color-bg-active);
+  background: var(--color-bg-hover);
   color: var(--color-accent);
+  opacity: 0.85;
 }
 
 .toolbar-button-ai {
