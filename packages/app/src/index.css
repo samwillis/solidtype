@@ -1,20 +1,122 @@
-* {
+*, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+:root {
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-family-mono: 'SF Mono', Monaco, Menlo, 'Ubuntu Mono', Consolas, monospace;
+}
+
+/* Dark theme (default) */
+:root, [data-theme="dark"] {
+  --color-bg: #1e1e1e;
+  --color-bg-light: #252526;
+  --color-bg-lighter: #2d2d2d;
+  --color-bg-hover: #2a2d2e;
+  --color-bg-active: #37373d;
+  
+  --color-border: #3c3c3c;
+  --color-border-light: #474747;
+  
+  --color-text: #cccccc;
+  --color-text-secondary: #969696;
+  --color-text-muted: #6e6e6e;
+  
+  --color-accent: #0078d4;
+  --color-accent-hover: #1c8ae6;
+  --color-accent-text: #ffffff;
+  
+  --color-icon: #c5c5c5;
+  --color-icon-hover: #ffffff;
+  
+  --color-viewer-bg: #1a1a1a;
+  
+  /* Feature icon colors */
+  --color-feature-sketch: #569cd6;
+  --color-feature-extrude: #6a9955;
+  --color-feature-revolve: #ce9178;
+  --color-feature-boolean: #c586c0;
+  --color-feature-primitive: #9cdcfe;
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --color-bg: #f3f3f3;
+  --color-bg-light: #ffffff;
+  --color-bg-lighter: #f8f8f8;
+  --color-bg-hover: #e8e8e8;
+  --color-bg-active: #d4d4d4;
+  
+  --color-border: #e0e0e0;
+  --color-border-light: #e8e8e8;
+  
+  --color-text: #333333;
+  --color-text-secondary: #666666;
+  --color-text-muted: #999999;
+  
+  --color-accent: #0078d4;
+  --color-accent-hover: #106ebe;
+  --color-accent-text: #ffffff;
+  
+  --color-icon: #424242;
+  --color-icon-hover: #000000;
+  
+  --color-viewer-bg: #e8e8e8;
+  
+  /* Feature icon colors */
+  --color-feature-sketch: #0066cc;
+  --color-feature-extrude: #388e3c;
+  --color-feature-revolve: #e65100;
+  --color-feature-boolean: #7b1fa2;
+  --color-feature-primitive: #0277bd;
+}
+
+html, body {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  font-family: var(--font-family);
+  font-size: 13px;
+  color: var(--color-text);
+  background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  height: 100vh;
-  overflow: hidden;
 }
 
 #root {
   height: 100vh;
   width: 100vw;
+}
+
+:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+::selection {
+  background: rgba(0, 120, 212, 0.3);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.4);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.6);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }

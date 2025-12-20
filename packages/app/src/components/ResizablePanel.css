@@ -1,0 +1,85 @@
+/* Resizable Panel */
+.resizable-panel {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  background: var(--color-bg);
+  border-color: var(--color-border);
+}
+
+.resizable-panel-left {
+  border-right: 1px solid var(--color-border);
+}
+
+.resizable-panel-right {
+  border-left: 1px solid var(--color-border);
+}
+
+.resizable-panel-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.resizable-panel-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 10;
+  transition: background-color 0.15s ease;
+}
+
+.resizable-panel-handle:hover,
+.resizable-panel-handle:active {
+  background: var(--color-accent);
+}
+
+.resizable-panel-handle-left {
+  right: -2px;
+}
+
+.resizable-panel-handle-right {
+  left: -2px;
+}
+
+/* Resizable Split (vertical) */
+.resizable-split {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.resizable-split-top,
+.resizable-split-bottom {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.resizable-split-handle {
+  flex-shrink: 0;
+  height: 6px;
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+}
+
+.resizable-split-handle:hover .resizable-split-handle-line,
+.resizable-split-handle:active .resizable-split-handle-line {
+  background: var(--color-accent);
+}
+
+.resizable-split-handle-line {
+  width: 32px;
+  height: 2px;
+  background: var(--color-border);
+  border-radius: 1px;
+  transition: background-color 0.15s ease;
+}

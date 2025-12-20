@@ -1,0 +1,33 @@
+.view-cube {
+  width: 130px;
+  height: 130px;
+  position: absolute;
+  bottom: 44px;
+  right: -7px;
+  z-index: 10;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.view-cube-tooltip {
+  position: fixed;
+  background: var(--color-bg-light);
+  color: var(--color-text);
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+  z-index: 1000;
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .view-cube-tooltip {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.view-cube canvas {
+  display: block;
+}
