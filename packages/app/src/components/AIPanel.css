@@ -21,17 +21,24 @@
   align-items: center;
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.ai-panel-tabs-list::-webkit-scrollbar {
+  display: none;
 }
 
 .ai-panel-tab {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 6px;
+  padding: 4px 8px;
   background: transparent;
   border: none;
-  border-radius: 0;
+  border-radius: 4px;
   cursor: pointer;
   color: var(--color-text-muted);
   font-size: 11px;
@@ -39,7 +46,7 @@
   min-width: 0;
   max-width: 120px;
   flex-shrink: 0;
-  border-right: 1px solid var(--color-border);
+  margin-right: 2px;
 }
 
 .ai-panel-tab:hover {

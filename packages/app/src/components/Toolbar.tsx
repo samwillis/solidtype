@@ -116,15 +116,15 @@ const PlaneIcon = () => (
 
 const UndoIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M3 7v6h6" />
-    <path d="M3 13a9 9 0 1018 0 9 9 0 00-15-6.7L3 9" />
+    <path d="M3 10h10a5 5 0 015 5v0a5 5 0 01-5 5H8" />
+    <path d="M7 6l-4 4 4 4" />
   </svg>
 );
 
 const RedoIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M21 7v6h-6" />
-    <path d="M21 13a9 9 0 11-18 0 9 9 0 0015-6.7L21 9" />
+    <path d="M21 10H11a5 5 0 00-5 5v0a5 5 0 005 5h5" />
+    <path d="M17 6l4 4-4 4" />
   </svg>
 );
 
