@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { PlaneSurface, CylinderSurface, ConeSurface, SphereSurface } from './surface.js';
+import type { PlaneSurface, CylinderSurface, ConeSurface, SphereSurface, TorusSurface } from './surface.js';
 import { evalSurface, surfaceNormal, createPlaneSurface } from './surface.js';
 import { vec3, X_AXIS, Y_AXIS, Z_AXIS } from '../num/vec3.js';
 import { createNumericContext } from '../num/tolerance.js';
@@ -136,6 +136,31 @@ describe('surface', () => {
       expect(normal[1]).toBeCloseTo(0, 10);
       expect(normal[2]).toBeCloseTo(1, 10);
       expect(length3(normal)).toBeCloseTo(1, 10);
+    });
+
+    it('computes torus normal and evaluates point', () => {
+      const torus: TorusSurface = {
+        kind: 'torus',
+        center: vec3(0, 0, 0),
+        axis: Z_AXIS,
+        majorRadius: 3,
+        minorRadius: 1,
+      };
+
+      const p = evalSurface(torus, 0, 0);
+      expect(p[0]).toBeCloseTo(4, 10);
+      expect(p[1]).toBeCloseTo(0, 10);
+      expect(p[2]).toBeCloseTo(0, 10);
+
+      const n0 = surfaceNormal(torus, 0, 0);
+      expect(n0[0]).toBeCloseTo(1, 10);
+      expect(n0[1]).toBeCloseTo(0, 10);
+      expect(n0[2]).toBeCloseTo(0, 10);
+
+      const n1 = surfaceNormal(torus, Math.PI / 2, 0);
+      expect(n1[0]).toBeCloseTo(0, 10);
+      expect(n1[1]).toBeCloseTo(0, 10);
+      expect(n1[2]).toBeCloseTo(1, 10);
     });
   });
 

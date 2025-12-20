@@ -39,24 +39,24 @@
 ### Constraints Array
 
 ```xml
-<sketch id="s1" plane="xy">
-  <points>[...]</points>
-  <entities>[...]</entities>
-  <constraints>
-    [
-      { "id": "c1", "type": "horizontal", "points": ["p1", "p2"] },
-      { "id": "c2", "type": "vertical", "points": ["p3", "p4"] },
-      { "id": "c3", "type": "coincident", "points": ["p2", "p3"] },
-      { "id": "c4", "type": "fixed", "point": "p1" }
-    ]
-  </constraints>
-</sketch>
+<sketch
+  id="s1"
+  plane="xy"
+  points='[ ... ]'
+  entities='[ ... ]'
+  constraints='[
+    { "id": "c1", "type": "horizontal", "points": ["p1", "p2"] },
+    { "id": "c2", "type": "vertical", "points": ["p3", "p4"] },
+    { "id": "c3", "type": "coincident", "points": ["p2", "p3"] },
+    { "id": "c4", "type": "fixed", "point": "p1" }
+  ]'
+/>
 ```
 
 ### TypeScript Types
 
 ```typescript
-// packages/app/src/types/constraints.ts
+// packages/app/src/types/document.ts (SketchConstraint union)
 
 export interface HorizontalConstraint {
   id: string;

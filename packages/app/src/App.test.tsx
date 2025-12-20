@@ -23,6 +23,10 @@ vi.mock('./contexts/KernelContext', () => ({
     bodies: [],
     isRebuilding: false,
     isReady: true,
+    previewExtrude: () => {},
+    previewRevolve: () => {},
+    clearPreview: () => {},
+    previewError: null,
   }),
 }));
 

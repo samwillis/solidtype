@@ -4,14 +4,19 @@
  * Creates a solid body by revolving a 2D profile around an axis.
  */
 
+import type { Vec2 } from '../num/vec2.js';
 import type { Vec3 } from '../num/vec3.js';
+import { vec2 } from '../num/vec2.js';
 import { vec3, normalize3, add3, sub3, mul3, cross3, dot3, length3 } from '../num/vec3.js';
+import type { Curve2D } from '../geom/curve2d.js';
+import { evalCurve2D } from '../geom/curve2d.js';
 import { createPlaneSurface } from '../geom/surface.js';
+import type { SurfaceIndex } from '../topo/handles.js';
+import { worldToPlane, planeToWorld } from './planes.js';
 import { TopoModel } from '../topo/TopoModel.js';
 import type { BodyId, EdgeId, VertexId, HalfEdgeId, FaceId, ShellId } from '../topo/handles.js';
 import type { SketchProfile } from './sketchProfile.js';
-import { getLoopVertices } from './sketchProfile.js';
-import { planeToWorld } from './planes.js';
+import type { ProfileLoop } from './sketchProfile.js';
 import type { NamingStrategy, FeatureId, PersistentRef } from '../naming/index.js';
 import {
   faceRef,
@@ -50,6 +55,9 @@ export interface RevolveResult {
 
 const MIN_FULL_SEGMENTS = 8;
 const SEGMENTS_PER_RADIAN = Math.PI / 12;
+
+const ARC_MIN_SEGMENTS = 8;
+const ARC_SEGMENTS_PER_RADIAN = 8;
 
 export function revolve(
   model: TopoModel,
@@ -98,8 +106,8 @@ export function revolve(
     return { success: false, error: 'Profile has no outer loop' };
   }
   
-  const vertices2D = getLoopVertices(loop);
-  if (vertices2D.length < 3) {
+  const { vertices2D, segmentCurves } = sampleProfileLoop(loop);
+  if (vertices2D.length < 3 || segmentCurves.length !== vertices2D.length) {
     return { success: false, error: 'Profile loop has less than 3 vertices' };
   }
   
@@ -130,8 +138,18 @@ export function revolve(
   const nProfile = profileVertices3D.length;
   const nSegments = isFullRevolution ? segments : segments + 1;
   
+  for (let v = 0; v < nProfile; v++) sideFaces.push([]);
+
+  // Precompute analytic side surface per profile segment (one per loop edge)
+  const sideSurfaceBySegment: SurfaceIndex[] = [];
   for (let v = 0; v < nProfile; v++) {
-    sideFaces.push([]);
+    const nextV = (v + 1) % nProfile;
+    const curve = segmentCurves[v];
+    const p0 = profileVertices3D[v];
+    const p1 = profileVertices3D[nextV];
+    sideSurfaceBySegment.push(
+      model.addSurface(createRevolvedSurface(model, profile, axisOrigin, axisDir, curve, p0, p1))
+    );
   }
   
   for (let s = 0; s < segments; s++) {
@@ -151,32 +169,7 @@ export function revolve(
       const edgeRev0 = model.addEdge(v00, v10);
       const edgeRev1 = model.addEdge(v01, v11);
       
-      const p0 = profileVertices3D[v];
-      const p1 = profileVertices3D[nextV];
-      
-      const midPoint3D: Vec3 = [
-        (p0[0] + p1[0]) / 2,
-        (p0[1] + p1[1]) / 2,
-        (p0[2] + p1[2]) / 2,
-      ];
-      const midAngle = (s + 0.5) * angleStep;
-      const rotatedMid = rotatePointAroundAxis(midPoint3D, axisOrigin, axisDir, midAngle);
-      
-      const axisPoint = projectPointOntoAxis(rotatedMid, axisOrigin, axisDir);
-      let radialDir = sub3(rotatedMid, axisPoint);
-      const radialLen = length3(radialDir);
-      if (radialLen > model.ctx.tol.length) {
-        radialDir = normalize3(radialDir);
-      } else {
-        radialDir = computePerpendicularToAxis(axisDir);
-      }
-      
-      const faceNormal = radialDir;
-      const surface = model.addSurface(createPlaneSurface(
-        rotatedMid,
-        faceNormal,
-        axisDir
-      ));
+      const surface = sideSurfaceBySegment[v];
       
       const halfEdges: HalfEdgeId[] = [
         model.addHalfEdge(edgeRing0, 1),
@@ -267,6 +260,142 @@ export function revolve(
   };
 }
 
+function arcAngleSpan(curve: Extract<Curve2D, { kind: 'arc' }>): number {
+  let span: number;
+  if (curve.ccw) {
+    span = curve.endAngle - curve.startAngle;
+    if (span < 0) span += 2 * Math.PI;
+  } else {
+    span = curve.startAngle - curve.endAngle;
+    if (span < 0) span += 2 * Math.PI;
+  }
+  return span;
+}
+
+function sampleProfileLoop(loop: ProfileLoop): { vertices2D: Vec2[]; segmentCurves: Curve2D[] } {
+  const vertices: Vec2[] = [];
+  const segmentCurves: Curve2D[] = [];
+
+  for (const curve of loop.curves) {
+    if (curve.kind === 'line') {
+      vertices.push(evalCurve2D(curve, 0));
+      segmentCurves.push(curve);
+      continue;
+    }
+
+    const span = arcAngleSpan(curve);
+    const segments = Math.max(ARC_MIN_SEGMENTS, Math.ceil(Math.abs(span) * ARC_SEGMENTS_PER_RADIAN));
+    for (let i = 0; i < segments; i++) {
+      const t0 = i / segments;
+      const t1 = (i + 1) / segments;
+      vertices.push(evalCurve2D(curve, t0));
+      // Each sampled segment still maps to the same source curve
+      segmentCurves.push(curve);
+      // avoid duplicating last point; next segment will add its own start
+      if (i === segments - 1) {
+        // ensure closure by letting next original curve start handle continuity
+      }
+      void t1;
+    }
+  }
+
+  // Remove duplicate closing vertex if present.
+  if (vertices.length >= 2) {
+    const first = vertices[0];
+    const last = vertices[vertices.length - 1];
+    const dx = last[0] - first[0];
+    const dy = last[1] - first[1];
+    if (Math.hypot(dx, dy) < 1e-12) {
+      vertices.pop();
+      segmentCurves.pop();
+    }
+  }
+
+  return { vertices2D: vertices, segmentCurves };
+}
+
+function clamp01(x: number): number {
+  return Math.max(-1, Math.min(1, x));
+}
+
+function distancePointToAxis(point: Vec3, axisOrigin: Vec3, axisDirUnit: Vec3): number {
+  const ap = sub3(point, axisOrigin);
+  const t = dot3(ap, axisDirUnit);
+  const proj = add3(axisOrigin, mul3(axisDirUnit, t));
+  return length3(sub3(point, proj));
+}
+
+function intersectLines2D(
+  p0: Vec2,
+  d0: Vec2,
+  p1: Vec2,
+  d1: Vec2
+): { ok: true; t0: number; t1: number; point: Vec2 } | { ok: false } {
+  const det = d0[0] * d1[1] - d0[1] * d1[0];
+  if (Math.abs(det) < 1e-12) return { ok: false };
+  const dx = p1[0] - p0[0];
+  const dy = p1[1] - p0[1];
+  const t0 = (dx * d1[1] - dy * d1[0]) / det;
+  const t1 = (dx * d0[1] - dy * d0[0]) / det;
+  return { ok: true, t0, t1, point: vec2(p0[0] + d0[0] * t0, p0[1] + d0[1] * t0) };
+}
+
+function createRevolvedSurface(
+  model: TopoModel,
+  profile: SketchProfile,
+  axisOrigin: Vec3,
+  axisDirUnit: Vec3,
+  curve: Curve2D,
+  p0: Vec3,
+  p1: Vec3
+) {
+  // Axis in the profile plane coordinate system (for cone apex computation)
+  const plane = profile.plane;
+  const axisO2 = worldToPlane(plane, axisOrigin);
+  const axisDir2: Vec2 = vec2(
+    dot3(axisDirUnit, plane.surface.xDir),
+    dot3(axisDirUnit, plane.surface.yDir)
+  );
+
+  if (curve.kind === 'arc') {
+    const center3 = planeToWorld(plane, curve.center[0], curve.center[1]);
+    const centerOnAxis = projectPointOntoAxis(center3, axisOrigin, axisDirUnit);
+    const majorRadius = length3(sub3(center3, centerOnAxis));
+    const minorRadius = curve.radius;
+    if (majorRadius < model.ctx.tol.length) {
+      return { kind: 'sphere', center: center3, radius: minorRadius } as const;
+    }
+    return {
+      kind: 'torus',
+      center: centerOnAxis,
+      axis: axisDirUnit,
+      majorRadius,
+      minorRadius,
+    } as const;
+  }
+
+  // Line segment: cylinder if parallel to axis, else cone
+  const lineDir = normalize3(sub3(p1, p0));
+  const parallel = length3(cross3(lineDir, axisDirUnit)) < model.ctx.tol.angle;
+  if (parallel) {
+    const radius = distancePointToAxis(p0, axisOrigin, axisDirUnit);
+    return { kind: 'cylinder', center: axisOrigin, axis: axisDirUnit, radius } as const;
+  }
+
+  const p0_2: Vec2 = vec2(...worldToPlane(plane, p0));
+  const p1_2: Vec2 = vec2(...worldToPlane(plane, p1));
+  const dLine: Vec2 = vec2(p1_2[0] - p0_2[0], p1_2[1] - p0_2[1]);
+  const hit = intersectLines2D(vec2(axisO2[0], axisO2[1]), axisDir2, p0_2, dLine);
+  if (!hit.ok) {
+    const radius = distancePointToAxis(p0, axisOrigin, axisDirUnit);
+    return { kind: 'cylinder', center: axisOrigin, axis: axisDirUnit, radius } as const;
+  }
+  const apex = planeToWorld(plane, hit.point[0], hit.point[1]);
+  const cos = clamp01(Math.abs(dot3(lineDir, axisDirUnit)));
+  const halfAngle = Math.acos(cos);
+  return { kind: 'cone', apex, axis: axisDirUnit, halfAngle } as const;
+}
+
 function projectPointOntoAxis(point: Vec3, axisOrigin: Vec3, axisDir: Vec3): Vec3 {
   const toPoint = sub3(point, axisOrigin);
   const projLen = dot3(toPoint, axisDir);
@@ -295,23 +424,6 @@ function rotatePointAroundAxis(
   ];
   
   return add3(axisOrigin, rotated);
-}
-
-function computePerpendicularToAxis(axisDir: Vec3): Vec3 {
-  const absX = Math.abs(axisDir[0]);
-  const absY = Math.abs(axisDir[1]);
-  const absZ = Math.abs(axisDir[2]);
-  
-  let candidate: Vec3;
-  if (absX <= absY && absX <= absZ) {
-    candidate = vec3(1, 0, 0);
-  } else if (absY <= absZ) {
-    candidate = vec3(0, 1, 0);
-  } else {
-    candidate = vec3(0, 0, 1);
-  }
-  
-  return normalize3(cross3(axisDir, candidate));
 }
 
 function createRevolveCap(

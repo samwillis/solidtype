@@ -8,6 +8,8 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useSketch } from '../contexts/SketchContext';
 import { useDocument } from '../contexts/DocumentContext';
+import { useKernel } from '../contexts/KernelContext';
+import { useSelection } from '../contexts/SelectionContext';
 import { findFeature, getSketchData, setSketchData } from '../document/featureHelpers';
 import type { NewSketchConstraint, SketchConstraint, SketchData, SketchLine } from '../types/document';
 import './SketchCanvas.css';
@@ -32,6 +34,8 @@ const SketchCanvas: React.FC = () => {
     addConstraint,
   } = useSketch();
   const { doc } = useDocument();
+  const { sketchSolveInfo } = useKernel();
+  const { highlightedSketchId, highlightedEntityIds } = useSelection();
   
   // View transform state
   const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
@@ -69,6 +73,20 @@ const SketchCanvas: React.FC = () => {
 
     doc.ydoc.transact(() => {
       setSketchData(sketchEl, data);
+    });
+  }, [doc.features, doc.ydoc, mode.sketchId]);
+
+  const deleteConstraint = useCallback((constraintId: string) => {
+    if (!mode.sketchId) return;
+    const sketchEl = findFeature(doc.features, mode.sketchId);
+    if (!sketchEl) return;
+    const data = getSketchData(sketchEl);
+    const next: SketchData = {
+      ...data,
+      constraints: data.constraints.filter((c) => c.id !== constraintId),
+    };
+    doc.ydoc.transact(() => {
+      setSketchData(sketchEl, next);
     });
   }, [doc.features, doc.ydoc, mode.sketchId]);
 
@@ -134,7 +152,14 @@ const SketchCanvas: React.FC = () => {
     // Draw sketch entities
     const sketch = getSketch();
     if (sketch) {
-      drawSketchEntities(ctx, sketch, sketchToCanvas, selectedPoints, selectedLines);
+      drawSketchEntities(
+        ctx,
+        sketch,
+        sketchToCanvas,
+        selectedPoints,
+        selectedLines,
+        highlightedSketchId === mode.sketchId ? highlightedEntityIds : undefined
+      );
     }
 
     // Draw temp line if in line tool mode
@@ -756,6 +781,14 @@ const SketchCanvas: React.FC = () => {
                 <span className="sketch-dimension-unit">
                   {c.type === 'distance' ? '' : '°'}
                 </span>
+                <button
+                  className="sketch-dimension-delete"
+                  type="button"
+                  title="Delete constraint"
+                  onClick={() => deleteConstraint(c.id)}
+                >
+                  ×
+                </button>
               </div>
             ))}
           </div>
@@ -768,6 +801,21 @@ const SketchCanvas: React.FC = () => {
               const pos = canvasToSketch(mousePos.x, mousePos.y);
               const snapped = snapToGrid(pos.x, pos.y);
               return `X: ${snapped.x.toFixed(1)}, Y: ${snapped.y.toFixed(1)}`;
+            })()}
+          </span>
+        )}
+        {mode.sketchId && sketchSolveInfo[mode.sketchId] && (
+          <span className="sketch-solve-status">
+            {(() => {
+              const info = sketchSolveInfo[mode.sketchId!];
+              const dof = info.dof;
+              if (!dof) return `Solve: ${info.status}`;
+              const tag = dof.isOverConstrained
+                ? 'Over'
+                : dof.isFullyConstrained
+                  ? 'Fully'
+                  : `DOF ${dof.remainingDOF}`;
+              return `Solve: ${info.status} • ${tag}`;
             })()}
           </span>
         )}
@@ -895,7 +943,8 @@ function drawSketchEntities(
   sketch: SketchData,
   sketchToCanvas: (x: number, y: number) => { x: number; y: number },
   selectedPoints: Set<string>,
-  selectedLines: Set<string>
+  selectedLines: Set<string>,
+  highlightedLines?: Set<string>
 ): void {
   // Draw lines
   for (const entity of sketch.entities) {
@@ -911,7 +960,9 @@ function drawSketchEntities(
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
         ctx.lineTo(end.x, end.y);
-        ctx.strokeStyle = selectedLines.has(line.id) ? '#ffff00' : '#00aaff';
+        const isSelected = selectedLines.has(line.id);
+        const isHighlighted = highlightedLines?.has(line.id) ?? false;
+        ctx.strokeStyle = isSelected ? '#ffff00' : isHighlighted ? '#ffaa00' : '#00aaff';
         ctx.lineWidth = 2;
         ctx.stroke();
       }
@@ -963,6 +1014,48 @@ function drawSketchEntities(
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
     ctx.stroke();
+  }
+
+  // Constraint indicators (lightweight visual hints)
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+  for (const c of sketch.constraints) {
+    // Skip dimensions here (handled in a panel; on-canvas dims can come later).
+    if (c.type === 'distance' || c.type === 'angle') continue;
+    const label =
+      c.type === 'horizontal'
+        ? 'H'
+        : c.type === 'vertical'
+          ? 'V'
+          : c.type === 'coincident'
+            ? 'C'
+            : c.type === 'fixed'
+              ? 'F'
+              : '?';
+
+    if (c.type === 'fixed') {
+      const p = sketch.points.find((pt) => pt.id === c.point);
+      if (!p) continue;
+      const pos = sketchToCanvas(p.x, p.y);
+      ctx.fillText(label, pos.x + 6, pos.y - 6);
+      continue;
+    }
+
+    if (c.type === 'coincident' || c.type === 'horizontal' || c.type === 'vertical') {
+      const [a, b] = c.points ?? [];
+      const p1 = sketch.points.find((pt) => pt.id === a);
+      const p2 = sketch.points.find((pt) => pt.id === b);
+      const p = p1 ?? p2;
+      if (!p) continue;
+      if (p1 && p2 && (c.type === 'horizontal' || c.type === 'vertical')) {
+        const mid = sketchToCanvas((p1.x + p2.x) * 0.5, (p1.y + p2.y) * 0.5);
+        ctx.fillText(label, mid.x + 6, mid.y - 6);
+      } else {
+        const pos = sketchToCanvas(p.x, p.y);
+        ctx.fillText(label, pos.x + 6, pos.y - 6);
+      }
+      continue;
+    }
   }
 }
 

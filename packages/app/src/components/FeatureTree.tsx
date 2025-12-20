@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useDocument } from '../contexts/DocumentContext';
+import { useKernel } from '../contexts/KernelContext';
 import type { Feature, FeatureType } from '../types/document';
+import type { FeatureStatus } from '../worker/types';
 import './FeatureTree.css';
 
 // Tree node types
@@ -25,6 +27,8 @@ interface TreeNode {
   expanded?: boolean;
   suppressed?: boolean;
   gated?: boolean;
+  status?: FeatureStatus;
+  errorMessage?: string;
 }
 
 // Map feature types to node types
@@ -46,7 +50,13 @@ function featureTypeToNodeType(type: FeatureType): NodeType {
 }
 
 // Convert features to tree nodes
-function featuresToTreeNodes(features: Feature[], rebuildGate: string | null): TreeNode[] {
+function featuresToTreeNodes(
+  features: Feature[],
+  rebuildGate: string | null,
+  kernelStatus: Record<string, FeatureStatus>,
+  errorsByFeature: Record<string, string>,
+  bodies: Array<{ id: string; featureId: string }>
+): TreeNode[] {
   // Find the gate index
   let gateIndex = -1;
   if (rebuildGate) {
@@ -55,13 +65,19 @@ function featuresToTreeNodes(features: Feature[], rebuildGate: string | null): T
 
   // Build the feature list nodes
   const featureNodes: TreeNode[] = features.map((feature, index) => {
-    const isGated = gateIndex !== -1 && index > gateIndex;
+    const isGatedByGate = gateIndex !== -1 && index > gateIndex;
+    const status = kernelStatus[feature.id];
+    const errorMessage = errorsByFeature[feature.id];
+    const gated = status === 'gated' ? true : isGatedByGate;
+    const suppressed = status === 'suppressed' ? true : Boolean(feature.suppressed);
     return {
       id: feature.id,
       name: feature.name || feature.id,
       type: featureTypeToNodeType(feature.type),
-      suppressed: feature.suppressed,
-      gated: isGated,
+      suppressed,
+      gated,
+      status,
+      errorMessage,
     };
   });
 
@@ -74,13 +90,19 @@ function featuresToTreeNodes(features: Feature[], rebuildGate: string | null): T
     children: featureNodes,
   };
 
-  // Bodies folder (placeholder for now)
+  // Bodies folder
   const bodiesFolder: TreeNode = {
     id: 'bodies',
     name: 'Bodies',
     type: 'bodies-folder',
     expanded: true,
-    children: [],
+    children: bodies.map((b) => ({
+      id: b.id,
+      name: b.id,
+      type: 'body',
+      status: 'computed',
+      errorMessage: errorsByFeature[b.featureId],
+    })),
   };
 
   return [bodiesFolder, partNode];
@@ -238,6 +260,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   const isExpanded = expandedNodes.has(node.id);
   const isSelected = selectedId === node.id;
   const [isDragOver, setIsDragOver] = useState(false);
+  const isError = Boolean(node.errorMessage) || node.status === 'error';
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -259,7 +282,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   return (
     <>
       <li
-        className={`tree-item ${isSelected ? 'selected' : ''} ${node.suppressed ? 'suppressed' : ''} ${node.gated ? 'gated' : ''} ${isDragOver ? 'drag-over' : ''}`}
+        className={`tree-item ${isSelected ? 'selected' : ''} ${node.suppressed ? 'suppressed' : ''} ${node.gated ? 'gated' : ''} ${isError ? 'error' : ''} ${isDragOver ? 'drag-over' : ''}`}
         style={{ paddingLeft: `${8 + level * 16}px` }}
         onClick={() => onSelect(node.id)}
         onDragOver={handleDragOver}
@@ -281,6 +304,16 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
         )}
         <NodeIcon type={node.type} />
         <span className="tree-item-name">{node.name}</span>
+        {isError && (
+          <span className="tree-item-badge tree-item-badge-error" title={node.errorMessage || 'Build error'}>
+            !
+          </span>
+        )}
+        {node.gated && !isError && (
+          <span className="tree-item-badge tree-item-badge-gated" title="Gated by rebuild gate">
+            ⏸
+          </span>
+        )}
       </li>
       {/* Show rebuild gate bar after this item if it's the gate position */}
       {showGateAfter && rebuildGate === node.id && (
@@ -320,11 +353,26 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
 
 const FeatureTree: React.FC = () => {
   const { features, rebuildGate, setRebuildGate } = useDocument();
+  const { featureStatus, errors, bodies } = useKernel();
+
+  const errorsByFeature = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const e of errors) {
+      map[e.featureId] = e.message;
+    }
+    return map;
+  }, [errors]);
 
   // Convert features to tree structure
   const treeData = useMemo(() => {
-    return featuresToTreeNodes(features, rebuildGate);
-  }, [features, rebuildGate]);
+    return featuresToTreeNodes(
+      features,
+      rebuildGate,
+      featureStatus,
+      errorsByFeature,
+      bodies.map((b) => ({ id: b.id, featureId: b.featureId }))
+    );
+  }, [features, rebuildGate, featureStatus, errorsByFeature, bodies]);
 
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => {
     // Initially expand part and bodies folder

@@ -1,7 +1,7 @@
 /**
  * 3D surface representations and evaluators
  * 
- * Provides analytic 3D surfaces: plane, cylinder, cone, and sphere.
+ * Provides analytic 3D surfaces: plane, cylinder, cone, sphere, and torus.
  * All surfaces use a uniform parameterization with (u, v) parameters.
  */
 
@@ -12,7 +12,7 @@ import { vec3, add3, sub3, mul3, cross3, dot3, normalize3 } from '../num/vec3.js
 /**
  * Type tag for surface kinds
  */
-export type SurfaceType = 'plane' | 'cylinder' | 'cone' | 'sphere';
+export type SurfaceType = 'plane' | 'cylinder' | 'cone' | 'sphere' | 'torus';
 
 /**
  * Plane surface
@@ -91,9 +91,33 @@ export interface SphereSurface {
 }
 
 /**
+ * Torus surface
+ *
+ * Defined by a center point on the torus axis, a unit axis direction, a major radius (R),
+ * and a minor radius (r).
+ *
+ * Parameterization (standard torus):
+ * - u: tube angle (minor circle), u ∈ [0, 2π)
+ * - v: sweep angle around axis (major circle), v ∈ [0, 2π)
+ * - Point:
+ *   radialDir(v) = cos(v) * vPerp + sin(v) * uPerp
+ *   p = center + (R + r*cos(u)) * radialDir(v) + r*sin(u) * axis
+ */
+export interface TorusSurface {
+  kind: 'torus';
+  center: Vec3; // point on axis
+  axis: Vec3; // unit vector along torus axis
+  majorRadius: number;
+  minorRadius: number;
+  // Cached orthonormal basis (computed from axis)
+  uPerp?: Vec3;
+  vPerp?: Vec3;
+}
+
+/**
  * Union type for all surfaces
  */
-export type Surface = PlaneSurface | CylinderSurface | ConeSurface | SphereSurface;
+export type Surface = PlaneSurface | CylinderSurface | ConeSurface | SphereSurface | TorusSurface;
 
 /**
  * Evaluate a surface at parameters (u, v)
@@ -163,6 +187,21 @@ export function evalSurface(surface: Surface, u: number, v: number): Vec3 {
         surface.center[2] + surface.radius * cosU
       );
     }
+
+    case 'torus': {
+      const basis = getTorusBasis(surface);
+      const cosU = Math.cos(u);
+      const sinU = Math.sin(u);
+      const cosV = Math.cos(v);
+      const sinV = Math.sin(v);
+      // radialDir(v) matches cylinder convention
+      const radialDir = add3(mul3(basis.vPerp, cosV), mul3(basis.uPerp, sinV));
+      const ringRadius = surface.majorRadius + surface.minorRadius * cosU;
+      return add3(
+        surface.center,
+        add3(mul3(radialDir, ringRadius), mul3(surface.axis, surface.minorRadius * sinU))
+      );
+    }
   }
 }
 
@@ -221,6 +260,17 @@ export function surfaceNormal(surface: Surface, u: number, v: number): Vec3 {
         cosU
       ));
     }
+
+    case 'torus': {
+      const basis = getTorusBasis(surface);
+      const cosU = Math.cos(u);
+      const sinU = Math.sin(u);
+      const cosV = Math.cos(v);
+      const sinV = Math.sin(v);
+      const radialDir = add3(mul3(basis.vPerp, cosV), mul3(basis.uPerp, sinV));
+      // Tube normal is a combination of radialDir and axis
+      return normalize3(add3(mul3(radialDir, cosU), mul3(surface.axis, sinU)));
+    }
   }
 }
 
@@ -251,6 +301,16 @@ function getConeBasis(cone: ConeSurface): { uPerp: Vec3; vPerp: Vec3 } {
   // Cache for future use
   (cone as ConeSurface & { uPerp: Vec3; vPerp: Vec3 }).uPerp = basis.uPerp;
   (cone as ConeSurface & { uPerp: Vec3; vPerp: Vec3 }).vPerp = basis.vPerp;
+  return basis;
+}
+
+function getTorusBasis(torus: TorusSurface): { uPerp: Vec3; vPerp: Vec3 } {
+  if (torus.uPerp && torus.vPerp) {
+    return { uPerp: torus.uPerp, vPerp: torus.vPerp };
+  }
+  const basis = computeOrthonormalBasis(torus.axis);
+  (torus as TorusSurface & { uPerp: Vec3; vPerp: Vec3 }).uPerp = basis.uPerp;
+  (torus as TorusSurface & { uPerp: Vec3; vPerp: Vec3 }).vPerp = basis.vPerp;
   return basis;
 }
 

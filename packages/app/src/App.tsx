@@ -11,6 +11,7 @@ import { ResizablePanel, ResizableSplit } from './components/ResizablePanel';
 import { DocumentProvider, useDocument } from './contexts/DocumentContext';
 import { KernelProvider } from './contexts/KernelContext';
 import { SketchProvider } from './contexts/SketchContext';
+import { SelectionProvider } from './contexts/SelectionContext';
 import SketchCanvas from './components/SketchCanvas';
 import './App.css';
 
@@ -96,9 +97,11 @@ const App: React.FC = () => {
   return (
     <DocumentProvider>
       <KernelProvider>
-        <SketchProvider>
-          <AppContent />
-        </SketchProvider>
+        <SelectionProvider>
+          <SketchProvider>
+            <AppContent />
+          </SketchProvider>
+        </SelectionProvider>
       </KernelProvider>
     </DocumentProvider>
   );

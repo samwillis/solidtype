@@ -99,6 +99,18 @@ function scheduleRebuild(): void {
 // Feature Interpretation
 // ============================================================================
 
+function getSketchElementById(sketchId: string): Y.XmlElement | null {
+  if (!doc) return null;
+  const features = doc.getXmlFragment('features');
+  for (let i = 0; i < features.length; i++) {
+    const child = features.get(i);
+    if (child instanceof Y.XmlElement && child.nodeName === 'sketch' && child.getAttribute('id') === sketchId) {
+      return child;
+    }
+  }
+  return null;
+}
+
 function getDatumPlane(planeId: string): DatumPlane | null {
   switch (planeId) {
     case 'xy':
@@ -276,16 +288,15 @@ function interpretSketch(
     p.y = solved.y;
   }
 
-  // Notify main thread only when solver actually moved points.
-  if (maxDelta > 1e-9) {
-    self.postMessage({
-      type: 'sketch-solved',
-      sketchId: id,
-      points: data.points.map((p) => ({ id: p.id, x: p.x, y: p.y })),
-      status: solveResult.status,
-      dof,
-    } as WorkerToMainMessage);
-  }
+  // Always notify the main thread of solve status/DOF.
+  // Only include points when the solver actually moved them to avoid churn.
+  self.postMessage({
+    type: 'sketch-solved',
+    sketchId: id,
+    points: maxDelta > 1e-9 ? data.points.map((p) => ({ id: p.id, x: p.x, y: p.y })) : [],
+    status: solveResult.status,
+    dof,
+  } as WorkerToMainMessage);
 
   sketchMap.set(id, { planeId, plane, data });
 }
@@ -625,6 +636,10 @@ function sendMesh(featureId: string, body: Body): void {
   }
 }
 
+function sendPreviewMesh(previewKey: string, body: Body): void {
+  sendMesh(previewKey, body);
+}
+
 // ============================================================================
 // Message Handler
 // ============================================================================
@@ -647,5 +662,82 @@ self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
         }
       }
       break;
+
+    case 'clear-preview':
+      // Main thread removes preview meshes; nothing else needed.
+      break;
+
+    case 'preview-extrude': {
+      try {
+        if (!doc) throw new Error('Worker not ready');
+        const { sketchId, distance, direction, op } = event.data;
+        const sketchEl = getSketchElementById(sketchId);
+        if (!sketchEl) throw new Error(`Sketch not found: ${sketchId}`);
+
+        const previewSession = new SolidSession();
+
+        // Build a sketch map entry for this preview
+        sketchMap.clear();
+        interpretSketch(previewSession, sketchEl);
+
+        const tmp = new Y.XmlElement('extrude');
+        tmp.setAttribute('sketch', sketchId);
+        tmp.setAttribute('distance', String(distance));
+        tmp.setAttribute('direction', direction);
+        tmp.setAttribute('op', op);
+
+        const body = interpretExtrude(previewSession, tmp);
+        if (!body) {
+          // cut previews: show tool body only by extruding as add
+          tmp.setAttribute('op', 'add');
+          const tool = interpretExtrude(previewSession, tmp);
+          if (!tool) throw new Error('Preview failed');
+          sendPreviewMesh(`__preview_extrude_${op}`, tool);
+        } else {
+          sendPreviewMesh(`__preview_extrude_${op}`, body);
+        }
+      } catch (err) {
+        self.postMessage({
+          type: 'preview-error',
+          message: err instanceof Error ? err.message : String(err),
+        } as WorkerToMainMessage);
+      }
+      break;
+    }
+
+    case 'preview-revolve': {
+      try {
+        if (!doc) throw new Error('Worker not ready');
+        const { sketchId, axis, angle, op } = event.data;
+        const sketchEl = getSketchElementById(sketchId);
+        if (!sketchEl) throw new Error(`Sketch not found: ${sketchId}`);
+
+        const previewSession = new SolidSession();
+        sketchMap.clear();
+        interpretSketch(previewSession, sketchEl);
+
+        const tmp = new Y.XmlElement('revolve');
+        tmp.setAttribute('sketch', sketchId);
+        tmp.setAttribute('axis', axis);
+        tmp.setAttribute('angle', String(angle));
+        tmp.setAttribute('op', op);
+
+        const body = interpretRevolve(previewSession, tmp);
+        if (!body) {
+          tmp.setAttribute('op', 'add');
+          const tool = interpretRevolve(previewSession, tmp);
+          if (!tool) throw new Error('Preview failed');
+          sendPreviewMesh(`__preview_revolve_${op}`, tool);
+        } else {
+          sendPreviewMesh(`__preview_revolve_${op}`, body);
+        }
+      } catch (err) {
+        self.postMessage({
+          type: 'preview-error',
+          message: err instanceof Error ? err.message : String(err),
+        } as WorkerToMainMessage);
+      }
+      break;
+    }
   }
 };

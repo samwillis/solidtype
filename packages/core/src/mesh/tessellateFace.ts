@@ -8,8 +8,8 @@
 import type { Vec2 } from '../num/vec2.js';
 import type { Vec3 } from '../num/vec3.js';
 import { vec2 } from '../num/vec2.js';
-import { sub3, dot3, normalize3, cross3, add3, mul3, vec3 } from '../num/vec3.js';
-import type { PlaneSurface, CylinderSurface } from '../geom/surface.js';
+import { sub3, dot3, normalize3, cross3, add3, mul3, vec3, length3 } from '../num/vec3.js';
+import type { PlaneSurface, CylinderSurface, ConeSurface, SphereSurface, TorusSurface } from '../geom/surface.js';
 import { surfaceNormal } from '../geom/surface.js';
 import { TopoModel } from '../topo/TopoModel.js';
 import type { FaceId, LoopId } from '../topo/handles.js';
@@ -201,6 +201,191 @@ function tessellateCylinderFace(
   return createMesh(positions, normals, indices);
 }
 
+function tessellateConeFace(
+  model: TopoModel,
+  faceId: FaceId,
+  surface: ConeSurface,
+  reversed: boolean
+): Mesh {
+  const loops = model.getFaceLoops(faceId);
+  if (loops.length === 0) return createMesh([], [], []);
+  const outerLoop = loops[0];
+  const vertices3D = getLoopVertices(model, outerLoop);
+  if (vertices3D.length < 3) return createMesh([], [], []);
+
+  const axis = normalize3(surface.axis);
+  const { uPerp, vPerp } = surface.uPerp && surface.vPerp
+    ? { uPerp: surface.uPerp, vPerp: surface.vPerp }
+    : computeOrthonormalBasis(axis);
+
+  const uVals: number[] = [];
+  const vAngles: number[] = [];
+  for (const p of vertices3D) {
+    const rel = sub3(p, surface.apex);
+    const u = dot3(rel, axis);
+    const axisPoint = add3(surface.apex, mul3(axis, u));
+    const radial = sub3(p, axisPoint);
+    const sinComp = dot3(radial, uPerp);
+    const cosComp = dot3(radial, vPerp);
+    const v = Math.atan2(sinComp, cosComp);
+    uVals.push(u);
+    vAngles.push(v);
+  }
+
+  const vUnwrapped = unwrapAngles(vAngles);
+  const vertices2D: Vec2[] = vertices3D.map((_p, i) => vec2(vUnwrapped[i], uVals[i]));
+  const triangleIndices = triangulatePolygon(vertices2D);
+  if (triangleIndices.length === 0) return createMesh([], [], []);
+
+  const positions: number[] = [];
+  const normals: number[] = [];
+  for (let i = 0; i < vertices3D.length; i++) {
+    const p = vertices3D[i];
+    positions.push(p[0], p[1], p[2]);
+    let n = surfaceNormal(surface, uVals[i], vUnwrapped[i]);
+    if (reversed) n = [-n[0], -n[1], -n[2]];
+    normals.push(n[0], n[1], n[2]);
+  }
+
+  const indices: number[] = [];
+  if (reversed) {
+    for (let i = 0; i < triangleIndices.length; i += 3) {
+      indices.push(triangleIndices[i], triangleIndices[i + 2], triangleIndices[i + 1]);
+    }
+  } else {
+    indices.push(...triangleIndices);
+  }
+  return createMesh(positions, normals, indices);
+}
+
+function tessellateSphereFace(
+  model: TopoModel,
+  faceId: FaceId,
+  surface: SphereSurface,
+  reversed: boolean
+): Mesh {
+  const loops = model.getFaceLoops(faceId);
+  if (loops.length === 0) return createMesh([], [], []);
+  const outerLoop = loops[0];
+  const vertices3D = getLoopVertices(model, outerLoop);
+  if (vertices3D.length < 3) return createMesh([], [], []);
+
+  const uVals: number[] = [];
+  const vAngles: number[] = [];
+  for (const p of vertices3D) {
+    const rel = sub3(p, surface.center);
+    const r = length3(rel);
+    if (r < 1e-12) {
+      uVals.push(0);
+      vAngles.push(0);
+      continue;
+    }
+    const nx = rel[0] / r;
+    const ny = rel[1] / r;
+    const nz = rel[2] / r;
+    const u = Math.acos(Math.max(-1, Math.min(1, nz))); // colatitude
+    const v = Math.atan2(ny, nx);
+    uVals.push(u);
+    vAngles.push(v);
+  }
+
+  const vUnwrapped = unwrapAngles(vAngles);
+  const vertices2D: Vec2[] = vertices3D.map((_p, i) => vec2(vUnwrapped[i], uVals[i]));
+  const triangleIndices = triangulatePolygon(vertices2D);
+  if (triangleIndices.length === 0) return createMesh([], [], []);
+
+  const positions: number[] = [];
+  const normals: number[] = [];
+  for (let i = 0; i < vertices3D.length; i++) {
+    const p = vertices3D[i];
+    positions.push(p[0], p[1], p[2]);
+    let n = surfaceNormal(surface, uVals[i], vUnwrapped[i]);
+    if (reversed) n = [-n[0], -n[1], -n[2]];
+    normals.push(n[0], n[1], n[2]);
+  }
+
+  const indices: number[] = [];
+  if (reversed) {
+    for (let i = 0; i < triangleIndices.length; i += 3) {
+      indices.push(triangleIndices[i], triangleIndices[i + 2], triangleIndices[i + 1]);
+    }
+  } else {
+    indices.push(...triangleIndices);
+  }
+  return createMesh(positions, normals, indices);
+}
+
+function tessellateTorusFace(
+  model: TopoModel,
+  faceId: FaceId,
+  surface: TorusSurface,
+  reversed: boolean
+): Mesh {
+  const loops = model.getFaceLoops(faceId);
+  if (loops.length === 0) return createMesh([], [], []);
+  const outerLoop = loops[0];
+  const vertices3D = getLoopVertices(model, outerLoop);
+  if (vertices3D.length < 3) return createMesh([], [], []);
+
+  const axis = normalize3(surface.axis);
+  const { uPerp, vPerp } = surface.uPerp && surface.vPerp
+    ? { uPerp: surface.uPerp, vPerp: surface.vPerp }
+    : computeOrthonormalBasis(axis);
+
+  const uAngles: number[] = [];
+  const vAngles: number[] = [];
+
+  for (const p of vertices3D) {
+    const rel = sub3(p, surface.center);
+    const axial = dot3(rel, axis);
+    const axisPoint = add3(surface.center, mul3(axis, axial));
+    const planar = sub3(p, axisPoint);
+    const planarLen = length3(planar);
+    const planarDir = planarLen > 1e-12 ? mul3(planar, 1 / planarLen) : vPerp;
+
+    // v: around the axis (same convention as cylinder)
+    const sinComp = dot3(planar, uPerp);
+    const cosComp = dot3(planar, vPerp);
+    const v = Math.atan2(sinComp, cosComp);
+    vAngles.push(v);
+
+    // u: around the tube circle (in plane spanned by planarDir and axis)
+    const tubeCenter = add3(surface.center, mul3(planarDir, surface.majorRadius));
+    const tubeVec = sub3(p, tubeCenter);
+    const sinU = dot3(tubeVec, axis);
+    const cosU = dot3(tubeVec, planarDir);
+    const u = Math.atan2(sinU, cosU);
+    uAngles.push(u);
+  }
+
+  const vUnwrapped = unwrapAngles(vAngles);
+  const uUnwrapped = unwrapAngles(uAngles);
+
+  const vertices2D: Vec2[] = vertices3D.map((_p, i) => vec2(vUnwrapped[i], uUnwrapped[i]));
+  const triangleIndices = triangulatePolygon(vertices2D);
+  if (triangleIndices.length === 0) return createMesh([], [], []);
+
+  const positions: number[] = [];
+  const normals: number[] = [];
+  for (let i = 0; i < vertices3D.length; i++) {
+    const p = vertices3D[i];
+    positions.push(p[0], p[1], p[2]);
+    let n = surfaceNormal(surface, uUnwrapped[i], vUnwrapped[i]);
+    if (reversed) n = [-n[0], -n[1], -n[2]];
+    normals.push(n[0], n[1], n[2]);
+  }
+
+  const indices: number[] = [];
+  if (reversed) {
+    for (let i = 0; i < triangleIndices.length; i += 3) {
+      indices.push(triangleIndices[i], triangleIndices[i + 2], triangleIndices[i + 1]);
+    }
+  } else {
+    indices.push(...triangleIndices);
+  }
+  return createMesh(positions, normals, indices);
+}
+
 /**
  * Tessellate a face
  */
@@ -220,9 +405,11 @@ export function tessellateFace(
     case 'cylinder':
       return tessellateCylinderFace(model, faceId, surface, reversed);
     case 'cone':
+      return tessellateConeFace(model, faceId, surface, reversed);
     case 'sphere':
-      console.warn(`Tessellation of ${surface.kind} surfaces not yet implemented`);
-      return createMesh([], [], []);
+      return tessellateSphereFace(model, faceId, surface, reversed);
+    case 'torus':
+      return tessellateTorusFace(model, faceId, surface, reversed);
       
     default:
       return createMesh([], [], []);

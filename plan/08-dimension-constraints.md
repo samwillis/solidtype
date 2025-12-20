@@ -45,17 +45,22 @@
 ### Dimension Constraints
 
 ```xml
-<constraints>
-  [
+<sketch
+  id="s1"
+  plane="xy"
+  points='[ ... ]'
+  entities='[ ... ]'
+  constraints='[
     { "id": "d1", "type": "distance", "points": ["p1", "p2"], "value": 25 },
     { "id": "d2", "type": "angle", "lines": ["l1", "l2"], "value": 45 }
-  ]
-</constraints>
+  ]'
+/>
 ```
 
 ### TypeScript Types
 
 ```typescript
+// packages/app/src/types/document.ts (SketchConstraint union)
 export interface DistanceConstraint {
   id: string;
   type: 'distance';

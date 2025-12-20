@@ -8,6 +8,7 @@ import { vec3 } from '../num/vec3.js';
 import { TopoModel } from '../topo/TopoModel.js';
 import { createBox, createUnitCube } from '../model/primitives.js';
 import { extrude } from '../model/extrude.js';
+import { revolve, Y_AXIS_REVOLVE } from '../model/revolve.js';
 import { createCircleProfile } from '../model/sketchProfile.js';
 import { XY_PLANE } from '../model/planes.js';
 import { tessellateBody, tessellateAllBodies } from './tessellateBody.js';
@@ -100,6 +101,20 @@ describe('tessellateBody', () => {
     expect(mesh.positions.length).toBeGreaterThan(0);
     expect(mesh.positions.length).toBe(mesh.normals.length);
     expect(getMeshTriangleCount(mesh)).toBeGreaterThan(0);
+  });
+
+  it('tessellates a revolved circle (torus faces)', () => {
+    const ctx = createNumericContext();
+    const model = new TopoModel(ctx);
+    const profile = createCircleProfile(XY_PLANE, 1, 3, 0);
+    const result = revolve(model, profile, { operation: 'add', axis: Y_AXIS_REVOLVE });
+    expect(result.success).toBe(true);
+
+    const mesh = tessellateBody(model, result.body!);
+    expect(mesh.positions.length).toBeGreaterThan(0);
+    expect(mesh.normals.length).toBeGreaterThan(0);
+    expect(mesh.indices.length).toBeGreaterThan(0);
+    expect(mesh.positions.length).toBe(mesh.normals.length);
   });
 });
 

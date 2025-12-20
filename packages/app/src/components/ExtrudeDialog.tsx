@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useKernel } from '../contexts/KernelContext';
 import './ExtrudeDialog.css';
 
 interface ExtrudeDialogProps {
@@ -18,9 +19,11 @@ const ExtrudeDialog: React.FC<ExtrudeDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  const { previewExtrude, clearPreview, previewError } = useKernel();
   const [distance, setDistance] = useState(10);
   const [direction, setDirection] = useState<'normal' | 'reverse'>('normal');
   const [operation, setOperation] = useState<'add' | 'cut'>('add');
+  const [debounceTimer, setDebounceTimer] = useState<number | null>(null);
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -28,8 +31,34 @@ const ExtrudeDialog: React.FC<ExtrudeDialogProps> = ({
       setDistance(10);
       setDirection('normal');
       setOperation('add');
+      // Trigger initial preview (debounced via effect below)
     }
   }, [open]);
+
+  // Live preview while dialog open
+  useEffect(() => {
+    if (!open) {
+      clearPreview();
+      return;
+    }
+    if (!sketchId) return;
+
+    if (debounceTimer) {
+      window.clearTimeout(debounceTimer);
+    }
+    const timer = window.setTimeout(() => {
+      previewExtrude({
+        sketchId,
+        distance,
+        direction,
+        op: operation,
+      });
+    }, 80);
+    setDebounceTimer(timer);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [open, sketchId, distance, direction, operation]);
 
   if (!open) return null;
 
@@ -96,6 +125,12 @@ const ExtrudeDialog: React.FC<ExtrudeDialogProps> = ({
               <option value="reverse">Reverse</option>
             </select>
           </div>
+
+          {previewError && (
+            <div className="extrude-dialog-error" role="alert">
+              {previewError}
+            </div>
+          )}
 
           <div className="extrude-dialog-actions">
             <button type="button" className="btn-cancel" onClick={onCancel}>

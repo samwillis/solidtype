@@ -103,6 +103,25 @@
   color: var(--color-text-muted);
 }
 
+.sketch-dimension-delete {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.sketch-dimension-delete:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+}
+
 .sketch-constraint-btn {
   display: flex;
   align-items: center;
@@ -160,4 +179,9 @@
   font-family: monospace;
   font-size: 12px;
   border-radius: 4px;
+}
+
+.sketch-solve-status {
+  margin-left: 10px;
+  color: var(--color-text-muted);
 }

@@ -171,3 +171,13 @@
   cursor: not-allowed;
 }
 
+.revolve-dialog-error {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 80, 80, 0.4);
+  background: rgba(255, 80, 80, 0.12);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 12px;
+}
+

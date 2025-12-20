@@ -110,9 +110,14 @@ const Viewer: React.FC = () => {
       );
       geometry.setIndex(new THREE.BufferAttribute(meshData.indices, 1));
 
+      const isPreview = bodyId.startsWith('__preview');
+      const isCutPreview = bodyId.includes('cut');
       const material = new THREE.MeshStandardMaterial({
-        color: 0x0078d4,
+        color: isPreview ? (isCutPreview ? 0xff4444 : 0x44aaff) : 0x0078d4,
         side: THREE.DoubleSide,
+        transparent: isPreview,
+        opacity: isPreview ? 0.45 : 1,
+        depthWrite: !isPreview,
       });
 
       const mesh = new THREE.Mesh(geometry, material);

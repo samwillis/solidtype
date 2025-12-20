@@ -37,6 +37,38 @@ interface KernelContextValue {
   isRebuilding: boolean;
   /** Whether the worker is ready */
   isReady: boolean;
+  /** Send a live preview request for extrude */
+  previewExtrude: (args: {
+    sketchId: string;
+    distance: number;
+    direction: 'normal' | 'reverse';
+    op: 'add' | 'cut';
+  }) => void;
+  /** Send a live preview request for revolve */
+  previewRevolve: (args: {
+    sketchId: string;
+    axis: string;
+    angle: number;
+    op: 'add' | 'cut';
+  }) => void;
+  /** Clear any active preview mesh */
+  clearPreview: () => void;
+  /** Last preview error message (if any) */
+  previewError: string | null;
+  /** Latest sketch solve status/DOF by sketchId */
+  sketchSolveInfo: Record<
+    string,
+    {
+      status: string;
+      dof?: {
+        totalDOF: number;
+        constrainedDOF: number;
+        remainingDOF: number;
+        isFullyConstrained: boolean;
+        isOverConstrained: boolean;
+      };
+    }
+  >;
 }
 
 // ============================================================================
@@ -68,6 +100,22 @@ export function KernelProvider({ children }: KernelProviderProps) {
   const [bodies, setBodies] = useState<BodyInfo[]>([]);
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [sketchSolveInfo, setSketchSolveInfo] = useState<
+    Record<
+      string,
+      {
+        status: string;
+        dof?: {
+          totalDOF: number;
+          constrainedDOF: number;
+          remainingDOF: number;
+          isFullyConstrained: boolean;
+          isOverConstrained: boolean;
+        };
+      }
+    >
+  >({});
 
   useEffect(() => {
     // Create kernel worker
@@ -111,7 +159,16 @@ export function KernelProvider({ children }: KernelProviderProps) {
           });
           break;
 
+        case 'preview-error':
+          setPreviewError(msg.message);
+          break;
+
         case 'sketch-solved': {
+          setSketchSolveInfo((prev) => ({
+            ...prev,
+            [msg.sketchId]: { status: msg.status, dof: msg.dof },
+          }));
+
           const sketchEl = findFeature(doc.features, msg.sketchId);
           if (sketchEl) {
             const data = getSketchData(sketchEl);
@@ -158,6 +215,44 @@ export function KernelProvider({ children }: KernelProviderProps) {
     };
   }, [doc]);
 
+  const previewExtrude = (args: {
+    sketchId: string;
+    distance: number;
+    direction: 'normal' | 'reverse';
+    op: 'add' | 'cut';
+  }) => {
+    setPreviewError(null);
+    workerRef.current?.postMessage({
+      type: 'preview-extrude',
+      ...args,
+    });
+  };
+
+  const previewRevolve = (args: {
+    sketchId: string;
+    axis: string;
+    angle: number;
+    op: 'add' | 'cut';
+  }) => {
+    setPreviewError(null);
+    workerRef.current?.postMessage({
+      type: 'preview-revolve',
+      ...args,
+    });
+  };
+
+  const clearPreview = () => {
+    setPreviewError(null);
+    workerRef.current?.postMessage({ type: 'clear-preview' });
+    setMeshes((prev) => {
+      const next = new Map(prev);
+      for (const key of Array.from(next.keys())) {
+        if (key.startsWith('__preview')) next.delete(key);
+      }
+      return next;
+    });
+  };
+
   const value: KernelContextValue = {
     meshes,
     errors,
@@ -165,6 +260,11 @@ export function KernelProvider({ children }: KernelProviderProps) {
     bodies,
     isRebuilding,
     isReady,
+    previewExtrude,
+    previewRevolve,
+    clearPreview,
+    previewError,
+    sketchSolveInfo,
   };
 
   return (

@@ -21,10 +21,33 @@ export interface YjsUpdateMessage {
   data: Uint8Array;
 }
 
+export interface PreviewExtrudeMessage {
+  type: 'preview-extrude';
+  sketchId: string;
+  distance: number;
+  direction: 'normal' | 'reverse';
+  op: 'add' | 'cut';
+}
+
+export interface PreviewRevolveMessage {
+  type: 'preview-revolve';
+  sketchId: string;
+  axis: string;
+  angle: number;
+  op: 'add' | 'cut';
+}
+
+export interface ClearPreviewMessage {
+  type: 'clear-preview';
+}
+
 export type MainToWorkerMessage =
   | InitSyncMessage
   | YjsInitMessage
-  | YjsUpdateMessage;
+  | YjsUpdateMessage
+  | PreviewExtrudeMessage
+  | PreviewRevolveMessage
+  | ClearPreviewMessage;
 
 // ============================================================================
 // Message Types: Worker → Main Thread
@@ -65,6 +88,11 @@ export interface SketchSolvedMessage {
   };
 }
 
+export interface PreviewErrorMessage {
+  type: 'preview-error';
+  message: string;
+}
+
 export interface ErrorMessage {
   type: 'error';
   message: string;
@@ -76,6 +104,7 @@ export type WorkerToMainMessage =
   | RebuildCompleteMessage
   | MeshMessage
   | SketchSolvedMessage
+  | PreviewErrorMessage
   | ErrorMessage;
 
 // ============================================================================

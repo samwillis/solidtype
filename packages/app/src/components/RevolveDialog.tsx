@@ -4,6 +4,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useDocument } from '../contexts/DocumentContext';
+import { useKernel } from '../contexts/KernelContext';
+import { useSelection } from '../contexts/SelectionContext';
 import type { SketchEntity, SketchLine } from '../types/document';
 import './RevolveDialog.css';
 
@@ -25,6 +27,8 @@ const RevolveDialog: React.FC<RevolveDialogProps> = ({
   onCancel,
 }) => {
   const { getFeatureById } = useDocument();
+  const { previewRevolve, clearPreview, previewError } = useKernel();
+  const { setHighlightedEntities, clearHighlightedEntities } = useSelection();
 
   const sketch = useMemo(() => {
     const feature = getFeatureById(sketchId);
@@ -46,6 +50,34 @@ const RevolveDialog: React.FC<RevolveDialogProps> = ({
     setOperation('add');
     setAxis(axisCandidates[0]?.id ?? '');
   }, [open, axisCandidates]);
+
+  // Highlight selected axis line in the sketch UI while dialog is open
+  useEffect(() => {
+    if (!open) {
+      clearHighlightedEntities();
+      return;
+    }
+    if (!axis) return;
+    setHighlightedEntities({ sketchId, entityIds: [axis] });
+  }, [open, axis, sketchId, setHighlightedEntities, clearHighlightedEntities]);
+
+  // Live preview while open
+  useEffect(() => {
+    if (!open) {
+      clearPreview();
+      return;
+    }
+    if (!sketchId || !axis) return;
+    const timer = window.setTimeout(() => {
+      previewRevolve({
+        sketchId,
+        axis,
+        angle,
+        op: operation,
+      });
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [open, sketchId, axis, angle, operation]);
 
   if (!open) return null;
 
@@ -132,6 +164,12 @@ const RevolveDialog: React.FC<RevolveDialogProps> = ({
               OK
             </button>
           </div>
+
+          {previewError && (
+            <div className="revolve-dialog-error" role="alert">
+              {previewError}
+            </div>
+          )}
         </form>
       </div>
     </div>
