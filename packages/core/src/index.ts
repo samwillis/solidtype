@@ -11,10 +11,10 @@
  * ## Internal Modules (for advanced use)
  * - num: numeric utilities, tolerances, predicates
  * - geom: curves & surfaces
- * - topo: BREP topology
+ * - topo: BREP topology (TopoModel class)
  * - model: modeling operators
  * - naming: persistent naming
- * - sketch: sketch representation & constraint solver
+ * - sketch: sketch representation & constraint solver (SketchModel class)
  * - mesh: tessellation
  */
 
@@ -115,7 +115,7 @@ export * from './geom/intersect2d.js';
 export * from './geom/curve3d.js';
 export * from './geom/surface.js';
 
-// topo: BREP topology
+// topo: BREP topology (OO TopoModel class)
 export * from './topo/index.js';
 
 // mesh: tessellation
@@ -127,10 +127,9 @@ export * from './model/index.js';
 // naming: persistent naming subsystem
 export * from './naming/index.js';
 
-// sketch: sketch representation & constraint solver
+// sketch: sketch representation & constraint solver (OO SketchModel class)
 // Note: We don't use `export *` here to avoid re-exporting the core `Sketch` type
 // which would conflict with the OO `Sketch` class from the api module.
-// The core sketch type is available as `CoreSketch` (re-exported above).
 export {
   // SketchModel class (core OO API)
   SketchModel,
@@ -149,32 +148,6 @@ export {
   getFreePoints,
   countBaseDOF,
   DEFAULT_SOLVE_OPTIONS,
-  // Sketch manipulation
-  allocateSketchId,
-  resetSketchIdCounter,
-  createSketch,
-  addPoint,
-  addFixedPoint,
-  setPointPosition,
-  setPointFixed,
-  attachPointToRef,
-  removePoint,
-  addLine,
-  addLineByCoords,
-  addArc,
-  addArcByCoords,
-  addCircle,
-  removeEntity,
-  getLineDirection,
-  getArcRadius,
-  cloneSketch,
-  getSketchState,
-  setSketchState,
-  getPointStateIndices,
-  sketchToProfile,
-  addRectangle,
-  addTriangle,
-  addPolygon,
   // Solver
   solveSketch,
   analyzeDOF,

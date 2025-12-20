@@ -17,7 +17,3 @@ export { TopoModel, EntityFlags, type ModelStats } from './TopoModel.js';
 // Re-export validation and healing
 export * from './validate.js';
 export * from './heal.js';
-
-// Backward compatibility: re-export old functional API (deprecated)
-// TODO: Remove these once all consumers are migrated
-export * from './model.js';

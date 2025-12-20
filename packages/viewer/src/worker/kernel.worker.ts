@@ -9,7 +9,7 @@
 
 import {
   createNumericContext,
-  createEmptyModel,
+  TopoModel,
   createBox,
   tessellateBody,
   extrude,
@@ -22,12 +22,7 @@ import {
   ZX_PLANE,
   createDatumPlaneFromNormal,
   createNamingStrategy,
-  iterateBodies,
-  createSketch as coreCreateSketch,
-  addPoint as coreAddPoint,
-  addFixedPoint as coreAddFixedPoint,
-  addLine as coreAddLine,
-  addArc as coreAddArc,
+  SketchModel,
   solveSketch,
   coincident,
   horizontalPoints,
@@ -50,7 +45,6 @@ import {
   arcArcTangent,
   radiusDimension,
   pointToLineDistance,
-  type TopoModel,
   type NumericContext,
   type NamingStrategy,
   type BodyId,
@@ -178,7 +172,7 @@ function handleInit(
   tolerances?: { length?: number; angle?: number }
 ): WorkerResponse {
   ctx = createNumericContext(tolerances);
-  model = createEmptyModel(ctx);
+  model = new TopoModel(ctx);
   naming = createNamingStrategy();
   initialized = true;
   
@@ -206,7 +200,7 @@ function handleReset(requestId: string): WorkerResponse {
   ensureInitialized();
   
   // Create fresh model and naming strategy
-  model = createEmptyModel(ctx!);
+  model = new TopoModel(ctx!);
   naming = createNamingStrategy();
   resultIds.clear();
   
@@ -268,7 +262,7 @@ function handleBuildSequence(
   ensureInitialized();
   
   // Reset model for clean rebuild
-  model = createEmptyModel(ctx!);
+  model = new TopoModel(ctx!);
   naming = createNamingStrategy();
   resultIds.clear();
   
@@ -580,7 +574,7 @@ function handleGetAllMeshes(
   
   const meshes: SerializedMesh[] = [];
   
-  for (const bodyId of iterateBodies(model!)) {
+  for (const bodyId of model!.iterateBodies()) {
     const mesh = tessellateBody(model!, bodyId);
     meshes.push({
       bodyId: bodyId as number,
@@ -612,7 +606,7 @@ function handleSolveSketch(
     serializedSketch.planeXDir
   );
   
-  const sketch = coreCreateSketch(plane, serializedSketch.name);
+  const sketch = new SketchModel(plane, serializedSketch.name);
   
   // Map from serialized IDs to actual IDs
   const pointIdMap = new Map<number, SketchPointId>();
@@ -621,8 +615,8 @@ function handleSolveSketch(
   // Add points
   for (const sp of serializedSketch.points) {
     const pid = sp.fixed 
-      ? coreAddFixedPoint(sketch, sp.x, sp.y, sp.name)
-      : coreAddPoint(sketch, sp.x, sp.y, { name: sp.name });
+      ? sketch.addFixedPoint(sp.x, sp.y, sp.name)
+      : sketch.addPoint(sp.x, sp.y, { name: sp.name });
     pointIdMap.set(sp.id, pid);
   }
   
@@ -634,12 +628,12 @@ function handleSolveSketch(
     if (!startId || !endId) continue;
     
     if (se.kind === 'line') {
-      const eid = coreAddLine(sketch, startId, endId, { construction: se.construction });
+      const eid = sketch.addLine(startId, endId, { construction: se.construction });
       entityIdMap.set(se.id, eid);
     } else if (se.kind === 'arc' && se.center !== undefined) {
       const centerId = pointIdMap.get(se.center);
       if (centerId) {
-        const eid = coreAddArc(sketch, startId, endId, centerId, se.ccw, { construction: se.construction });
+        const eid = sketch.addArc(startId, endId, centerId, se.ccw, { construction: se.construction });
         entityIdMap.set(se.id, eid);
       }
     }

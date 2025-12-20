@@ -1,33 +1,10 @@
 /**
- * Tests for Sketch Creation and Manipulation
+ * Tests for Sketch Creation and Manipulation (SketchModel class)
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  createSketch,
-  addPoint,
-  addFixedPoint,
-  addLine,
-  addLineByCoords,
-  addArc,
-  addArcByCoords,
-  addCircle,
-  addRectangle,
-  addTriangle,
-  addPolygon,
-  setPointPosition,
-  setPointFixed,
-  removePoint,
-  removeEntity,
-  cloneSketch,
-  getSketchState,
-  setSketchState,
-  getPointStateIndices,
-  sketchToProfile,
-  getLineDirection,
-  getArcRadius,
-  resetSketchIdCounter,
-} from './sketch.js';
+import { SketchModel } from './SketchModel.js';
+import { resetAllIds } from './idAllocator.js';
 import {
   getSketchPoint,
   getSketchEntity,
@@ -40,12 +17,12 @@ import { XY_PLANE, YZ_PLANE } from '../model/planes.js';
 
 describe('Sketch Creation', () => {
   beforeEach(() => {
-    resetSketchIdCounter();
+    resetAllIds();
   });
 
-  describe('createSketch', () => {
+  describe('constructor', () => {
     it('should create an empty sketch on XY plane', () => {
-      const sketch = createSketch(XY_PLANE);
+      const sketch = new SketchModel(XY_PLANE);
       expect(sketch.id).toBe(0);
       expect(sketch.plane).toBe(XY_PLANE);
       expect(sketch.points.size).toBe(0);
@@ -53,13 +30,13 @@ describe('Sketch Creation', () => {
     });
 
     it('should create sketch with name', () => {
-      const sketch = createSketch(YZ_PLANE, 'My Sketch');
+      const sketch = new SketchModel(YZ_PLANE, 'My Sketch');
       expect(sketch.name).toBe('My Sketch');
     });
 
     it('should generate unique IDs', () => {
-      const s1 = createSketch(XY_PLANE);
-      const s2 = createSketch(XY_PLANE);
+      const s1 = new SketchModel(XY_PLANE);
+      const s2 = new SketchModel(XY_PLANE);
       expect(s1.id).toBe(0);
       expect(s2.id).toBe(1);
     });
@@ -67,8 +44,8 @@ describe('Sketch Creation', () => {
 
   describe('Point Operations', () => {
     it('should add a point with correct position', () => {
-      const sketch = createSketch(XY_PLANE);
-      const id = addPoint(sketch, 5, 10);
+      const sketch = new SketchModel(XY_PLANE);
+      const id = sketch.addPoint(5, 10);
       
       const point = getSketchPoint(sketch, id);
       expect(point).toBeDefined();
@@ -78,8 +55,8 @@ describe('Sketch Creation', () => {
     });
 
     it('should add a fixed point', () => {
-      const sketch = createSketch(XY_PLANE);
-      const id = addFixedPoint(sketch, 1, 2, 'origin');
+      const sketch = new SketchModel(XY_PLANE);
+      const id = sketch.addFixedPoint(1, 2, 'origin');
       
       const point = getSketchPoint(sketch, id);
       expect(point!.fixed).toBe(true);
@@ -87,10 +64,10 @@ describe('Sketch Creation', () => {
     });
 
     it('should update point position', () => {
-      const sketch = createSketch(XY_PLANE);
-      const id = addPoint(sketch, 0, 0);
+      const sketch = new SketchModel(XY_PLANE);
+      const id = sketch.addPoint(0, 0);
       
-      setPointPosition(sketch, id, 100, 200);
+      sketch.setPointPosition(id, 100, 200);
       
       const point = getSketchPoint(sketch, id);
       expect(point!.x).toBe(100);
@@ -98,39 +75,39 @@ describe('Sketch Creation', () => {
     });
 
     it('should toggle fixed status', () => {
-      const sketch = createSketch(XY_PLANE);
-      const id = addPoint(sketch, 0, 0);
+      const sketch = new SketchModel(XY_PLANE);
+      const id = sketch.addPoint(0, 0);
       
       expect(getSketchPoint(sketch, id)!.fixed).toBe(false);
       
-      setPointFixed(sketch, id, true);
+      sketch.setPointFixed(id, true);
       expect(getSketchPoint(sketch, id)!.fixed).toBe(true);
       
-      setPointFixed(sketch, id, false);
+      sketch.setPointFixed(id, false);
       expect(getSketchPoint(sketch, id)!.fixed).toBe(false);
     });
 
     it('should remove point and associated entities', () => {
-      const sketch = createSketch(XY_PLANE);
-      const p1 = addPoint(sketch, 0, 0);
-      const p2 = addPoint(sketch, 10, 10);
-      const line = addLine(sketch, p1, p2);
+      const sketch = new SketchModel(XY_PLANE);
+      const p1 = sketch.addPoint(0, 0);
+      const p2 = sketch.addPoint(10, 10);
+      const line = sketch.addLine(p1, p2);
       
       expect(sketch.entities.size).toBe(1);
       
-      removePoint(sketch, p1);
+      sketch.removePoint(p1);
       
       expect(sketch.points.has(p1)).toBe(false);
-      expect(sketch.entities.has(line)).toBe(false); // Line should be removed too
+      expect(sketch.entities.has(line)).toBe(false);
     });
   });
 
   describe('Line Operations', () => {
     it('should add a line between points', () => {
-      const sketch = createSketch(XY_PLANE);
-      const p1 = addPoint(sketch, 0, 0);
-      const p2 = addPoint(sketch, 10, 10);
-      const line = addLine(sketch, p1, p2);
+      const sketch = new SketchModel(XY_PLANE);
+      const p1 = sketch.addPoint(0, 0);
+      const p2 = sketch.addPoint(10, 10);
+      const line = sketch.addLine(p1, p2);
       
       const entity = getSketchEntity(sketch, line);
       expect(entity).toBeDefined();
@@ -142,8 +119,8 @@ describe('Sketch Creation', () => {
     });
 
     it('should add line by coordinates', () => {
-      const sketch = createSketch(XY_PLANE);
-      const result = addLineByCoords(sketch, 0, 0, 5, 5);
+      const sketch = new SketchModel(XY_PLANE);
+      const result = sketch.addLineByCoords(0, 0, 5, 5);
       
       expect(sketch.points.size).toBe(2);
       expect(sketch.entities.size).toBe(1);
@@ -157,33 +134,33 @@ describe('Sketch Creation', () => {
     });
 
     it('should add construction line', () => {
-      const sketch = createSketch(XY_PLANE);
-      const p1 = addPoint(sketch, 0, 0);
-      const p2 = addPoint(sketch, 10, 0);
-      const line = addLine(sketch, p1, p2, { construction: true });
+      const sketch = new SketchModel(XY_PLANE);
+      const p1 = sketch.addPoint(0, 0);
+      const p2 = sketch.addPoint(10, 0);
+      const line = sketch.addLine(p1, p2, { construction: true });
       
       const entity = getSketchEntity(sketch, line);
       expect(entity!.construction).toBe(true);
     });
 
     it('should get line direction', () => {
-      const sketch = createSketch(XY_PLANE);
-      const p1 = addPoint(sketch, 0, 0);
-      const p2 = addPoint(sketch, 10, 0);
-      const line = addLine(sketch, p1, p2);
+      const sketch = new SketchModel(XY_PLANE);
+      const p1 = sketch.addPoint(0, 0);
+      const p2 = sketch.addPoint(10, 0);
+      const line = sketch.addLine(p1, p2);
       
-      const dir = getLineDirection(sketch, line);
+      const dir = sketch.getLineDirection(line);
       expect(dir).toEqual([10, 0]);
     });
   });
 
   describe('Arc Operations', () => {
     it('should add an arc', () => {
-      const sketch = createSketch(XY_PLANE);
-      const center = addPoint(sketch, 0, 0);
-      const start = addPoint(sketch, 5, 0);
-      const end = addPoint(sketch, 0, 5);
-      const arc = addArc(sketch, start, end, center, true);
+      const sketch = new SketchModel(XY_PLANE);
+      const center = sketch.addPoint(0, 0);
+      const start = sketch.addPoint(5, 0);
+      const end = sketch.addPoint(0, 5);
+      const arc = sketch.addArc(start, end, center, true);
       
       const entity = getSketchEntity(sketch, arc);
       expect(entity!.kind).toBe('arc');
@@ -196,18 +173,17 @@ describe('Sketch Creation', () => {
     });
 
     it('should add arc by coordinates', () => {
-      const sketch = createSketch(XY_PLANE);
-      const result = addArcByCoords(sketch, 5, 0, 0, 5, 0, 0);
+      const sketch = new SketchModel(XY_PLANE);
+      const result = sketch.addArcByCoords(5, 0, 0, 5, 0, 0);
       
       expect(sketch.points.size).toBe(3);
       expect(sketch.entities.size).toBe(1);
     });
 
     it('should add a circle', () => {
-      const sketch = createSketch(XY_PLANE);
-      const result = addCircle(sketch, 5, 5, 3);
+      const sketch = new SketchModel(XY_PLANE);
+      const result = sketch.addCircle(5, 5, 3);
       
-      // Circle creates center and one point on the circumference
       expect(sketch.points.size).toBe(2);
       expect(sketch.entities.size).toBe(1);
       
@@ -217,36 +193,36 @@ describe('Sketch Creation', () => {
     });
 
     it('should get arc radius', () => {
-      const sketch = createSketch(XY_PLANE);
-      const result = addCircle(sketch, 0, 0, 7);
+      const sketch = new SketchModel(XY_PLANE);
+      const result = sketch.addCircle(0, 0, 7);
       
-      const radius = getArcRadius(sketch, result.arc);
+      const radius = sketch.getArcRadius(result.arc);
       expect(radius).toBe(7);
     });
   });
 
   describe('Entity Removal', () => {
     it('should remove entity without affecting points', () => {
-      const sketch = createSketch(XY_PLANE);
-      const p1 = addPoint(sketch, 0, 0);
-      const p2 = addPoint(sketch, 10, 10);
-      const line = addLine(sketch, p1, p2);
+      const sketch = new SketchModel(XY_PLANE);
+      const p1 = sketch.addPoint(0, 0);
+      const p2 = sketch.addPoint(10, 10);
+      const line = sketch.addLine(p1, p2);
       
-      removeEntity(sketch, line);
+      sketch.removeEntity(line);
       
       expect(sketch.entities.has(line)).toBe(false);
-      expect(sketch.points.has(p1)).toBe(true); // Points remain
+      expect(sketch.points.has(p1)).toBe(true);
       expect(sketch.points.has(p2)).toBe(true);
     });
   });
 
   describe('Sketch Utilities', () => {
     it('should clone a sketch', () => {
-      const sketch = createSketch(XY_PLANE);
-      addPoint(sketch, 1, 2);
-      addPoint(sketch, 3, 4);
+      const sketch = new SketchModel(XY_PLANE);
+      sketch.addPoint(1, 2);
+      sketch.addPoint(3, 4);
       
-      const cloned = cloneSketch(sketch);
+      const cloned = sketch.clone();
       
       expect(cloned.id).toBe(sketch.id);
       expect(cloned.points.size).toBe(sketch.points.size);
@@ -255,66 +231,66 @@ describe('Sketch Creation', () => {
     });
 
     it('should get and set sketch state', () => {
-      const sketch = createSketch(XY_PLANE);
-      addPoint(sketch, 1, 2);
-      addPoint(sketch, 3, 4);
-      addFixedPoint(sketch, 0, 0); // Fixed point not in state
+      const sketch = new SketchModel(XY_PLANE);
+      sketch.addPoint(1, 2);
+      sketch.addPoint(3, 4);
+      sketch.addFixedPoint(0, 0);
       
-      const state = getSketchState(sketch);
-      expect(state).toEqual([1, 2, 3, 4]); // Only non-fixed points
+      const state = sketch.getState();
+      expect(state).toEqual([1, 2, 3, 4]);
       
-      setSketchState(sketch, [10, 20, 30, 40]);
+      sketch.setState([10, 20, 30, 40]);
       
-      const newState = getSketchState(sketch);
+      const newState = sketch.getState();
       expect(newState).toEqual([10, 20, 30, 40]);
     });
 
     it('should get point state indices', () => {
-      const sketch = createSketch(XY_PLANE);
-      const p1 = addPoint(sketch, 0, 0);
-      const p2 = addFixedPoint(sketch, 0, 0);
-      const p3 = addPoint(sketch, 1, 1);
+      const sketch = new SketchModel(XY_PLANE);
+      const p1 = sketch.addPoint(0, 0);
+      const p2 = sketch.addFixedPoint(0, 0);
+      const p3 = sketch.addPoint(1, 1);
       
-      const indices = getPointStateIndices(sketch);
+      const indices = sketch.getPointStateIndices();
       
       expect(indices.get(p1)).toBe(0);
-      expect(indices.has(p2)).toBe(false); // Fixed point not included
+      expect(indices.has(p2)).toBe(false);
       expect(indices.get(p3)).toBe(2);
     });
 
     it('should count DOF correctly', () => {
-      const sketch = createSketch(XY_PLANE);
-      addPoint(sketch, 0, 0); // 2 DOF
-      addPoint(sketch, 1, 1); // 2 DOF
-      addFixedPoint(sketch, 2, 2); // 0 DOF
+      const sketch = new SketchModel(XY_PLANE);
+      sketch.addPoint(0, 0);
+      sketch.addPoint(1, 1);
+      sketch.addFixedPoint(2, 2);
       
       expect(countBaseDOF(sketch)).toBe(4);
     });
 
     it('should get all points', () => {
-      const sketch = createSketch(XY_PLANE);
-      addPoint(sketch, 0, 0);
-      addPoint(sketch, 1, 1);
+      const sketch = new SketchModel(XY_PLANE);
+      sketch.addPoint(0, 0);
+      sketch.addPoint(1, 1);
       
       const points = getAllSketchPoints(sketch);
       expect(points.length).toBe(2);
     });
 
     it('should get all entities', () => {
-      const sketch = createSketch(XY_PLANE);
-      const p1 = addPoint(sketch, 0, 0);
-      const p2 = addPoint(sketch, 1, 1);
-      addLine(sketch, p1, p2);
+      const sketch = new SketchModel(XY_PLANE);
+      const p1 = sketch.addPoint(0, 0);
+      const p2 = sketch.addPoint(1, 1);
+      sketch.addLine(p1, p2);
       
       const entities = getAllSketchEntities(sketch);
       expect(entities.length).toBe(1);
     });
 
     it('should get free points only', () => {
-      const sketch = createSketch(XY_PLANE);
-      addPoint(sketch, 0, 0);
-      addFixedPoint(sketch, 1, 1);
-      addPoint(sketch, 2, 2);
+      const sketch = new SketchModel(XY_PLANE);
+      sketch.addPoint(0, 0);
+      sketch.addFixedPoint(1, 1);
+      sketch.addPoint(2, 2);
       
       const free = getFreePoints(sketch);
       expect(free.length).toBe(2);
@@ -324,15 +300,14 @@ describe('Sketch Creation', () => {
 
   describe('Shape Helpers', () => {
     it('should add a rectangle', () => {
-      const sketch = createSketch(XY_PLANE);
-      const rect = addRectangle(sketch, 0, 0, 10, 5);
+      const sketch = new SketchModel(XY_PLANE);
+      const rect = sketch.addRectangle(0, 0, 10, 5);
       
       expect(rect.corners.length).toBe(4);
       expect(rect.sides.length).toBe(4);
       expect(sketch.points.size).toBe(4);
       expect(sketch.entities.size).toBe(4);
       
-      // Check corners are at expected positions
       const c0 = getSketchPoint(sketch, rect.corners[0])!;
       const c1 = getSketchPoint(sketch, rect.corners[1])!;
       const c2 = getSketchPoint(sketch, rect.corners[2])!;
@@ -349,8 +324,8 @@ describe('Sketch Creation', () => {
     });
 
     it('should add a triangle', () => {
-      const sketch = createSketch(XY_PLANE);
-      const tri = addTriangle(sketch, 0, 0, 6);
+      const sketch = new SketchModel(XY_PLANE);
+      const tri = sketch.addTriangle(0, 0, 6);
       
       expect(tri.corners.length).toBe(3);
       expect(tri.sides.length).toBe(3);
@@ -359,8 +334,8 @@ describe('Sketch Creation', () => {
     });
 
     it('should add a polygon', () => {
-      const sketch = createSketch(XY_PLANE);
-      const hex = addPolygon(sketch, 0, 0, 5, 6); // Hexagon
+      const sketch = new SketchModel(XY_PLANE);
+      const hex = sketch.addPolygon(0, 0, 5, 6);
       
       expect(hex.corners.length).toBe(6);
       expect(hex.edges.length).toBe(6);
@@ -371,10 +346,10 @@ describe('Sketch Creation', () => {
 
   describe('Profile Conversion', () => {
     it('should convert a closed rectangle to profile', () => {
-      const sketch = createSketch(XY_PLANE);
-      addRectangle(sketch, 0, 0, 10, 10);
+      const sketch = new SketchModel(XY_PLANE);
+      sketch.addRectangle(0, 0, 10, 10);
       
-      const profile = sketchToProfile(sketch);
+      const profile = sketch.toProfile();
       
       expect(profile).not.toBeNull();
       expect(profile!.loops.length).toBe(1);
@@ -383,28 +358,25 @@ describe('Sketch Creation', () => {
     });
 
     it('should exclude construction geometry from profile', () => {
-      const sketch = createSketch(XY_PLANE);
-      const rect = addRectangle(sketch, 0, 0, 10, 10);
+      const sketch = new SketchModel(XY_PLANE);
+      const rect = sketch.addRectangle(0, 0, 10, 10);
       
-      // Add construction line
       const p1 = getSketchPoint(sketch, rect.corners[0])!;
       const p2 = getSketchPoint(sketch, rect.corners[2])!;
-      const diagP1 = addPoint(sketch, p1.x, p1.y);
-      const diagP2 = addPoint(sketch, p2.x, p2.y);
-      addLine(sketch, diagP1, diagP2, { construction: true });
+      const diagP1 = sketch.addPoint(p1.x, p1.y);
+      const diagP2 = sketch.addPoint(p2.x, p2.y);
+      sketch.addLine(diagP1, diagP2, { construction: true });
       
-      const profile = sketchToProfile(sketch);
+      const profile = sketch.toProfile();
       
-      // Should only have 4 curves (the rectangle), not the diagonal
       expect(profile!.loops[0].curves.length).toBe(4);
     });
 
     it('should return null for non-closed sketch', () => {
-      const sketch = createSketch(XY_PLANE);
-      // Just a single line, not closed
-      addLineByCoords(sketch, 0, 0, 10, 10);
+      const sketch = new SketchModel(XY_PLANE);
+      sketch.addLineByCoords(0, 0, 10, 10);
       
-      const profile = sketchToProfile(sketch);
+      const profile = sketch.toProfile();
       
       expect(profile).toBeNull();
     });
