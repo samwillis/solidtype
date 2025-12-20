@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ViewerProvider } from './contexts/ViewerContext';
 import App from './App';
 
 // Mock the Viewer component to avoid WebGL issues in jsdom
@@ -11,7 +12,9 @@ vi.mock('./components/Viewer', () => ({
 const renderApp = () => {
   return render(
     <ThemeProvider>
-      <App />
+      <ViewerProvider>
+        <App />
+      </ViewerProvider>
     </ThemeProvider>
   );
 };

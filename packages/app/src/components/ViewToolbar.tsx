@@ -1,5 +1,6 @@
 import React from 'react';
 import { Tooltip, Separator } from '@base-ui/react';
+import { useViewer, ViewPreset, DisplayMode } from '../contexts/ViewerContext';
 import './ViewToolbar.css';
 
 // View control icons
@@ -65,15 +66,50 @@ const ViewButton: React.FC<ViewButtonProps> = ({ icon, label, onClick, active })
 };
 
 const ViewToolbar: React.FC = () => {
+  const { state, actions } = useViewer();
+
+  const handleViewChange = (view: ViewPreset) => {
+    actions.setView(view);
+  };
+
+  const handleDisplayModeChange = (mode: DisplayMode) => {
+    actions.setDisplayMode(mode);
+  };
+
   return (
     <Tooltip.Provider>
       <div className="view-toolbar">
-        <ViewButton icon={<FrontViewIcon />} label="Front" />
-        <ViewButton icon={<TopViewIcon />} label="Top" />
-        <ViewButton icon={<IsoViewIcon />} label="Isometric" />
+        <ViewButton 
+          icon={<FrontViewIcon />} 
+          label="Front" 
+          onClick={() => handleViewChange('front')}
+          active={state.currentView === 'front'}
+        />
+        <ViewButton 
+          icon={<TopViewIcon />} 
+          label="Top" 
+          onClick={() => handleViewChange('top')}
+          active={state.currentView === 'top'}
+        />
+        <ViewButton 
+          icon={<IsoViewIcon />} 
+          label="Isometric" 
+          onClick={() => handleViewChange('isometric')}
+          active={state.currentView === 'isometric'}
+        />
         <Separator orientation="vertical" className="view-separator" />
-        <ViewButton icon={<WireframeIcon />} label="Wireframe" />
-        <ViewButton icon={<ShadedIcon />} label="Shaded" active />
+        <ViewButton 
+          icon={<WireframeIcon />} 
+          label="Wireframe" 
+          onClick={() => handleDisplayModeChange('wireframe')}
+          active={state.displayMode === 'wireframe'}
+        />
+        <ViewButton 
+          icon={<ShadedIcon />} 
+          label="Shaded" 
+          onClick={() => handleDisplayModeChange('shaded')}
+          active={state.displayMode === 'shaded'}
+        />
       </div>
     </Tooltip.Provider>
   );
