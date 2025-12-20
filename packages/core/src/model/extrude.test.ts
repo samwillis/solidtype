@@ -3,20 +3,18 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createEmptyModel, getModelStats, getBodyShells, getShellFaces } from '../topo/model.js';
+import { TopoModel } from '../topo/TopoModel.js';
 import { createNumericContext } from '../num/tolerance.js';
 import { extrude } from './extrude.js';
-import { createRectangleProfile, createCircleProfile, createPolygonProfile } from './sketchProfile.js';
+import { createRectangleProfile, createPolygonProfile } from './sketchProfile.js';
 import { XY_PLANE, YZ_PLANE, createOffsetPlane } from './planes.js';
-import { validateModel } from '../topo/validate.js';
 import { vec2 } from '../num/vec2.js';
-import type { TopoModel } from '../topo/model.js';
 
 describe('extrude', () => {
   let model: TopoModel;
   
   beforeEach(() => {
-    model = createEmptyModel(createNumericContext());
+    model = new TopoModel(createNumericContext());
   });
 
   describe('basic extrusion', () => {
@@ -30,12 +28,10 @@ describe('extrude', () => {
       expect(result.success).toBe(true);
       expect(result.body).toBeDefined();
       
-      // Check topology: box has 6 faces
-      const shells = getBodyShells(model, result.body!);
+      const shells = model.getBodyShells(result.body!);
       expect(shells).toHaveLength(1);
       
-      const faces = getShellFaces(model, shells[0]);
-      // 4 side faces + top + bottom = 6
+      const faces = model.getShellFaces(shells[0]);
       expect(faces.length).toBe(6);
     });
 
@@ -46,10 +42,10 @@ describe('extrude', () => {
         distance: 1,
       });
       
-      const stats = getModelStats(model);
-      expect(stats.vertices).toBe(8);  // 4 bottom + 4 top
-      expect(stats.edges).toBe(12);     // 4 bottom + 4 top + 4 side
-      expect(stats.faces).toBe(6);      // box has 6 faces
+      const stats = model.getStats();
+      expect(stats.vertices).toBe(8);
+      expect(stats.edges).toBe(12);
+      expect(stats.faces).toBe(6);
     });
 
     it('extrudes a triangle to create a prism', () => {
@@ -62,9 +58,8 @@ describe('extrude', () => {
       
       expect(result.success).toBe(true);
       
-      const shells = getBodyShells(model, result.body!);
-      const faces = getShellFaces(model, shells[0]);
-      // 3 side faces + top + bottom = 5
+      const shells = model.getBodyShells(result.body!);
+      const faces = model.getShellFaces(shells[0]);
       expect(faces.length).toBe(5);
     });
   });
@@ -79,7 +74,6 @@ describe('extrude', () => {
       
       expect(result.success).toBe(true);
       
-      // Find min and max z values
       const zValues = [];
       for (let i = 0; i < model.vertices.count; i++) {
         zValues.push(model.vertices.z[i]);
@@ -96,12 +90,11 @@ describe('extrude', () => {
       const result = extrude(model, profile, {
         operation: 'add',
         distance: 2,
-        direction: [0, 1, 0], // extrude in Y direction
+        direction: [0, 1, 0],
       });
       
       expect(result.success).toBe(true);
       
-      // Find max y value
       const yValues = [];
       for (let i = 0; i < model.vertices.count; i++) {
         yValues.push(model.vertices.y[i]);
@@ -122,7 +115,6 @@ describe('extrude', () => {
       
       expect(result.success).toBe(true);
       
-      // Find min and max z values - should be -2 and 2
       const zValues = [];
       for (let i = 0; i < model.vertices.count; i++) {
         zValues.push(model.vertices.z[i]);
@@ -145,7 +137,6 @@ describe('extrude', () => {
       
       expect(result.success).toBe(true);
       
-      // Find min z - should be at -2 (below XY plane)
       const zValues = [];
       for (let i = 0; i < model.vertices.count; i++) {
         zValues.push(model.vertices.z[i]);
@@ -168,8 +159,7 @@ describe('extrude', () => {
       
       expect(result.success).toBe(true);
       
-      // Should extrude in X direction
-      const stats = getModelStats(model);
+      const stats = model.getStats();
       expect(stats.faces).toBe(6);
     });
 
@@ -183,7 +173,6 @@ describe('extrude', () => {
       
       expect(result.success).toBe(true);
       
-      // Find min and max z - should be 5 and 7
       const zValues = [];
       for (let i = 0; i < model.vertices.count; i++) {
         zValues.push(model.vertices.z[i]);
@@ -233,7 +222,6 @@ describe('extrude', () => {
 
   describe('complex profiles', () => {
     it('extrudes a pentagon', () => {
-      // Create a regular pentagon
       const radius = 2;
       const vertices = [];
       for (let i = 0; i < 5; i++) {
@@ -249,9 +237,8 @@ describe('extrude', () => {
       
       expect(result.success).toBe(true);
       
-      const shells = getBodyShells(model, result.body!);
-      const faces = getShellFaces(model, shells[0]);
-      // 5 side faces + top + bottom = 7
+      const shells = model.getBodyShells(result.body!);
+      const faces = model.getShellFaces(shells[0]);
       expect(faces.length).toBe(7);
     });
   });

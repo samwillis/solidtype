@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   createNumericContext,
-  createEmptyModel,
+  TopoModel,
   createBox,
   tessellateBody,
 } from '@solidtype/core';
@@ -129,7 +129,7 @@ function buildDemoModelDirect(): THREE.Mesh {
   const ctx = createNumericContext();
   
   // Create empty topology model
-  const model = createEmptyModel(ctx);
+  const model = new TopoModel(ctx);
   
   // Create a box primitive
   const bodyId = createBox(model, {

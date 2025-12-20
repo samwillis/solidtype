@@ -3,18 +3,17 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createEmptyModel, getModelStats, getBodyShells, getShellFaces } from '../topo/model.js';
+import { TopoModel } from '../topo/TopoModel.js';
 import { createNumericContext } from '../num/tolerance.js';
 import { createBox } from './primitives.js';
 import { union, subtract, intersect, booleanOperation } from './boolean.js';
 import { vec3 } from '../num/vec3.js';
-import type { TopoModel } from '../topo/model.js';
 
 describe('boolean operations', () => {
   let model: TopoModel;
   
   beforeEach(() => {
-    model = createEmptyModel(createNumericContext());
+    model = new TopoModel(createNumericContext());
   });
 
   describe('non-overlapping bodies', () => {
@@ -134,13 +133,11 @@ describe('boolean operations', () => {
     it('handles same body for both operands', () => {
       const box = createBox(model, { center: vec3(0, 0, 0), width: 2, height: 2, depth: 2 });
       
-      // Union with itself should work
       const result = union(model, box, box);
       expect(result.success).toBe(true);
     });
 
     it('handles touching but not overlapping boxes', () => {
-      // Boxes sharing a face
       const boxA = createBox(model, { center: vec3(0, 0, 0), width: 2, height: 2, depth: 2 });
       const boxB = createBox(model, { center: vec3(2, 0, 0), width: 2, height: 2, depth: 2 });
       
@@ -158,10 +155,10 @@ describe('boolean operations', () => {
       
       expect(result.success).toBe(true);
       if (result.body) {
-        const shells = getBodyShells(model, result.body);
+        const shells = model.getBodyShells(result.body);
         expect(shells.length).toBeGreaterThan(0);
         
-        const faces = getShellFaces(model, shells[0]);
+        const faces = model.getShellFaces(shells[0]);
         expect(faces.length).toBeGreaterThan(0);
       }
     });
@@ -174,7 +171,7 @@ describe('boolean operations', () => {
       
       expect(result.success).toBe(true);
       if (result.body) {
-        const shells = getBodyShells(model, result.body);
+        const shells = model.getBodyShells(result.body);
         expect(shells.length).toBeGreaterThan(0);
       }
     });

@@ -4,18 +4,18 @@
 
 Monorepo (pnpm), ESM-only, with a **small number of packages**:
 
-* `@solidtype/core` – functional, data-oriented kernel:
+* `@solidtype/core` – CAD kernel with OO API:
 
-  * `num` – math, tolerances, predicates.
-  * `geom` – curves/surfaces, evaluators.
-  * `topo` – BREP representation, validation, healing.
-  * `model` – modeling ops: primitives, extrude, revolve, booleans.
-  * `sketch` – 2D sketch entities + constraint graph + solver.
-  * `naming` – persistent naming, evolution graph, fingerprints.
-  * `mesh` – tessellation to triangle meshes.
-* `@solidtype/oo` – thin OO façade:
-
-  * `SolidSession`, `Body`, `Face`, `Edge`, `Sketch` etc. wrapping core.
+  * **Primary API (Object-Oriented)**:
+    * `api/` – `SolidSession`, `Body`, `Face`, `Edge`, `Sketch` classes.
+  * **Internal Modules (Data-Oriented)**:
+    * `num` – math, tolerances, predicates.
+    * `geom` – curves/surfaces, evaluators.
+    * `topo` – BREP representation, validation, healing.
+    * `model` – modeling ops: primitives, extrude, revolve, booleans.
+    * `sketch` – 2D sketch entities + constraint graph + solver.
+    * `naming` – persistent naming, evolution graph, fingerprints.
+    * `mesh` – tessellation to triangle meshes.
 * `@solidtype/viewer` – WebGL/three.js demo app:
 
   * Code-driven examples, parameter sliders, basic inspection.
@@ -23,10 +23,10 @@ Monorepo (pnpm), ESM-only, with a **small number of packages**:
 Tooling:
 
 * **Tests**: Vitest in each package, `strict` TS.
-* **Build**: tsdown for `@solidtype/core` and `@solidtype/oo`.
+* **Build**: tsdown for `@solidtype/core`.
 * **App**: Vite for `@solidtype/viewer`.
 
-Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses serialisable data; `@solidtype/oo` / `@solidtype/viewer` provide worker wrappers later.
+Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses serialisable data; `@solidtype/viewer` provides worker wrappers later.
 
 ---
 
@@ -45,7 +45,6 @@ Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses se
    * Packages:
 
      * `packages/core`
-     * `packages/oo`
      * `packages/viewer`
 
 2. **Shared TS config**
@@ -55,12 +54,12 @@ Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses se
 
 3. **Vitest setup**
 
-   * Add Vitest config to `@solidtype/core` and `@solidtype/oo`.
+   * Add Vitest config to `@solidtype/core`.
    * Ensure `pnpm test` runs all tests across the workspace.
 
 4. **Build tooling**
 
-   * Configure tsdown for `@solidtype/core` and `@solidtype/oo`:
+   * Configure tsdown for `@solidtype/core`:
 
      * ESM output only.
      * Preserve source maps for debugging.
@@ -260,7 +259,7 @@ Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses se
   * Vertices, edges, half-edges, loops, faces, shells, bodies.
   * Multiple bodies per model.
   * Both open shells (surfaces) and closed solids.
-* Data-oriented: **handles + tables**, not object graphs.
+* Object-oriented API with internal struct-of-arrays storage for performance.
 
 ### Implementation
 
@@ -277,46 +276,48 @@ Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses se
      export type HalfEdgeId = number & { __brand: "HalfEdgeId" };
      ```
 
-2. **Struct-of-arrays BREP store**
+2. **TopoModel class with internal struct-of-arrays storage**
 
-   * `topo/model.ts` with a `TopoModel` structure:
+   * `topo/TopoModel.ts` with a `TopoModel` class that encapsulates:
 
      ```ts
-     interface VertexTable {
-       x: Float64Array;
-       y: Float64Array;
-       z: Float64Array;
-       // maybe reference count / flags
-     }
-
-     interface EdgeTable {
-       vStart: Int32Array;
-       vEnd: Int32Array;
-       curveIndex: Int32Array; // index into geom curve array
+     class TopoModel {
+       // Internal storage (struct-of-arrays for performance)
+       private _vertices: VertexTable;
+       private _edges: EdgeTable;
+       private _faces: FaceTable;
        // ...
+       
+       // Public OO API
+       addVertex(x: number, y: number, z: number): VertexId;
+       addEdge(vStart: VertexId, vEnd: VertexId): EdgeId;
+       addFace(surfaceIndex: SurfaceIndex): FaceId;
+       addBody(): BodyId;
+       
+       getVertexPosition(id: VertexId): Vec3;
+       getEdgeStartVertex(id: EdgeId): VertexId;
+       getFaceLoops(id: FaceId): LoopId[];
+       iterateBodies(): Iterable<BodyId>;
+       
+       // Geometry storage
+       addSurface(surface: Surface): SurfaceIndex;
+       addCurve(curve: Curve3D): Curve3DIndex;
      }
-
-     interface FaceTable {
-       surfaceIndex: Int32Array;
-       firstLoop: Int32Array;
-       loopCount: Int32Array;
-       // orientation, shell, flags...
-     }
-
-     // Similarly for loops & half-edges; loops reference a cycle of half-edges.
      ```
-   * `TopoModel` includes:
-
+   * Internal tables include:
      * Arrays for vertices, edges, faces, loops, half-edges, shells, bodies.
-     * Arrays of `Surface` and `Curve3D` for underlying geometry or references to a separate `geomStore`.
+     * Arrays of `Surface` and `Curve3D` for underlying geometry.
 
-3. **Creation & mutation API (functional core)**
+3. **Backward compatibility layer**
 
-   * `createEmptyModel(): TopoModel`.
-   * `createBody`, `createFace`, `createEdge`, `createVertex` etc.:
+   * `topo/model.ts` re-exports TopoModel and provides deprecated functional wrappers:
 
-     * Manage free-lists for deleted entries to avoid growth.
-   * Ensure operations return **new handles** but mutate underlying arrays (for perf).
+     ```ts
+     /** @deprecated Use model.addVertex() instead */
+     export function addVertex(model: TopoModel, x: number, y: number, z: number): VertexId {
+       return model.addVertex(x, y, z);
+     }
+     ```
 
 4. **Validity & invariants**
 
@@ -618,7 +619,7 @@ Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses se
 
 5. **OO façade hooks**
 
-   * In `@solidtype/oo`:
+   * In `@solidtype/core`'s OO API:
 
      * `Body.selectFaceByRay(...)` returns `PersistentRef`.
      * `Body.resolve(ref)` returns an OO `Face` or `null`.
@@ -764,7 +765,7 @@ Multi-threading later: `@solidtype/core` is pure TS without DOM deps and uses se
 
 6. **Integration with modeling**
 
-   * Add helper in `@solidtype/oo`:
+   * Add helper in `@solidtype/core`'s OO API:
 
      * `session.createSketch(plane)` → returns an OO `Sketch`.
      * `Sketch.addLine`, `Sketch.addArc`, `Sketch.addConstraint`.

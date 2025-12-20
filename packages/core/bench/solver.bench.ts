@@ -7,16 +7,13 @@
 
 import {
   createDatumPlaneFromNormal,
-  createSketch,
-  addPoint,
-  addLine,
+  SketchModel,
   solveSketch,
   horizontalLine,
   verticalLine,
   distance,
   equalLength,
   vec3,
-  type Sketch,
   type Constraint,
   type SketchEntityId,
   type SketchPointId,
@@ -30,21 +27,21 @@ import { runBenchmark, printResult, summarizeResults, type BenchmarkResult } fro
 /**
  * Create a simple rectangle sketch with basic constraints
  */
-function createRectangleSketch(): { sketch: Sketch; constraints: Constraint[] } {
+function createRectangleSketch(): { sketch: SketchModel; constraints: Constraint[] } {
   const plane = createDatumPlaneFromNormal('XY', vec3(0, 0, 0), vec3(0, 0, 1));
-  const sketch = createSketch(plane);
+  const sketch = new SketchModel(plane);
   
   // Add 4 corner points
-  const p0 = addPoint(sketch, 0, 0, { fixed: true });
-  const p1 = addPoint(sketch, 10, 0);
-  const p2 = addPoint(sketch, 10, 8);
-  const p3 = addPoint(sketch, 0, 8);
+  const p0 = sketch.addPoint(0, 0, { fixed: true });
+  const p1 = sketch.addPoint(10, 0);
+  const p2 = sketch.addPoint(10, 8);
+  const p3 = sketch.addPoint(0, 8);
   
   // Add 4 lines
-  const l0 = addLine(sketch, p0, p1);
-  const l1 = addLine(sketch, p1, p2);
-  const l2 = addLine(sketch, p2, p3);
-  const l3 = addLine(sketch, p3, p0);
+  const l0 = sketch.addLine(p0, p1);
+  const l1 = sketch.addLine(p1, p2);
+  const l2 = sketch.addLine(p2, p3);
+  const l3 = sketch.addLine(p3, p0);
   
   // Create constraints (factory functions auto-allocate IDs)
   const constraints: Constraint[] = [
@@ -62,19 +59,19 @@ function createRectangleSketch(): { sketch: Sketch; constraints: Constraint[] } 
 /**
  * Create a triangular sketch with constraints
  */
-function createTriangleSketch(): { sketch: Sketch; constraints: Constraint[] } {
+function createTriangleSketch(): { sketch: SketchModel; constraints: Constraint[] } {
   const plane = createDatumPlaneFromNormal('XY', vec3(0, 0, 0), vec3(0, 0, 1));
-  const sketch = createSketch(plane);
+  const sketch = new SketchModel(plane);
   
   // Add 3 corner points
-  const p0 = addPoint(sketch, 0, 0, { fixed: true });
-  const p1 = addPoint(sketch, 10, 0);
-  const p2 = addPoint(sketch, 5, 8);
+  const p0 = sketch.addPoint(0, 0, { fixed: true });
+  const p1 = sketch.addPoint(10, 0);
+  const p2 = sketch.addPoint(5, 8);
   
   // Add 3 lines
-  const l0 = addLine(sketch, p0, p1);
-  const l1 = addLine(sketch, p1, p2);
-  const l2 = addLine(sketch, p2, p0);
+  const l0 = sketch.addLine(p0, p1);
+  const l1 = sketch.addLine(p1, p2);
+  const l2 = sketch.addLine(p2, p0);
   
   // Create constraints
   const constraints: Constraint[] = [
@@ -91,9 +88,9 @@ function createTriangleSketch(): { sketch: Sketch; constraints: Constraint[] } {
  */
 function createComplexSketch(
   numPoints: number
-): { sketch: Sketch; constraints: Constraint[] } {
+): { sketch: SketchModel; constraints: Constraint[] } {
   const plane = createDatumPlaneFromNormal('XY', vec3(0, 0, 0), vec3(0, 0, 1));
-  const sketch = createSketch(plane);
+  const sketch = new SketchModel(plane);
   
   // Create a polygon with numPoints vertices
   const points: SketchPointId[] = [];
@@ -103,14 +100,14 @@ function createComplexSketch(
     const angle = (2 * Math.PI * i) / numPoints;
     const x = radius * Math.cos(angle) + (Math.random() - 0.5);
     const y = radius * Math.sin(angle) + (Math.random() - 0.5);
-    points.push(addPoint(sketch, x, y, { fixed: i === 0 }));
+    points.push(sketch.addPoint(x, y, { fixed: i === 0 }));
   }
   
   // Create lines between adjacent points
   const lines: SketchEntityId[] = [];
   for (let i = 0; i < numPoints; i++) {
     const j = (i + 1) % numPoints;
-    lines.push(addLine(sketch, points[i], points[j]));
+    lines.push(sketch.addLine(points[i], points[j]));
   }
   
   // Create constraints

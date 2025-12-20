@@ -3,28 +3,23 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createEmptyModel } from '../topo/model.js';
+import { TopoModel } from '../topo/TopoModel.js';
 import { createNumericContext } from '../num/tolerance.js';
 import { extrude } from '../model/extrude.js';
 import { revolve, Y_AXIS_REVOLVE } from '../model/revolve.js';
 import { booleanOperation } from '../model/boolean.js';
-import { createRectangleProfile, createCircleProfile } from '../model/sketchProfile.js';
+import { createRectangleProfile } from '../model/sketchProfile.js';
 import { XY_PLANE, ZX_PLANE } from '../model/planes.js';
 import {
   createNamingStrategy,
   DefaultNamingStrategy,
   subshapeRefsMatch,
-  computeFaceFingerprint,
   fingerprintDistance,
-  faceRef,
-  edgeRef,
   extrudeTopCapSelector,
   extrudeSideSelector,
   createPersistentRef,
-  asFeatureId,
 } from './index.js';
-import type { NamingStrategy, PersistentRef, SubshapeRef } from './types.js';
-import type { TopoModel } from '../topo/model.js';
+import type { NamingStrategy, SubshapeRef } from './types.js';
 import type { BodyId, FaceId, EdgeId } from '../topo/handles.js';
 import { vec3 } from '../num/vec3.js';
 
@@ -34,7 +29,7 @@ describe('Naming System', () => {
   
   beforeEach(() => {
     const ctx = createNumericContext();
-    model = createEmptyModel(ctx);
+    model = new TopoModel(ctx);
     naming = createNamingStrategy();
   });
   

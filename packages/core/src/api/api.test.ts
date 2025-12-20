@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { SolidSession, Body, Face, vec3 } from './index.js';
+import { SolidSession, Body, Face, Sketch } from './index.js';
+import { vec3 } from '../num/vec3.js';
 
-describe('@solidtype/oo', () => {
+describe('Object-Oriented API', () => {
   it('should pass smoke test', () => {
     expect(true).toBe(true);
   });
@@ -242,6 +243,70 @@ describe('@solidtype/oo', () => {
       const resolved = unionResult.body!.resolve(originalTopCapRef);
       expect(resolved).not.toBeNull();
       expect(resolved).toBeInstanceOf(Face);
+    });
+  });
+  
+  describe('Sketch', () => {
+    it('should create a sketch', () => {
+      const session = new SolidSession();
+      const plane = session.getXYPlane();
+      const sketch = session.createSketch(plane, 'test-sketch');
+      
+      expect(sketch).toBeInstanceOf(Sketch);
+      expect(sketch.getPlane()).toBe(plane);
+    });
+    
+    it('should add points and lines', () => {
+      const session = new SolidSession();
+      const plane = session.getXYPlane();
+      const sketch = session.createSketch(plane);
+      
+      const p1 = sketch.addPoint(0, 0);
+      const p2 = sketch.addPoint(10, 0);
+      const line = sketch.addLine(p1, p2);
+      
+      expect(sketch.getPoint(p1)).toBeDefined();
+      expect(sketch.getPoint(p2)).toBeDefined();
+      expect(sketch.getEntity(line)).toBeDefined();
+    });
+    
+    it('should add rectangle', () => {
+      const session = new SolidSession();
+      const plane = session.getXYPlane();
+      const sketch = session.createSketch(plane);
+      
+      const rect = sketch.addRectangle(0, 0, 10, 10);
+      
+      expect(rect.corners.length).toBe(4);
+      expect(rect.sides.length).toBe(4);
+    });
+    
+    it('should convert to profile', () => {
+      const session = new SolidSession();
+      const plane = session.getXYPlane();
+      const sketch = session.createSketch(plane);
+      
+      sketch.addRectangle(0, 0, 10, 10);
+      const profile = sketch.toProfile();
+      
+      expect(profile).not.toBeNull();
+      expect(profile!.loops.length).toBeGreaterThan(0);
+    });
+    
+    it('should extrude sketch directly', () => {
+      const session = new SolidSession();
+      const plane = session.getXYPlane();
+      const sketch = session.createSketch(plane);
+      
+      sketch.addRectangle(-5, -5, 10, 10);
+      
+      const result = session.extrudeSketch(sketch, {
+        operation: 'add',
+        distance: 5,
+      });
+      
+      expect(result.success).toBe(true);
+      expect(result.body).toBeInstanceOf(Body);
     });
   });
 });

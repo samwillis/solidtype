@@ -6,27 +6,13 @@ import { describe, it, expect } from 'vitest';
 import { createNumericContext } from '../num/tolerance.js';
 import { vec3 } from '../num/vec3.js';
 import { createPlaneSurface } from '../geom/surface.js';
+import { TopoModel } from './TopoModel.js';
 import {
-  createEmptyModel,
-  addVertex,
-  addEdge,
-  addHalfEdge,
-  setHalfEdgeTwin,
-  addLoop,
-  addLoopToFace,
-  addFace,
-  addFaceToShell,
-  addShell,
-  addShellToBody,
-  setShellClosed,
-  addBody,
-  addSurface,
-  type TopoModel,
-  type BodyId,
   NULL_ID,
   asSurfaceIndex,
   asLoopId,
-} from './model.js';
+  type BodyId,
+} from './handles.js';
 import {
   validateModel,
   isValidModel,
@@ -39,30 +25,30 @@ describe('Validation', () => {
    * Helper to create a simple valid triangle face
    */
   function createTriangleFace(model: TopoModel): BodyId {
-    const v0 = addVertex(model, 0, 0, 0);
-    const v1 = addVertex(model, 1, 0, 0);
-    const v2 = addVertex(model, 0.5, 1, 0);
+    const v0 = model.addVertex(0, 0, 0);
+    const v1 = model.addVertex(1, 0, 0);
+    const v2 = model.addVertex(0.5, 1, 0);
     
-    const e0 = addEdge(model, v0, v1);
-    const e1 = addEdge(model, v1, v2);
-    const e2 = addEdge(model, v2, v0);
+    const e0 = model.addEdge(v0, v1);
+    const e1 = model.addEdge(v1, v2);
+    const e2 = model.addEdge(v2, v0);
     
-    const he0 = addHalfEdge(model, e0, 1);
-    const he1 = addHalfEdge(model, e1, 1);
-    const he2 = addHalfEdge(model, e2, 1);
+    const he0 = model.addHalfEdge(e0, 1);
+    const he1 = model.addHalfEdge(e1, 1);
+    const he2 = model.addHalfEdge(e2, 1);
     
     const surface = createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1));
-    const surfaceIdx = addSurface(model, surface);
+    const surfaceIdx = model.addSurface(surface);
     
-    const body = addBody(model);
-    const shell = addShell(model, false); // open shell
-    addShellToBody(model, body, shell);
+    const body = model.addBody();
+    const shell = model.addShell(false);
+    model.addShellToBody(body, shell);
     
-    const face = addFace(model, surfaceIdx);
-    addFaceToShell(model, shell, face);
+    const face = model.addFace(surfaceIdx);
+    model.addFaceToShell(shell, face);
     
-    const loop = addLoop(model, [he0, he1, he2]);
-    addLoopToFace(model, face, loop);
+    const loop = model.addLoop([he0, he1, he2]);
+    model.addLoopToFace(face, loop);
     
     return body;
   }
@@ -73,123 +59,114 @@ describe('Validation', () => {
   function createCube(model: TopoModel, size: number = 1): BodyId {
     const s = size;
     
-    // Create 8 vertices
-    const v0 = addVertex(model, 0, 0, 0);
-    const v1 = addVertex(model, s, 0, 0);
-    const v2 = addVertex(model, s, 0, s);
-    const v3 = addVertex(model, 0, 0, s);
-    const v4 = addVertex(model, 0, s, 0);
-    const v5 = addVertex(model, s, s, 0);
-    const v6 = addVertex(model, s, s, s);
-    const v7 = addVertex(model, 0, s, s);
+    const v0 = model.addVertex(0, 0, 0);
+    const v1 = model.addVertex(s, 0, 0);
+    const v2 = model.addVertex(s, 0, s);
+    const v3 = model.addVertex(0, 0, s);
+    const v4 = model.addVertex(0, s, 0);
+    const v5 = model.addVertex(s, s, 0);
+    const v6 = model.addVertex(s, s, s);
+    const v7 = model.addVertex(0, s, s);
     
-    // Create 12 edges
-    const e01 = addEdge(model, v0, v1);
-    const e12 = addEdge(model, v1, v2);
-    const e23 = addEdge(model, v2, v3);
-    const e30 = addEdge(model, v3, v0);
-    const e45 = addEdge(model, v4, v5);
-    const e56 = addEdge(model, v5, v6);
-    const e67 = addEdge(model, v6, v7);
-    const e74 = addEdge(model, v7, v4);
-    const e04 = addEdge(model, v0, v4);
-    const e15 = addEdge(model, v1, v5);
-    const e26 = addEdge(model, v2, v6);
-    const e37 = addEdge(model, v3, v7);
+    const e01 = model.addEdge(v0, v1);
+    const e12 = model.addEdge(v1, v2);
+    const e23 = model.addEdge(v2, v3);
+    const e30 = model.addEdge(v3, v0);
+    const e45 = model.addEdge(v4, v5);
+    const e56 = model.addEdge(v5, v6);
+    const e67 = model.addEdge(v6, v7);
+    const e74 = model.addEdge(v7, v4);
+    const e04 = model.addEdge(v0, v4);
+    const e15 = model.addEdge(v1, v5);
+    const e26 = model.addEdge(v2, v6);
+    const e37 = model.addEdge(v3, v7);
     
-    const body = addBody(model);
-    const shell = addShell(model, true); // closed
-    addShellToBody(model, body, shell);
+    const body = model.addBody();
+    const shell = model.addShell(true);
+    model.addShellToBody(body, shell);
     
-    const surfBottom = addSurface(model, createPlaneSurface(vec3(0, 0, 0), vec3(0, -1, 0)));
-    const surfTop = addSurface(model, createPlaneSurface(vec3(0, s, 0), vec3(0, 1, 0)));
-    const surfFront = addSurface(model, createPlaneSurface(vec3(0, 0, s), vec3(0, 0, 1)));
-    const surfBack = addSurface(model, createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, -1)));
-    const surfLeft = addSurface(model, createPlaneSurface(vec3(0, 0, 0), vec3(-1, 0, 0)));
-    const surfRight = addSurface(model, createPlaneSurface(vec3(s, 0, 0), vec3(1, 0, 0)));
+    const surfBottom = model.addSurface(createPlaneSurface(vec3(0, 0, 0), vec3(0, -1, 0)));
+    const surfTop = model.addSurface(createPlaneSurface(vec3(0, s, 0), vec3(0, 1, 0)));
+    const surfFront = model.addSurface(createPlaneSurface(vec3(0, 0, s), vec3(0, 0, 1)));
+    const surfBack = model.addSurface(createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, -1)));
+    const surfLeft = model.addSurface(createPlaneSurface(vec3(0, 0, 0), vec3(-1, 0, 0)));
+    const surfRight = model.addSurface(createPlaneSurface(vec3(s, 0, 0), vec3(1, 0, 0)));
     
-    const faceBottom = addFace(model, surfBottom);
-    const faceTop = addFace(model, surfTop);
-    const faceFront = addFace(model, surfFront);
-    const faceBack = addFace(model, surfBack);
-    const faceLeft = addFace(model, surfLeft);
-    const faceRight = addFace(model, surfRight);
+    const faceBottom = model.addFace(surfBottom);
+    const faceTop = model.addFace(surfTop);
+    const faceFront = model.addFace(surfFront);
+    const faceBack = model.addFace(surfBack);
+    const faceLeft = model.addFace(surfLeft);
+    const faceRight = model.addFace(surfRight);
     
-    addFaceToShell(model, shell, faceBottom);
-    addFaceToShell(model, shell, faceTop);
-    addFaceToShell(model, shell, faceFront);
-    addFaceToShell(model, shell, faceBack);
-    addFaceToShell(model, shell, faceLeft);
-    addFaceToShell(model, shell, faceRight);
+    model.addFaceToShell(shell, faceBottom);
+    model.addFaceToShell(shell, faceTop);
+    model.addFaceToShell(shell, faceFront);
+    model.addFaceToShell(shell, faceBack);
+    model.addFaceToShell(shell, faceLeft);
+    model.addFaceToShell(shell, faceRight);
     
-    // Bottom face
-    const he_bottom_01 = addHalfEdge(model, e01, 1);
-    const he_bottom_12 = addHalfEdge(model, e12, 1);
-    const he_bottom_23 = addHalfEdge(model, e23, 1);
-    const he_bottom_30 = addHalfEdge(model, e30, 1);
-    const loopBottom = addLoop(model, [he_bottom_01, he_bottom_12, he_bottom_23, he_bottom_30]);
-    addLoopToFace(model, faceBottom, loopBottom);
+    const he_bottom_01 = model.addHalfEdge(e01, 1);
+    const he_bottom_12 = model.addHalfEdge(e12, 1);
+    const he_bottom_23 = model.addHalfEdge(e23, 1);
+    const he_bottom_30 = model.addHalfEdge(e30, 1);
+    const loopBottom = model.addLoop([he_bottom_01, he_bottom_12, he_bottom_23, he_bottom_30]);
+    model.addLoopToFace(faceBottom, loopBottom);
     
-    // Top face
-    const he_top_47 = addHalfEdge(model, e74, -1);
-    const he_top_76 = addHalfEdge(model, e67, -1);
-    const he_top_65 = addHalfEdge(model, e56, -1);
-    const he_top_54 = addHalfEdge(model, e45, -1);
-    const loopTop = addLoop(model, [he_top_47, he_top_76, he_top_65, he_top_54]);
-    addLoopToFace(model, faceTop, loopTop);
+    const he_top_47 = model.addHalfEdge(e74, -1);
+    const he_top_76 = model.addHalfEdge(e67, -1);
+    const he_top_65 = model.addHalfEdge(e56, -1);
+    const he_top_54 = model.addHalfEdge(e45, -1);
+    const loopTop = model.addLoop([he_top_47, he_top_76, he_top_65, he_top_54]);
+    model.addLoopToFace(faceTop, loopTop);
     
-    // Front face
-    const he_front_32 = addHalfEdge(model, e23, -1);
-    const he_front_26 = addHalfEdge(model, e26, 1);
-    const he_front_67 = addHalfEdge(model, e67, 1);
-    const he_front_73 = addHalfEdge(model, e37, -1);
-    const loopFront = addLoop(model, [he_front_32, he_front_26, he_front_67, he_front_73]);
-    addLoopToFace(model, faceFront, loopFront);
+    const he_front_32 = model.addHalfEdge(e23, -1);
+    const he_front_26 = model.addHalfEdge(e26, 1);
+    const he_front_67 = model.addHalfEdge(e67, 1);
+    const he_front_73 = model.addHalfEdge(e37, -1);
+    const loopFront = model.addLoop([he_front_32, he_front_26, he_front_67, he_front_73]);
+    model.addLoopToFace(faceFront, loopFront);
     
-    // Back face
-    const he_back_04 = addHalfEdge(model, e04, 1);
-    const he_back_45 = addHalfEdge(model, e45, 1);
-    const he_back_51 = addHalfEdge(model, e15, -1);
-    const he_back_10 = addHalfEdge(model, e01, -1);
-    const loopBack = addLoop(model, [he_back_04, he_back_45, he_back_51, he_back_10]);
-    addLoopToFace(model, faceBack, loopBack);
+    const he_back_04 = model.addHalfEdge(e04, 1);
+    const he_back_45 = model.addHalfEdge(e45, 1);
+    const he_back_51 = model.addHalfEdge(e15, -1);
+    const he_back_10 = model.addHalfEdge(e01, -1);
+    const loopBack = model.addLoop([he_back_04, he_back_45, he_back_51, he_back_10]);
+    model.addLoopToFace(faceBack, loopBack);
     
-    // Left face
-    const he_left_03 = addHalfEdge(model, e30, -1);
-    const he_left_37 = addHalfEdge(model, e37, 1);
-    const he_left_74 = addHalfEdge(model, e74, 1);
-    const he_left_40 = addHalfEdge(model, e04, -1);
-    const loopLeft = addLoop(model, [he_left_03, he_left_37, he_left_74, he_left_40]);
-    addLoopToFace(model, faceLeft, loopLeft);
+    const he_left_03 = model.addHalfEdge(e30, -1);
+    const he_left_37 = model.addHalfEdge(e37, 1);
+    const he_left_74 = model.addHalfEdge(e74, 1);
+    const he_left_40 = model.addHalfEdge(e04, -1);
+    const loopLeft = model.addLoop([he_left_03, he_left_37, he_left_74, he_left_40]);
+    model.addLoopToFace(faceLeft, loopLeft);
     
-    // Right face
-    const he_right_15 = addHalfEdge(model, e15, 1);
-    const he_right_56 = addHalfEdge(model, e56, 1);
-    const he_right_62 = addHalfEdge(model, e26, -1);
-    const he_right_21 = addHalfEdge(model, e12, -1);
-    const loopRight = addLoop(model, [he_right_15, he_right_56, he_right_62, he_right_21]);
-    addLoopToFace(model, faceRight, loopRight);
+    const he_right_15 = model.addHalfEdge(e15, 1);
+    const he_right_56 = model.addHalfEdge(e56, 1);
+    const he_right_62 = model.addHalfEdge(e26, -1);
+    const he_right_21 = model.addHalfEdge(e12, -1);
+    const loopRight = model.addLoop([he_right_15, he_right_56, he_right_62, he_right_21]);
+    model.addLoopToFace(faceRight, loopRight);
     
-    // Set up twins
-    setHalfEdgeTwin(model, he_bottom_01, he_back_10);
-    setHalfEdgeTwin(model, he_bottom_12, he_right_21);
-    setHalfEdgeTwin(model, he_bottom_23, he_front_32);
-    setHalfEdgeTwin(model, he_bottom_30, he_left_03);
-    setHalfEdgeTwin(model, he_top_47, he_left_74);
-    setHalfEdgeTwin(model, he_top_76, he_front_67);
-    setHalfEdgeTwin(model, he_top_65, he_right_56);
-    setHalfEdgeTwin(model, he_top_54, he_back_45);
-    setHalfEdgeTwin(model, he_back_04, he_left_40);
-    setHalfEdgeTwin(model, he_back_51, he_right_15);
-    setHalfEdgeTwin(model, he_front_26, he_right_62);
-    setHalfEdgeTwin(model, he_front_73, he_left_37);
+    model.setHalfEdgeTwin(he_bottom_01, he_back_10);
+    model.setHalfEdgeTwin(he_bottom_12, he_right_21);
+    model.setHalfEdgeTwin(he_bottom_23, he_front_32);
+    model.setHalfEdgeTwin(he_bottom_30, he_left_03);
+    model.setHalfEdgeTwin(he_top_47, he_left_74);
+    model.setHalfEdgeTwin(he_top_76, he_front_67);
+    model.setHalfEdgeTwin(he_top_65, he_right_56);
+    model.setHalfEdgeTwin(he_top_54, he_back_45);
+    model.setHalfEdgeTwin(he_back_04, he_left_40);
+    model.setHalfEdgeTwin(he_back_51, he_right_15);
+    model.setHalfEdgeTwin(he_front_26, he_right_62);
+    model.setHalfEdgeTwin(he_front_73, he_left_37);
     
     return body;
   }
 
   describe('Valid models', () => {
     it('should validate an empty model', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       const report = validateModel(model);
       
       expect(report.isValid).toBe(true);
@@ -197,7 +174,7 @@ describe('Validation', () => {
     });
 
     it('should validate a simple triangle face (open shell)', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       createTriangleFace(model);
       
       const report = validateModel(model, { checkBoundary: false });
@@ -207,7 +184,7 @@ describe('Validation', () => {
     });
 
     it('should validate a cube (closed shell)', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       createCube(model, 1);
       
       const report = validateModel(model);
@@ -217,19 +194,18 @@ describe('Validation', () => {
     });
 
     it('should report boundary edges as info for open shells', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       createTriangleFace(model);
       
       const report = validateModel(model, { checkBoundary: true });
       
-      // Should report boundary edges as info
       expect(report.infoCount).toBeGreaterThan(0);
       const boundaryIssues = report.issues.filter(i => i.kind === 'boundaryEdge');
-      expect(boundaryIssues.length).toBe(3); // triangle has 3 boundary edges
+      expect(boundaryIssues.length).toBe(3);
     });
 
     it('should pass isValidModel for valid models', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       createCube(model, 1);
       
       expect(isValidModel(model)).toBe(true);
@@ -238,16 +214,14 @@ describe('Validation', () => {
 
   describe('Invalid models - structural issues', () => {
     it('should detect broken loop cycles', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      // Create a half-edge with broken next/prev
-      const v0 = addVertex(model, 0, 0, 0);
-      const v1 = addVertex(model, 1, 0, 0);
-      const e = addEdge(model, v0, v1);
-      const he = addHalfEdge(model, e, 1);
+      const v0 = model.addVertex(0, 0, 0);
+      const v1 = model.addVertex(1, 0, 0);
+      const e = model.addEdge(v0, v1);
+      const he = model.addHalfEdge(e, 1);
       
-      // Manually corrupt the next pointer to create a broken cycle
-      model.halfEdges.next[he] = 999; // invalid
+      model.halfEdges.next[he] = 999;
       model.halfEdges.prev[999] = he;
       
       const report = validateModel(model);
@@ -260,15 +234,14 @@ describe('Validation', () => {
     });
 
     it('should detect missing surface reference', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      const body = addBody(model);
-      const shell = addShell(model);
-      addShellToBody(model, body, shell);
+      const body = model.addBody();
+      const shell = model.addShell();
+      model.addShellToBody(body, shell);
       
-      // Create face with invalid surface index
-      const face = addFace(model, asSurfaceIndex(999)); // invalid surface
-      addFaceToShell(model, shell, face);
+      const face = model.addFace(asSurfaceIndex(999));
+      model.addFaceToShell(shell, face);
       
       const report = validateModel(model);
       
@@ -278,17 +251,16 @@ describe('Validation', () => {
     });
 
     it('should detect twin mismatch', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      const v0 = addVertex(model, 0, 0, 0);
-      const v1 = addVertex(model, 1, 0, 0);
-      const e = addEdge(model, v0, v1);
+      const v0 = model.addVertex(0, 0, 0);
+      const v1 = model.addVertex(1, 0, 0);
+      const e = model.addEdge(v0, v1);
       
-      const he1 = addHalfEdge(model, e, 1);
-      const he2 = addHalfEdge(model, e, -1);
-      const he3 = addHalfEdge(model, e, 1); // extra half-edge
+      const he1 = model.addHalfEdge(e, 1);
+      const he2 = model.addHalfEdge(e, -1);
+      const he3 = model.addHalfEdge(e, 1);
       
-      // Set up incorrect twin (he1 points to he2, but he2 points to he3)
       model.halfEdges.twin[he1] = he2;
       model.halfEdges.twin[he2] = he3;
       model.halfEdges.twin[he3] = he2;
@@ -301,17 +273,16 @@ describe('Validation', () => {
     });
 
     it('should detect half-edges with same direction as twin', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      const v0 = addVertex(model, 0, 0, 0);
-      const v1 = addVertex(model, 1, 0, 0);
-      const e = addEdge(model, v0, v1);
+      const v0 = model.addVertex(0, 0, 0);
+      const v1 = model.addVertex(1, 0, 0);
+      const e = model.addEdge(v0, v1);
       
-      // Create two half-edges with the same direction (wrong)
-      const he1 = addHalfEdge(model, e, 1);
-      const he2 = addHalfEdge(model, e, 1); // should be -1
+      const he1 = model.addHalfEdge(e, 1);
+      const he2 = model.addHalfEdge(e, 1);
       
-      setHalfEdgeTwin(model, he1, he2);
+      model.setHalfEdgeTwin(he1, he2);
       
       const report = validateModel(model);
       
@@ -323,12 +294,11 @@ describe('Validation', () => {
 
   describe('Invalid models - degenerate entities', () => {
     it('should detect zero-length edges', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      // Create an edge with the same start and end position
-      const v0 = addVertex(model, 0, 0, 0);
-      const v1 = addVertex(model, 0, 0, 0); // same position
-      const e = addEdge(model, v0, v1);
+      const v0 = model.addVertex(0, 0, 0);
+      const v1 = model.addVertex(0, 0, 0);
+      model.addEdge(v0, v1);
       
       const report = validateModel(model, { checkDegenerate: true });
       
@@ -339,16 +309,15 @@ describe('Validation', () => {
 
   describe('Invalid models - manifold issues', () => {
     it('should detect non-manifold edges (more than 2 half-edges)', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      const v0 = addVertex(model, 0, 0, 0);
-      const v1 = addVertex(model, 1, 0, 0);
-      const e = addEdge(model, v0, v1);
+      const v0 = model.addVertex(0, 0, 0);
+      const v1 = model.addVertex(1, 0, 0);
+      const e = model.addEdge(v0, v1);
       
-      // Create 3 half-edges for the same edge (non-manifold)
-      const _he1 = addHalfEdge(model, e, 1);
-      const _he2 = addHalfEdge(model, e, -1);
-      const _he3 = addHalfEdge(model, e, 1); // extra
+      model.addHalfEdge(e, 1);
+      model.addHalfEdge(e, -1);
+      model.addHalfEdge(e, 1);
       
       const report = validateModel(model, { checkManifold: true });
       
@@ -358,39 +327,36 @@ describe('Validation', () => {
     });
 
     it('should detect boundary edges in closed shells as errors', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      // Create a single face and mark shell as closed (incorrect)
-      const v0 = addVertex(model, 0, 0, 0);
-      const v1 = addVertex(model, 1, 0, 0);
-      const v2 = addVertex(model, 1, 1, 0);
-      const v3 = addVertex(model, 0, 1, 0);
+      const v0 = model.addVertex(0, 0, 0);
+      const v1 = model.addVertex(1, 0, 0);
+      const v2 = model.addVertex(1, 1, 0);
+      const v3 = model.addVertex(0, 1, 0);
       
-      const e01 = addEdge(model, v0, v1);
-      const e12 = addEdge(model, v1, v2);
-      const e23 = addEdge(model, v2, v3);
-      const e30 = addEdge(model, v3, v0);
+      const e01 = model.addEdge(v0, v1);
+      const e12 = model.addEdge(v1, v2);
+      const e23 = model.addEdge(v2, v3);
+      const e30 = model.addEdge(v3, v0);
       
-      const body = addBody(model);
-      const shell = addShell(model, true); // claim it's closed
-      addShellToBody(model, body, shell);
+      const body = model.addBody();
+      const shell = model.addShell(true);
+      model.addShellToBody(body, shell);
       
-      const surface = addSurface(model, createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1)));
-      const face = addFace(model, surface);
-      addFaceToShell(model, shell, face);
+      const surface = model.addSurface(createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1)));
+      const face = model.addFace(surface);
+      model.addFaceToShell(shell, face);
       
-      // Create half-edges but no twins (incomplete)
-      const he01 = addHalfEdge(model, e01, 1);
-      const he12 = addHalfEdge(model, e12, 1);
-      const he23 = addHalfEdge(model, e23, 1);
-      const he30 = addHalfEdge(model, e30, 1);
+      const he01 = model.addHalfEdge(e01, 1);
+      const he12 = model.addHalfEdge(e12, 1);
+      const he23 = model.addHalfEdge(e23, 1);
+      const he30 = model.addHalfEdge(e30, 1);
       
-      const loop = addLoop(model, [he01, he12, he23, he30]);
-      addLoopToFace(model, face, loop);
+      const loop = model.addLoop([he01, he12, he23, he30]);
+      model.addLoopToFace(face, loop);
       
       const report = validateModel(model, { checkManifold: true });
       
-      // Should report boundary edges as errors (shell claims to be closed)
       expect(report.isValid).toBe(false);
       const boundaryErrors = report.issues.filter(
         i => i.kind === 'boundaryEdge' && i.severity === 'error'
@@ -400,39 +366,40 @@ describe('Validation', () => {
   });
 
   describe('Invalid models - reference issues', () => {
-    it('should detect invalid vertex references in edges', () => {
-      const model = createEmptyModel(ctx);
+    it('should detect null vertex references in edges', () => {
+      const model = new TopoModel(ctx);
       
-      // Create edge referencing non-existent vertices
-      model.edges.vStart[0] = 999;
-      model.edges.vEnd[0] = 998;
-      model.edges.curveIndex[0] = NULL_ID;
-      model.edges.tStart[0] = 0;
-      model.edges.tEnd[0] = 1;
-      model.edges.halfEdge[0] = NULL_ID;
-      model.edges.flags[0] = 0;
-      model.edges.count = 1;
-      model.edges.liveCount = 1;
+      model.addVertex(0, 0, 0);
+      
+      const body = model.addBody();
+      const shell = model.addShell();
+      model.addShellToBody(body, shell);
+      
+      const surface = model.addSurface(createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1)));
+      const face = model.addFace(surface);
+      model.addFaceToShell(shell, face);
+      
+      const v0 = model.addVertex(0, 0, 0);
+      const edge = model.addEdge(v0, v0);
+      model.setEdgeVertices(edge, NULL_ID as any, v0);
       
       const report = validateModel(model);
       
       expect(report.isValid).toBe(false);
-      const invalidIndex = report.issues.filter(i => i.kind === 'invalidIndex');
-      expect(invalidIndex.length).toBeGreaterThan(0);
+      const nullRef = report.issues.filter(i => i.kind === 'nullReference');
+      expect(nullRef.length).toBeGreaterThan(0);
     });
 
     it('should detect face without loops', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      const body = addBody(model);
-      const shell = addShell(model);
-      addShellToBody(model, body, shell);
+      const body = model.addBody();
+      const shell = model.addShell();
+      model.addShellToBody(body, shell);
       
-      const surface = addSurface(model, createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1)));
-      const face = addFace(model, surface);
-      addFaceToShell(model, shell, face);
-      
-      // Don't add any loops to the face
+      const surface = model.addSurface(createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1)));
+      const face = model.addFace(surface);
+      model.addFaceToShell(shell, face);
       
       const report = validateModel(model);
       
@@ -446,36 +413,30 @@ describe('Validation', () => {
 
   describe('Vertex connectivity', () => {
     it('should detect vertex mismatch in half-edge sequence', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      // Create vertices and edges that don't connect properly
-      const v0 = addVertex(model, 0, 0, 0);
-      const v1 = addVertex(model, 1, 0, 0);
-      const v2 = addVertex(model, 2, 0, 0);
-      const v3 = addVertex(model, 3, 0, 0); // disconnected
+      const v0 = model.addVertex(0, 0, 0);
+      const v1 = model.addVertex(1, 0, 0);
+      const v2 = model.addVertex(2, 0, 0);
+      const v3 = model.addVertex(3, 0, 0);
       
-      // Edge from v0 to v1
-      const e01 = addEdge(model, v0, v1);
-      // Edge from v2 to v3 (not connected!)
-      const e23 = addEdge(model, v2, v3);
+      const e01 = model.addEdge(v0, v1);
+      const e23 = model.addEdge(v2, v3);
       
-      // Half-edges that should form a loop but vertices don't match
-      const he01 = addHalfEdge(model, e01, 1); // ends at v1
-      const he23 = addHalfEdge(model, e23, 1); // starts at v2 (mismatch!)
+      const he01 = model.addHalfEdge(e01, 1);
+      const he23 = model.addHalfEdge(e23, 1);
       
-      // Link them together incorrectly
       model.halfEdges.next[he01] = he23;
       model.halfEdges.prev[he23] = he01;
       
-      const body = addBody(model);
-      const shell = addShell(model);
-      addShellToBody(model, body, shell);
+      const body = model.addBody();
+      const shell = model.addShell();
+      model.addShellToBody(body, shell);
       
-      const surface = addSurface(model, createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1)));
-      const face = addFace(model, surface);
-      addFaceToShell(model, shell, face);
+      const surface = model.addSurface(createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1)));
+      const face = model.addFace(surface);
+      model.addFaceToShell(shell, face);
       
-      // Manually set up loop structure
       model.halfEdges.loop[he01] = 0;
       model.halfEdges.loop[he23] = 0;
       model.loops.face[0] = face;
@@ -485,12 +446,10 @@ describe('Validation', () => {
       model.loops.count = 1;
       model.loops.liveCount = 1;
       
-      // Add loop to face's loop array
       model.faceLoops[face] = [asLoopId(0)];
       
       const report = validateModel(model);
       
-      // Should detect that vertex at end of he01 (v1) doesn't match start of he23 (v2)
       const vertexMismatch = report.issues.filter(i => i.kind === 'vertexMismatch');
       expect(vertexMismatch.length).toBeGreaterThan(0);
     });
@@ -498,35 +457,33 @@ describe('Validation', () => {
 
   describe('Consistency checks', () => {
     it('should detect loop-face reference mismatch', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      const body = addBody(model);
-      const shell = addShell(model);
-      addShellToBody(model, body, shell);
+      const body = model.addBody();
+      const shell = model.addShell();
+      model.addShellToBody(body, shell);
       
-      const surface = addSurface(model, createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1)));
+      const surface = model.addSurface(createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1)));
       
-      const face0 = addFace(model, surface);
-      const face1 = addFace(model, surface);
-      addFaceToShell(model, shell, face0);
-      addFaceToShell(model, shell, face1);
+      const face0 = model.addFace(surface);
+      const face1 = model.addFace(surface);
+      model.addFaceToShell(shell, face0);
+      model.addFaceToShell(shell, face1);
       
-      // Create a loop
-      const v0 = addVertex(model, 0, 0, 0);
-      const v1 = addVertex(model, 1, 0, 0);
-      const v2 = addVertex(model, 0.5, 1, 0);
+      const v0 = model.addVertex(0, 0, 0);
+      const v1 = model.addVertex(1, 0, 0);
+      const v2 = model.addVertex(0.5, 1, 0);
       
-      const e0 = addEdge(model, v0, v1);
-      const e1 = addEdge(model, v1, v2);
-      const e2 = addEdge(model, v2, v0);
+      const e0 = model.addEdge(v0, v1);
+      const e1 = model.addEdge(v1, v2);
+      const e2 = model.addEdge(v2, v0);
       
-      const he0 = addHalfEdge(model, e0, 1);
-      const he1 = addHalfEdge(model, e1, 1);
-      const he2 = addHalfEdge(model, e2, 1);
+      const he0 = model.addHalfEdge(e0, 1);
+      const he1 = model.addHalfEdge(e1, 1);
+      const he2 = model.addHalfEdge(e2, 1);
       
-      const loop = addLoop(model, [he0, he1, he2]);
+      const loop = model.addLoop([he0, he1, he2]);
       
-      // Add loop to face0 but set loop's face to face1 (mismatch)
       model.faceLoops[face0] = [loop];
       model.loops.face[loop] = face1;
       
@@ -538,34 +495,32 @@ describe('Validation', () => {
     });
 
     it('should detect face-shell reference mismatch', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      const body = addBody(model);
-      const shell0 = addShell(model);
-      const shell1 = addShell(model);
-      addShellToBody(model, body, shell0);
-      addShellToBody(model, body, shell1);
+      const body = model.addBody();
+      const shell0 = model.addShell();
+      const shell1 = model.addShell();
+      model.addShellToBody(body, shell0);
+      model.addShellToBody(body, shell1);
       
-      const surface = addSurface(model, createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1)));
+      const surface = model.addSurface(createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1)));
       
-      const face = addFace(model, surface);
+      const face = model.addFace(surface);
       
-      // Add face to shell0's list but set face's shell to shell1 (mismatch)
       model.shellFaces[shell0] = [face];
       model.faces.shell[face] = shell1;
       
-      // Add a loop to the face to avoid "no loops" error
-      const v0 = addVertex(model, 0, 0, 0);
-      const v1 = addVertex(model, 1, 0, 0);
-      const v2 = addVertex(model, 0.5, 1, 0);
-      const e0 = addEdge(model, v0, v1);
-      const e1 = addEdge(model, v1, v2);
-      const e2 = addEdge(model, v2, v0);
-      const he0 = addHalfEdge(model, e0, 1);
-      const he1 = addHalfEdge(model, e1, 1);
-      const he2 = addHalfEdge(model, e2, 1);
-      const loop = addLoop(model, [he0, he1, he2]);
-      addLoopToFace(model, face, loop);
+      const v0 = model.addVertex(0, 0, 0);
+      const v1 = model.addVertex(1, 0, 0);
+      const v2 = model.addVertex(0.5, 1, 0);
+      const e0 = model.addEdge(v0, v1);
+      const e1 = model.addEdge(v1, v2);
+      const e2 = model.addEdge(v2, v0);
+      const he0 = model.addHalfEdge(e0, 1);
+      const he1 = model.addHalfEdge(e1, 1);
+      const he2 = model.addHalfEdge(e2, 1);
+      const loop = model.addLoop([he0, he1, he2]);
+      model.addLoopToFace(face, loop);
       
       const report = validateModel(model);
       
@@ -577,12 +532,11 @@ describe('Validation', () => {
 
   describe('Duplicate vertices', () => {
     it('should detect near-coincident vertices', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      // Create two vertices at nearly the same position
-      addVertex(model, 0, 0, 0);
-      addVertex(model, 1e-8, 1e-8, 0); // within tolerance
-      addVertex(model, 1, 0, 0); // far away
+      model.addVertex(0, 0, 0);
+      model.addVertex(1e-8, 1e-8, 0);
+      model.addVertex(1, 0, 0);
       
       const report = validateModel(model, { checkDuplicateVertices: true });
       
@@ -591,11 +545,11 @@ describe('Validation', () => {
     });
 
     it('should not flag vertices that are far apart', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      addVertex(model, 0, 0, 0);
-      addVertex(model, 1, 0, 0);
-      addVertex(model, 0, 1, 0);
+      model.addVertex(0, 0, 0);
+      model.addVertex(1, 0, 0);
+      model.addVertex(0, 1, 0);
       
       const report = validateModel(model, { checkDuplicateVertices: true });
       
@@ -606,14 +560,14 @@ describe('Validation', () => {
 
   describe('Short edges', () => {
     it('should detect short edges', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      const v0 = addVertex(model, 0, 0, 0);
-      const v1 = addVertex(model, 1e-5, 0, 0); // very short edge
-      const v2 = addVertex(model, 1, 0, 0); // normal length
+      const v0 = model.addVertex(0, 0, 0);
+      const v1 = model.addVertex(1e-5, 0, 0);
+      const v2 = model.addVertex(1, 0, 0);
       
-      addEdge(model, v0, v1); // short edge
-      addEdge(model, v1, v2); // normal edge
+      model.addEdge(v0, v1);
+      model.addEdge(v1, v2);
       
       const report = validateModel(model, { checkDegenerate: true, shortEdgeMultiplier: 1000 });
       
@@ -624,37 +578,36 @@ describe('Validation', () => {
 
   describe('Sliver faces', () => {
     it('should detect sliver faces with very poor aspect ratio', () => {
-      const model = createEmptyModel(ctx);
+      const model = new TopoModel(ctx);
       
-      // Create a very thin triangle (sliver)
-      const v0 = addVertex(model, 0, 0, 0);
-      const v1 = addVertex(model, 10, 0, 0); // long edge
-      const v2 = addVertex(model, 5, 0.001, 0); // very thin
+      const v0 = model.addVertex(0, 0, 0);
+      const v1 = model.addVertex(10, 0, 0);
+      const v2 = model.addVertex(5, 0.001, 0);
       
-      const e0 = addEdge(model, v0, v1);
-      const e1 = addEdge(model, v1, v2);
-      const e2 = addEdge(model, v2, v0);
+      const e0 = model.addEdge(v0, v1);
+      const e1 = model.addEdge(v1, v2);
+      const e2 = model.addEdge(v2, v0);
       
-      const he0 = addHalfEdge(model, e0, 1);
-      const he1 = addHalfEdge(model, e1, 1);
-      const he2 = addHalfEdge(model, e2, 1);
+      const he0 = model.addHalfEdge(e0, 1);
+      const he1 = model.addHalfEdge(e1, 1);
+      const he2 = model.addHalfEdge(e2, 1);
       
       const surface = createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1));
-      const surfaceIdx = addSurface(model, surface);
+      const surfaceIdx = model.addSurface(surface);
       
-      const body = addBody(model);
-      const shell = addShell(model, false);
-      addShellToBody(model, body, shell);
+      const body = model.addBody();
+      const shell = model.addShell(false);
+      model.addShellToBody(body, shell);
       
-      const face = addFace(model, surfaceIdx);
-      addFaceToShell(model, shell, face);
+      const face = model.addFace(surfaceIdx);
+      model.addFaceToShell(shell, face);
       
-      const loop = addLoop(model, [he0, he1, he2]);
-      addLoopToFace(model, face, loop);
+      const loop = model.addLoop([he0, he1, he2]);
+      model.addLoopToFace(face, loop);
       
       const report = validateModel(model, { 
         checkSlivers: true,
-        sliverAspectRatioThreshold: 0.1 // 10% threshold
+        sliverAspectRatioThreshold: 0.1
       });
       
       const slivers = report.issues.filter(i => i.kind === 'sliverFace');
@@ -662,8 +615,8 @@ describe('Validation', () => {
     });
 
     it('should not flag normal faces as slivers', () => {
-      const model = createEmptyModel(ctx);
-      createTriangleFace(model); // normal equilateral-ish triangle
+      const model = new TopoModel(ctx);
+      createTriangleFace(model);
       
       const report = validateModel(model, { checkSlivers: true });
       

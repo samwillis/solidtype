@@ -12,32 +12,9 @@
  */
 
 import { sub3, length3, mul3, dot3 } from '../num/vec3.js';
-import type { TopoModel } from './model.js';
+import { TopoModel } from './TopoModel.js';
 import type { ShellId, FaceId, HalfEdgeId, LoopId } from './handles.js';
-import {
-  isNullId,
-  asVertexId,
-  asEdgeId,
-  asFaceId,
-  asShellId,
-  getVertexPosition,
-  setVertexPosition,
-  isVertexDeleted,
-  isEdgeDeleted,
-  isFaceDeleted,
-  getHalfEdgeNext,
-  getHalfEdgeTwin,
-  getHalfEdgeStartVertex,
-  getLoopFirstHalfEdge,
-  getFaceShell,
-  getFaceLoops,
-  getFaceSurfaceIndex,
-  getSurface,
-  isFaceReversed,
-  getShellFaces,
-  isShellClosed,
-  EntityFlags,
-} from './model.js';
+import { isNullId, asVertexId, asEdgeId, asFaceId, asShellId } from './handles.js';
 import type { ValidationReport } from './validate.js';
 import { validateModel } from './validate.js';
 import { surfaceNormal } from '../geom/surface.js';
@@ -65,13 +42,10 @@ export interface HealingOptions {
   validateAfterEachStep?: boolean;
 }
 
-/**
- * Default healing options
- */
 const DEFAULT_HEALING_OPTIONS: Required<HealingOptions> = {
-  vertexMergeTolerance: 0, // Will use model tolerance
-  shortEdgeThreshold: 0, // Will use 10 * model tolerance
-  smallFaceAreaThreshold: 0, // Will use (10 * tol)²
+  vertexMergeTolerance: 0,
+  shortEdgeThreshold: 0,
+  smallFaceAreaThreshold: 0,
   reorientShells: true,
   maxIterations: 3,
   validateAfterEachStep: false,
@@ -81,11 +55,8 @@ const DEFAULT_HEALING_OPTIONS: Required<HealingOptions> = {
  * Result of a single healing action
  */
 export interface HealingAction {
-  /** Type of healing performed */
   kind: 'mergeVertices' | 'collapseEdge' | 'removeFace' | 'reorientShell';
-  /** Description of what was done */
   description: string;
-  /** Entities affected */
   affected: Array<{
     type: 'vertex' | 'edge' | 'face' | 'shell';
     id: number;
@@ -96,28 +67,19 @@ export interface HealingAction {
  * Result of a healing operation
  */
 export interface HealingResult {
-  /** Whether healing was successful */
   success: boolean;
-  /** Error message if healing failed */
   error?: string;
-  /** Number of healing iterations performed */
   iterations: number;
-  /** Actions taken during healing */
   actions: HealingAction[];
-  /** Summary statistics */
   stats: {
     verticesMerged: number;
     edgesCollapsed: number;
     facesRemoved: number;
     shellsReoriented: number;
   };
-  /** Final validation report (if validation was requested) */
   validationReport?: ValidationReport;
 }
 
-/**
- * Create a healing result with default values
- */
 function createHealingResult(): HealingResult {
   return {
     success: true,
@@ -138,14 +100,6 @@ function createHealingResult(): HealingResult {
 
 /**
  * Heal a topology model
- * 
- * Applies a series of healing operations to fix common topology issues.
- * The healing is conservative and will fail cleanly if issues cannot
- * be resolved automatically.
- * 
- * @param model The topology model to heal
- * @param options Healing options
- * @returns Healing result with actions taken and final status
  */
 export function healModel(
   model: TopoModel,
@@ -167,25 +121,21 @@ export function healModel(
       
       let actionsThisIteration = 0;
       
-      // Step 1: Merge coincident vertices
       const mergeResult = mergeCoincidentVertices(model, opts.vertexMergeTolerance);
       result.actions.push(...mergeResult.actions);
       result.stats.verticesMerged += mergeResult.count;
       actionsThisIteration += mergeResult.count;
       
-      // Step 2: Collapse short edges
       const collapseResult = collapseShortEdges(model, opts.shortEdgeThreshold);
       result.actions.push(...collapseResult.actions);
       result.stats.edgesCollapsed += collapseResult.count;
       actionsThisIteration += collapseResult.count;
       
-      // Step 3: Remove small faces
       const removeResult = removeSmallFaces(model, opts.smallFaceAreaThreshold);
       result.actions.push(...removeResult.actions);
       result.stats.facesRemoved += removeResult.count;
       actionsThisIteration += removeResult.count;
       
-      // Step 4: Reorient shells (only on first iteration)
       if (opts.reorientShells && iteration === 0) {
         const reorientResult = reorientShells(model);
         result.actions.push(...reorientResult.actions);
@@ -193,12 +143,10 @@ export function healModel(
         actionsThisIteration += reorientResult.count;
       }
       
-      // If no actions were taken, we're done
       if (actionsThisIteration === 0) {
         break;
       }
       
-      // Optionally validate after each step
       if (opts.validateAfterEachStep) {
         const report = validateModel(model);
         if (!report.isValid) {
@@ -210,11 +158,10 @@ export function healModel(
       }
     }
     
-    // Final validation
     result.validationReport = validateModel(model, {
       checkDegenerate: true,
       checkManifold: true,
-      checkBoundary: false, // Don't fail on boundary edges
+      checkBoundary: false,
       checkSlivers: true,
     });
     
@@ -235,9 +182,6 @@ export function healModel(
 // Individual Healing Operations
 // ============================================================================
 
-/**
- * Result of a healing sub-operation
- */
 interface SubOperationResult {
   count: number;
   actions: HealingAction[];
@@ -245,9 +189,6 @@ interface SubOperationResult {
 
 /**
  * Merge vertices that are within tolerance of each other
- * 
- * When vertices are merged, all edge references are updated to point
- * to the surviving vertex.
  */
 export function mergeCoincidentVertices(
   model: TopoModel,
@@ -256,31 +197,31 @@ export function mergeCoincidentVertices(
   const result: SubOperationResult = { count: 0, actions: [] };
   const tolSq = tolerance * tolerance;
   
-  // Build groups of coincident vertices
   const vertexGroups: Map<number, number[]> = new Map();
   const merged: Set<number> = new Set();
   
   // Collect live vertices
   const liveVertices: number[] = [];
-  for (let i = 0; i < model.vertices.count; i++) {
-    if (!isVertexDeleted(model, asVertexId(i))) {
+  const vertexCount = model.getVertexCount();
+  for (let i = 0; i < vertexCount; i++) {
+    if (!model.isVertexDeleted(asVertexId(i))) {
       liveVertices.push(i);
     }
   }
   
-  // Find coincident vertex pairs (O(n²) - could use spatial hashing for large models)
+  // Find coincident vertex pairs
   for (let i = 0; i < liveVertices.length; i++) {
     const vi = liveVertices[i];
     if (merged.has(vi)) continue;
     
-    const pi = getVertexPosition(model, asVertexId(vi));
+    const pi = model.getVertexPosition(asVertexId(vi));
     const group: number[] = [vi];
     
     for (let j = i + 1; j < liveVertices.length; j++) {
       const vj = liveVertices[j];
       if (merged.has(vj)) continue;
       
-      const pj = getVertexPosition(model, asVertexId(vj));
+      const pj = model.getVertexPosition(asVertexId(vj));
       const d = sub3(pj, pi);
       const distSq = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
       
@@ -297,10 +238,9 @@ export function mergeCoincidentVertices(
   
   // Merge each group
   for (const [survivor, group] of vertexGroups) {
-    // Compute averaged position
     let sx = 0, sy = 0, sz = 0;
     for (const vid of group) {
-      const p = getVertexPosition(model, asVertexId(vid));
+      const p = model.getVertexPosition(asVertexId(vid));
       sx += p[0];
       sy += p[1];
       sz += p[2];
@@ -309,26 +249,23 @@ export function mergeCoincidentVertices(
     sy /= group.length;
     sz /= group.length;
     
-    // Update survivor position
-    setVertexPosition(model, asVertexId(survivor), [sx, sy, sz]);
+    model.setVertexPosition(asVertexId(survivor), [sx, sy, sz]);
     
-    // Delete other vertices and update all edge references
     for (const vid of group) {
       if (vid === survivor) continue;
       
-      // Update edge references
-      for (let e = 0; e < model.edges.count; e++) {
-        if (model.edges.vStart[e] === vid) {
-          model.edges.vStart[e] = survivor;
+      // Update all edge references
+      for (const edgeId of model.iterateAllEdgeIds()) {
+        const { vStart, vEnd } = model.getRawEdgeVertices(edgeId);
+        if (vStart === vid) {
+          model.setEdgeStartVertex(edgeId, asVertexId(survivor));
         }
-        if (model.edges.vEnd[e] === vid) {
-          model.edges.vEnd[e] = survivor;
+        if (vEnd === vid) {
+          model.setEdgeEndVertex(edgeId, asVertexId(survivor));
         }
       }
       
-      // Mark vertex as deleted
-      model.vertices.flags[vid] |= EntityFlags.DELETED;
-      model.vertices.liveCount--;
+      model.markVertexDeleted(asVertexId(vid));
     }
     
     result.count += group.length - 1;
@@ -344,9 +281,6 @@ export function mergeCoincidentVertices(
 
 /**
  * Collapse edges that are shorter than the threshold
- * 
- * Short edges are collapsed by merging their endpoints.
- * This may create degenerate faces which should be removed afterward.
  */
 export function collapseShortEdges(
   model: TopoModel,
@@ -354,20 +288,21 @@ export function collapseShortEdges(
 ): SubOperationResult {
   const result: SubOperationResult = { count: 0, actions: [] };
   
-  // Find edges to collapse
   const edgesToCollapse: Array<{ id: number; length: number }> = [];
+  const edgeCount = model.getEdgeCount();
   
-  for (let i = 0; i < model.edges.count; i++) {
-    if (isEdgeDeleted(model, asEdgeId(i))) continue;
+  for (let i = 0; i < edgeCount; i++) {
+    const id = asEdgeId(i);
+    if (model.isEdgeDeleted(id)) continue;
     
-    const vStart = model.edges.vStart[i];
-    const vEnd = model.edges.vEnd[i];
+    const vStart = model.getEdgeStartVertex(id);
+    const vEnd = model.getEdgeEndVertex(id);
     
     if (isNullId(vStart) || isNullId(vEnd)) continue;
-    if (vStart === vEnd) continue; // Already collapsed
+    if (vStart === vEnd) continue;
     
-    const p0 = getVertexPosition(model, asVertexId(vStart));
-    const p1 = getVertexPosition(model, asVertexId(vEnd));
+    const p0 = model.getVertexPosition(vStart);
+    const p1 = model.getVertexPosition(vEnd);
     const len = length3(sub3(p1, p0));
     
     if (len < threshold && len > 0) {
@@ -375,51 +310,42 @@ export function collapseShortEdges(
     }
   }
   
-  // Sort by length (shortest first)
   edgesToCollapse.sort((a, b) => a.length - b.length);
   
-  // Collapse each edge
   for (const { id: edgeId, length } of edgesToCollapse) {
-    // Re-check if edge is still valid (may have been affected by previous collapses)
-    if (isEdgeDeleted(model, asEdgeId(edgeId))) continue;
+    const id = asEdgeId(edgeId);
+    if (model.isEdgeDeleted(id)) continue;
     
-    const vStart = model.edges.vStart[edgeId];
-    const vEnd = model.edges.vEnd[edgeId];
+    const vStart = model.getEdgeStartVertex(id);
+    const vEnd = model.getEdgeEndVertex(id);
     
     if (isNullId(vStart) || isNullId(vEnd) || vStart === vEnd) continue;
-    if (isVertexDeleted(model, asVertexId(vStart))) continue;
-    if (isVertexDeleted(model, asVertexId(vEnd))) continue;
+    if (model.isVertexDeleted(vStart)) continue;
+    if (model.isVertexDeleted(vEnd)) continue;
     
-    // Merge vEnd into vStart (keep vStart as survivor)
-    const p0 = getVertexPosition(model, asVertexId(vStart));
-    const p1 = getVertexPosition(model, asVertexId(vEnd));
+    const p0 = model.getVertexPosition(vStart);
+    const p1 = model.getVertexPosition(vEnd);
     const midpoint: Vec3 = [
       (p0[0] + p1[0]) / 2,
       (p0[1] + p1[1]) / 2,
       (p0[2] + p1[2]) / 2,
     ];
     
-    // Update survivor position to midpoint
-    setVertexPosition(model, asVertexId(vStart), midpoint);
+    model.setVertexPosition(vStart, midpoint);
     
     // Update all references from vEnd to vStart
-    for (let e = 0; e < model.edges.count; e++) {
-      if (model.edges.vStart[e] === vEnd) {
-        model.edges.vStart[e] = vStart;
+    for (const eId of model.iterateAllEdgeIds()) {
+      const { vStart: vs, vEnd: ve } = model.getRawEdgeVertices(eId);
+      if (vs === vEnd) {
+        model.setEdgeStartVertex(eId, vStart);
       }
-      if (model.edges.vEnd[e] === vEnd) {
-        model.edges.vEnd[e] = vStart;
+      if (ve === vEnd) {
+        model.setEdgeEndVertex(eId, vStart);
       }
     }
     
-    // Mark the edge as collapsed (vStart == vEnd now effectively)
-    // We'll mark it as deleted
-    model.edges.flags[edgeId] |= EntityFlags.DELETED;
-    model.edges.liveCount--;
-    
-    // Mark vEnd as deleted
-    model.vertices.flags[vEnd] |= EntityFlags.DELETED;
-    model.vertices.liveCount--;
+    model.markEdgeDeleted(id);
+    model.markVertexDeleted(vEnd);
     
     result.count++;
     result.actions.push({
@@ -438,69 +364,38 @@ export function collapseShortEdges(
 
 /**
  * Remove faces with area smaller than the threshold
- * 
- * Small faces are typically the result of degenerate geometry
- * and should be removed to avoid numerical issues.
  */
 export function removeSmallFaces(
   model: TopoModel,
   areaThreshold: number
 ): SubOperationResult {
   const result: SubOperationResult = { count: 0, actions: [] };
+  const faceCount = model.getFaceCount();
   
-  for (let i = 0; i < model.faces.count; i++) {
+  for (let i = 0; i < faceCount; i++) {
     const faceId = asFaceId(i);
-    if (isFaceDeleted(model, faceId)) continue;
+    if (model.isFaceDeleted(faceId)) continue;
     
     const area = computeFaceArea(model, faceId);
     
     if (area < areaThreshold) {
-      // Mark face as deleted
-      model.faces.flags[i] |= EntityFlags.DELETED;
-      model.faces.liveCount--;
+      model.markFaceDeleted(faceId);
+      model.removeFaceFromShell(faceId);
       
-      // Remove from shell's face list
-      const shellId = getFaceShell(model, faceId);
-      if (!isNullId(shellId)) {
-        const shellFaces = model.shellFaces[shellId];
-        if (shellFaces) {
-          const idx = shellFaces.indexOf(faceId);
-          if (idx >= 0) {
-            shellFaces.splice(idx, 1);
+      const loops = model.getFaceLoops(faceId);
+      for (const loopId of loops) {
+        model.markLoopDeleted(loopId);
+        
+        for (const he of model.iterateLoopHalfEdges(loopId)) {
+          model.markHalfEdgeDeleted(he);
+          const twin = model.getHalfEdgeTwin(he);
+          if (!isNullId(twin)) {
+            model.clearHalfEdgeTwin(twin);
           }
         }
       }
       
-      // Mark loops as deleted
-      const loops = getFaceLoops(model, faceId);
-      for (const loopId of loops) {
-        model.loops.flags[loopId] |= EntityFlags.DELETED;
-        model.loops.liveCount--;
-        
-        // Mark half-edges in loop as deleted
-        const firstHe = getLoopFirstHalfEdge(model, loopId);
-        if (!isNullId(firstHe)) {
-          let he = firstHe;
-          let iterations = 0;
-          do {
-            if (iterations++ > 10000) break; // Safety
-            
-            model.halfEdges.flags[he] |= EntityFlags.DELETED;
-            model.halfEdges.liveCount--;
-            
-            // Clear twin reference of the twin
-            const twin = getHalfEdgeTwin(model, he);
-            if (!isNullId(twin)) {
-              model.halfEdges.twin[twin] = -1;
-            }
-            
-            he = getHalfEdgeNext(model, he);
-          } while (he !== firstHe && !isNullId(he));
-        }
-      }
-      
-      // Clear face loops array
-      model.faceLoops[i] = [];
+      model.clearFaceLoops(faceId);
       
       result.count++;
       result.actions.push({
@@ -514,45 +409,33 @@ export function removeSmallFaces(
   return result;
 }
 
-/**
- * Compute the approximate area of a face
- */
 function computeFaceArea(model: TopoModel, faceId: FaceId): number {
-  const loops = getFaceLoops(model, faceId);
+  const loops = model.getFaceLoops(faceId);
   if (loops.length === 0) return 0;
   
   const outerLoop = loops[0];
-  const firstHe = getLoopFirstHalfEdge(model, outerLoop);
+  const firstHe = model.getLoopFirstHalfEdge(outerLoop);
   if (isNullId(firstHe)) return 0;
   
-  // Collect vertices
   const vertices: Vec3[] = [];
-  let he = firstHe;
   let iterations = 0;
   
-  do {
+  for (const he of model.iterateLoopHalfEdges(outerLoop)) {
     if (iterations++ > 10000) break;
-    
-    const vertex = getHalfEdgeStartVertex(model, he);
+    const vertex = model.getHalfEdgeStartVertex(he);
     if (!isNullId(vertex)) {
-      vertices.push(getVertexPosition(model, vertex));
+      vertices.push(model.getVertexPosition(vertex));
     }
-    he = getHalfEdgeNext(model, he);
-  } while (he !== firstHe && !isNullId(he));
+  }
   
   if (vertices.length < 3) return 0;
   
-  // Compute area using Newell's method
   const n = vertices.length;
   let cx = 0, cy = 0, cz = 0;
   for (const v of vertices) {
-    cx += v[0];
-    cy += v[1];
-    cz += v[2];
+    cx += v[0]; cy += v[1]; cz += v[2];
   }
-  cx /= n;
-  cy /= n;
-  cz /= n;
+  cx /= n; cy /= n; cz /= n;
   
   let nx = 0, ny = 0, nz = 0;
   for (let i = 0; i < n; i++) {
@@ -570,23 +453,18 @@ function computeFaceArea(model: TopoModel, faceId: FaceId): number {
 
 /**
  * Reorient shells to have consistent outward-pointing normals
- * 
- * Uses the signed volume test: if total signed volume is negative,
- * the shell is inside-out and should be flipped.
  */
 export function reorientShells(model: TopoModel): SubOperationResult {
   const result: SubOperationResult = { count: 0, actions: [] };
+  const shellCount = model.getShellCount();
   
-  for (let s = 0; s < model.shells.count; s++) {
+  for (let s = 0; s < shellCount; s++) {
     const shellId = asShellId(s);
-    if ((model.shells.flags[s] & EntityFlags.DELETED) !== 0) continue;
     
-    // Only reorient closed shells
-    if (!isShellClosed(model, shellId)) continue;
+    if (!model.isShellClosed(shellId)) continue;
     
     const signedVolume = computeShellSignedVolume(model, shellId);
     
-    // If signed volume is negative, shell is inside-out
     if (signedVolume < 0) {
       flipShell(model, shellId);
       
@@ -602,126 +480,94 @@ export function reorientShells(model: TopoModel): SubOperationResult {
   return result;
 }
 
-/**
- * Compute the signed volume of a shell using the divergence theorem
- * 
- * For each face, compute the signed volume contribution using
- * the formula: V = (1/6) * sum(face_centroid · face_normal * face_area)
- */
 function computeShellSignedVolume(model: TopoModel, shellId: ShellId): number {
-  const faces = getShellFaces(model, shellId);
+  const faces = model.getShellFaces(shellId);
   let totalVolume = 0;
   
   for (const faceId of faces) {
-    if (isFaceDeleted(model, faceId)) continue;
+    if (model.isFaceDeleted(faceId)) continue;
     
-    const loops = getFaceLoops(model, faceId);
+    const loops = model.getFaceLoops(faceId);
     if (loops.length === 0) continue;
     
     const outerLoop = loops[0];
-    const firstHe = getLoopFirstHalfEdge(model, outerLoop);
+    const firstHe = model.getLoopFirstHalfEdge(outerLoop);
     if (isNullId(firstHe)) continue;
     
-    // Collect vertices
     const vertices: Vec3[] = [];
-    let he = firstHe;
     let iterations = 0;
     
-    do {
+    for (const he of model.iterateLoopHalfEdges(outerLoop)) {
       if (iterations++ > 10000) break;
-      
-      const vertex = getHalfEdgeStartVertex(model, he);
+      const vertex = model.getHalfEdgeStartVertex(he);
       if (!isNullId(vertex)) {
-        vertices.push(getVertexPosition(model, vertex));
+        vertices.push(model.getVertexPosition(vertex));
       }
-      he = getHalfEdgeNext(model, he);
-    } while (he !== firstHe && !isNullId(he));
+    }
     
     if (vertices.length < 3) continue;
     
-    // Compute face centroid
     const n = vertices.length;
     let cx = 0, cy = 0, cz = 0;
     for (const v of vertices) {
-      cx += v[0];
-      cy += v[1];
-      cz += v[2];
+      cx += v[0]; cy += v[1]; cz += v[2];
     }
     const centroid: Vec3 = [cx / n, cy / n, cz / n];
     
-    // Get face normal (from surface)
-    const surfaceIdx = getFaceSurfaceIndex(model, faceId);
-    const surface = getSurface(model, surfaceIdx);
+    const surfaceIdx = model.getFaceSurfaceIndex(faceId);
+    const surface = model.getSurface(surfaceIdx);
     let normal = surfaceNormal(surface, 0, 0);
     
-    if (isFaceReversed(model, faceId)) {
+    if (model.isFaceReversed(faceId)) {
       normal = mul3(normal, -1);
     }
     
-    // Compute area
     const area = computeFaceArea(model, faceId);
     
-    // Contribution to volume: (1/3) * centroid · normal * area
     totalVolume += (1 / 3) * dot3(centroid, normal) * area;
   }
   
   return totalVolume;
 }
 
-/**
- * Flip a shell by reversing all face orientations
- */
 function flipShell(model: TopoModel, shellId: ShellId): void {
-  const faces = getShellFaces(model, shellId);
+  const faces = model.getShellFaces(shellId);
   
   for (const faceId of faces) {
-    if (isFaceDeleted(model, faceId)) continue;
+    if (model.isFaceDeleted(faceId)) continue;
     
-    // Toggle the REVERSED flag
-    model.faces.flags[faceId] ^= EntityFlags.REVERSED;
+    model.toggleFaceReversed(faceId);
     
-    // Reverse the half-edge directions in all loops
-    const loops = getFaceLoops(model, faceId);
+    const loops = model.getFaceLoops(faceId);
     for (const loopId of loops) {
       reverseLoop(model, loopId);
     }
   }
 }
 
-/**
- * Reverse a loop by swapping next/prev pointers and flipping directions
- */
 function reverseLoop(model: TopoModel, loopId: LoopId): void {
-  const firstHe = getLoopFirstHalfEdge(model, loopId);
+  const firstHe = model.getLoopFirstHalfEdge(loopId);
   if (isNullId(firstHe)) return;
   
-  // Collect all half-edges in the loop
   const halfEdges: HalfEdgeId[] = [];
-  let he = firstHe;
-  let iterations = 0;
   
-  do {
-    if (iterations++ > 10000) break;
+  for (const he of model.iterateLoopHalfEdges(loopId)) {
     halfEdges.push(he);
-    he = getHalfEdgeNext(model, he);
-  } while (he !== firstHe && !isNullId(he));
+    if (halfEdges.length > 10000) break;
+  }
   
   if (halfEdges.length === 0) return;
   
-  // Reverse the links
   for (let i = 0; i < halfEdges.length; i++) {
     const current = halfEdges[i];
     const prevIdx = (i + 1) % halfEdges.length;
     const nextIdx = (i - 1 + halfEdges.length) % halfEdges.length;
     
-    model.halfEdges.next[current] = halfEdges[nextIdx];
-    model.halfEdges.prev[current] = halfEdges[prevIdx];
+    model.setHalfEdgeLinks(current, halfEdges[nextIdx], halfEdges[prevIdx]);
     
-    // Flip direction
-    model.halfEdges.direction[current] *= -1;
+    const dir = model.getHalfEdgeDirection(current);
+    model.setHalfEdgeDirection(current, dir === 1 ? -1 : 1);
   }
-  
-  // Update loop's first half-edge (keep it the same, but it's now "first" in reverse order)
 }
 
 // ============================================================================
@@ -730,8 +576,6 @@ function reverseLoop(model: TopoModel, loopId: LoopId): void {
 
 /**
  * Check if the model needs healing
- * 
- * Returns true if there are any issues that healing could address.
  */
 export function needsHealing(model: TopoModel): boolean {
   const report = validateModel(model, {
@@ -742,7 +586,6 @@ export function needsHealing(model: TopoModel): boolean {
     checkDuplicateVertices: true,
   });
   
-  // Check for healable issues
   const healableKinds = [
     'zeroLengthEdge',
     'shortEdge',

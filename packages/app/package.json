@@ -28,7 +28,6 @@
   },
   "devDependencies": {
     "@solidtype/core": "workspace:*",
-    "@solidtype/oo": "workspace:*",
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",

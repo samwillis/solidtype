@@ -6,7 +6,7 @@
  */
 
 import {
-  createEmptyModel,
+  TopoModel,
   createNumericContext,
   createBox,
   createRectangleProfile,
@@ -30,7 +30,7 @@ const ctx: NumericContext = createNumericContext();
  */
 function benchmarkBoxCreation(): BenchmarkResult {
   return runBenchmark('createBox', () => {
-    const model = createEmptyModel(ctx);
+    const model = new TopoModel(ctx);
     createBox(model, { width: 10, depth: 10, height: 10 });
   }, { iterations: 1000 });
 }
@@ -40,7 +40,7 @@ function benchmarkBoxCreation(): BenchmarkResult {
  */
 function benchmarkMultipleBoxes(): BenchmarkResult {
   return runBenchmark('10 boxes', () => {
-    const model = createEmptyModel(ctx);
+    const model = new TopoModel(ctx);
     for (let i = 0; i < 10; i++) {
       createBox(model, {
         width: 1,
@@ -63,7 +63,7 @@ function benchmarkRectangleExtrusion(): BenchmarkResult {
   const plane = createDatumPlaneFromNormal('XY', vec3(0, 0, 0), vec3(0, 0, 1));
   
   return runBenchmark('extrude rect', () => {
-    const model = createEmptyModel(ctx);
+    const model = new TopoModel(ctx);
     const profile = createRectangleProfile(plane, 10, 8);
     extrude(model, profile, { operation: 'add', distance: 5 });
   }, { iterations: 500 });
@@ -104,7 +104,7 @@ function benchmarkComplexExtrusion(): BenchmarkResult {
   const polygon16 = createPolygonProfile(16);
   
   return runBenchmark('extrude 16-gon', () => {
-    const model = createEmptyModel(ctx);
+    const model = new TopoModel(ctx);
     extrude(model, polygon16 as any, { operation: 'add', distance: 5 });
   }, { iterations: 200 });
 }
@@ -118,7 +118,7 @@ function benchmarkComplexExtrusion(): BenchmarkResult {
  */
 function benchmarkBooleanUnion(): BenchmarkResult {
   return runBenchmark('union 2 boxes', () => {
-    const model = createEmptyModel(ctx);
+    const model = new TopoModel(ctx);
     const box1 = createBox(model, { width: 10, depth: 10, height: 10, center: vec3(0, 0, 0) });
     const box2 = createBox(model, { width: 10, depth: 10, height: 10, center: vec3(5, 5, 0) });
     booleanOperation(model, box1, box2, { operation: 'union' });
@@ -130,7 +130,7 @@ function benchmarkBooleanUnion(): BenchmarkResult {
  */
 function benchmarkBooleanSubtract(): BenchmarkResult {
   return runBenchmark('subtract boxes', () => {
-    const model = createEmptyModel(ctx);
+    const model = new TopoModel(ctx);
     const box1 = createBox(model, { width: 20, depth: 20, height: 20, center: vec3(0, 0, 0) });
     const box2 = createBox(model, { width: 10, depth: 10, height: 10, center: vec3(5, 5, 5) });
     booleanOperation(model, box1, box2, { operation: 'subtract' });
@@ -151,7 +151,7 @@ function benchmarkModelRebuild(): BenchmarkResult {
   return runBenchmark('rebuild model', () => {
     // Simulate rebuilding a model with different parameters
     const height = 5 + Math.random() * 10;
-    const model = createEmptyModel(ctx);
+    const model = new TopoModel(ctx);
     const profile = createRectangleProfile(plane, 10, 8);
     extrude(model, profile, { operation: 'add', distance: height });
   }, { iterations: 200 });

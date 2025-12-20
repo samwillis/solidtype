@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   createNumericContext,
-  createEmptyModel,
+  TopoModel,
   createNamingStrategy,
   createBox,
   extrude,
@@ -19,8 +19,6 @@ import {
   createCircleProfile,
   tessellateBody,
   vec3,
-  iterateBodies,
-  type TopoModel,
   type NumericContext,
   type NamingStrategy,
   type BodyId,
@@ -119,7 +117,7 @@ function handleInit(
 ): WorkerResponse {
   try {
     state.ctx = createNumericContext(tolerances);
-    state.model = createEmptyModel(state.ctx);
+    state.model = new TopoModel(state.ctx);
     state.naming = createNamingStrategy();
     state.initialized = true;
     state.params.clear();
@@ -165,7 +163,7 @@ function handleReset(state: WorkerState, requestId: string): WorkerResponse {
     };
   }
   
-  state.model = createEmptyModel(state.ctx);
+  state.model = new TopoModel(state.ctx);
   state.naming = createNamingStrategy();
   state.resultIds.clear();
   
@@ -352,7 +350,7 @@ function handleGetAllMeshes(
   try {
     const meshes: SerializedMesh[] = [];
     
-    for (const bodyId of iterateBodies(state.model)) {
+    for (const bodyId of state.model.iterateBodies()) {
       const mesh = tessellateBody(state.model, bodyId);
       meshes.push({
         bodyId: bodyId as number,
@@ -470,7 +468,7 @@ function handleBuildSequence(
   }
   
   // Reset model for clean rebuild
-  state.model = createEmptyModel(state.ctx);
+  state.model = new TopoModel(state.ctx);
   state.naming = createNamingStrategy();
   state.resultIds.clear();
   

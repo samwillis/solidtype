@@ -3,13 +3,17 @@
  * 
  * This module provides the boundary representation (BREP) topology layer:
  * - handles.ts: Branded handle types for type-safe references
- * - model.ts: Struct-of-arrays storage and creation/mutation API
+ * - TopoModel.ts: OO BREP model class
  * - validate.ts: Topology validation
  * - heal.ts: Topology healing (merge vertices, collapse edges, etc.)
  */
 
-// Re-export everything from the topology module
+// Re-export handles
 export * from './handles.js';
-export * from './model.js';
+
+// Export the OO TopoModel class
+export { TopoModel, EntityFlags, type ModelStats } from './TopoModel.js';
+
+// Re-export validation and healing
 export * from './validate.js';
 export * from './heal.js';
