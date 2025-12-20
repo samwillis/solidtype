@@ -132,6 +132,8 @@ export * from './naming/index.js';
 // which would conflict with the OO `Sketch` class from the api module.
 // The core sketch type is available as `CoreSketch` (re-exported above).
 export {
+  // SketchModel class (core OO API)
+  SketchModel,
   // ID types and casts
   asSketchId,
   asSketchPointId,
