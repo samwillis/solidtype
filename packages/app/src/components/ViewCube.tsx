@@ -15,9 +15,9 @@ const ViewCube: React.FC = () => {
   const animationFrameRef = useRef<number | null>(null);
   const hoveredRef = useRef<string | null>(null);
 
-  const { actions, cameraRotationRef } = useViewer();
+  const { actions, cameraStateRef } = useViewer();
   const { theme } = useTheme();
-  const lastRotationVersionRef = useRef(-1);
+  const lastVersionRef = useRef(-1);
 
   // Map mesh names to view presets
   const getViewPreset = (name: string): ViewPreset | null => {
@@ -234,15 +234,18 @@ const ViewCube: React.FC = () => {
     container.addEventListener('click', onClick);
 
     // Animation loop
+    const cameraDistance = 3;
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
 
-      // Sync cube rotation with main camera
-      if (cubeRef.current && cameraRotationRef.current.version !== lastRotationVersionRef.current) {
-        lastRotationVersionRef.current = cameraRotationRef.current.version;
-        // Apply camera rotation to cube (inverted so cube shows orientation from camera's POV)
-        const quaternion = cameraRotationRef.current.quaternion.clone().invert();
-        cubeRef.current.quaternion.copy(quaternion);
+      // Sync ViewCube camera with main camera
+      if (cameraStateRef.current.version !== lastVersionRef.current) {
+        lastVersionRef.current = cameraStateRef.current.version;
+        // Move ViewCube camera to match main camera's viewing direction
+        const direction = cameraStateRef.current.position;
+        camera.position.copy(direction).multiplyScalar(cameraDistance);
+        camera.up.copy(cameraStateRef.current.up);
+        camera.lookAt(0, 0, 0);
       }
 
       // Raycast for hover effect

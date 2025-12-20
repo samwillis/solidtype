@@ -15,7 +15,7 @@ const Viewer: React.FC = () => {
   const projectionModeRef = useRef<ProjectionMode>('perspective');
 
   const { theme } = useTheme();
-  const { registerRefs, cameraRotationRef } = useViewer();
+  const { registerRefs, cameraStateRef } = useViewer();
 
   // Request a render (for use by external controls)
   const requestRender = useCallback(() => {
@@ -270,9 +270,12 @@ const Viewer: React.FC = () => {
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
       if (cameraRef.current) {
-        // Update camera rotation ref for ViewCube sync every frame
-        cameraRotationRef.current.quaternion.copy(cameraRef.current.quaternion);
-        cameraRotationRef.current.version++;
+        // Update camera state ref for ViewCube sync every frame
+        // Store camera direction (position relative to target, normalized)
+        const direction = cameraRef.current.position.clone().sub(targetRef.current).normalize();
+        cameraStateRef.current.position.copy(direction);
+        cameraStateRef.current.up.copy(cameraRef.current.up);
+        cameraStateRef.current.version++;
         
         renderer.render(scene, cameraRef.current);
       }
