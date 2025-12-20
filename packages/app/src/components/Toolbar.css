@@ -18,13 +18,21 @@
 }
 
 .toolbar-logo svg {
-  color: var(--color-accent);
+  flex-shrink: 0;
 }
 
 .toolbar-logo-text {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.3px;
+}
+
+.toolbar-logo-text .logo-solid {
+  color: #2980b9;
+}
+
+.toolbar-logo-text .logo-type {
+  color: #e67e22;
 }
 
 .toolbar-group {

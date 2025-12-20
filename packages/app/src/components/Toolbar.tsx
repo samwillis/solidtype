@@ -224,14 +224,27 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
   return (
     <Tooltip.Provider>
       <div className="toolbar">
-        {/* Logo */}
+        {/* Logo - Isometric cube inspired by SolidType branding */}
         <div className="toolbar-logo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M12 2l8 4v12l-8 4-8-4V6l8-4z" />
-            <path d="M12 22V10" />
-            <path d="M4 6l8 4 8-4" />
+          <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+            {/* Top face - blue with grid pattern */}
+            <path d="M16 4L28 10L16 16L4 10L16 4Z" fill="#3498db"/>
+            {/* Grid lines on top */}
+            <path d="M10 7L22 13M12 6L24 12M14 5L26 11" stroke="#2980b9" strokeWidth="0.5" opacity="0.6"/>
+            <path d="M22 7L10 13M20 6L8 12M18 5L6 11" stroke="#2980b9" strokeWidth="0.5" opacity="0.6"/>
+            {/* Left face - blue */}
+            <path d="M4 10L16 16V28L4 22V10Z" fill="#2980b9"/>
+            {/* Right face - orange */}
+            <path d="M28 10L16 16V28L28 22V10Z" fill="#e67e22"/>
+            {/* Code brackets on left face </> */}
+            <path d="M8 14L6 16.5L8 19" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            <path d="M12 14L14 16.5L12 19" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            <path d="M11 13.5L9 19.5" stroke="white" strokeWidth="1" strokeLinecap="round" fill="none"/>
+            {/* Code brackets on right face /> */}
+            <path d="M20 14L22 16.5L20 19" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            <path d="M24 14L26 16.5L24 19" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
           </svg>
-          <span className="toolbar-logo-text">SolidType</span>
+          <span className="toolbar-logo-text"><span className="logo-solid">Solid</span><span className="logo-type">Type</span></span>
         </div>
 
         <Separator orientation="vertical" className="toolbar-separator" />
