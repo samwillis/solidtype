@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { useTheme } from '../contexts/ThemeContext';
 import './Viewer.css';
 
 const Viewer: React.FC = () => {
@@ -9,13 +10,23 @@ const Viewer: React.FC = () => {
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const cubeRef = useRef<THREE.Mesh | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const { theme } = useTheme();
+
+  // Update scene background when theme changes
+  useEffect(() => {
+    if (sceneRef.current) {
+      const bgColor = theme === 'dark' ? 0x1a1a1a : 0xe8e8e8;
+      sceneRef.current.background = new THREE.Color(bgColor);
+    }
+  }, [theme]);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     // Scene setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1a1a1a);
+    const bgColor = theme === 'dark' ? 0x1a1a1a : 0xe8e8e8;
+    scene.background = new THREE.Color(bgColor);
     sceneRef.current = scene;
 
     // Camera setup
@@ -48,7 +59,7 @@ const Viewer: React.FC = () => {
 
     // Test cube
     const geometry = new THREE.BoxGeometry(2, 2, 2);
-    const material = new THREE.MeshStandardMaterial({ color: 0x0066cc });
+    const material = new THREE.MeshStandardMaterial({ color: 0x0078d4 });
     const cube = new THREE.Mesh(geometry, material);
     scene.add(cube);
     cubeRef.current = cube;
