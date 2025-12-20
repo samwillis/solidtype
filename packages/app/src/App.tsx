@@ -10,7 +10,7 @@ import './App.css';
 const App: React.FC = () => {
   return (
     <div className="app">
-      {/* Main toolbar at top with multi-modal tabs */}
+      {/* Main toolbar */}
       <Toolbar />
       
       {/* Main content area */}
@@ -20,11 +20,11 @@ const App: React.FC = () => {
           <FeatureTree />
         </aside>
         
-        {/* Center - Viewer with view toolbar */}
+        {/* Center - Viewer with overlay controls */}
         <main className="app-center">
-          <ViewToolbar />
           <div className="app-viewer">
             <Viewer />
+            <ViewToolbar />
           </div>
         </main>
         

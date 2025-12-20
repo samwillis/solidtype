@@ -1,67 +1,65 @@
 .view-toolbar {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: linear-gradient(to bottom, #f8f9fa, #f0f1f2);
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.view-toolbar-group {
-  display: flex;
   gap: 2px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(4px);
+  z-index: 10;
 }
 
-.view-toolbar-separator {
+.view-separator {
   width: 1px;
-  height: 24px;
+  height: 16px;
   background: #d0d0d0;
-  margin: 0 4px;
+  margin: 0 2px;
 }
 
-.view-toolbar-button {
+.view-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   border-radius: 4px;
   cursor: pointer;
   color: #555;
-  transition: all 0.15s ease;
+  transition: all 0.1s ease;
 }
 
-.view-toolbar-button:hover {
-  background: #e8f0fe;
-  border-color: #c8d8ee;
+.view-button:hover {
+  background: rgba(0, 102, 204, 0.1);
   color: #0066cc;
 }
 
-.view-toolbar-button:active {
-  background: #d8e8fe;
-}
-
-.view-toolbar-button.active {
-  background: #e0efff;
-  border-color: #0066cc;
+.view-button.active {
+  background: rgba(0, 102, 204, 0.15);
   color: #0066cc;
 }
 
-.view-toolbar-button svg {
-  width: 18px;
-  height: 18px;
+.view-button svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Tooltip styling */
-.view-toolbar-tooltip {
-  background: #333;
-  color: white;
-  padding: 5px 8px;
-  border-radius: 4px;
-  font-size: 11px;
+.view-tooltip {
+  background: #222;
+  color: #fff;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  animation: tooltip-fade-in 0.15s ease;
+  white-space: nowrap;
+  z-index: 1000;
 }

@@ -14,16 +14,17 @@ describe('App', () => {
     expect(screen.getByTestId('viewer')).toBeInTheDocument();
   });
 
-  it('renders the main toolbar with mode tabs', () => {
+  it('renders the toolbar with tool buttons', () => {
     render(<App />);
-    expect(screen.getByText('Features')).toBeInTheDocument();
-    expect(screen.getByText('Sketch')).toBeInTheDocument();
-    expect(screen.getByText('Primitives')).toBeInTheDocument();
+    // Check for some toolbar buttons by aria-label
+    expect(screen.getByLabelText('New Sketch')).toBeInTheDocument();
+    expect(screen.getByLabelText('Extrude')).toBeInTheDocument();
+    expect(screen.getByLabelText('Box')).toBeInTheDocument();
   });
 
   it('shows empty feature tree message', () => {
     render(<App />);
-    expect(screen.getByText(/No features yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/No features/i)).toBeInTheDocument();
   });
 
   it('renders the properties panel', () => {

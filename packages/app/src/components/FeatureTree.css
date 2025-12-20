@@ -5,21 +5,6 @@
   background: #fff;
 }
 
-.feature-tree-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #e0e0e0;
-  background: linear-gradient(to bottom, #ffffff, #f8f8f8);
-}
-
-.feature-tree-header h3 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: #333;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
 .feature-tree-content {
   flex: 1;
   overflow: auto;
@@ -31,51 +16,51 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  padding: 24px;
+  padding: 16px;
   text-align: center;
-  color: #888;
+  color: #999;
 }
 
 .feature-tree-empty svg {
-  color: #ccc;
-  margin-bottom: 16px;
+  color: #d0d0d0;
+  margin-bottom: 8px;
 }
 
-.feature-tree-empty-title {
-  margin: 0 0 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #666;
-}
-
-.feature-tree-empty-hint {
-  margin: 0;
+.empty-title {
+  margin: 0 0 4px;
   font-size: 12px;
-  color: #999;
-  line-height: 1.5;
+  font-weight: 500;
+  color: #777;
+}
+
+.empty-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #aaa;
 }
 
 .feature-tree-list {
   list-style: none;
   margin: 0;
-  padding: 8px 0;
+  padding: 4px 0;
 }
 
 .feature-tree-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 6px;
+  padding: 4px 10px;
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.1s ease;
+  font-size: 12px;
 }
 
 .feature-tree-item:hover {
-  background: #f5f8ff;
+  background: #f0f5ff;
 }
 
 .feature-tree-item.selected {
-  background: #e5efff;
+  background: #e0ebff;
 }
 
 .feature-tree-item.suppressed {
@@ -91,29 +76,14 @@
   color: #555;
 }
 
-.feature-icon-sketch {
-  color: #2196f3;
-}
-
-.feature-icon-extrude {
-  color: #4caf50;
-}
-
-.feature-icon-revolve {
-  color: #ff9800;
-}
-
-.feature-icon-boolean {
-  color: #9c27b0;
-}
-
-.feature-icon-primitive {
-  color: #607d8b;
-}
+.feature-icon-sketch { color: #2196f3; }
+.feature-icon-extrude { color: #4caf50; }
+.feature-icon-revolve { color: #ff9800; }
+.feature-icon-boolean { color: #9c27b0; }
+.feature-icon-primitive { color: #607d8b; }
 
 .feature-tree-item-name {
   flex: 1;
-  font-size: 13px;
   color: #333;
   white-space: nowrap;
   overflow: hidden;
