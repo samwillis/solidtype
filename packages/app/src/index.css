@@ -5,23 +5,29 @@
 }
 
 :root {
-  --color-primary: #0066cc;
-  --color-primary-light: #e0efff;
-  --color-primary-dark: #004d99;
+  /* VSCode-inspired color palette */
+  --color-bg: #1e1e1e;
+  --color-bg-light: #252526;
+  --color-bg-lighter: #2d2d2d;
+  --color-bg-hover: #2a2d2e;
+  --color-bg-active: #37373d;
   
-  --color-bg: #f0f0f0;
-  --color-bg-light: #ffffff;
+  --color-border: #3c3c3c;
+  --color-border-light: #474747;
   
-  --color-border: #ddd;
-  --color-border-light: #e8e8e8;
+  --color-text: #cccccc;
+  --color-text-secondary: #969696;
+  --color-text-muted: #6e6e6e;
   
-  --color-text: #333;
-  --color-text-secondary: #666;
-  --color-text-muted: #999;
+  --color-accent: #0078d4;
+  --color-accent-hover: #1c8ae6;
+  
+  --color-icon: #c5c5c5;
+  --color-icon-hover: #ffffff;
   
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  --font-family-mono: Monaco, Menlo, 'Ubuntu Mono', Consolas, monospace;
+  --font-family-mono: 'SF Mono', Monaco, Menlo, 'Ubuntu Mono', Consolas, monospace;
 }
 
 html, body {
@@ -42,18 +48,17 @@ html, body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 1px;
+  outline: 1px solid var(--color-accent);
+  outline-offset: -1px;
 }
 
 ::selection {
-  background: var(--color-primary-light);
-  color: var(--color-primary-dark);
+  background: rgba(0, 120, 212, 0.4);
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
@@ -61,10 +66,13 @@ html, body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c8c8c8;
-  border-radius: 3px;
+  background: rgba(121, 121, 121, 0.4);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #aaa;
+  background: rgba(121, 121, 121, 0.7);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }

@@ -3,50 +3,49 @@
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  background: linear-gradient(to bottom, #fafafa, #f0f0f0);
-  border-bottom: 1px solid #d8d8d8;
+  background: var(--color-bg-light);
+  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
 .toolbar-group {
   display: flex;
-  gap: 1px;
+  gap: 2px;
 }
 
 .toolbar-separator {
   width: 1px;
-  height: 20px;
-  background: #d0d0d0;
-  margin: 0 4px;
+  height: 18px;
+  background: var(--color-border);
+  margin: 0 6px;
 }
 
 .toolbar-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   border-radius: 4px;
   cursor: pointer;
-  color: #444;
-  transition: all 0.1s ease;
+  color: var(--color-icon);
+  transition: background-color 0.1s ease, color 0.1s ease;
 }
 
 .toolbar-button:hover:not(.disabled) {
-  background: #e8f0fe;
-  border-color: #c0d0e8;
-  color: #0066cc;
+  background: var(--color-bg-hover);
+  color: var(--color-icon-hover);
 }
 
 .toolbar-button:active:not(.disabled) {
-  background: #d0e4ff;
+  background: var(--color-bg-active);
 }
 
 .toolbar-button.disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
@@ -57,13 +56,13 @@
 
 /* Tooltip styling */
 .toolbar-tooltip {
-  background: #222;
-  color: #fff;
+  background: #383838;
+  color: var(--color-text);
   padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  border: 1px solid #454545;
+  border-radius: 3px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
   z-index: 1000;
 }

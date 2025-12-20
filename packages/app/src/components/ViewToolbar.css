@@ -5,19 +5,18 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 4px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(4px);
+  padding: 3px;
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   z-index: 10;
 }
 
 .view-separator {
   width: 1px;
-  height: 16px;
-  background: #d0d0d0;
+  height: 14px;
+  background: var(--color-border);
   margin: 0 2px;
 }
 
@@ -25,41 +24,41 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
-  color: #555;
-  transition: all 0.1s ease;
+  color: var(--color-icon);
+  transition: background-color 0.1s ease, color 0.1s ease;
 }
 
 .view-button:hover {
-  background: rgba(0, 102, 204, 0.1);
-  color: #0066cc;
+  background: var(--color-bg-hover);
+  color: var(--color-icon-hover);
 }
 
 .view-button.active {
-  background: rgba(0, 102, 204, 0.15);
-  color: #0066cc;
+  background: var(--color-bg-active);
+  color: var(--color-accent);
 }
 
 .view-button svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 /* Tooltip styling */
 .view-tooltip {
-  background: #222;
-  color: #fff;
+  background: #383838;
+  color: var(--color-text);
   padding: 3px 6px;
+  border: 1px solid #454545;
   border-radius: 3px;
-  font-size: 10px;
-  font-weight: 500;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  font-size: 11px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
   z-index: 1000;
 }

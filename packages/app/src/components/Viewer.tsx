@@ -15,7 +15,7 @@ const Viewer: React.FC = () => {
 
     // Scene setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f0f0);
+    scene.background = new THREE.Color(0x1a1a1a);
     sceneRef.current = scene;
 
     // Camera setup

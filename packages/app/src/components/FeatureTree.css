@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
+  background: var(--color-bg-light);
 }
 
 .feature-tree-content {
@@ -18,25 +18,12 @@
   height: 100%;
   padding: 16px;
   text-align: center;
-  color: #999;
 }
 
 .feature-tree-empty svg {
-  color: #d0d0d0;
+  color: var(--color-text-muted);
   margin-bottom: 8px;
-}
-
-.empty-title {
-  margin: 0 0 4px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #777;
-}
-
-.empty-hint {
-  margin: 0;
-  font-size: 11px;
-  color: #aaa;
+  opacity: 0.5;
 }
 
 .feature-tree-list {
@@ -49,18 +36,18 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 4px 12px;
   cursor: pointer;
-  transition: background-color 0.1s ease;
-  font-size: 12px;
+  font-size: 13px;
+  color: var(--color-text);
 }
 
 .feature-tree-item:hover {
-  background: #f0f5ff;
+  background: var(--color-bg-hover);
 }
 
 .feature-tree-item.selected {
-  background: #e0ebff;
+  background: var(--color-bg-active);
 }
 
 .feature-tree-item.suppressed {
@@ -73,18 +60,17 @@
 
 .feature-icon {
   flex-shrink: 0;
-  color: #555;
+  color: var(--color-icon);
 }
 
-.feature-icon-sketch { color: #2196f3; }
-.feature-icon-extrude { color: #4caf50; }
-.feature-icon-revolve { color: #ff9800; }
-.feature-icon-boolean { color: #9c27b0; }
-.feature-icon-primitive { color: #607d8b; }
+.feature-icon-sketch { color: #569cd6; }
+.feature-icon-extrude { color: #6a9955; }
+.feature-icon-revolve { color: #ce9178; }
+.feature-icon-boolean { color: #c586c0; }
+.feature-icon-primitive { color: #9cdcfe; }
 
 .feature-tree-item-name {
   flex: 1;
-  color: #333;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

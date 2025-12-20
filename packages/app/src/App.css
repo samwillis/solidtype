@@ -4,7 +4,7 @@
   height: 100vh;
   width: 100vw;
   overflow: hidden;
-  background: #f0f0f0;
+  background: var(--color-bg);
 }
 
 .app-main {
@@ -18,18 +18,18 @@
 .app-sidebar {
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--color-bg-light);
   overflow: hidden;
 }
 
 .app-sidebar-left {
   width: 200px;
-  border-right: 1px solid #ddd;
+  border-right: 1px solid var(--color-border);
 }
 
 .app-sidebar-right {
   width: 220px;
-  border-left: 1px solid #ddd;
+  border-left: 1px solid var(--color-border);
 }
 
 /* Center viewer area */
@@ -44,18 +44,18 @@
 .app-viewer {
   flex: 1;
   position: relative;
-  background: linear-gradient(135deg, #e4e4e4 0%, #f4f4f4 100%);
+  background: #1a1a1a;
   overflow: hidden;
 }
 
 /* Shared panel header style */
 .panel-header {
-  padding: 6px 10px;
-  background: #f8f8f8;
-  border-bottom: 1px solid #e8e8e8;
+  padding: 8px 12px;
+  background: var(--color-bg-light);
+  border-bottom: 1px solid var(--color-border);
   font-size: 11px;
   font-weight: 600;
-  color: #555;
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -65,13 +65,13 @@
   margin: 0 0 4px;
   font-size: 12px;
   font-weight: 500;
-  color: #777;
+  color: var(--color-text-secondary);
 }
 
 .empty-hint {
   margin: 0;
   font-size: 11px;
-  color: #aaa;
+  color: var(--color-text-muted);
 }
 
 /* Responsive adjustments */
