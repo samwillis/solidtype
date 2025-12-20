@@ -17,13 +17,6 @@ const Viewer: React.FC = () => {
   const { theme } = useTheme();
   const { registerRefs, cameraRotationRef } = useViewer();
 
-  // Update camera rotation ref for ViewCube sync
-  const updateCameraRotation = useCallback(() => {
-    if (!cameraRef.current) return;
-    cameraRotationRef.current.quaternion.copy(cameraRef.current.quaternion);
-    cameraRotationRef.current.version++;
-  }, [cameraRotationRef]);
-
   // Request a render (for use by external controls)
   const requestRender = useCallback(() => {
     needsRenderRef.current = true;
@@ -204,7 +197,6 @@ const Viewer: React.FC = () => {
         currentCamera.position.copy(targetRef.current).add(offset);
         currentCamera.lookAt(targetRef.current);
         needsRenderRef.current = true;
-        updateCameraRotation();
       } else if (isPanning) {
         // Pan the camera and target
         const panSpeed = 0.01;
@@ -278,13 +270,14 @@ const Viewer: React.FC = () => {
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
       if (cameraRef.current) {
+        // Update camera rotation ref for ViewCube sync every frame
+        cameraRotationRef.current.quaternion.copy(cameraRef.current.quaternion);
+        cameraRotationRef.current.version++;
+        
         renderer.render(scene, cameraRef.current);
       }
     };
     animate();
-    
-    // Report initial camera rotation
-    updateCameraRotation();
 
     // Initial render
     needsRenderRef.current = true;
