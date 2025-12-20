@@ -286,8 +286,7 @@ const Viewer: React.FC = () => {
     needsRenderRef.current = true;
 
     // Handle resize (both window and container)
-    let lastWidth = containerRef.current.clientWidth;
-    let lastHeight = containerRef.current.clientHeight;
+    let resizeTimeout: number | null = null;
     
     const handleResize = () => {
       if (!containerRef.current || !cameraRef.current || !renderer) return;
@@ -295,12 +294,8 @@ const Viewer: React.FC = () => {
       const width = containerRef.current.clientWidth;
       const height = containerRef.current.clientHeight;
       
-      // Skip if size hasn't actually changed or is zero
+      // Skip if size is zero
       if (width === 0 || height === 0) return;
-      if (width === lastWidth && height === lastHeight) return;
-      
-      lastWidth = width;
-      lastHeight = height;
       
       const aspect = width / height;
       
@@ -315,15 +310,25 @@ const Viewer: React.FC = () => {
         currentCamera.bottom = -frustumSize;
       }
       currentCamera.updateProjectionMatrix();
-      renderer.setSize(width, height, false); // false = don't update style, prevents flashing
+      renderer.setSize(width, height);
       
       // Immediately render to prevent black flash
       renderer.render(scene, currentCamera);
     };
     
+    // Debounced resize for ResizeObserver to reduce flashing
+    const debouncedResize = () => {
+      if (resizeTimeout) {
+        cancelAnimationFrame(resizeTimeout);
+      }
+      resizeTimeout = requestAnimationFrame(() => {
+        handleResize();
+      });
+    };
+    
     // Use ResizeObserver to detect container size changes (panel resize, AI panel toggle)
     const resizeObserver = new ResizeObserver(() => {
-      handleResize();
+      debouncedResize();
     });
     resizeObserver.observe(containerRef.current);
     
@@ -331,6 +336,9 @@ const Viewer: React.FC = () => {
 
     // Cleanup
     return () => {
+      if (resizeTimeout) {
+        cancelAnimationFrame(resizeTimeout);
+      }
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       renderer.domElement.removeEventListener('mousedown', onMouseDown);
