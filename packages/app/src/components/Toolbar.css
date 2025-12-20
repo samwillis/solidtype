@@ -8,6 +8,24 @@
   flex-shrink: 0;
 }
 
+.toolbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 4px;
+  color: var(--color-text);
+}
+
+.toolbar-logo svg {
+  color: var(--color-accent);
+}
+
+.toolbar-logo-text {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
 .toolbar-group {
   display: flex;
   gap: 2px;
@@ -18,6 +36,10 @@
   height: 18px;
   background: var(--color-border);
   margin: 0 6px;
+}
+
+.toolbar-spacer {
+  flex: 1;
 }
 
 .toolbar-button {
@@ -47,6 +69,15 @@
 .toolbar-button.disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+.toolbar-button.active {
+  background: var(--color-bg-active);
+  color: var(--color-accent);
+}
+
+.toolbar-button-ai {
+  margin-left: 4px;
 }
 
 .toolbar-button svg {

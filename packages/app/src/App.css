@@ -14,24 +14,6 @@
   overflow: hidden;
 }
 
-/* Sidebars */
-.app-sidebar {
-  display: flex;
-  flex-direction: column;
-  background: var(--color-bg-light);
-  overflow: hidden;
-}
-
-.app-sidebar-left {
-  width: 200px;
-  border-right: 1px solid var(--color-border);
-}
-
-.app-sidebar-right {
-  width: 220px;
-  border-left: 1px solid var(--color-border);
-}
-
 /* Center viewer area */
 .app-center {
   flex: 1;
@@ -44,7 +26,7 @@
 .app-viewer {
   flex: 1;
   position: relative;
-  background: #1a1a1a;
+  background: var(--color-bg);
   overflow: hidden;
 }
 
@@ -58,6 +40,7 @@
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 
 /* Shared empty state styles */
@@ -75,24 +58,14 @@
 }
 
 /* Responsive adjustments */
-@media (max-width: 1000px) {
-  .app-sidebar-left {
-    width: 180px;
-  }
-  
-  .app-sidebar-right {
-    width: 180px;
-  }
-}
-
 @media (max-width: 800px) {
-  .app-sidebar-right {
+  .resizable-panel-right {
     display: none;
   }
 }
 
 @media (max-width: 600px) {
-  .app-sidebar-left {
+  .resizable-panel-left {
     display: none;
   }
 }

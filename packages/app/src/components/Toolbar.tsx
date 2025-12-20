@@ -114,6 +114,30 @@ const PlaneIcon = () => (
   </svg>
 );
 
+const UndoIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M3 7v6h6" />
+    <path d="M3 13a9 9 0 1018 0 9 9 0 00-15-6.7L3 9" />
+  </svg>
+);
+
+const RedoIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M21 7v6h-6" />
+    <path d="M21 13a9 9 0 11-18 0 9 9 0 0015-6.7L21 9" />
+  </svg>
+);
+
+const AIIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <rect x="3" y="11" width="18" height="10" rx="2" />
+    <circle cx="8.5" cy="16" r="1.5" fill="currentColor" />
+    <circle cx="15.5" cy="16" r="1.5" fill="currentColor" />
+    <path d="M12 3v4" />
+    <path d="M8 5l4-2 4 2" />
+  </svg>
+);
+
 // Tool groups
 const sketchTools: ToolItem[] = [
   { id: 'new-sketch', label: 'New Sketch', icon: <SketchIcon /> },
@@ -191,15 +215,89 @@ const ToolGroup: React.FC<ToolGroupProps> = ({ tools }) => (
   </div>
 );
 
-const Toolbar: React.FC = () => {
+interface ToolbarProps {
+  onToggleAIPanel?: () => void;
+  aiPanelVisible?: boolean;
+}
+
+const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) => {
   return (
     <Tooltip.Provider>
       <div className="toolbar">
+        {/* Logo */}
+        <div className="toolbar-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M12 2l8 4v12l-8 4-8-4V6l8-4z" />
+            <path d="M12 22V10" />
+            <path d="M4 6l8 4 8-4" />
+          </svg>
+          <span className="toolbar-logo-text">SolidType</span>
+        </div>
+
+        <Separator orientation="vertical" className="toolbar-separator" />
+
+        {/* Undo/Redo */}
+        <div className="toolbar-group">
+          <Tooltip.Root>
+            <Tooltip.Trigger
+              delay={300}
+              className="toolbar-button"
+              render={<button aria-label="Undo" />}
+            >
+              <UndoIcon />
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Positioner side="bottom" sideOffset={6}>
+                <Tooltip.Popup className="toolbar-tooltip">Undo</Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+          <Tooltip.Root>
+            <Tooltip.Trigger
+              delay={300}
+              className="toolbar-button"
+              render={<button aria-label="Redo" />}
+            >
+              <RedoIcon />
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Positioner side="bottom" sideOffset={6}>
+                <Tooltip.Popup className="toolbar-tooltip">Redo</Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        </div>
+
+        <Separator orientation="vertical" className="toolbar-separator" />
+
+        {/* Tool groups */}
         <ToolGroup tools={sketchTools} />
         <Separator orientation="vertical" className="toolbar-separator" />
         <ToolGroup tools={featureTools} />
         <Separator orientation="vertical" className="toolbar-separator" />
         <ToolGroup tools={primitiveTools} />
+
+        {/* Spacer to push AI button to right */}
+        <div className="toolbar-spacer" />
+
+        {/* AI Panel Toggle */}
+        <Tooltip.Root>
+          <Tooltip.Trigger
+            delay={300}
+            className={`toolbar-button toolbar-button-ai ${aiPanelVisible ? 'active' : ''}`}
+            onClick={onToggleAIPanel}
+            render={<button aria-label="Toggle AI Assistant" />}
+          >
+            <AIIcon />
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Positioner side="bottom" sideOffset={6}>
+              <Tooltip.Popup className="toolbar-tooltip">
+                {aiPanelVisible ? 'Hide AI Assistant' : 'Show AI Assistant'}
+              </Tooltip.Popup>
+            </Tooltip.Positioner>
+          </Tooltip.Portal>
+        </Tooltip.Root>
       </div>
     </Tooltip.Provider>
   );
