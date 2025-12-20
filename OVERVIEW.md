@@ -138,15 +138,17 @@ These live in `geom/*` modules and are independent of topology, making them easy
 
 ### 4.3 BREP topology
 
-Topology is stored in a **struct-of-arrays**, handle-based representation:
+Topology is managed by the `TopoModel` class, which provides an object-oriented API while using internal struct-of-arrays storage for performance:
 
-* Handles: `BodyId`, `FaceId`, `EdgeId`, `VertexId`, `LoopId`, `HalfEdgeId`.
-* Tables:
+* Branded handle types: `BodyId`, `FaceId`, `EdgeId`, `VertexId`, `LoopId`, `HalfEdgeId`.
+* OO methods for all operations:
+  * `model.addVertex(x, y, z)` → `VertexId`
+  * `model.addEdge(vStart, vEnd)` → `EdgeId`
+  * `model.getVertexPosition(id)` → `Vec3`
+  * `model.getFaceLoops(id)` → `LoopId[]`
+  * `model.iterateBodies()` → iteration over all bodies
 
-  * `VertexTable` with `x`, `y`, `z` typed arrays.
-  * `EdgeTable` linking vertices and underlying 3D curves.
-  * `FaceTable` referencing surfaces and loops.
-  * Loops + half-edges to describe boundaries and adjacency.
+Internal storage uses TypedArrays (`Float64Array`, `Int32Array`) for cache-friendly access during heavy operations like tessellation and validation.
 
 We support:
 

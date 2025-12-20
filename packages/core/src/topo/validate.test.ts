@@ -400,25 +400,34 @@ describe('Validation', () => {
   });
 
   describe('Invalid models - reference issues', () => {
-    it('should detect invalid vertex references in edges', () => {
+    it('should detect null vertex references in edges', () => {
       const model = createEmptyModel(ctx);
       
-      // Create edge referencing non-existent vertices
-      model.edges.vStart[0] = 999;
-      model.edges.vEnd[0] = 998;
-      model.edges.curveIndex[0] = NULL_ID;
-      model.edges.tStart[0] = 0;
-      model.edges.tEnd[0] = 1;
-      model.edges.halfEdge[0] = NULL_ID;
-      model.edges.flags[0] = 0;
-      model.edges.count = 1;
-      model.edges.liveCount = 1;
+      // Create vertices but then create edge using NULL_ID as vertex
+      addVertex(model, 0, 0, 0); // Create a valid vertex
+      
+      // Use the internal method to add an edge with invalid references
+      // This tests that validation catches edges with null vertex references
+      const body = addBody(model);
+      const shell = addShell(model);
+      addShellToBody(model, body, shell);
+      
+      const surface = addSurface(model, createPlaneSurface(vec3(0, 0, 0), vec3(0, 0, 1)));
+      const face = addFace(model, surface);
+      addFaceToShell(model, shell, face);
+      
+      // Create edge with first vertex being NULL_ID
+      const v0 = addVertex(model, 0, 0, 0);
+      // Create an edge and then manually set its vertices to null via internal API
+      const edge = addEdge(model, v0, v0);
+      // Update edge to have null vertex using internal method
+      model.setEdgeVertices(edge, NULL_ID as any, v0);
       
       const report = validateModel(model);
       
       expect(report.isValid).toBe(false);
-      const invalidIndex = report.issues.filter(i => i.kind === 'invalidIndex');
-      expect(invalidIndex.length).toBeGreaterThan(0);
+      const nullRef = report.issues.filter(i => i.kind === 'nullReference');
+      expect(nullRef.length).toBeGreaterThan(0);
     });
 
     it('should detect face without loops', () => {

@@ -7,8 +7,7 @@
 import type { Vec3 } from '../num/vec3.js';
 import type { NumericContext } from '../num/tolerance.js';
 import { createNumericContext } from '../num/tolerance.js';
-import type { TopoModel } from '../topo/model.js';
-import { createEmptyModel } from '../topo/model.js';
+import { TopoModel } from '../topo/TopoModel.js';
 import type { PersistentRef, ResolveResult } from '../naming/types.js';
 import type { NamingStrategy } from '../naming/evolution.js';
 import { createNamingStrategy } from '../naming/evolution.js';
@@ -34,7 +33,7 @@ export class SolidSession {
   
   constructor(ctx?: NumericContext) {
     const numericCtx = ctx ?? createNumericContext();
-    this.model = createEmptyModel(numericCtx);
+    this.model = new TopoModel(numericCtx);
     this.naming = createNamingStrategy();
   }
   

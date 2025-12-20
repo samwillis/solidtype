@@ -150,7 +150,7 @@ This keeps geometry:
 
 **Data model**
 
-* Handle types:
+* Handle types (branded IDs for type safety):
 
   ```ts
   type BodyId   = number & { __brand: "BodyId" };
@@ -161,18 +161,44 @@ This keeps geometry:
   type HalfEdgeId = number & { __brand: "HalfEdgeId" };
   ```
 
-* Struct-of-arrays tables:
+* Internal storage uses struct-of-arrays for performance:
 
   * `VertexTable`: `x`, `y`, `z` as `Float64Array`.
   * `EdgeTable`: `vStart`, `vEnd`, `curveIndex`, flags.
-  * `FaceTable`: `surfaceIndex`, `firstLoop`, `loopCount`, shell, orientation.
+  * `FaceTable`: `surfaceIndex`, shell reference, orientation.
   * `Loop` & `HalfEdge` tables: capture boundary cycles and adjacency.
 
-**Functional API**
+**Object-Oriented API**
 
-* `createEmptyModel(): TopoModel`.
-* Mutators: `addBody`, `addFace`, `addEdge`, `addVertex`, `addLoop`, etc.
-* Mutation is local to the `TopoModel` instance; handles (`FaceId`, etc.) are used instead of object references.
+The `TopoModel` class encapsulates the BREP data and exposes methods for all operations:
+
+```ts
+class TopoModel {
+  // Entity creation
+  addVertex(x: number, y: number, z: number): VertexId;
+  addEdge(vStart: VertexId, vEnd: VertexId): EdgeId;
+  addHalfEdge(edge: EdgeId, direction: 1 | -1): HalfEdgeId;
+  addLoop(firstHalfEdge: HalfEdgeId): LoopId;
+  addFace(surfaceIndex: SurfaceIndex): FaceId;
+  addShell(): ShellId;
+  addBody(): BodyId;
+  
+  // Queries
+  getVertexPosition(id: VertexId): Vec3;
+  getEdgeStartVertex(id: EdgeId): VertexId;
+  getFaceLoops(id: FaceId): LoopId[];
+  iterateBodies(): Iterable<BodyId>;
+  
+  // Geometry storage
+  addSurface(surface: Surface): SurfaceIndex;
+  addCurve(curve: Curve3D): Curve3DIndex;
+}
+```
+
+This design provides:
+* Clean encapsulation with methods instead of raw data access.
+* Type-safe operations using branded handle IDs.
+* Internal struct-of-arrays storage for performance-critical operations.
 
 **Validation and healing**
 

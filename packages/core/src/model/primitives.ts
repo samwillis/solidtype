@@ -8,22 +8,8 @@
 
 import type { Vec3 } from '../num/vec3.js';
 import { vec3 } from '../num/vec3.js';
-import type { TopoModel } from '../topo/model.js';
-import type { BodyId, EdgeId, HalfEdgeId } from '../topo/handles.js';
-import {
-  addVertex,
-  addEdge,
-  addHalfEdge,
-  addLoop,
-  addFace,
-  addShell,
-  addBody,
-  addSurface,
-  addLoopToFace,
-  addFaceToShell,
-  addShellToBody,
-  setHalfEdgeTwin,
-} from '../topo/model.js';
+import { TopoModel } from '../topo/TopoModel.js';
+import type { BodyId, EdgeId, HalfEdgeId, ShellId } from '../topo/handles.js';
 import { createPlaneSurface } from '../geom/surface.js';
 
 /**
@@ -73,36 +59,36 @@ export function createBox(model: TopoModel, options: BoxOptions = {}): BodyId {
   
   // Create 8 vertices
   const v = [
-    addVertex(model, center[0] - hw, center[1] - hd, center[2] - hh), // v0
-    addVertex(model, center[0] + hw, center[1] - hd, center[2] - hh), // v1
-    addVertex(model, center[0] + hw, center[1] + hd, center[2] - hh), // v2
-    addVertex(model, center[0] - hw, center[1] + hd, center[2] - hh), // v3
-    addVertex(model, center[0] - hw, center[1] - hd, center[2] + hh), // v4
-    addVertex(model, center[0] + hw, center[1] - hd, center[2] + hh), // v5
-    addVertex(model, center[0] + hw, center[1] + hd, center[2] + hh), // v6
-    addVertex(model, center[0] - hw, center[1] + hd, center[2] + hh), // v7
+    model.addVertex(center[0] - hw, center[1] - hd, center[2] - hh), // v0
+    model.addVertex(center[0] + hw, center[1] - hd, center[2] - hh), // v1
+    model.addVertex(center[0] + hw, center[1] + hd, center[2] - hh), // v2
+    model.addVertex(center[0] - hw, center[1] + hd, center[2] - hh), // v3
+    model.addVertex(center[0] - hw, center[1] - hd, center[2] + hh), // v4
+    model.addVertex(center[0] + hw, center[1] - hd, center[2] + hh), // v5
+    model.addVertex(center[0] + hw, center[1] + hd, center[2] + hh), // v6
+    model.addVertex(center[0] - hw, center[1] + hd, center[2] + hh), // v7
   ];
   
   // Create 12 edges (each edge is used by exactly 2 faces)
   const e = [
-    addEdge(model, v[0], v[1]), // e0: v0 -> v1
-    addEdge(model, v[1], v[2]), // e1: v1 -> v2
-    addEdge(model, v[2], v[3]), // e2: v2 -> v3
-    addEdge(model, v[3], v[0]), // e3: v3 -> v0
-    addEdge(model, v[4], v[5]), // e4: v4 -> v5
-    addEdge(model, v[5], v[6]), // e5: v5 -> v6
-    addEdge(model, v[6], v[7]), // e6: v6 -> v7
-    addEdge(model, v[7], v[4]), // e7: v7 -> v4
-    addEdge(model, v[0], v[4]), // e8: v0 -> v4
-    addEdge(model, v[1], v[5]), // e9: v1 -> v5
-    addEdge(model, v[2], v[6]), // e10: v2 -> v6
-    addEdge(model, v[3], v[7]), // e11: v3 -> v7
+    model.addEdge(v[0], v[1]), // e0: v0 -> v1
+    model.addEdge(v[1], v[2]), // e1: v1 -> v2
+    model.addEdge(v[2], v[3]), // e2: v2 -> v3
+    model.addEdge(v[3], v[0]), // e3: v3 -> v0
+    model.addEdge(v[4], v[5]), // e4: v4 -> v5
+    model.addEdge(v[5], v[6]), // e5: v5 -> v6
+    model.addEdge(v[6], v[7]), // e6: v6 -> v7
+    model.addEdge(v[7], v[4]), // e7: v7 -> v4
+    model.addEdge(v[0], v[4]), // e8: v0 -> v4
+    model.addEdge(v[1], v[5]), // e9: v1 -> v5
+    model.addEdge(v[2], v[6]), // e10: v2 -> v6
+    model.addEdge(v[3], v[7]), // e11: v3 -> v7
   ];
   
   // Create the body and shell
-  const body = addBody(model);
-  const shell = addShell(model, true);
-  addShellToBody(model, body, shell);
+  const body = model.addBody();
+  const shell = model.addShell(true);
+  model.addShellToBody(body, shell);
   
   // Each face is defined with vertex winding that gives outward-pointing normal
   // by right-hand rule. Adjacent faces use shared edges in opposite directions.
@@ -199,7 +185,7 @@ export function createBox(model: TopoModel, options: BoxOptions = {}): BodyId {
  */
 function createFaceWithLoop(
   model: TopoModel,
-  shell: ReturnType<typeof addShell>,
+  shell: ShellId,
   center: Vec3,
   normal: Vec3,
   originOffset: Vec3,
@@ -211,18 +197,18 @@ function createFaceWithLoop(
     center[1] + originOffset[1],
     center[2] + originOffset[2],
   ];
-  const surface = addSurface(model, createPlaneSurface(surfaceOrigin, normal, xDir));
+  const surface = model.addSurface(createPlaneSurface(surfaceOrigin, normal, xDir));
   
   const halfEdges: HalfEdgeId[] = [];
   for (const spec of edgeSpecs) {
-    const he = addHalfEdge(model, spec.edge, spec.dir);
+    const he = model.addHalfEdge(spec.edge, spec.dir);
     halfEdges.push(he);
   }
   
-  const loop = addLoop(model, halfEdges);
-  const face = addFace(model, surface, false);
-  addLoopToFace(model, face, loop);
-  addFaceToShell(model, shell, face);
+  const loop = model.addLoop(halfEdges);
+  const face = model.addFace(surface, false);
+  model.addLoopToFace(face, loop);
+  model.addFaceToShell(shell, face);
 }
 
 /**
@@ -230,9 +216,10 @@ function createFaceWithLoop(
  */
 function setupTwinHalfEdges(model: TopoModel): void {
   const edgeHalfEdges = new Map<number, HalfEdgeId[]>();
+  const heCount = model.getHalfEdgeCount();
   
-  for (let i = 0; i < model.halfEdges.count; i++) {
-    const edge = model.halfEdges.edge[i];
+  for (let i = 0; i < heCount; i++) {
+    const edge = model.getHalfEdgeEdge(i as HalfEdgeId);
     if (edge < 0) continue;
     
     const halfEdges = edgeHalfEdges.get(edge) || [];
@@ -242,7 +229,7 @@ function setupTwinHalfEdges(model: TopoModel): void {
   
   for (const [_edge, halfEdges] of edgeHalfEdges) {
     if (halfEdges.length === 2) {
-      setHalfEdgeTwin(model, halfEdges[0], halfEdges[1]);
+      model.setHalfEdgeTwin(halfEdges[0], halfEdges[1]);
     }
   }
 }
