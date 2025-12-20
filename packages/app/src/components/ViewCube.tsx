@@ -15,8 +15,9 @@ const ViewCube: React.FC = () => {
   const animationFrameRef = useRef<number | null>(null);
   const hoveredRef = useRef<string | null>(null);
 
-  const { state, actions } = useViewer();
+  const { actions, cameraRotationRef } = useViewer();
   const { theme } = useTheme();
+  const lastRotationVersionRef = useRef(-1);
 
   // Map mesh names to view presets
   const getViewPreset = (name: string): ViewPreset | null => {
@@ -174,17 +175,6 @@ const ViewCube: React.FC = () => {
     return group;
   }, []);
 
-  // Sync cube rotation with main camera
-  useEffect(() => {
-    if (!cubeRef.current) return;
-    
-    // Apply camera rotation to cube (inverted so cube shows orientation from camera's POV)
-    const { x, y, z, w } = state.cameraRotation;
-    const quaternion = new THREE.Quaternion(x, y, z, w);
-    
-    // Invert the quaternion so the cube shows what the camera is looking at
-    cubeRef.current.quaternion.copy(quaternion.invert());
-  }, [state.cameraRotation]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -247,6 +237,14 @@ const ViewCube: React.FC = () => {
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
 
+      // Sync cube rotation with main camera
+      if (cubeRef.current && cameraRotationRef.current.version !== lastRotationVersionRef.current) {
+        lastRotationVersionRef.current = cameraRotationRef.current.version;
+        // Apply camera rotation to cube (inverted so cube shows orientation from camera's POV)
+        const quaternion = cameraRotationRef.current.quaternion.clone().invert();
+        cubeRef.current.quaternion.copy(quaternion);
+      }
+
       // Raycast for hover effect
       if (cubeRef.current) {
         raycasterRef.current.setFromCamera(mouseRef.current, camera);
@@ -294,12 +292,6 @@ const ViewCube: React.FC = () => {
       renderer.dispose();
     };
   }, [theme, createCube, actions]);
-
-  // Update cube rotation to match main viewer camera
-  useEffect(() => {
-    // This will be called when the viewer state changes
-    // For a complete implementation, we'd need to share camera rotation
-  }, [state]);
 
   return <div ref={containerRef} className="view-cube" />;
 };

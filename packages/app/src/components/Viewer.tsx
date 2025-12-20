@@ -15,14 +15,14 @@ const Viewer: React.FC = () => {
   const projectionModeRef = useRef<ProjectionMode>('perspective');
 
   const { theme } = useTheme();
-  const { registerRefs, actions } = useViewer();
+  const { registerRefs, cameraRotationRef } = useViewer();
 
-  // Report camera rotation to context
-  const reportCameraRotation = useCallback(() => {
+  // Update camera rotation ref for ViewCube sync
+  const updateCameraRotation = useCallback(() => {
     if (!cameraRef.current) return;
-    const q = cameraRef.current.quaternion;
-    actions.updateCameraRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
-  }, [actions]);
+    cameraRotationRef.current.quaternion.copy(cameraRef.current.quaternion);
+    cameraRotationRef.current.version++;
+  }, [cameraRotationRef]);
 
   // Request a render (for use by external controls)
   const requestRender = useCallback(() => {
@@ -204,7 +204,7 @@ const Viewer: React.FC = () => {
         currentCamera.position.copy(targetRef.current).add(offset);
         currentCamera.lookAt(targetRef.current);
         needsRenderRef.current = true;
-        reportCameraRotation();
+        updateCameraRotation();
       } else if (isPanning) {
         // Pan the camera and target
         const panSpeed = 0.01;
@@ -274,15 +274,17 @@ const Viewer: React.FC = () => {
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
     renderer.domElement.addEventListener('contextmenu', onContextMenu);
 
-    // Render loop (only renders when needed)
+    // Render loop - always render to avoid black frames
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
-      if (needsRenderRef.current && cameraRef.current) {
+      if (cameraRef.current) {
         renderer.render(scene, cameraRef.current);
-        needsRenderRef.current = false;
       }
     };
     animate();
+    
+    // Report initial camera rotation
+    updateCameraRotation();
 
     // Initial render
     needsRenderRef.current = true;

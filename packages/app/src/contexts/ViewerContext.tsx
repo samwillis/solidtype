@@ -15,7 +15,6 @@ interface ViewerState {
   displayMode: DisplayMode;
   projectionMode: ProjectionMode;
   currentView: ViewPreset | null;
-  cameraRotation: { x: number; y: number; z: number; w: number }; // Quaternion
 }
 
 interface ViewerActions {
@@ -23,7 +22,12 @@ interface ViewerActions {
   setDisplayMode: (mode: DisplayMode) => void;
   toggleProjection: () => void;
   zoomToFit: () => void;
-  updateCameraRotation: (rotation: { x: number; y: number; z: number; w: number }) => void;
+}
+
+// Shared camera rotation ref for real-time sync between Viewer and ViewCube
+export interface CameraRotationRef {
+  quaternion: THREE.Quaternion;
+  version: number; // Incremented on each update to trigger checks
 }
 
 interface ViewerRefs {
@@ -39,6 +43,7 @@ interface ViewerContextValue {
   state: ViewerState;
   actions: ViewerActions;
   registerRefs: (refs: ViewerRefs) => void;
+  cameraRotationRef: React.MutableRefObject<CameraRotationRef>;
 }
 
 const ViewerContext = createContext<ViewerContextValue | null>(null);
@@ -105,7 +110,12 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     displayMode: 'shaded',
     projectionMode: 'perspective',
     currentView: null,
-    cameraRotation: { x: 0, y: 0, z: 0, w: 1 },
+  });
+
+  // Shared ref for camera rotation (avoids React state updates during drag)
+  const cameraRotationRef = useRef<CameraRotationRef>({
+    quaternion: new THREE.Quaternion(),
+    version: 0,
   });
 
   const viewerRefsRef = useRef<ViewerRefs | null>(null);
@@ -127,13 +137,11 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     camera.up.copy(up);
     camera.lookAt(target);
 
-    // Update camera rotation in state
-    const q = camera.quaternion;
-    setState((prev) => ({ 
-      ...prev, 
-      currentView: preset,
-      cameraRotation: { x: q.x, y: q.y, z: q.z, w: q.w }
-    }));
+    // Update camera rotation ref
+    cameraRotationRef.current.quaternion.copy(camera.quaternion);
+    cameraRotationRef.current.version++;
+
+    setState((prev) => ({ ...prev, currentView: preset }));
     refs.requestRender();
   }, []);
 
@@ -196,12 +204,8 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     refs.requestRender();
   }, []);
 
-  const updateCameraRotation = useCallback((rotation: { x: number; y: number; z: number; w: number }) => {
-    setState((prev) => ({ ...prev, cameraRotation: rotation }));
-  }, []);
-
   return (
-    <ViewerContext.Provider value={{ state, actions: { setView, setDisplayMode, toggleProjection, zoomToFit, updateCameraRotation }, registerRefs }}>
+    <ViewerContext.Provider value={{ state, actions: { setView, setDisplayMode, toggleProjection, zoomToFit }, registerRefs, cameraRotationRef }}>
       {children}
     </ViewerContext.Provider>
   );
