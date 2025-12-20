@@ -1,0 +1,173 @@
+.revolve-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.revolve-dialog {
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 320px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.revolve-dialog h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.revolve-dialog-info {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.revolve-dialog-info .label {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.revolve-dialog-info .value {
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.revolve-dialog-field {
+  margin-bottom: 16px;
+}
+
+.revolve-dialog-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.revolve-dialog-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.revolve-dialog-toggle button {
+  flex: 1;
+  padding: 8px 16px;
+  background: var(--color-bg);
+  border: none;
+  color: var(--color-text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.revolve-dialog-toggle button:not(:last-child) {
+  border-right: 1px solid var(--color-border);
+}
+
+.revolve-dialog-toggle button:hover {
+  background: var(--color-bg-hover);
+}
+
+.revolve-dialog-toggle button.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+.revolve-dialog-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.revolve-dialog-input-group input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+.revolve-dialog-input-group input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.revolve-dialog-unit {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  min-width: 20px;
+}
+
+.revolve-dialog-field select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+.revolve-dialog-field select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.revolve-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.revolve-dialog-actions button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.revolve-dialog-actions .btn-cancel {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.revolve-dialog-actions .btn-cancel:hover {
+  background: var(--color-bg-hover);
+}
+
+.revolve-dialog-actions .btn-confirm {
+  background: var(--color-primary);
+  border: none;
+  color: white;
+}
+
+.revolve-dialog-actions .btn-confirm:hover {
+  background: var(--color-primary-hover);
+}
+
+.revolve-dialog-actions .btn-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+

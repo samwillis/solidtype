@@ -13,16 +13,18 @@ import {
   findFeature,
   addPointToSketch,
   addLineToSketch,
+  addArcToSketch,
+  addConstraintToSketch,
   getSketchData,
   setSketchData,
 } from '../document/featureHelpers';
-import type { SketchPoint } from '../types/document';
+import type { NewSketchConstraint, SketchPoint } from '../types/document';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type SketchTool = 'select' | 'line' | 'rectangle';
+export type SketchTool = 'select' | 'line' | 'arc' | 'circle' | 'rectangle';
 
 export interface SketchModeState {
   active: boolean;
@@ -39,6 +41,7 @@ interface SketchContextValue {
   setTool: (tool: SketchTool) => void;
   addPoint: (x: number, y: number) => string | null;
   addLine: (startId: string, endId: string) => string | null;
+  addArc: (startId: string, endId: string, centerId: string, ccw?: boolean) => string | null;
   addTempPoint: (x: number, y: number) => void;
   clearTempPoints: () => void;
   getSketchPoints: () => SketchPoint[];
@@ -46,6 +49,7 @@ interface SketchContextValue {
   findNearbyPoint: (x: number, y: number, tolerance: number) => SketchPoint | null;
   /** Draw a rectangle at the given center with width and height */
   addRectangle: (centerX: number, centerY: number, width: number, height: number) => void;
+  addConstraint: (constraint: NewSketchConstraint) => string | null;
 }
 
 // ============================================================================
@@ -121,6 +125,12 @@ export function SketchProvider({ children }: SketchProviderProps) {
     return addLineToSketch(sketch, startId, endId);
   }, [getSketchElement]);
 
+  const addArc = useCallback((startId: string, endId: string, centerId: string, ccw: boolean = true): string | null => {
+    const sketch = getSketchElement();
+    if (!sketch) return null;
+    return addArcToSketch(sketch, startId, endId, centerId, ccw);
+  }, [getSketchElement]);
+
   const addTempPoint = useCallback((x: number, y: number) => {
     setMode((prev) => ({
       ...prev,
@@ -185,6 +195,12 @@ export function SketchProvider({ children }: SketchProviderProps) {
     addLineToSketch(sketch, p4, p1);
   }, [getSketchElement]);
 
+  const addConstraint = useCallback((constraint: NewSketchConstraint): string | null => {
+    const sketch = getSketchElement();
+    if (!sketch) return null;
+    return addConstraintToSketch(sketch, constraint);
+  }, [getSketchElement]);
+
   const value: SketchContextValue = {
     mode,
     startSketch,
@@ -192,12 +208,14 @@ export function SketchProvider({ children }: SketchProviderProps) {
     setTool,
     addPoint,
     addLine,
+    addArc,
     addTempPoint,
     clearTempPoints,
     getSketchPoints,
     updatePointPosition,
     findNearbyPoint,
     addRectangle,
+    addConstraint,
   };
 
   return (

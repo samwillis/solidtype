@@ -7,6 +7,9 @@ import { createNumericContext } from '../num/tolerance.js';
 import { vec3 } from '../num/vec3.js';
 import { TopoModel } from '../topo/TopoModel.js';
 import { createBox, createUnitCube } from '../model/primitives.js';
+import { extrude } from '../model/extrude.js';
+import { createCircleProfile } from '../model/sketchProfile.js';
+import { XY_PLANE } from '../model/planes.js';
 import { tessellateBody, tessellateAllBodies } from './tessellateBody.js';
 import { getMeshVertexCount, getMeshTriangleCount } from './types.js';
 
@@ -84,6 +87,19 @@ describe('tessellateBody', () => {
       expect(mesh.indices[i]).toBeGreaterThanOrEqual(0);
       expect(mesh.indices[i]).toBeLessThan(vertexCount);
     }
+  });
+
+  it('tessellates an extruded circle (cylindrical faces)', () => {
+    const ctx = createNumericContext();
+    const model = new TopoModel(ctx);
+    const profile = createCircleProfile(XY_PLANE, 5);
+    const result = extrude(model, profile, { operation: 'add', distance: 3 });
+    expect(result.success).toBe(true);
+    const mesh = tessellateBody(model, result.body!);
+
+    expect(mesh.positions.length).toBeGreaterThan(0);
+    expect(mesh.positions.length).toBe(mesh.normals.length);
+    expect(getMeshTriangleCount(mesh)).toBeGreaterThan(0);
   });
 });
 

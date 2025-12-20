@@ -5,7 +5,14 @@
 import React, { createContext, useContext, useMemo, useEffect, useState, useCallback } from 'react';
 import * as Y from 'yjs';
 import { createDocument, type SolidTypeDoc } from '../document/createDocument';
-import { getFeaturesArray, parseFeature, addSketchFeature, addExtrudeFeature, findFeature } from '../document/featureHelpers';
+import {
+  getFeaturesArray,
+  parseFeature,
+  addSketchFeature,
+  addExtrudeFeature,
+  addRevolveFeature,
+  findFeature,
+} from '../document/featureHelpers';
 import type { Feature } from '../types/document';
 
 // ============================================================================
@@ -24,7 +31,18 @@ interface DocumentContextValue {
   canRedo: boolean;
   // Feature operations
   addSketch: (planeId: string, name?: string) => string;
-  addExtrude: (sketchId: string, distance: number, op?: 'add' | 'cut') => string;
+  addExtrude: (
+    sketchId: string,
+    distance: number,
+    op?: 'add' | 'cut',
+    direction?: 'normal' | 'reverse'
+  ) => string;
+  addRevolve: (
+    sketchId: string,
+    axis: string,
+    angle: number,
+    op?: 'add' | 'cut'
+  ) => string;
   getFeatureById: (id: string) => Feature | null;
 }
 
@@ -116,8 +134,22 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
     return addSketchFeature(doc, planeId, name);
   }, [doc]);
 
-  const addExtrude = useCallback((sketchId: string, distance: number, op: 'add' | 'cut' = 'add') => {
-    return addExtrudeFeature(doc, sketchId, distance, op);
+  const addExtrude = useCallback((
+    sketchId: string,
+    distance: number,
+    op: 'add' | 'cut' = 'add',
+    direction: 'normal' | 'reverse' = 'normal'
+  ) => {
+    return addExtrudeFeature(doc, sketchId, distance, op, direction);
+  }, [doc]);
+
+  const addRevolve = useCallback((
+    sketchId: string,
+    axis: string,
+    angle: number,
+    op: 'add' | 'cut' = 'add'
+  ) => {
+    return addRevolveFeature(doc, sketchId, axis, angle, op);
   }, [doc]);
 
   const getFeatureById = useCallback((id: string): Feature | null => {
@@ -137,6 +169,7 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
     canRedo,
     addSketch,
     addExtrude,
+    addRevolve,
     getFeatureById,
   };
 

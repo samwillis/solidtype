@@ -11,12 +11,11 @@
 import type { Vec2 } from '../num/vec2.js';
 import type { Vec3 } from '../num/vec3.js';
 import { vec3, normalize3, add3, mul3, cross3 } from '../num/vec3.js';
-import { evalCurve2D } from '../geom/curve2d.js';
-import { createPlaneSurface } from '../geom/surface.js';
+import { evalCurve2D, type Curve2D, type Arc2D } from '../geom/curve2d.js';
+import { createPlaneSurface, type CylinderSurface } from '../geom/surface.js';
 import { TopoModel } from '../topo/TopoModel.js';
-import type { BodyId, EdgeId, VertexId, HalfEdgeId, FaceId, ShellId } from '../topo/handles.js';
+import type { BodyId, EdgeId, VertexId, HalfEdgeId, FaceId, ShellId, SurfaceIndex } from '../topo/handles.js';
 import type { SketchProfile, ProfileLoop } from './sketchProfile.js';
-import { getLoopVertices } from './sketchProfile.js';
 import { planeToWorld } from './planes.js';
 import type { NamingStrategy, FeatureId, PersistentRef } from '../naming/index.js';
 import {
@@ -77,6 +76,14 @@ interface ExtrudeEdgeData {
   sideEdges: EdgeId[];
 }
 
+interface SampledLoop {
+  vertices: Vec2[];
+  segmentCurves: Curve2D[]; // curve source for each edge i -> (i+1)%n
+}
+
+const ARC_MIN_SEGMENTS = 12;
+const ARC_SEGMENTS_PER_RADIAN = Math.PI / 18; // ~10 degrees
+
 /**
  * Extrude a sketch profile to create a solid body
  */
@@ -128,7 +135,8 @@ export function extrude(
   for (let loopIdx = 0; loopIdx < profile.loops.length; loopIdx++) {
     const loop = profile.loops[loopIdx];
     
-    const vertices2D = getLoopVertices(loop);
+    const sampled = sampleProfileLoop(loop);
+    const vertices2D = sampled.vertices;
     if (vertices2D.length < 3) continue;
     
     const vertexData = createExtrudeVertices(
@@ -149,7 +157,17 @@ export function extrude(
     const topFace = createTopFace(model, shell, profile, vertexData, edgeData, direction, isOuterLoop);
     topCapFaces.push(topFace);
     
-    const loopSideFaces = createSideFaces(model, shell, profile, loop, vertexData, edgeData, direction, isOuterLoop);
+    const loopSideFaces = createSideFaces(
+      model,
+      shell,
+      profile,
+      sampled.segmentCurves,
+      vertexData,
+      edgeData,
+      direction,
+      startOffset,
+      isOuterLoop
+    );
     sideFaces.push(loopSideFaces);
   }
   
@@ -234,6 +252,49 @@ export function extrude(
     topEdgeRefs,
     bottomEdgeRefs,
   };
+}
+
+function arcAngleSpan(arc: Arc2D): number {
+  let span = arc.ccw ? arc.endAngle - arc.startAngle : arc.startAngle - arc.endAngle;
+  if (span < 0) span += 2 * Math.PI;
+  return span;
+}
+
+function sampleProfileLoop(loop: ProfileLoop): SampledLoop {
+  const vertices: Vec2[] = [];
+  const segmentCurves: Curve2D[] = [];
+
+  if (loop.curves.length === 0) return { vertices, segmentCurves };
+
+  // Start at the first curve's start point
+  vertices.push(evalCurve2D(loop.curves[0], 0));
+
+  for (const curve of loop.curves) {
+    let segments = 1;
+    if (curve.kind === 'arc') {
+      const span = arcAngleSpan(curve);
+      segments = Math.max(ARC_MIN_SEGMENTS, Math.ceil(span / ARC_SEGMENTS_PER_RADIAN));
+    }
+
+    for (let i = 1; i <= segments; i++) {
+      const p = evalCurve2D(curve, i / segments);
+      vertices.push(p);
+      segmentCurves.push(curve);
+    }
+  }
+
+  // Remove duplicate closing point if present
+  if (vertices.length >= 2) {
+    const first = vertices[0];
+    const last = vertices[vertices.length - 1];
+    const dx = first[0] - last[0];
+    const dy = first[1] - last[1];
+    if (dx * dx + dy * dy < 1e-16) {
+      vertices.pop();
+    }
+  }
+
+  return { vertices, segmentCurves };
 }
 
 function createExtrudeVertices(
@@ -357,10 +418,11 @@ function createSideFaces(
   model: TopoModel,
   shell: ShellId,
   profile: SketchProfile,
-  loop: ProfileLoop,
+  segmentCurves: Curve2D[],
   vertexData: ExtrudeVertexData,
   edgeData: ExtrudeEdgeData,
   direction: Vec3,
+  startOffset: number,
   isOuterLoop: boolean
 ): FaceId[] {
   const n = vertexData.bottomVertices.length;
@@ -370,7 +432,7 @@ function createSideFaces(
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
     
-    const curve = loop.curves[i];
+    const curve = segmentCurves[i] ?? segmentCurves[segmentCurves.length - 1];
     const startPoint2D = evalCurve2D(curve, 0);
     const endPoint2D = evalCurve2D(curve, 1);
     
@@ -385,21 +447,38 @@ function createSideFaces(
       edge2D[0] * plane.xDir[2] + edge2D[1] * plane.yDir[2],
     ];
     
-    let faceNormal: Vec3;
-    if (isOuterLoop) {
-      faceNormal = normalize3(cross3(direction, edgeDir3D));
-    } else {
-      faceNormal = normalize3(cross3(edgeDir3D, direction));
-    }
-    
     const v0 = vertexData.bottomVertices[i];
     const pos = model.getVertexPosition(v0);
-    
-    const surface = model.addSurface(createPlaneSurface(
-      vec3(pos[0], pos[1], pos[2]),
-      faceNormal,
-      normalize3(edgeDir3D)
-    ));
+
+    let surface: SurfaceIndex;
+    let faceReversed = false;
+    if (curve.kind === 'arc') {
+      // Arc segment sweeps a cylindrical surface under extrusion.
+      const baseCenter = planeToWorld(profile.plane, curve.center[0], curve.center[1]);
+      const center = add3(baseCenter, mul3(direction, startOffset));
+      const cyl: CylinderSurface = {
+        kind: 'cylinder',
+        center,
+        axis: direction,
+        radius: curve.radius,
+      };
+      surface = model.addSurface(cyl);
+      // Inner-loop (hole) side faces should flip normals.
+      faceReversed = !isOuterLoop;
+    } else {
+      // Line segment sweeps a planar side face.
+      let faceNormal: Vec3;
+      if (isOuterLoop) {
+        faceNormal = normalize3(cross3(direction, edgeDir3D));
+      } else {
+        faceNormal = normalize3(cross3(edgeDir3D, direction));
+      }
+      surface = model.addSurface(createPlaneSurface(
+        vec3(pos[0], pos[1], pos[2]),
+        faceNormal,
+        normalize3(edgeDir3D)
+      ));
+    }
     
     const halfEdges: HalfEdgeId[] = [];
     
@@ -416,7 +495,7 @@ function createSideFaces(
     }
     
     const faceLoop = model.addLoop(halfEdges);
-    const face = model.addFace(surface, false);
+    const face = model.addFace(surface, faceReversed);
     model.addLoopToFace(face, faceLoop);
     model.addFaceToShell(shell, face);
     createdFaces.push(face);

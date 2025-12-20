@@ -18,9 +18,11 @@ import {
   getFeatureIds,
   addSketchFeature,
   addExtrudeFeature,
+  addRevolveFeature,
   getSketchData,
   addPointToSketch,
   addLineToSketch,
+  addConstraintToSketch,
   parseFeature,
 } from '../document/featureHelpers';
 
@@ -214,13 +216,28 @@ describe('Feature Helpers', () => {
   test('addExtrudeFeature creates extrude element', () => {
     const doc = createDocument();
     const sketchId = addSketchFeature(doc, 'xy');
-    const extrudeId = addExtrudeFeature(doc, sketchId, 10, 'add');
+    const extrudeId = addExtrudeFeature(doc, sketchId, 10, 'add', 'reverse');
 
     const extrude = findFeature(doc.features, extrudeId);
     expect(extrude).not.toBeNull();
     expect(extrude?.getAttribute('sketch')).toBe(sketchId);
     expect(extrude?.getAttribute('distance')).toBe('10');
     expect(extrude?.getAttribute('op')).toBe('add');
+    expect(extrude?.getAttribute('direction')).toBe('reverse');
+  });
+
+  test('addRevolveFeature creates revolve element', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'xy');
+    const axisId = 'ln1';
+    const revolveId = addRevolveFeature(doc, sketchId, axisId, 90, 'add');
+
+    const revolve = findFeature(doc.features, revolveId);
+    expect(revolve).not.toBeNull();
+    expect(revolve?.getAttribute('sketch')).toBe(sketchId);
+    expect(revolve?.getAttribute('axis')).toBe(axisId);
+    expect(revolve?.getAttribute('angle')).toBe('90');
+    expect(revolve?.getAttribute('op')).toBe('add');
   });
 });
 
@@ -270,6 +287,21 @@ describe('Sketch Data', () => {
     expect((data.entities[0] as any).start).toBe(pt1);
     expect((data.entities[0] as any).end).toBe(pt2);
   });
+
+  test('addConstraintToSketch adds constraint', () => {
+    const doc = createDocument();
+    const id = addSketchFeature(doc, 'xy');
+    const sketch = findFeature(doc.features, id)!;
+
+    const p1 = addPointToSketch(sketch, 0, 0);
+    const p2 = addPointToSketch(sketch, 10, 5);
+    const cid = addConstraintToSketch(sketch, { type: 'horizontal', points: [p1, p2] });
+
+    const data = getSketchData(sketch);
+    expect(data.constraints).toHaveLength(1);
+    expect(data.constraints[0].id).toBe(cid);
+    expect((data.constraints[0] as any).type).toBe('horizontal');
+  });
 });
 
 // ============================================================================
@@ -310,6 +342,21 @@ describe('Feature Parsing', () => {
     expect(feature!.type).toBe('extrude');
     expect((feature as any).sketch).toBe(sketchId);
     expect((feature as any).distance).toBe(15);
+    expect((feature as any).op).toBe('cut');
+  });
+
+  test('parseFeature parses revolve correctly', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'xy');
+    const revolveId = addRevolveFeature(doc, sketchId, 'ln1', 180, 'cut');
+    const element = findFeature(doc.features, revolveId)!;
+    const feature = parseFeature(element);
+
+    expect(feature).not.toBeNull();
+    expect(feature!.type).toBe('revolve');
+    expect((feature as any).sketch).toBe(sketchId);
+    expect((feature as any).axis).toBe('ln1');
+    expect((feature as any).angle).toBe(180);
     expect((feature as any).op).toBe('cut');
   });
 });

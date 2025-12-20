@@ -51,6 +51,20 @@ export interface MeshMessage {
   mesh: TransferableMesh;
 }
 
+export interface SketchSolvedMessage {
+  type: 'sketch-solved';
+  sketchId: string;
+  points: Array<{ id: string; x: number; y: number }>;
+  status: string;
+  dof?: {
+    totalDOF: number;
+    constrainedDOF: number;
+    remainingDOF: number;
+    isFullyConstrained: boolean;
+    isOverConstrained: boolean;
+  };
+}
+
 export interface ErrorMessage {
   type: 'error';
   message: string;
@@ -61,6 +75,7 @@ export type WorkerToMainMessage =
   | RebuildStartMessage
   | RebuildCompleteMessage
   | MeshMessage
+  | SketchSolvedMessage
   | ErrorMessage;
 
 // ============================================================================

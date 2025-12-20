@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { TopoModel } from '../topo/TopoModel.js';
 import { createNumericContext } from '../num/tolerance.js';
 import { extrude } from './extrude.js';
-import { createRectangleProfile, createPolygonProfile } from './sketchProfile.js';
+import { createRectangleProfile, createPolygonProfile, createCircleProfile } from './sketchProfile.js';
 import { XY_PLANE, YZ_PLANE, createOffsetPlane } from './planes.js';
 import { vec2 } from '../num/vec2.js';
 
@@ -61,6 +61,28 @@ describe('extrude', () => {
       const shells = model.getBodyShells(result.body!);
       const faces = model.getShellFaces(shells[0]);
       expect(faces.length).toBe(5);
+    });
+
+    it('extrudes a circle profile and creates cylindrical side faces', () => {
+      const profile = createCircleProfile(XY_PLANE, 5);
+      const result = extrude(model, profile, {
+        operation: 'add',
+        distance: 3,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+
+      const shells = model.getBodyShells(result.body!);
+      const faces = model.getShellFaces(shells[0]);
+
+      const hasCylinder = faces.some((faceId) => {
+        const surfaceIdx = model.getFaceSurfaceIndex(faceId);
+        const surface = model.getSurface(surfaceIdx);
+        return surface.kind === 'cylinder';
+      });
+
+      expect(hasCylinder).toBe(true);
     });
   });
 

@@ -14,6 +14,7 @@ import {
   countBaseDOF,
 } from './types.js';
 import { XY_PLANE, YZ_PLANE } from '../model/planes.js';
+import { curveLength2D } from '../geom/curve2d.js';
 
 describe('Sketch Creation', () => {
   beforeEach(() => {
@@ -379,6 +380,20 @@ describe('Sketch Creation', () => {
       const profile = sketch.toProfile();
       
       expect(profile).toBeNull();
+    });
+
+    it('should convert a full circle to a single arc with 2π span', () => {
+      const sketch = new SketchModel(XY_PLANE);
+      sketch.addCircle(0, 0, 5);
+      const profile = sketch.toProfile();
+
+      expect(profile).not.toBeNull();
+      expect(profile!.loops.length).toBe(1);
+      expect(profile!.loops[0].curves.length).toBe(1);
+
+      const curve = profile!.loops[0].curves[0];
+      expect(curve.kind).toBe('arc');
+      expect(curveLength2D(curve)).toBeCloseTo(2 * Math.PI * 5, 6);
     });
   });
 });

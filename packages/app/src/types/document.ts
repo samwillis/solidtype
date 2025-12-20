@@ -59,12 +59,22 @@ export interface SketchArc {
 
 export type SketchEntity = SketchLine | SketchArc;
 
-export interface SketchConstraint {
-  id: string;
-  type: string;
-  // Additional fields based on constraint type
-  [key: string]: unknown;
-}
+export type SketchConstraint =
+  | { id: string; type: 'horizontal'; points: [string, string] }
+  | { id: string; type: 'vertical'; points: [string, string] }
+  | { id: string; type: 'coincident'; points: [string, string] }
+  | { id: string; type: 'fixed'; point: string }
+  | { id: string; type: 'distance'; points: [string, string]; value: number }
+  | { id: string; type: 'angle'; lines: [string, string]; value: number };
+
+/**
+ * A sketch constraint payload for creation (no `id` yet).
+ *
+ * Note: `Omit<SketchConstraint, "id">` does NOT distribute over unions, so we
+ * use a distributive conditional type here.
+ */
+type WithoutId<T> = T extends any ? Omit<T, 'id'> : never;
+export type NewSketchConstraint = WithoutId<SketchConstraint>;
 
 export interface SketchData {
   points: SketchPoint[];
@@ -93,10 +103,10 @@ export interface ExtrudeFeature extends FeatureBase {
 export interface RevolveFeature extends FeatureBase {
   type: 'revolve';
   sketch: string;
+  /** Line entity id within the sketch used as the revolution axis */
+  axis: string;
   angle: number;
   op: 'add' | 'cut';
-  axisStart: [number, number];
-  axisEnd: [number, number];
 }
 
 // ============================================================================

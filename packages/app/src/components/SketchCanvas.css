@@ -33,6 +33,100 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+.sketch-constraints-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.sketch-dimensions-panel {
+  position: absolute;
+  top: 48px;
+  left: 8px;
+  min-width: 180px;
+  padding: 8px;
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.sketch-dimensions-title {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.sketch-dimension-row {
+  display: grid;
+  grid-template-columns: 1fr 70px 16px;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.sketch-dimension-row:last-child {
+  margin-bottom: 0;
+}
+
+.sketch-dimension-label {
+  font-size: 12px;
+  color: var(--color-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.sketch-dimension-input {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.sketch-dimension-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.sketch-dimension-unit {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.sketch-constraint-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+  font-weight: 700;
+}
+
+.sketch-constraint-btn:hover {
+  background: var(--color-bg-hover);
+}
+
+.sketch-constraint-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .sketch-tool-btn {
   display: flex;
   align-items: center;

@@ -3,6 +3,7 @@ import { Tooltip, Separator } from '@base-ui/react';
 import { useSketch } from '../contexts/SketchContext';
 import { useDocument } from '../contexts/DocumentContext';
 import ExtrudeDialog from './ExtrudeDialog';
+import RevolveDialog from './RevolveDialog';
 import './Toolbar.css';
 
 // Toolbar tool definition
@@ -200,10 +201,11 @@ interface ToolbarProps {
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) => {
-  const { mode, startSketch, finishSketch, addRectangle } = useSketch();
-  const { undo, redo, canUndo, canRedo, features, addExtrude } = useDocument();
+  const { mode, startSketch, finishSketch, addRectangle, setTool } = useSketch();
+  const { undo, redo, canUndo, canRedo, features, addExtrude, addRevolve } = useDocument();
   const [planeSelectorOpen, setPlaneSelectorOpen] = useState(false);
   const [extrudeDialogOpen, setExtrudeDialogOpen] = useState(false);
+  const [revolveDialogOpen, setRevolveDialogOpen] = useState(false);
   const [selectedSketchId, setSelectedSketchId] = useState<string | null>(null);
 
   // Get available sketches for extrusion
@@ -242,10 +244,20 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     }
   };
 
-  const handleExtrudeConfirm = (distance: number, _direction: 'normal' | 'reverse', op: 'add' | 'cut') => {
+  const handleRevolve = () => {
+    if (sketches.length === 1) {
+      setSelectedSketchId(sketches[0].id);
+      setRevolveDialogOpen(true);
+    } else if (sketches.length > 1) {
+      // For now, use the last sketch
+      setSelectedSketchId(sketches[sketches.length - 1].id);
+      setRevolveDialogOpen(true);
+    }
+  };
+
+  const handleExtrudeConfirm = (distance: number, direction: 'normal' | 'reverse', op: 'add' | 'cut') => {
     if (selectedSketchId) {
-      // TODO: Handle direction when extrude supports it
-      addExtrude(selectedSketchId, distance, op);
+      addExtrude(selectedSketchId, distance, op, direction);
     }
     setExtrudeDialogOpen(false);
     setSelectedSketchId(null);
@@ -253,6 +265,19 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
 
   const handleExtrudeCancel = () => {
     setExtrudeDialogOpen(false);
+    setSelectedSketchId(null);
+  };
+
+  const handleRevolveConfirm = (axis: string, angle: number, op: 'add' | 'cut') => {
+    if (selectedSketchId) {
+      addRevolve(selectedSketchId, axis, angle, op);
+    }
+    setRevolveDialogOpen(false);
+    setSelectedSketchId(null);
+  };
+
+  const handleRevolveCancel = () => {
+    setRevolveDialogOpen(false);
     setSelectedSketchId(null);
   };
 
@@ -342,6 +367,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
               <Tooltip.Trigger
                 delay={300}
                 className="toolbar-button"
+                onClick={() => setTool('line')}
                 render={<button aria-label="Line" />}
               >
                 <LineIcon />
@@ -412,8 +438,9 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
           <Tooltip.Root>
             <Tooltip.Trigger
               delay={300}
-              className="toolbar-button disabled"
-              render={<button aria-label="Revolve" disabled />}
+              className={`toolbar-button ${sketches.length === 0 ? 'disabled' : ''}`}
+              onClick={handleRevolve}
+              render={<button aria-label="Revolve" disabled={sketches.length === 0} />}
             >
               <RevolveIcon />
             </Tooltip.Trigger>
@@ -463,6 +490,14 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
           sketchId={selectedSketchId || ''}
           onConfirm={handleExtrudeConfirm}
           onCancel={handleExtrudeCancel}
+        />
+
+        {/* Revolve dialog */}
+        <RevolveDialog
+          open={revolveDialogOpen}
+          sketchId={selectedSketchId || ''}
+          onConfirm={handleRevolveConfirm}
+          onCancel={handleRevolveCancel}
         />
       </div>
     </Tooltip.Provider>

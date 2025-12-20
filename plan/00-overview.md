@@ -239,7 +239,7 @@ These decisions are **locked** to prevent schema migrations:
 | Decision | Value | See |
 |----------|-------|-----|
 | Vector serialization | Comma-separated strings (`"0,0,1"`) | [01-document-model.md](01-document-model.md) |
-| Complex data | JSON in element content | [01-document-model.md](01-document-model.md) |
+| Complex data | JSON in attributes (for sketch lists: `points`/`entities`/`constraints`) | [01-document-model.md](01-document-model.md) |
 | Feature IDs | Type prefix + counter (`s1`, `e1`) | [01-document-model.md](01-document-model.md) |
 | Persistent refs | `type:featureId:selector` | [appendix/naming-strategy.md](appendix/naming-strategy.md) |
 | Build errors | Transient (not stored in Yjs) | [01-document-model.md](01-document-model.md) |

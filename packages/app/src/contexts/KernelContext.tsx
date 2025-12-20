@@ -11,6 +11,7 @@ import React, {
 } from 'react';
 import { useDocument } from './DocumentContext';
 import { YjsWorkerSync } from '../worker/YjsWorkerSync';
+import { findFeature, getSketchData, setSketchData } from '../document/featureHelpers';
 import type {
   WorkerToMainMessage,
   TransferableMesh,
@@ -109,6 +110,35 @@ export function KernelProvider({ children }: KernelProviderProps) {
             return next;
           });
           break;
+
+        case 'sketch-solved': {
+          const sketchEl = findFeature(doc.features, msg.sketchId);
+          if (sketchEl) {
+            const data = getSketchData(sketchEl);
+
+            let changed = false;
+            for (const solved of msg.points) {
+              const p = data.points.find((pt) => pt.id === solved.id);
+              if (!p) continue;
+              const dx = solved.x - p.x;
+              const dy = solved.y - p.y;
+              if (Math.hypot(dx, dy) > 1e-9) {
+                p.x = solved.x;
+                p.y = solved.y;
+                changed = true;
+              }
+            }
+
+            if (changed) {
+              // Apply as a normal local change so the worker mirror also sees it
+              // (this converges quickly because the worker will stop emitting once stable).
+              doc.ydoc.transact(() => {
+                setSketchData(sketchEl, data);
+              });
+            }
+          }
+          break;
+        }
 
         case 'error':
           console.error('Kernel worker error:', msg.message);

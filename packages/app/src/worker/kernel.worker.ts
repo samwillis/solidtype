@@ -14,6 +14,15 @@ import {
   YZ_PLANE,
   ZX_PLANE,
   type DatumPlane,
+  planeToWorld,
+  sub3,
+  vec2,
+  coincident,
+  horizontalPoints,
+  verticalPoints,
+  fixed,
+  distance,
+  angle,
 } from '@solidtype/core';
 import type {
   MainToWorkerMessage,
@@ -106,7 +115,7 @@ function getDatumPlane(planeId: string): DatumPlane | null {
 interface SketchData {
   points: Array<{ id: string; x: number; y: number; fixed?: boolean }>;
   entities: Array<{ id: string; type: string; start?: string; end?: string; center?: string; ccw?: boolean }>;
-  constraints: Array<{ id: string; type: string }>;
+  constraints: any[];
 }
 
 function parseSketchData(element: Y.XmlElement): SketchData {
@@ -131,7 +140,7 @@ interface SketchInfo {
 const sketchMap = new Map<string, SketchInfo>();
 
 function interpretSketch(
-  _session: SolidSession,
+  session: SolidSession,
   element: Y.XmlElement
 ): void {
   const planeId = element.getAttribute('plane') || 'xy';
@@ -143,7 +152,141 @@ function interpretSketch(
   
   const data = parseSketchData(element);
   const id = element.getAttribute('id')!;
-  
+
+  // Build a kernel sketch so we can solve constraints and feed solved geometry
+  // into downstream features (extrude/revolve) within the same rebuild.
+  const sketch = session.createSketch(plane);
+  const pointIdMap = new Map<string, any>();
+  const entityIdMap = new Map<string, any>();
+
+  for (const point of data.points) {
+    const pid = sketch.addPoint(point.x, point.y, { fixed: point.fixed });
+    pointIdMap.set(point.id, pid);
+  }
+
+  for (const entity of data.entities) {
+    if (entity.type === 'line' && entity.start && entity.end) {
+      const startId = pointIdMap.get(entity.start);
+      const endId = pointIdMap.get(entity.end);
+      if (startId !== undefined && endId !== undefined) {
+        const eid = sketch.addLine(startId, endId);
+        entityIdMap.set(entity.id, eid);
+      }
+    }
+    if (entity.type === 'arc' && entity.start && entity.end && entity.center) {
+      const startId = pointIdMap.get(entity.start);
+      const endId = pointIdMap.get(entity.end);
+      const centerId = pointIdMap.get(entity.center);
+      if (startId !== undefined && endId !== undefined && centerId !== undefined) {
+        const eid = sketch.addArc(startId, endId, centerId, entity.ccw ?? true);
+        entityIdMap.set(entity.id, eid);
+      }
+    }
+  }
+
+  // Apply constraints
+  for (const c of data.constraints) {
+    if (!c || typeof c !== 'object') continue;
+    switch (c.type) {
+      case 'coincident': {
+        const [a, b] = c.points ?? [];
+        const p1 = pointIdMap.get(a);
+        const p2 = pointIdMap.get(b);
+        if (p1 !== undefined && p2 !== undefined) {
+          sketch.addConstraint(coincident(p1, p2));
+        }
+        break;
+      }
+      case 'horizontal': {
+        const [a, b] = c.points ?? [];
+        const p1 = pointIdMap.get(a);
+        const p2 = pointIdMap.get(b);
+        if (p1 !== undefined && p2 !== undefined) {
+          sketch.addConstraint(horizontalPoints(p1, p2));
+        }
+        break;
+      }
+      case 'vertical': {
+        const [a, b] = c.points ?? [];
+        const p1 = pointIdMap.get(a);
+        const p2 = pointIdMap.get(b);
+        if (p1 !== undefined && p2 !== undefined) {
+          sketch.addConstraint(verticalPoints(p1, p2));
+        }
+        break;
+      }
+      case 'fixed': {
+        const pointId = c.point;
+        const pid = pointIdMap.get(pointId);
+        const p = data.points.find((pt) => pt.id === pointId);
+        if (pid !== undefined && p) {
+          sketch.addConstraint(fixed(pid, vec2(p.x, p.y)));
+        }
+        break;
+      }
+      case 'distance': {
+        const [a, b] = c.points ?? [];
+        const p1 = pointIdMap.get(a);
+        const p2 = pointIdMap.get(b);
+        const val = typeof c.value === 'number' ? c.value : Number(c.value);
+        if (p1 !== undefined && p2 !== undefined && Number.isFinite(val)) {
+          sketch.addConstraint(distance(p1, p2, val));
+        }
+        break;
+      }
+      case 'angle': {
+        const [l1, l2] = c.lines ?? [];
+        const e1 = entityIdMap.get(l1);
+        const e2 = entityIdMap.get(l2);
+        const valDeg = typeof c.value === 'number' ? c.value : Number(c.value);
+        if (e1 !== undefined && e2 !== undefined && Number.isFinite(valDeg)) {
+          sketch.addConstraint(angle(e1, e2, (valDeg * Math.PI) / 180));
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  const before = new Map<string, { x: number; y: number }>();
+  for (const p of data.points) {
+    before.set(p.id, { x: p.x, y: p.y });
+  }
+
+  const solveResult = sketch.solve();
+  const dof = sketch.analyzeDOF();
+
+  // Update sketch data with solved positions
+  let maxDelta = 0;
+  for (const p of data.points) {
+    const pid = pointIdMap.get(p.id);
+    if (pid === undefined) continue;
+    const solved = sketch.getPoint(pid);
+    if (!solved) continue;
+
+    const prev = before.get(p.id);
+    if (prev) {
+      const dx = solved.x - prev.x;
+      const dy = solved.y - prev.y;
+      maxDelta = Math.max(maxDelta, Math.hypot(dx, dy));
+    }
+
+    p.x = solved.x;
+    p.y = solved.y;
+  }
+
+  // Notify main thread only when solver actually moved points.
+  if (maxDelta > 1e-9) {
+    self.postMessage({
+      type: 'sketch-solved',
+      sketchId: id,
+      points: data.points.map((p) => ({ id: p.id, x: p.x, y: p.y })),
+      status: solveResult.status,
+      dof,
+    } as WorkerToMainMessage);
+  }
+
   sketchMap.set(id, { planeId, plane, data });
 }
 
@@ -184,7 +327,14 @@ function interpretExtrude(
         sketch.addLine(startId, endId);
       }
     }
-    // TODO: Add arc support
+    if (entity.type === 'arc' && entity.start && entity.end && entity.center) {
+      const startId = pointIdMap.get(entity.start);
+      const endId = pointIdMap.get(entity.end);
+      const centerId = pointIdMap.get(entity.center);
+      if (startId !== undefined && endId !== undefined && centerId !== undefined) {
+        sketch.addArc(startId, endId, centerId, entity.ccw ?? true);
+      }
+    }
   }
 
   // Attempt to get a profile from the sketch
@@ -216,6 +366,109 @@ function interpretExtrude(
       }
     }
     // Tool body is consumed, return null
+    return null;
+  }
+
+  return result.body;
+}
+
+function interpretRevolve(
+  session: SolidSession,
+  element: Y.XmlElement
+): Body | null {
+  const sketchId = element.getAttribute('sketch');
+  const axisId = element.getAttribute('axis') || '';
+  const angleDeg = parseFloat(element.getAttribute('angle') || '360');
+  const op = element.getAttribute('op') || 'add';
+
+  if (!sketchId) {
+    throw new Error('Revolve requires a sketch reference');
+  }
+  if (!axisId) {
+    throw new Error('Revolve requires an axis line selection');
+  }
+
+  const sketchInfo = sketchMap.get(sketchId);
+  if (!sketchInfo) {
+    throw new Error(`Sketch not found: ${sketchId}`);
+  }
+
+  const axisEntity = sketchInfo.data.entities.find((e) => e.id === axisId);
+  if (!axisEntity || axisEntity.type !== 'line' || !axisEntity.start || !axisEntity.end) {
+    throw new Error('Invalid axis selection');
+  }
+
+  const axisStart2d = sketchInfo.data.points.find((p) => p.id === axisEntity.start);
+  const axisEnd2d = sketchInfo.data.points.find((p) => p.id === axisEntity.end);
+  if (!axisStart2d || !axisEnd2d) {
+    throw new Error('Axis references missing sketch points');
+  }
+
+  // Create sketch and add entities (mark axis as construction so it doesn't affect profile extraction)
+  const sketch = session.createSketch(sketchInfo.plane);
+  const pointIdMap = new Map<string, any>();
+  const entityIdMap = new Map<string, any>();
+
+  for (const point of sketchInfo.data.points) {
+    const pid = sketch.addPoint(point.x, point.y, { fixed: point.fixed });
+    pointIdMap.set(point.id, pid);
+  }
+
+  for (const entity of sketchInfo.data.entities) {
+    if (entity.type === 'line' && entity.start && entity.end) {
+      const startId = pointIdMap.get(entity.start);
+      const endId = pointIdMap.get(entity.end);
+      if (startId !== undefined && endId !== undefined) {
+        const isAxis = entity.id === axisId;
+        const eid = sketch.addLine(startId, endId, { construction: isAxis });
+        entityIdMap.set(entity.id, eid);
+      }
+    }
+    if (entity.type === 'arc' && entity.start && entity.end && entity.center) {
+      const startId = pointIdMap.get(entity.start);
+      const endId = pointIdMap.get(entity.end);
+      const centerId = pointIdMap.get(entity.center);
+      if (startId !== undefined && endId !== undefined && centerId !== undefined) {
+        const eid = sketch.addArc(startId, endId, centerId, entity.ccw ?? true);
+        entityIdMap.set(entity.id, eid);
+      }
+    }
+  }
+
+  const profileEntityIds: any[] = [];
+  for (const entity of sketchInfo.data.entities) {
+    if (entity.id === axisId) continue;
+    const eid = entityIdMap.get(entity.id);
+    if (eid !== undefined) profileEntityIds.push(eid);
+  }
+
+  const profile = sketch.getCoreSketch().toProfile(profileEntityIds);
+  if (!profile) {
+    throw new Error('Sketch does not contain a closed profile');
+  }
+
+  const axisStartWorld = planeToWorld(sketchInfo.plane, axisStart2d.x, axisStart2d.y);
+  const axisEndWorld = planeToWorld(sketchInfo.plane, axisEnd2d.x, axisEnd2d.y);
+  const axisDir = sub3(axisEndWorld, axisStartWorld);
+
+  const angleRad = (angleDeg * Math.PI) / 180;
+  const result = session.revolve(profile, {
+    operation: 'add',
+    axis: { origin: axisStartWorld, direction: axisDir },
+    angle: angleRad,
+  });
+
+  if (!result.success || !result.body) {
+    throw new Error(result.error || 'Revolve failed');
+  }
+
+  if (op === 'cut') {
+    for (const [existingId, existingBody] of bodyMap) {
+      const boolResult = session.subtract(existingBody, result.body);
+      if (boolResult.success && boolResult.body) {
+        bodyMap.set(existingId, boolResult.body);
+      }
+    }
     return null;
   }
 
@@ -287,6 +540,19 @@ function performRebuild(): void {
           body = interpretExtrude(session!, child);
           featureStatus[id] = 'computed';
           
+          if (body) {
+            bodyMap.set(id, body);
+            bodies.push({
+              id: String(body.id),
+              featureId: id,
+              faceCount: body.getFaces().length,
+            });
+          }
+          break;
+
+        case 'revolve':
+          body = interpretRevolve(session!, child);
+          featureStatus[id] = 'computed';
           if (body) {
             bodyMap.set(id, body);
             bodies.push({

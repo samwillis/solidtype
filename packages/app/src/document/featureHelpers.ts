@@ -4,7 +4,7 @@
 
 import * as Y from 'yjs';
 import type { SolidTypeDoc } from './createDocument';
-import type { Feature, FeatureType, SketchData } from '../types/document';
+import type { Feature, FeatureType, NewSketchConstraint, SketchConstraint, SketchData } from '../types/document';
 import { generateId, parseVector3, parseNumber, parseBoolean, serializeSketchData, parseSketchData } from './utils';
 import { getCounters, updateCounter } from './createDocument';
 
@@ -119,6 +119,37 @@ export function addExtrudeFeature(
   return id;
 }
 
+/**
+ * Create a new revolve feature
+ */
+export function addRevolveFeature(
+  doc: SolidTypeDoc,
+  sketchId: string,
+  axis: string,
+  angle: number = 360,
+  op: 'add' | 'cut' = 'add',
+  name?: string
+): string {
+  const counters = getCounters(doc);
+  const id = generateId('revolve', counters);
+  updateCounter(doc, 'r', counters['r']);
+
+  const revolve = new Y.XmlElement('revolve');
+  revolve.setAttribute('id', id);
+  revolve.setAttribute('sketch', sketchId);
+  revolve.setAttribute('axis', axis);
+  revolve.setAttribute('angle', String(angle));
+  revolve.setAttribute('op', op);
+  if (name) {
+    revolve.setAttribute('name', name);
+  } else {
+    revolve.setAttribute('name', `Revolve${counters['r']}`);
+  }
+
+  doc.features.push([revolve]);
+  return id;
+}
+
 // ============================================================================
 // Sketch Data Manipulation
 // ============================================================================
@@ -191,6 +222,49 @@ export function addLineToSketch(
   return id;
 }
 
+/**
+ * Add an arc to a sketch
+ */
+export function addArcToSketch(
+  sketch: Y.XmlElement,
+  startId: string,
+  endId: string,
+  centerId: string,
+  ccw: boolean = true
+): string {
+  const data = getSketchData(sketch);
+
+  const maxNum = data.entities.reduce((max, e) => {
+    const match = e.id.match(/^ar(\d+)$/);
+    return match ? Math.max(max, parseInt(match[1], 10)) : max;
+  }, 0);
+
+  const id = `ar${maxNum + 1}`;
+  data.entities.push({ id, type: 'arc', start: startId, end: endId, center: centerId, ccw });
+  setSketchData(sketch, data);
+  return id;
+}
+
+/**
+ * Add a constraint to a sketch
+ */
+export function addConstraintToSketch(
+  sketch: Y.XmlElement,
+  constraint: NewSketchConstraint
+): string {
+  const data = getSketchData(sketch);
+
+  const maxNum = data.constraints.reduce((max, c) => {
+    const match = c.id.match(/^cn(\d+)$/);
+    return match ? Math.max(max, parseInt(match[1], 10)) : max;
+  }, 0);
+
+  const id = `cn${maxNum + 1}`;
+  data.constraints.push({ ...constraint, id } as SketchConstraint);
+  setSketchData(sketch, data);
+  return id;
+}
+
 // ============================================================================
 // Feature Parsing
 // ============================================================================
@@ -250,10 +324,9 @@ export function parseFeature(element: Y.XmlElement): Feature | null {
         name,
         suppressed,
         sketch: element.getAttribute('sketch') ?? '',
+        axis: element.getAttribute('axis') ?? '',
         angle: parseNumber(element.getAttribute('angle'), 360),
         op: (element.getAttribute('op') ?? 'add') as 'add' | 'cut',
-        axisStart: [0, 0] as [number, number],
-        axisEnd: [1, 0] as [number, number],
       };
 
     default:

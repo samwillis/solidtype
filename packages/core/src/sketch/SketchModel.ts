@@ -637,7 +637,15 @@ export class SketchModel implements Sketch {
       const radius = Math.sqrt(dx1 * dx1 + dy1 * dy1);
       
       const startAngle = Math.atan2(dy1, dx1);
-      const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
+      let endAngle = Math.atan2(end.y - center.y, end.x - center.x);
+      
+      // Special case: start and end points coincide -> full circle.
+      // This matches SketchModel.addCircle(), which creates an arc with start=end.
+      const dxSE = start.x - end.x;
+      const dySE = start.y - end.y;
+      if (dxSE * dxSE + dySE * dySE < 1e-16) {
+        endAngle = startAngle + (entity.ccw ? 2 * Math.PI : -2 * Math.PI);
+      }
       
       return {
         kind: 'arc',
