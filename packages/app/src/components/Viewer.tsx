@@ -25,8 +25,8 @@ const Viewer: React.FC = () => {
 
     // Scene setup
     const scene = new THREE.Scene();
-    const bgColor = theme === 'dark' ? 0x1a1a1a : 0xe8e8e8;
-    scene.background = new THREE.Color(bgColor);
+    const initialBgColor = 0x1a1a1a; // Will be updated by theme effect
+    scene.background = new THREE.Color(initialBgColor);
     sceneRef.current = scene;
 
     // Camera setup

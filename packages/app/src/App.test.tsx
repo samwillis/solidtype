@@ -44,6 +44,7 @@ describe('App', () => {
   it('renders the status bar with theme toggle', () => {
     renderApp();
     expect(screen.getByText('Ready')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Switch to .* mode/)).toBeInTheDocument();
+    // Theme toggle button - matches any of the three modes
+    expect(screen.getByLabelText(/(Light|Dark|Auto) mode/)).toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Separator } from '@base-ui/react';
+import { Tooltip, Separator } from '@base-ui/react';
 import './ViewToolbar.css';
 
 // View control icons
@@ -44,27 +44,38 @@ interface ViewButtonProps {
 
 const ViewButton: React.FC<ViewButtonProps> = ({ icon, label, onClick, active }) => {
   return (
-    <button
-      className={`view-button ${active ? 'active' : ''}`}
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-    >
-      {icon}
-    </button>
+    <Tooltip.Root>
+      <Tooltip.Trigger
+        delay={300}
+        className={`view-button ${active ? 'active' : ''}`}
+        onClick={onClick}
+        render={<button aria-label={label} />}
+      >
+        {icon}
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Positioner side="top" sideOffset={6}>
+          <Tooltip.Popup className="view-tooltip">
+            {label}
+          </Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
   );
 };
 
 const ViewToolbar: React.FC = () => {
   return (
-    <div className="view-toolbar">
-      <ViewButton icon={<FrontViewIcon />} label="Front" />
-      <ViewButton icon={<TopViewIcon />} label="Top" />
-      <ViewButton icon={<IsoViewIcon />} label="Isometric" />
-      <Separator orientation="vertical" className="view-separator" />
-      <ViewButton icon={<WireframeIcon />} label="Wireframe" />
-      <ViewButton icon={<ShadedIcon />} label="Shaded" active />
-    </div>
+    <Tooltip.Provider>
+      <div className="view-toolbar">
+        <ViewButton icon={<FrontViewIcon />} label="Front" />
+        <ViewButton icon={<TopViewIcon />} label="Top" />
+        <ViewButton icon={<IsoViewIcon />} label="Isometric" />
+        <Separator orientation="vertical" className="view-separator" />
+        <ViewButton icon={<WireframeIcon />} label="Wireframe" />
+        <ViewButton icon={<ShadedIcon />} label="Shaded" active />
+      </div>
+    </Tooltip.Provider>
   );
 };
 

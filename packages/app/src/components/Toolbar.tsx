@@ -1,5 +1,5 @@
 import React from 'react';
-import { Separator } from '@base-ui/react';
+import { Tooltip, Separator } from '@base-ui/react';
 import './Toolbar.css';
 
 // Toolbar tool definition
@@ -144,16 +144,38 @@ interface ToolButtonProps {
 }
 
 const ToolButton: React.FC<ToolButtonProps> = ({ tool }) => {
+  // Disabled buttons just render without tooltip
+  if (tool.disabled) {
+    return (
+      <button
+        className="toolbar-button disabled"
+        onClick={tool.onClick}
+        disabled
+        aria-label={tool.label}
+      >
+        {tool.icon}
+      </button>
+    );
+  }
+
   return (
-    <button
-      className={`toolbar-button ${tool.disabled ? 'disabled' : ''}`}
-      onClick={tool.onClick}
-      disabled={tool.disabled}
-      aria-label={tool.label}
-      title={tool.label}
-    >
-      {tool.icon}
-    </button>
+    <Tooltip.Root>
+      <Tooltip.Trigger
+        delay={300}
+        className="toolbar-button"
+        onClick={tool.onClick}
+        render={<button aria-label={tool.label} />}
+      >
+        {tool.icon}
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Positioner side="bottom" sideOffset={6}>
+          <Tooltip.Popup className="toolbar-tooltip">
+            {tool.label}
+          </Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
   );
 };
 
@@ -171,13 +193,15 @@ const ToolGroup: React.FC<ToolGroupProps> = ({ tools }) => (
 
 const Toolbar: React.FC = () => {
   return (
-    <div className="toolbar">
-      <ToolGroup tools={sketchTools} />
-      <Separator orientation="vertical" className="toolbar-separator" />
-      <ToolGroup tools={featureTools} />
-      <Separator orientation="vertical" className="toolbar-separator" />
-      <ToolGroup tools={primitiveTools} />
-    </div>
+    <Tooltip.Provider>
+      <div className="toolbar">
+        <ToolGroup tools={sketchTools} />
+        <Separator orientation="vertical" className="toolbar-separator" />
+        <ToolGroup tools={featureTools} />
+        <Separator orientation="vertical" className="toolbar-separator" />
+        <ToolGroup tools={primitiveTools} />
+      </div>
+    </Tooltip.Provider>
   );
 };
 
