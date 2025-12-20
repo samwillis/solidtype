@@ -98,21 +98,25 @@ const AIPanel: React.FC = () => {
           >
             <HistoryIcon />
           </button>
-          {showHistory && closedSessions.length > 0 && (
+          {showHistory && (
             <div className="ai-panel-history-dropdown">
               <div className="ai-panel-history-header">Previous Sessions</div>
-              {closedSessions.map((session) => (
-                <button
-                  key={session.id}
-                  className="ai-panel-history-item"
-                  onClick={() => restoreSession(session)}
-                >
-                  <span>{session.title}</span>
-                  <span className="ai-panel-history-date">
-                    {session.createdAt.toLocaleDateString()}
-                  </span>
-                </button>
-              ))}
+              {closedSessions.length > 0 ? (
+                closedSessions.map((session) => (
+                  <button
+                    key={session.id}
+                    className="ai-panel-history-item"
+                    onClick={() => restoreSession(session)}
+                  >
+                    <span>{session.title}</span>
+                    <span className="ai-panel-history-date">
+                      {session.createdAt.toLocaleDateString()}
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="ai-panel-history-empty">No previous sessions</div>
+              )}
             </div>
           )}
         </div>
@@ -141,14 +145,16 @@ const AIPanel: React.FC = () => {
 
       {/* Input area */}
       <div className="ai-panel-input-area">
-        <textarea
-          className="ai-panel-input"
-          placeholder="Ask the AI assistant..."
-          rows={3}
-        />
-        <button className="ai-panel-send" aria-label="Send message">
-          <SendIcon />
-        </button>
+        <div className="ai-panel-input-wrapper">
+          <textarea
+            className="ai-panel-input"
+            placeholder="Ask the AI assistant..."
+            rows={2}
+          />
+          <button className="ai-panel-send" aria-label="Send message">
+            <SendIcon />
+          </button>
+        </div>
       </div>
     </div>
   );
