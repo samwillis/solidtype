@@ -1,9 +1,9 @@
 .view-cube {
-  width: 160px;
-  height: 160px;
+  width: 100px;
+  height: 100px;
   position: absolute;
-  bottom: 48px;
-  right: 8px;
+  bottom: 42px;
+  right: 4px;
   z-index: 10;
   border-radius: 4px;
   overflow: hidden;

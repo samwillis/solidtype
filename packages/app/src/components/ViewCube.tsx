@@ -180,7 +180,7 @@ const ViewCube: React.FC = () => {
     if (!containerRef.current) return;
 
     const container = containerRef.current;
-    const size = 160;
+    const size = 100;
 
     // Scene setup
     const scene = new THREE.Scene();
