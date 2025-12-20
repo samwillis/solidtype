@@ -9,8 +9,104 @@
 .feature-tree-content {
   flex: 1;
   overflow: auto;
+  padding: 4px 0;
 }
 
+/* Tree list styles */
+.tree-list,
+.tree-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text);
+  min-height: 22px;
+}
+
+.tree-item:hover {
+  background: var(--color-bg-hover);
+}
+
+.tree-item.selected {
+  background: var(--color-bg-active);
+}
+
+.tree-item.suppressed {
+  opacity: 0.5;
+}
+
+.tree-item.suppressed .tree-item-name {
+  text-decoration: line-through;
+}
+
+/* Expand/collapse button */
+.tree-expand-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.tree-expand-btn:hover {
+  background: var(--color-bg-active);
+}
+
+.tree-expand-placeholder {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* Chevron icon */
+.tree-chevron {
+  color: var(--color-text-muted);
+  transition: transform 0.15s ease;
+}
+
+.tree-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+/* Tree node icons */
+.tree-icon {
+  flex-shrink: 0;
+  color: var(--color-icon);
+}
+
+/* Icon colors by type */
+.tree-icon-bodies { color: #8b7355; }
+.tree-icon-body { color: #6b8e23; }
+.tree-icon-part { color: #4a90d9; }
+.tree-icon-origin { color: #e57373; }
+.tree-icon-plane { color: #7986cb; }
+.tree-icon-sketch { color: #4fc3f7; }
+.tree-icon-extrude { color: #81c784; }
+.tree-icon-revolve { color: #ffb74d; }
+.tree-icon-fillet { color: #ba68c8; }
+.tree-icon-chamfer { color: #9575cd; }
+.tree-icon-boolean { color: #4db6ac; }
+
+/* Node name */
+.tree-item-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Empty state (kept for potential future use) */
 .feature-tree-empty {
   display: flex;
   flex-direction: column;
@@ -25,54 +121,4 @@
   color: var(--color-text-muted);
   margin-bottom: 8px;
   opacity: 0.5;
-}
-
-.feature-tree-list {
-  list-style: none;
-  margin: 0;
-  padding: 4px 0;
-}
-
-.feature-tree-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--color-text);
-}
-
-.feature-tree-item:hover {
-  background: var(--color-bg-hover);
-}
-
-.feature-tree-item.selected {
-  background: var(--color-bg-active);
-}
-
-.feature-tree-item.suppressed {
-  opacity: 0.5;
-}
-
-.feature-tree-item.suppressed .feature-tree-item-name {
-  text-decoration: line-through;
-}
-
-.feature-icon {
-  flex-shrink: 0;
-  color: var(--color-icon);
-}
-
-.feature-icon-sketch { color: var(--color-feature-sketch); }
-.feature-icon-extrude { color: var(--color-feature-extrude); }
-.feature-icon-revolve { color: var(--color-feature-revolve); }
-.feature-icon-boolean { color: var(--color-feature-boolean); }
-.feature-icon-primitive { color: var(--color-feature-primitive); }
-
-.feature-tree-item-name {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }

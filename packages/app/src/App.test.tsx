@@ -26,7 +26,7 @@ const renderApp = () => {
 describe('App', () => {
   it('renders without crashing', () => {
     renderApp();
-    expect(screen.getByText('Feature Tree')).toBeInTheDocument();
+    expect(screen.getByText('Features')).toBeInTheDocument();
     expect(screen.getByTestId('viewer')).toBeInTheDocument();
   });
 
@@ -38,9 +38,12 @@ describe('App', () => {
     expect(screen.getByLabelText('Box')).toBeInTheDocument();
   });
 
-  it('shows empty feature tree message', () => {
+  it('shows feature tree with mock data', () => {
     renderApp();
-    expect(screen.getByText(/No features/i)).toBeInTheDocument();
+    // Check for key elements in the feature tree
+    expect(screen.getByText('Bodies')).toBeInTheDocument();
+    expect(screen.getByText('Part1')).toBeInTheDocument();
+    expect(screen.getByText('Origin')).toBeInTheDocument();
   });
 
   it('renders the properties panel', () => {
