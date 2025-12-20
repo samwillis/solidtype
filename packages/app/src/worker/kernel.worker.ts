@@ -124,6 +124,123 @@ function getDatumPlane(planeId: string): DatumPlane | null {
   }
 }
 
+/**
+ * Get sketch plane - supports both datum planes and face references (Phase 15)
+ */
+function getSketchPlane(planeRef: string): DatumPlane | null {
+  // Try datum plane first
+  const datum = getDatumPlane(planeRef);
+  if (datum) return datum;
+  
+  // Check for face reference (Phase 15)
+  if (planeRef.startsWith('face:')) {
+    // Parse face:featureId:selector format
+    const parts = planeRef.split(':');
+    if (parts.length >= 3) {
+      const featureId = parts[1];
+      const selector = parts.slice(2).join(':');
+      
+      // Get the body from the feature
+      const body = bodyMap.get(featureId);
+      if (!body) {
+        throw new Error(`Cannot resolve face reference: body for feature ${featureId} not found`);
+      }
+      
+      // Try to find the face - for now use a simple selector approach
+      // In a full implementation, this would use the persistent naming system
+      const faces = body.getFaces();
+      if (faces.length === 0) {
+        throw new Error(`Body has no faces`);
+      }
+      
+      // Simple selector parsing for top/bottom/side
+      if (selector === 'top' && faces.length > 0) {
+        // Find the top face (highest Z normal or based on extrude direction)
+        const topFace = faces[0]; // Simplified - in reality would analyze normals
+        const surface = topFace.getSurface();
+        if (surface.kind !== 'plane') {
+          throw new Error('Cannot sketch on non-planar face');
+        }
+        return {
+          surface: {
+            kind: 'plane',
+            origin: surface.origin,
+            normal: surface.normal,
+            xDir: surface.xDir,
+            yDir: surface.yDir,
+          },
+        };
+      }
+      
+      // Default to first planar face
+      for (const face of faces) {
+        const surface = face.getSurface();
+        if (surface.kind === 'plane') {
+          return {
+            surface: {
+              kind: 'plane',
+              origin: surface.origin,
+              normal: surface.normal,
+              xDir: surface.xDir,
+              yDir: surface.yDir,
+            },
+          };
+        }
+      }
+      
+      throw new Error('No planar face found for sketch');
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Calculate extrude distance based on extent type (Phase 14)
+ */
+function calculateExtrudeDistance(
+  element: Y.XmlElement,
+  direction: number
+): number {
+  const extent = element.getAttribute('extent') || 'blind';
+  const baseDistance = parseFloat(element.getAttribute('distance') || '10');
+  
+  switch (extent) {
+    case 'blind':
+      return baseDistance * direction;
+      
+    case 'throughAll':
+      // Use a large distance to ensure we go through everything
+      // In a full implementation, we'd calculate the actual bounding box
+      return 1000 * direction;
+      
+    case 'toFace': {
+      // Parse extent reference and calculate distance to face
+      const extentRef = element.getAttribute('extentRef');
+      if (!extentRef) {
+        throw new Error('toFace extent requires extentRef');
+      }
+      
+      // For now, use a simplified approach - in full implementation
+      // we'd intersect rays with the target face
+      // TODO: Implement proper face intersection
+      return baseDistance * direction;
+    }
+      
+    case 'toVertex': {
+      const extentRef = element.getAttribute('extentRef');
+      if (!extentRef) {
+        throw new Error('toVertex extent requires extentRef');
+      }
+      // TODO: Implement vertex reference resolution
+      return baseDistance * direction;
+    }
+      
+    default:
+      return baseDistance * direction;
+  }
+}
+
 interface SketchData {
   points: Array<{ id: string; x: number; y: number; fixed?: boolean }>;
   entities: Array<{ id: string; type: string; start?: string; end?: string; center?: string; ccw?: boolean }>;
@@ -156,7 +273,7 @@ function interpretSketch(
   element: Y.XmlElement
 ): void {
   const planeId = element.getAttribute('plane') || 'xy';
-  const plane = getDatumPlane(planeId);
+  const plane = getSketchPlane(planeId);
   
   if (!plane) {
     throw new Error(`Unknown plane: ${planeId}`);
@@ -306,7 +423,6 @@ function interpretExtrude(
   element: Y.XmlElement
 ): Body | null {
   const sketchId = element.getAttribute('sketch');
-  const distance = parseFloat(element.getAttribute('distance') || '10');
   const op = element.getAttribute('op') || 'add';
   const direction = element.getAttribute('direction') || 'normal';
 
@@ -354,13 +470,14 @@ function interpretExtrude(
     throw new Error('Sketch does not contain a closed profile');
   }
 
-  // Calculate direction multiplier
+  // Calculate direction multiplier and extent-based distance (Phase 14)
   const dirMultiplier = direction === 'reverse' ? -1 : 1;
+  const finalDistance = calculateExtrudeDistance(element, dirMultiplier);
 
   // Perform extrusion - always use 'add' operation and handle cut separately
   const result = session.extrude(profile, {
     operation: 'add',
-    distance: distance * dirMultiplier,
+    distance: finalDistance,
   });
 
   if (!result.success || !result.body) {

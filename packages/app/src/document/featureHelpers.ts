@@ -89,28 +89,61 @@ export function addSketchFeature(
 }
 
 /**
+ * Options for creating an extrude feature
+ */
+export interface ExtrudeFeatureOptions {
+  sketchId: string;
+  distance?: number;
+  op?: 'add' | 'cut';
+  direction?: 'normal' | 'reverse';
+  extent?: 'blind' | 'toFace' | 'toVertex' | 'throughAll';
+  extentRef?: string;
+  name?: string;
+}
+
+/**
  * Create a new extrude feature
  */
 export function addExtrudeFeature(
   doc: SolidTypeDoc,
-  sketchId: string,
-  distance: number,
+  sketchIdOrOptions: string | ExtrudeFeatureOptions,
+  distance?: number,
   op: 'add' | 'cut' = 'add',
   direction: 'normal' | 'reverse' = 'normal',
   name?: string
 ): string {
+  // Support both old and new API
+  const options: ExtrudeFeatureOptions = typeof sketchIdOrOptions === 'string'
+    ? { sketchId: sketchIdOrOptions, distance, op, direction, name }
+    : sketchIdOrOptions;
+
   const counters = getCounters(doc);
   const id = generateId('extrude', counters);
   updateCounter(doc, 'e', counters['e']);
 
   const extrude = new Y.XmlElement('extrude');
   extrude.setAttribute('id', id);
-  extrude.setAttribute('sketch', sketchId);
-  extrude.setAttribute('distance', String(distance));
-  extrude.setAttribute('op', op);
-  extrude.setAttribute('direction', direction);
-  if (name) {
-    extrude.setAttribute('name', name);
+  extrude.setAttribute('sketch', options.sketchId);
+  extrude.setAttribute('op', options.op ?? 'add');
+  extrude.setAttribute('direction', options.direction ?? 'normal');
+  
+  // Extent type (Phase 14)
+  const extent = options.extent ?? 'blind';
+  extrude.setAttribute('extent', extent);
+  
+  if (extent === 'blind') {
+    extrude.setAttribute('distance', String(options.distance ?? 10));
+  } else if (extent === 'toFace' || extent === 'toVertex') {
+    if (options.extentRef) {
+      extrude.setAttribute('extentRef', options.extentRef);
+    }
+    // Also store a fallback distance
+    extrude.setAttribute('distance', String(options.distance ?? 10));
+  }
+  // throughAll doesn't need a distance attribute
+  
+  if (options.name) {
+    extrude.setAttribute('name', options.name);
   } else {
     extrude.setAttribute('name', `Extrude${counters['e']}`);
   }
@@ -305,7 +338,8 @@ export function parseFeature(element: Y.XmlElement): Feature | null {
         data: getSketchData(element),
       };
 
-    case 'extrude':
+    case 'extrude': {
+      const extent = (element.getAttribute('extent') ?? 'blind') as 'blind' | 'toFace' | 'toVertex' | 'throughAll';
       return {
         type: 'extrude',
         id,
@@ -315,7 +349,10 @@ export function parseFeature(element: Y.XmlElement): Feature | null {
         distance: parseNumber(element.getAttribute('distance'), 10),
         op: (element.getAttribute('op') ?? 'add') as 'add' | 'cut',
         direction: (element.getAttribute('direction') ?? 'normal') as 'normal' | 'reverse',
+        extent,
+        extentRef: element.getAttribute('extentRef') ?? undefined,
       };
+    }
 
     case 'revolve':
       return {

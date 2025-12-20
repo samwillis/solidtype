@@ -9,6 +9,7 @@
 .properties-panel-content {
   flex: 1;
   overflow: auto;
+  padding: 8px;
 }
 
 .properties-empty {
@@ -27,12 +28,42 @@
   opacity: 0.5;
 }
 
-/* Property rows */
+.empty-title {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.empty-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* Property Groups */
+.property-group {
+  margin-bottom: 16px;
+}
+
+.property-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-muted);
+  padding: 0 4px;
+  margin-bottom: 6px;
+}
+
+/* Property Rows */
 .property-row {
   display: flex;
   align-items: center;
-  padding: 4px 12px;
+  padding: 4px;
   font-size: 12px;
+  margin-bottom: 4px;
+  border-radius: 4px;
 }
 
 .property-row:hover {
@@ -40,27 +71,77 @@
 }
 
 .property-label {
-  flex: 1;
+  flex: 0 0 80px;
   color: var(--color-text-secondary);
+  font-size: 12px;
 }
 
 .property-value {
   flex: 1;
-  color: var(--color-text);
-  text-align: right;
+  min-width: 0;
 }
 
-.property-input {
-  flex: 1;
-  padding: 2px 6px;
+.readonly-value {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+/* Input Components */
+.text-input,
+.select-input {
+  width: 100%;
+  padding: 4px 8px;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
-  border-radius: 2px;
+  border-radius: 4px;
   font-size: 12px;
   color: var(--color-text);
 }
 
-.property-input:focus {
+.text-input:focus,
+.select-input:focus {
   outline: none;
   border-color: var(--color-accent);
+}
+
+.text-input:disabled,
+.select-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.number-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.number-input input {
+  width: 60px;
+  padding: 4px 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--color-text);
+  text-align: right;
+}
+
+.number-input input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.number-input input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.number-input .unit {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.select-input {
+  cursor: pointer;
 }

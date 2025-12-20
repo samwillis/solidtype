@@ -1,8 +1,25 @@
 # Phase 13: Properties Panel
 
+**Status: IMPLEMENTED**
+
 ## Prerequisites
 
 - Phase 12: Rebuild Gate
+
+## Implementation Notes
+
+The properties panel is fully implemented in:
+- `PropertiesPanel.tsx` - Complete feature editing UI with:
+  - `NumberInput` component with blur/Enter commit
+  - `TextInput` component for name editing
+  - `SelectInput` component for dropdown options
+  - `PropertyRow` and `PropertyGroup` layout components
+  - Feature-specific property editors:
+    - `SketchProperties` - Shows plane, point/entity/constraint counts
+    - `ExtrudeProperties` - Edits distance, operation, direction, extent type
+    - `RevolveProperties` - Edits angle and operation
+- `PropertiesPanel.css` - Styled property groups, rows, and inputs
+- Integration with `SelectionContext` for feature selection from tree or 3D view
 
 ## Goals
 

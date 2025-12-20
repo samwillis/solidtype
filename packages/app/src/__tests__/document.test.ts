@@ -360,3 +360,72 @@ describe('Feature Parsing', () => {
     expect((feature as any).op).toBe('cut');
   });
 });
+
+// ============================================================================
+// Phase 14: Extrude Extent Tests
+// ============================================================================
+
+describe('Extrude Extent Types', () => {
+  test('addExtrudeFeature defaults to blind extent', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'xy');
+    const extrudeId = addExtrudeFeature(doc, sketchId, 10);
+    const element = findFeature(doc.features, extrudeId)!;
+    const feature = parseFeature(element);
+
+    expect(feature).not.toBeNull();
+    expect((feature as any).extent).toBe('blind');
+    expect((feature as any).distance).toBe(10);
+  });
+
+  test('addExtrudeFeature with options object supports throughAll', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'xy');
+    const extrudeId = addExtrudeFeature(doc, {
+      sketchId,
+      extent: 'throughAll',
+      op: 'cut',
+    });
+    const element = findFeature(doc.features, extrudeId)!;
+    const feature = parseFeature(element);
+
+    expect(feature).not.toBeNull();
+    expect((feature as any).extent).toBe('throughAll');
+    expect((feature as any).op).toBe('cut');
+  });
+
+  test('addExtrudeFeature with options object supports toFace with extentRef', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'xy');
+    const extrudeId = addExtrudeFeature(doc, {
+      sketchId,
+      extent: 'toFace',
+      extentRef: 'face:e1:top',
+      op: 'add',
+    });
+    const element = findFeature(doc.features, extrudeId)!;
+    const feature = parseFeature(element);
+
+    expect(feature).not.toBeNull();
+    expect((feature as any).extent).toBe('toFace');
+    expect((feature as any).extentRef).toBe('face:e1:top');
+  });
+});
+
+// ============================================================================
+// Phase 15: Sketch on Face Tests
+// ============================================================================
+
+describe('Sketch on Face', () => {
+  test('addSketchFeature accepts face reference for plane', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'face:e1:top', 'SketchOnFace');
+    const element = findFeature(doc.features, sketchId)!;
+    const feature = parseFeature(element);
+
+    expect(feature).not.toBeNull();
+    expect(feature!.type).toBe('sketch');
+    expect((feature as any).plane).toBe('face:e1:top');
+    expect(feature!.name).toBe('SketchOnFace');
+  });
+});

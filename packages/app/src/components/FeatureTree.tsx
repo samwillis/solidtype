@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useDocument } from '../contexts/DocumentContext';
 import { useKernel } from '../contexts/KernelContext';
+import { useSelection } from '../contexts/SelectionContext';
 import type { Feature, FeatureType } from '../types/document';
 import type { FeatureStatus } from '../worker/types';
 import './FeatureTree.css';
@@ -354,6 +355,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
 const FeatureTree: React.FC = () => {
   const { features, rebuildGate, setRebuildGate } = useDocument();
   const { featureStatus, errors, bodies } = useKernel();
+  const { selectedFeatureId, selectFeature } = useSelection();
 
   const errorsByFeature = useMemo(() => {
     const map: Record<string, string> = {};
@@ -378,7 +380,6 @@ const FeatureTree: React.FC = () => {
     // Initially expand part and bodies folder
     return new Set(['part', 'bodies']);
   });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const handleToggleExpand = useCallback((id: string) => {
     setExpandedNodes((prev) => {
@@ -393,8 +394,10 @@ const FeatureTree: React.FC = () => {
   }, []);
 
   const handleSelect = useCallback((id: string) => {
-    setSelectedId(id);
-  }, []);
+    // Don't select folder nodes
+    if (id === 'part' || id === 'bodies') return;
+    selectFeature(id);
+  }, [selectFeature]);
 
   const handleGateDrop = useCallback((afterId: string | null) => {
     setRebuildGate(afterId);
@@ -411,7 +414,7 @@ const FeatureTree: React.FC = () => {
               node={node}
               level={0}
               expandedNodes={expandedNodes}
-              selectedId={selectedId}
+              selectedId={selectedFeatureId}
               rebuildGate={rebuildGate}
               showGateAfter={false}
               onToggleExpand={handleToggleExpand}

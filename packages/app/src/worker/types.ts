@@ -129,4 +129,20 @@ export interface TransferableMesh {
   positions: Float32Array;
   normals: Float32Array;
   indices: Uint32Array;
+  /** Maps triangle index to face ID for 3D selection */
+  faceMap?: Uint32Array;
+}
+
+/** Request to resolve a persistent reference */
+export interface ResolveRefMessage {
+  type: 'resolve-ref';
+  ref: string;
+  requestId: string;
+}
+
+/** Response for resolved reference */
+export interface ResolveRefResultMessage {
+  type: 'resolve-ref-result';
+  requestId: string;
+  result: { faceId: number; bodyId: string } | null;
 }

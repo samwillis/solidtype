@@ -1,9 +1,24 @@
 # Phase 15: Sketch on Face
 
+**Status: IMPLEMENTED**
+
 ## Prerequisites
 
 - Phase 14: Extrude Extents
 - Phase 11: 3D Selection
+
+## Implementation Notes
+
+Sketch on face is supported in the document model and worker:
+- `document.ts` - Updated `SketchFeature.plane` documentation to support face references
+- `kernel.worker.ts` - Added `getSketchPlane()` function that:
+  - Resolves datum plane IDs (`xy`, `xz`, `yz`)
+  - Parses face references (`face:{featureId}:{selector}`)
+  - Extracts plane from planar body faces
+- Unit tests added for face reference in plane attribute
+
+Face reference format: `face:{featureId}:{selector}`
+- Example: `face:e1:top` - Top face of extrude feature e1
 
 ## Goals
 

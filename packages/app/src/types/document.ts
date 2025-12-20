@@ -84,7 +84,12 @@ export interface SketchData {
 
 export interface SketchFeature extends FeatureBase {
   type: 'sketch';
-  plane: string; // Reference to plane ID or face ref
+  /** 
+   * Reference to sketch plane. Can be:
+   * - Datum plane ID: "xy", "xz", "yz"
+   * - Face reference: "face:{featureId}:{selector}" (Phase 15)
+   */
+  plane: string;
   data?: SketchData;
 }
 
@@ -92,12 +97,21 @@ export interface SketchFeature extends FeatureBase {
 // Modeling Features
 // ============================================================================
 
+/** Extent type for extrude operations (Phase 14) */
+export type ExtrudeExtent = 'blind' | 'toFace' | 'toVertex' | 'throughAll';
+
 export interface ExtrudeFeature extends FeatureBase {
   type: 'extrude';
   sketch: string;
-  distance: number;
   op: 'add' | 'cut';
   direction: 'normal' | 'reverse' | [number, number, number];
+  
+  /** Extent type - how far to extrude (Phase 14) */
+  extent?: ExtrudeExtent;
+  /** Distance for 'blind' extent (default) */
+  distance?: number;
+  /** Persistent reference to target face or vertex for 'toFace' or 'toVertex' extent */
+  extentRef?: string;
 }
 
 export interface RevolveFeature extends FeatureBase {

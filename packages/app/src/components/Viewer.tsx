@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { useTheme } from '../contexts/ThemeContext';
 import { useViewer, ProjectionMode } from '../contexts/ViewerContext';
 import { useKernel } from '../contexts/KernelContext';
+import { useSelection } from '../contexts/SelectionContext';
+import { useRaycast } from '../hooks/useRaycast';
 import './Viewer.css';
 
 const Viewer: React.FC = () => {
@@ -18,7 +20,29 @@ const Viewer: React.FC = () => {
 
   const { theme } = useTheme();
   const { registerRefs, cameraStateRef } = useViewer();
-  const { meshes } = useKernel();
+  const { meshes, bodies } = useKernel();
+  const { selectFace, setHover, selectedFaces, hover, selectionMode, clearSelection } = useSelection();
+  
+  // Raycast hook for 3D selection
+  const { raycast, getFaceId } = useRaycast({
+    camera: cameraRef,
+    scene: sceneRef,
+    container: containerRef,
+    meshes,
+    bodies,
+  });
+  
+  // Use refs for callbacks to avoid effect re-runs
+  const raycastRef = useRef(raycast);
+  raycastRef.current = raycast;
+  const getFaceIdRef = useRef(getFaceId);
+  getFaceIdRef.current = getFaceId;
+  const selectFaceRef = useRef(selectFace);
+  selectFaceRef.current = selectFace;
+  const setHoverRef = useRef(setHover);
+  setHoverRef.current = setHover;
+  const clearSelectionRef = useRef(clearSelection);
+  clearSelectionRef.current = clearSelection;
 
   // Request a render (for use by external controls)
   const requestRender = useCallback(() => {
@@ -324,6 +348,71 @@ const Viewer: React.FC = () => {
       e.preventDefault(); // Prevent context menu on right click
     };
 
+    // Click handler for 3D selection
+    let clickStartPos = { x: 0, y: 0 };
+    let clickStartTime = 0;
+    
+    const onClickStart = (e: MouseEvent) => {
+      clickStartPos = { x: e.clientX, y: e.clientY };
+      clickStartTime = Date.now();
+    };
+    
+    const onClick = (e: MouseEvent) => {
+      // Ignore if we dragged significantly (rotation/pan)
+      const dx = e.clientX - clickStartPos.x;
+      const dy = e.clientY - clickStartPos.y;
+      const dragDistance = Math.sqrt(dx * dx + dy * dy);
+      const clickDuration = Date.now() - clickStartTime;
+      
+      if (dragDistance > 5 || clickDuration > 300) return;
+      
+      // Only handle left click
+      if (e.button !== 0) return;
+      
+      // Don't select if modifier key for orbit/pan was held
+      if (e.shiftKey) return;
+      
+      const hit = raycastRef.current(e.clientX, e.clientY);
+      
+      if (hit) {
+        const faceId = getFaceIdRef.current(hit.bodyId, hit.faceIndex);
+        selectFaceRef.current({
+          bodyId: hit.bodyId,
+          faceIndex: faceId,
+          featureId: hit.featureId,
+        }, e.ctrlKey || e.metaKey);
+      } else {
+        // Clicked empty space - clear selection
+        clearSelectionRef.current();
+      }
+    };
+    
+    // Hover handler for 3D highlighting
+    const onHover = (e: MouseEvent) => {
+      // Skip hover if dragging
+      if (isDragging) {
+        setHoverRef.current(null);
+        return;
+      }
+      
+      const hit = raycastRef.current(e.clientX, e.clientY);
+      
+      if (hit) {
+        const faceId = getFaceIdRef.current(hit.bodyId, hit.faceIndex);
+        setHoverRef.current({
+          type: 'face',
+          bodyId: hit.bodyId,
+          index: faceId,
+          featureId: hit.featureId,
+        });
+      } else {
+        setHoverRef.current(null);
+      }
+    };
+
+    renderer.domElement.addEventListener('mousedown', onClickStart);
+    renderer.domElement.addEventListener('click', onClick);
+    renderer.domElement.addEventListener('mousemove', onHover);
     renderer.domElement.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
@@ -405,6 +494,9 @@ const Viewer: React.FC = () => {
       }
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
+      renderer.domElement.removeEventListener('mousedown', onClickStart);
+      renderer.domElement.removeEventListener('click', onClick);
+      renderer.domElement.removeEventListener('mousemove', onHover);
       renderer.domElement.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
