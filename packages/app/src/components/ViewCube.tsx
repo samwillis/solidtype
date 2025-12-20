@@ -12,8 +12,9 @@ const ViewCube: React.FC = () => {
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const cubeRef = useRef<THREE.Group | null>(null);
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
-  const mouseRef = useRef<THREE.Vector2>(new THREE.Vector2());
+  const mouseRef = useRef<THREE.Vector2>(new THREE.Vector2(-999, -999)); // Start off-screen
   const mouseScreenRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const hasMouseEnteredRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const hoveredRef = useRef<string | null>(null);
 
@@ -243,7 +244,12 @@ const ViewCube: React.FC = () => {
     cubeRef.current = cube;
 
     // Handle mouse events
+    const onMouseEnter = () => {
+      hasMouseEnteredRef.current = true;
+    };
+
     const onMouseMove = (e: MouseEvent) => {
+      if (!hasMouseEnteredRef.current) return;
       const rect = container.getBoundingClientRect();
       mouseRef.current.x = ((e.clientX - rect.left) / size) * 2 - 1;
       mouseRef.current.y = -((e.clientY - rect.top) / size) * 2 + 1;
@@ -275,6 +281,7 @@ const ViewCube: React.FC = () => {
       }
     };
 
+    container.addEventListener('mouseenter', onMouseEnter);
     container.addEventListener('mousemove', onMouseMove);
     container.addEventListener('mouseleave', onMouseLeave);
     container.addEventListener('click', onClick);
@@ -343,6 +350,7 @@ const ViewCube: React.FC = () => {
 
     // Cleanup
     return () => {
+      container.removeEventListener('mouseenter', onMouseEnter);
       container.removeEventListener('mousemove', onMouseMove);
       container.removeEventListener('mouseleave', onMouseLeave);
       container.removeEventListener('click', onClick);

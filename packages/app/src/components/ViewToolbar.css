@@ -9,8 +9,12 @@
   background: var(--color-bg-light);
   border: 1px solid var(--color-border);
   border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
   z-index: 10;
+}
+
+[data-theme="dark"] .view-toolbar {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 .view-separator {
@@ -59,7 +63,11 @@
   border-radius: 4px;
   font-size: 11px;
   font-weight: 500;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   white-space: nowrap;
   z-index: 1000;
+}
+
+[data-theme="dark"] .view-tooltip {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }

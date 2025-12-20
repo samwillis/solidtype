@@ -63,7 +63,11 @@
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   white-space: nowrap;
   z-index: 1000;
+}
+
+[data-theme="dark"] .toolbar-tooltip {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
