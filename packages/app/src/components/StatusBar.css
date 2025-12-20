@@ -1,0 +1,33 @@
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  padding: 0 12px;
+  background: #f0f0f0;
+  border-top: 1px solid #d0d0d0;
+  font-size: 11px;
+  color: #555;
+}
+
+.status-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-bar-text {
+  color: #333;
+}
+
+.status-bar-coordinates {
+  font-family: Monaco, Menlo, 'Ubuntu Mono', Consolas, monospace;
+  color: #666;
+  letter-spacing: 0.5px;
+}

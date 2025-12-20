@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { ProjectProvider } from './contexts/ProjectContext';
 import App from './App';
 
 // Mock the Viewer component to avoid WebGL issues in jsdom
@@ -10,23 +9,30 @@ vi.mock('./components/Viewer', () => ({
 
 describe('App', () => {
   it('renders without crashing', () => {
-    render(
-      <ProjectProvider>
-        <App />
-      </ProjectProvider>
-    );
+    render(<App />);
     expect(screen.getByText('Feature Tree')).toBeInTheDocument();
-    expect(screen.getByText('Files & Code')).toBeInTheDocument();
     expect(screen.getByTestId('viewer')).toBeInTheDocument();
   });
 
-  it('shows Feature Tree tab by default', () => {
-    render(
-      <ProjectProvider>
-        <App />
-      </ProjectProvider>
-    );
-    const featureTreeContent = screen.getByText(/No features yet/i);
-    expect(featureTreeContent).toBeInTheDocument();
+  it('renders the main toolbar with mode tabs', () => {
+    render(<App />);
+    expect(screen.getByText('Features')).toBeInTheDocument();
+    expect(screen.getByText('Sketch')).toBeInTheDocument();
+    expect(screen.getByText('Primitives')).toBeInTheDocument();
+  });
+
+  it('shows empty feature tree message', () => {
+    render(<App />);
+    expect(screen.getByText(/No features yet/i)).toBeInTheDocument();
+  });
+
+  it('renders the properties panel', () => {
+    render(<App />);
+    expect(screen.getByText('Properties')).toBeInTheDocument();
+  });
+
+  it('renders the status bar', () => {
+    render(<App />);
+    expect(screen.getByText('Ready')).toBeInTheDocument();
   });
 });

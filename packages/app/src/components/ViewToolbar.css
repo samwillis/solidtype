@@ -1,0 +1,67 @@
+.view-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: linear-gradient(to bottom, #f8f9fa, #f0f1f2);
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.view-toolbar-group {
+  display: flex;
+  gap: 2px;
+}
+
+.view-toolbar-separator {
+  width: 1px;
+  height: 24px;
+  background: #d0d0d0;
+  margin: 0 4px;
+}
+
+.view-toolbar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.15s ease;
+}
+
+.view-toolbar-button:hover {
+  background: #e8f0fe;
+  border-color: #c8d8ee;
+  color: #0066cc;
+}
+
+.view-toolbar-button:active {
+  background: #d8e8fe;
+}
+
+.view-toolbar-button.active {
+  background: #e0efff;
+  border-color: #0066cc;
+  color: #0066cc;
+}
+
+.view-toolbar-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Tooltip styling */
+.view-toolbar-tooltip {
+  background: #333;
+  color: white;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  animation: tooltip-fade-in 0.15s ease;
+}

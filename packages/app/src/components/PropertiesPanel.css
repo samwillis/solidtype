@@ -2,19 +2,23 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .properties-panel-header {
-  padding: 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid #e0e0e0;
-  background: #f5f5f5;
+  background: linear-gradient(to bottom, #ffffff, #f8f8f8);
 }
 
 .properties-panel-header h3 {
-  font-size: 14px;
+  margin: 0;
+  font-size: 13px;
   font-weight: 600;
   color: #333;
-  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .properties-panel-content {
@@ -28,13 +32,60 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #999;
+  padding: 24px;
   text-align: center;
-  padding: 20px;
+  color: #888;
 }
 
-.properties-panel-hint {
+.properties-panel-empty svg {
+  color: #ccc;
+  margin-bottom: 12px;
+}
+
+.properties-panel-empty-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+}
+
+.properties-panel-empty-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #999;
+  line-height: 1.5;
+}
+
+/* Property rows */
+.property-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.property-label {
+  flex: 1;
   font-size: 12px;
-  margin-top: 8px;
-  color: #bbb;
+  color: #555;
+}
+
+.property-value {
+  flex: 1;
+  font-size: 12px;
+  color: #333;
+}
+
+.property-input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: border-color 0.15s ease;
+}
+
+.property-input:focus {
+  outline: none;
+  border-color: #0066cc;
 }
