@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Tabs } from '@base-ui/react/tabs';
-import { Tooltip } from '@base-ui/react/tooltip';
+import { Tabs, Tooltip } from '@base-ui/react';
 import './Toolbar.css';
 
 // Toolbar tool definition

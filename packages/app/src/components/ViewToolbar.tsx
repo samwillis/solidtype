@@ -1,6 +1,5 @@
 import React from 'react';
-import { Separator } from '@base-ui/react/separator';
-import { Tooltip } from '@base-ui/react/tooltip';
+import { Separator, Tooltip } from '@base-ui/react';
 import './ViewToolbar.css';
 
 // View control icons
