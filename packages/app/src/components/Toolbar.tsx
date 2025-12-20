@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tooltip, Separator } from '@base-ui/react';
+import { Separator } from '@base-ui/react';
 import './Toolbar.css';
 
 // Toolbar tool definition
@@ -144,34 +144,16 @@ interface ToolButtonProps {
 }
 
 const ToolButton: React.FC<ToolButtonProps> = ({ tool }) => {
-  const button = (
+  return (
     <button
       className={`toolbar-button ${tool.disabled ? 'disabled' : ''}`}
       onClick={tool.onClick}
       disabled={tool.disabled}
       aria-label={tool.label}
+      title={tool.label}
     >
       {tool.icon}
     </button>
-  );
-
-  if (tool.disabled) {
-    return button;
-  }
-
-  return (
-    <Tooltip.Provider>
-      <Tooltip.Root>
-        <Tooltip.Trigger render={button} />
-        <Tooltip.Portal>
-          <Tooltip.Positioner sideOffset={4}>
-            <Tooltip.Popup className="toolbar-tooltip">
-              {tool.label}
-            </Tooltip.Popup>
-          </Tooltip.Positioner>
-        </Tooltip.Portal>
-      </Tooltip.Root>
-    </Tooltip.Provider>
   );
 };
 
