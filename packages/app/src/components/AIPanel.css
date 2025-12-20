@@ -25,6 +25,7 @@
   overflow-y: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  padding-left: 4px;
 }
 
 .ai-panel-tabs-list::-webkit-scrollbar {
