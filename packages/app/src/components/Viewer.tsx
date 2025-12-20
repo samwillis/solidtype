@@ -285,11 +285,16 @@ const Viewer: React.FC = () => {
     // Initial render
     needsRenderRef.current = true;
 
-    // Handle resize
+    // Handle resize (both window and container)
     const handleResize = () => {
       if (!containerRef.current || !cameraRef.current || !renderer) return;
       const currentCamera = cameraRef.current;
-      const aspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
+      
+      if (width === 0 || height === 0) return;
+      
+      const aspect = width / height;
       
       if (currentCamera instanceof THREE.PerspectiveCamera) {
         currentCamera.aspect = aspect;
@@ -302,16 +307,21 @@ const Viewer: React.FC = () => {
         currentCamera.bottom = -frustumSize;
       }
       currentCamera.updateProjectionMatrix();
-      renderer.setSize(
-        containerRef.current.clientWidth,
-        containerRef.current.clientHeight
-      );
+      renderer.setSize(width, height);
       needsRenderRef.current = true;
     };
+    
+    // Use ResizeObserver to detect container size changes (panel resize, AI panel toggle)
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+    resizeObserver.observe(containerRef.current);
+    
     window.addEventListener('resize', handleResize);
 
     // Cleanup
     return () => {
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       renderer.domElement.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
