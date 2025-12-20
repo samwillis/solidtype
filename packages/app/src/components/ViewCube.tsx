@@ -6,18 +6,53 @@ import './ViewCube.css';
 
 const ViewCube: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const cubeRef = useRef<THREE.Group | null>(null);
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const mouseRef = useRef<THREE.Vector2>(new THREE.Vector2());
+  const mouseScreenRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const animationFrameRef = useRef<number | null>(null);
   const hoveredRef = useRef<string | null>(null);
 
   const { actions, cameraStateRef } = useViewer();
   const { theme } = useTheme();
   const lastVersionRef = useRef(-1);
+
+  // Get display name for a mesh
+  const getDisplayName = (name: string): string => {
+    const mapping: Record<string, string> = {
+      'face-front': 'Front',
+      'face-back': 'Back',
+      'face-top': 'Top',
+      'face-bottom': 'Bottom',
+      'face-left': 'Left',
+      'face-right': 'Right',
+      'edge-front-top': 'Front Top',
+      'edge-front-bottom': 'Front Bottom',
+      'edge-front-left': 'Front Left',
+      'edge-front-right': 'Front Right',
+      'edge-back-top': 'Back Top',
+      'edge-back-bottom': 'Back Bottom',
+      'edge-back-left': 'Back Left',
+      'edge-back-right': 'Back Right',
+      'edge-top-left': 'Top Left',
+      'edge-top-right': 'Top Right',
+      'edge-bottom-left': 'Bottom Left',
+      'edge-bottom-right': 'Bottom Right',
+      'corner-front-top-left': 'Front Top Left',
+      'corner-front-top-right': 'Front Top Right',
+      'corner-front-bottom-left': 'Front Bottom Left',
+      'corner-front-bottom-right': 'Front Bottom Right',
+      'corner-back-top-left': 'Back Top Left',
+      'corner-back-top-right': 'Back Top Right',
+      'corner-back-bottom-left': 'Back Bottom Left',
+      'corner-back-bottom-right': 'Back Bottom Right',
+    };
+    return mapping[name] || name;
+  };
 
   // Map mesh names to view presets
   const getViewPreset = (name: string): ViewPreset | null => {
@@ -57,10 +92,11 @@ const ViewCube: React.FC = () => {
   const createCube = useCallback((isDark: boolean) => {
     const group = new THREE.Group();
     
-    const faceColor = isDark ? 0x3c3c3c : 0xf0f0f0;
-    const edgeColor = isDark ? 0x505050 : 0xd0d0d0;
-    const cornerColor = isDark ? 0x606060 : 0xc0c0c0;
-    const textColor = isDark ? '#cccccc' : '#333333';
+    const faceColor = isDark ? 0x3c3c3c : 0xe8e8e8;
+    const edgeColor = isDark ? 0x505050 : 0xc8c8c8;
+    const cornerColor = isDark ? 0x606060 : 0xb8b8b8;
+    const textColor = isDark ? '#ffffff' : '#222222';
+    const faceBackground = isDark ? '#3c3c3c' : '#e8e8e8';
     const hoverColor = 0x0078d4;
     
     const cubeSize = 1;
@@ -74,11 +110,11 @@ const ViewCube: React.FC = () => {
       canvas.height = 128;
       const ctx = canvas.getContext('2d')!;
       
-      ctx.fillStyle = isDark ? '#3c3c3c' : '#f0f0f0';
+      ctx.fillStyle = faceBackground;
       ctx.fillRect(0, 0, 128, 128);
       
       ctx.fillStyle = textColor;
-      ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(label, 64, 64);
@@ -180,7 +216,7 @@ const ViewCube: React.FC = () => {
     if (!containerRef.current) return;
 
     const container = containerRef.current;
-    const size = 100;
+    const size = 130;
 
     // Scene setup
     const scene = new THREE.Scene();
@@ -211,6 +247,15 @@ const ViewCube: React.FC = () => {
       const rect = container.getBoundingClientRect();
       mouseRef.current.x = ((e.clientX - rect.left) / size) * 2 - 1;
       mouseRef.current.y = -((e.clientY - rect.top) / size) * 2 + 1;
+      mouseScreenRef.current = { x: e.clientX, y: e.clientY };
+    };
+
+    const onMouseLeave = () => {
+      mouseRef.current.x = -999;
+      mouseRef.current.y = -999;
+      if (tooltipRef.current) {
+        tooltipRef.current.style.display = 'none';
+      }
     };
 
     const onClick = (e: MouseEvent) => {
@@ -231,6 +276,7 @@ const ViewCube: React.FC = () => {
     };
 
     container.addEventListener('mousemove', onMouseMove);
+    container.addEventListener('mouseleave', onMouseLeave);
     container.addEventListener('click', onClick);
 
     // Animation loop
@@ -271,10 +317,23 @@ const ViewCube: React.FC = () => {
             mat.color.setHex(object.userData.hoverColor);
             hoveredRef.current = object.name;
             container.style.cursor = 'pointer';
+            
+            // Show tooltip
+            if (tooltipRef.current) {
+              tooltipRef.current.textContent = getDisplayName(object.name);
+              tooltipRef.current.style.display = 'block';
+              tooltipRef.current.style.left = `${mouseScreenRef.current.x + 12}px`;
+              tooltipRef.current.style.top = `${mouseScreenRef.current.y + 12}px`;
+            }
           }
         } else {
           hoveredRef.current = null;
           container.style.cursor = 'default';
+          
+          // Hide tooltip
+          if (tooltipRef.current) {
+            tooltipRef.current.style.display = 'none';
+          }
         }
       }
 
@@ -285,6 +344,7 @@ const ViewCube: React.FC = () => {
     // Cleanup
     return () => {
       container.removeEventListener('mousemove', onMouseMove);
+      container.removeEventListener('mouseleave', onMouseLeave);
       container.removeEventListener('click', onClick);
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -296,7 +356,12 @@ const ViewCube: React.FC = () => {
     };
   }, [theme, createCube, actions]);
 
-  return <div ref={containerRef} className="view-cube" />;
+  return (
+    <>
+      <div ref={containerRef} className="view-cube" />
+      <div ref={tooltipRef} className="view-cube-tooltip" style={{ display: 'none' }} />
+    </>
+  );
 };
 
 export default ViewCube;
