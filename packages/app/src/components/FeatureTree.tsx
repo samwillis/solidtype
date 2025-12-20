@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { useDocument } from '../contexts/DocumentContext';
+import type { Feature, FeatureType } from '../types/document';
 import './FeatureTree.css';
 
 // Tree node types
-type NodeType = 
+type NodeType =
   | 'bodies-folder'
   | 'body'
   | 'part'
@@ -22,6 +24,66 @@ interface TreeNode {
   children?: TreeNode[];
   expanded?: boolean;
   suppressed?: boolean;
+  gated?: boolean;
+}
+
+// Map feature types to node types
+function featureTypeToNodeType(type: FeatureType): NodeType {
+  switch (type) {
+    case 'origin':
+      return 'origin';
+    case 'plane':
+      return 'plane';
+    case 'sketch':
+      return 'sketch';
+    case 'extrude':
+      return 'extrude';
+    case 'revolve':
+      return 'revolve';
+    default:
+      return 'part';
+  }
+}
+
+// Convert features to tree nodes
+function featuresToTreeNodes(features: Feature[], rebuildGate: string | null): TreeNode[] {
+  // Find the gate index
+  let gateIndex = -1;
+  if (rebuildGate) {
+    gateIndex = features.findIndex(f => f.id === rebuildGate);
+  }
+
+  // Build the feature list nodes
+  const featureNodes: TreeNode[] = features.map((feature, index) => {
+    const isGated = gateIndex !== -1 && index > gateIndex;
+    return {
+      id: feature.id,
+      name: feature.name || feature.id,
+      type: featureTypeToNodeType(feature.type),
+      suppressed: feature.suppressed,
+      gated: isGated,
+    };
+  });
+
+  // Create the part node with feature children
+  const partNode: TreeNode = {
+    id: 'part',
+    name: 'Part1',
+    type: 'part',
+    expanded: true,
+    children: featureNodes,
+  };
+
+  // Bodies folder (placeholder for now)
+  const bodiesFolder: TreeNode = {
+    id: 'bodies',
+    name: 'Bodies',
+    type: 'bodies-folder',
+    expanded: true,
+    children: [],
+  };
+
+  return [bodiesFolder, partNode];
 }
 
 // Icons for each node type
@@ -114,58 +176,51 @@ const NodeIcon: React.FC<{ type: NodeType }> = ({ type }) => {
 
 // Expand/collapse chevron
 const Chevron: React.FC<{ expanded: boolean }> = ({ expanded }) => (
-  <svg 
-    className={`tree-chevron ${expanded ? 'expanded' : ''}`} 
-    width="12" 
-    height="12" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
+  <svg
+    className={`tree-chevron ${expanded ? 'expanded' : ''}`}
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
     strokeWidth="2"
   >
     <polyline points="9 18 15 12 9 6" />
   </svg>
 );
 
-// Mock data for the feature tree
-const mockTreeData: TreeNode[] = [
-  {
-    id: 'bodies',
-    name: 'Bodies',
-    type: 'bodies-folder',
-    expanded: true,
-    children: [
-      { id: 'body-1', name: 'Body1', type: 'body' },
-    ],
-  },
-  {
-    id: 'part',
-    name: 'Part1',
-    type: 'part',
-    expanded: true,
-    children: [
-      { id: 'origin', name: 'Origin', type: 'origin' },
-      { id: 'plane-xy', name: 'XY Plane (Top)', type: 'plane' },
-      { id: 'plane-xz', name: 'XZ Plane (Front)', type: 'plane' },
-      { id: 'plane-yz', name: 'YZ Plane (Right)', type: 'plane' },
-      { id: 'sketch-1', name: 'Sketch1', type: 'sketch' },
-      { id: 'extrude-1', name: 'Extrude1', type: 'extrude' },
-      { id: 'sketch-2', name: 'Sketch2', type: 'sketch' },
-      { id: 'extrude-2', name: 'Extrude2', type: 'extrude' },
-      { id: 'fillet-1', name: 'Fillet1', type: 'fillet' },
-      { id: 'sketch-3', name: 'Sketch3', type: 'sketch', suppressed: true },
-      { id: 'revolve-1', name: 'Revolve1', type: 'revolve', suppressed: true },
-    ],
-  },
-];
+// Rebuild gate bar component
+const RebuildGateBar: React.FC<{
+  afterFeatureId: string | null;
+  onDragStart: () => void;
+}> = ({ afterFeatureId, onDragStart }) => {
+  return (
+    <div
+      className="rebuild-gate-bar"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', afterFeatureId || 'top');
+        e.dataTransfer.effectAllowed = 'move';
+        onDragStart();
+      }}
+      title="Drag to change rebuild position"
+    >
+      <div className="rebuild-gate-line" />
+      <div className="rebuild-gate-handle">⊣</div>
+    </div>
+  );
+};
 
 interface TreeNodeItemProps {
   node: TreeNode;
   level: number;
   expandedNodes: Set<string>;
   selectedId: string | null;
+  rebuildGate: string | null;
+  showGateAfter: boolean;
   onToggleExpand: (id: string) => void;
   onSelect: (id: string) => void;
+  onGateDrop: (afterId: string | null) => void;
 }
 
 const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
@@ -173,22 +228,46 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   level,
   expandedNodes,
   selectedId,
+  rebuildGate,
+  showGateAfter,
   onToggleExpand,
   onSelect,
+  onGateDrop,
 }) => {
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
   const isSelected = selectedId === node.id;
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    // Drop sets gate to this feature
+    onGateDrop(node.id);
+  }, [node.id, onGateDrop]);
 
   return (
     <>
       <li
-        className={`tree-item ${isSelected ? 'selected' : ''} ${node.suppressed ? 'suppressed' : ''}`}
+        className={`tree-item ${isSelected ? 'selected' : ''} ${node.suppressed ? 'suppressed' : ''} ${node.gated ? 'gated' : ''} ${isDragOver ? 'drag-over' : ''}`}
         style={{ paddingLeft: `${8 + level * 16}px` }}
         onClick={() => onSelect(node.id)}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {hasChildren ? (
-          <span 
+          <span
             className="tree-expand-btn"
             onClick={(e) => {
               e.stopPropagation();
@@ -203,19 +282,36 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
         <NodeIcon type={node.type} />
         <span className="tree-item-name">{node.name}</span>
       </li>
+      {/* Show rebuild gate bar after this item if it's the gate position */}
+      {showGateAfter && rebuildGate === node.id && (
+            <RebuildGateBar
+              afterFeatureId={node.id}
+              onDragStart={() => {}}
+            />
+      )}
       {hasChildren && isExpanded && (
         <ul className="tree-children">
           {node.children!.map((child) => (
-            <TreeNodeItem
-              key={child.id}
-              node={child}
-              level={level + 1}
-              expandedNodes={expandedNodes}
-              selectedId={selectedId}
-              onToggleExpand={onToggleExpand}
-              onSelect={onSelect}
-            />
+              <TreeNodeItem
+                key={child.id}
+                node={child}
+                level={level + 1}
+                expandedNodes={expandedNodes}
+                selectedId={selectedId}
+                rebuildGate={rebuildGate}
+                showGateAfter={true}
+                onToggleExpand={onToggleExpand}
+                onSelect={onSelect}
+                onGateDrop={onGateDrop}
+              />
           ))}
+          {/* Show gate at end if no gate is set */}
+          {rebuildGate === null && (
+            <RebuildGateBar
+              afterFeatureId={null}
+              onDragStart={() => {}}
+            />
+          )}
         </ul>
       )}
     </>
@@ -223,21 +319,20 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
 };
 
 const FeatureTree: React.FC = () => {
+  const { features, rebuildGate, setRebuildGate } = useDocument();
+
+  // Convert features to tree structure
+  const treeData = useMemo(() => {
+    return featuresToTreeNodes(features, rebuildGate);
+  }, [features, rebuildGate]);
+
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => {
-    // Initially expand nodes marked as expanded in mock data
-    const expanded = new Set<string>();
-    const collectExpanded = (nodes: TreeNode[]) => {
-      nodes.forEach((node) => {
-        if (node.expanded) expanded.add(node.id);
-        if (node.children) collectExpanded(node.children);
-      });
-    };
-    collectExpanded(mockTreeData);
-    return expanded;
+    // Initially expand part and bodies folder
+    return new Set(['part', 'bodies']);
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const handleToggleExpand = (id: string) => {
+  const handleToggleExpand = useCallback((id: string) => {
     setExpandedNodes((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -247,26 +342,33 @@ const FeatureTree: React.FC = () => {
       }
       return next;
     });
-  };
+  }, []);
 
-  const handleSelect = (id: string) => {
+  const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
-  };
+  }, []);
+
+  const handleGateDrop = useCallback((afterId: string | null) => {
+    setRebuildGate(afterId);
+  }, [setRebuildGate]);
 
   return (
     <div className="feature-tree">
       <div className="panel-header">Features</div>
       <div className="feature-tree-content">
         <ul className="tree-list">
-          {mockTreeData.map((node) => (
+          {treeData.map((node) => (
             <TreeNodeItem
               key={node.id}
               node={node}
               level={0}
               expandedNodes={expandedNodes}
               selectedId={selectedId}
+              rebuildGate={rebuildGate}
+              showGateAfter={false}
               onToggleExpand={handleToggleExpand}
               onSelect={handleSelect}
+              onGateDrop={handleGateDrop}
             />
           ))}
         </ul>

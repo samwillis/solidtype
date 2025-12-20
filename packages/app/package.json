@@ -12,12 +12,14 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.0.0",
+    "@solidtype/core": "workspace:*",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "three": "^0.161.0"
+    "three": "^0.161.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.28"
   },
   "devDependencies": {
-    "@solidtype/core": "workspace:*",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
     "@types/node": "^20.11.0",

@@ -1,0 +1,69 @@
+.sketch-canvas-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  z-index: 10;
+}
+
+.sketch-canvas {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  background: rgba(26, 26, 46, 0.95);
+}
+
+.sketch-canvas.tool-select {
+  cursor: default;
+}
+
+.sketch-toolbar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.sketch-tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.sketch-tool-btn:hover {
+  background: var(--color-bg-hover);
+}
+
+.sketch-tool-btn.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+.sketch-info {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--color-text);
+  font-family: monospace;
+  font-size: 12px;
+  border-radius: 4px;
+}

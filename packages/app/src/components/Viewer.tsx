@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { useTheme } from '../contexts/ThemeContext';
 import { useViewer, ProjectionMode } from '../contexts/ViewerContext';
+import { useKernel } from '../contexts/KernelContext';
 import './Viewer.css';
 
 const Viewer: React.FC = () => {
@@ -13,9 +14,11 @@ const Viewer: React.FC = () => {
   const animationFrameRef = useRef<number | null>(null);
   const needsRenderRef = useRef(true);
   const projectionModeRef = useRef<ProjectionMode>('perspective');
+  const meshGroupRef = useRef<THREE.Group | null>(null);
 
   const { theme } = useTheme();
   const { registerRefs, cameraStateRef } = useViewer();
+  const { meshes } = useKernel();
 
   // Request a render (for use by external controls)
   const requestRender = useCallback(() => {
@@ -77,6 +80,62 @@ const Viewer: React.FC = () => {
     }
   }, [theme]);
 
+  // Update meshes when kernel sends new mesh data
+  useEffect(() => {
+    const meshGroup = meshGroupRef.current;
+    if (!meshGroup) return;
+
+    // Clear existing meshes
+    while (meshGroup.children.length > 0) {
+      const child = meshGroup.children[0];
+      meshGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        if (child.material instanceof THREE.Material) {
+          child.material.dispose();
+        }
+      }
+    }
+
+    // Add new meshes
+    meshes.forEach((meshData, bodyId) => {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute(
+        'position',
+        new THREE.BufferAttribute(meshData.positions, 3)
+      );
+      geometry.setAttribute(
+        'normal',
+        new THREE.BufferAttribute(meshData.normals, 3)
+      );
+      geometry.setIndex(new THREE.BufferAttribute(meshData.indices, 1));
+
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x0078d4,
+        side: THREE.DoubleSide,
+      });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.name = bodyId;
+      meshGroup.add(mesh);
+    });
+
+    // If no meshes, show a placeholder cube
+    if (meshes.size === 0) {
+      const geometry = new THREE.BoxGeometry(2, 2, 2);
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x0078d4,
+        opacity: 0.3,
+        transparent: true,
+      });
+      const placeholder = new THREE.Mesh(geometry, material);
+      placeholder.name = 'placeholder';
+      meshGroup.add(placeholder);
+    }
+
+    needsRenderRef.current = true;
+  }, [meshes]);
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -121,11 +180,11 @@ const Viewer: React.FC = () => {
     directionalLight2.position.set(-5, -5, -5);
     scene.add(directionalLight2);
 
-    // Test cube (static, no spinning)
-    const geometry = new THREE.BoxGeometry(2, 2, 2);
-    const material = new THREE.MeshStandardMaterial({ color: 0x0078d4 });
-    const cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
+    // Group for kernel meshes
+    const meshGroup = new THREE.Group();
+    meshGroup.name = 'kernel-meshes';
+    scene.add(meshGroup);
+    meshGroupRef.current = meshGroup;
 
     // Add grid helper for reference
     const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x333333);

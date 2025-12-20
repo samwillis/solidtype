@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Tooltip, Separator } from '@base-ui/react';
+import { useSketch } from '../contexts/SketchContext';
+import { useDocument } from '../contexts/DocumentContext';
+import ExtrudeDialog from './ExtrudeDialog';
 import './Toolbar.css';
 
 // Toolbar tool definition
@@ -49,62 +52,15 @@ const CylinderIcon = () => (
   </svg>
 );
 
-const BooleanIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <circle cx="9" cy="9" r="6" />
-    <circle cx="15" cy="15" r="6" />
-  </svg>
-);
-
 const LineIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
     <line x1="5" y1="19" x2="19" y2="5" />
   </svg>
 );
 
-const ArcIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M5 17a9 9 0 0114 0" />
-  </svg>
-);
-
 const RectangleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
     <rect x="3" y="5" width="18" height="14" rx="2" />
-  </svg>
-);
-
-const CircleIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <circle cx="12" cy="12" r="9" />
-  </svg>
-);
-
-const DimensionIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M3 8h18" />
-    <path d="M3 16h18" />
-    <path d="M8 3v18" />
-    <path d="M16 3v18" />
-  </svg>
-);
-
-const ConstraintIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
-  </svg>
-);
-
-const FilletIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M3 19h8a8 8 0 008-8V3" />
-  </svg>
-);
-
-const ChamferIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M3 19h8l8-8V3" />
   </svg>
 );
 
@@ -139,24 +95,6 @@ const AIIcon = () => (
 );
 
 // Tool groups
-const sketchTools: ToolItem[] = [
-  { id: 'new-sketch', label: 'New Sketch', icon: <SketchIcon /> },
-  { id: 'line', label: 'Line', icon: <LineIcon />, disabled: true },
-  { id: 'arc', label: 'Arc', icon: <ArcIcon />, disabled: true },
-  { id: 'rectangle', label: 'Rectangle', icon: <RectangleIcon />, disabled: true },
-  { id: 'circle', label: 'Circle', icon: <CircleIcon />, disabled: true },
-  { id: 'dimension', label: 'Dimension', icon: <DimensionIcon />, disabled: true },
-  { id: 'constraint', label: 'Constraint', icon: <ConstraintIcon />, disabled: true },
-];
-
-const featureTools: ToolItem[] = [
-  { id: 'extrude', label: 'Extrude', icon: <ExtrudeIcon /> },
-  { id: 'revolve', label: 'Revolve', icon: <RevolveIcon /> },
-  { id: 'fillet', label: 'Fillet', icon: <FilletIcon />, disabled: true },
-  { id: 'chamfer', label: 'Chamfer', icon: <ChamferIcon />, disabled: true },
-  { id: 'boolean', label: 'Boolean', icon: <BooleanIcon />, disabled: true },
-];
-
 const primitiveTools: ToolItem[] = [
   { id: 'box', label: 'Box', icon: <BoxIcon /> },
   { id: 'cylinder', label: 'Cylinder', icon: <CylinderIcon />, disabled: true },
@@ -215,12 +153,109 @@ const ToolGroup: React.FC<ToolGroupProps> = ({ tools }) => (
   </div>
 );
 
+// Plane selector dialog
+interface PlaneSelectorProps {
+  open: boolean;
+  onClose: () => void;
+  onSelect: (planeId: string) => void;
+}
+
+const PlaneSelector: React.FC<PlaneSelectorProps> = ({ open, onClose, onSelect }) => {
+  if (!open) return null;
+
+  return (
+    <div className="plane-selector-overlay" onClick={onClose}>
+      <div className="plane-selector-dialog" onClick={(e) => e.stopPropagation()}>
+        <h3>Select a Plane</h3>
+        <div className="plane-selector-options">
+          <button onClick={() => onSelect('xy')}>
+            <span className="plane-icon plane-xy" />
+            XY Plane (Top)
+          </button>
+          <button onClick={() => onSelect('xz')}>
+            <span className="plane-icon plane-xz" />
+            XZ Plane (Front)
+          </button>
+          <button onClick={() => onSelect('yz')}>
+            <span className="plane-icon plane-yz" />
+            YZ Plane (Right)
+          </button>
+        </div>
+        <button className="plane-selector-cancel" onClick={onClose}>Cancel</button>
+      </div>
+    </div>
+  );
+};
+
+// Finish Sketch button
+const FinishSketchIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
 interface ToolbarProps {
   onToggleAIPanel?: () => void;
   aiPanelVisible?: boolean;
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) => {
+  const { mode, startSketch, finishSketch, addRectangle } = useSketch();
+  const { undo, redo, canUndo, canRedo, features, addExtrude } = useDocument();
+  const [planeSelectorOpen, setPlaneSelectorOpen] = useState(false);
+  const [extrudeDialogOpen, setExtrudeDialogOpen] = useState(false);
+  const [selectedSketchId, setSelectedSketchId] = useState<string | null>(null);
+
+  // Get available sketches for extrusion
+  const sketches = useMemo(() => {
+    return features.filter((f) => f.type === 'sketch');
+  }, [features]);
+
+  const handleNewSketch = () => {
+    setPlaneSelectorOpen(true);
+  };
+
+  const handlePlaneSelect = (planeId: string) => {
+    startSketch(planeId);
+    setPlaneSelectorOpen(false);
+  };
+
+  const handleFinishSketch = () => {
+    finishSketch();
+  };
+
+  const handleAddRectangle = () => {
+    // Add a test rectangle at origin
+    addRectangle(0, 0, 4, 3);
+  };
+
+  const handleExtrude = () => {
+    // If there's only one sketch, use it directly
+    if (sketches.length === 1) {
+      setSelectedSketchId(sketches[0].id);
+      setExtrudeDialogOpen(true);
+    } else if (sketches.length > 1) {
+      // For now, use the last sketch
+      // TODO: Add sketch selector
+      setSelectedSketchId(sketches[sketches.length - 1].id);
+      setExtrudeDialogOpen(true);
+    }
+  };
+
+  const handleExtrudeConfirm = (distance: number, _direction: 'normal' | 'reverse', op: 'add' | 'cut') => {
+    if (selectedSketchId) {
+      // TODO: Handle direction when extrude supports it
+      addExtrude(selectedSketchId, distance, op);
+    }
+    setExtrudeDialogOpen(false);
+    setSelectedSketchId(null);
+  };
+
+  const handleExtrudeCancel = () => {
+    setExtrudeDialogOpen(false);
+    setSelectedSketchId(null);
+  };
+
   return (
     <Tooltip.Provider>
       <div className="toolbar">
@@ -254,8 +289,9 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
           <Tooltip.Root>
             <Tooltip.Trigger
               delay={300}
-              className="toolbar-button"
-              render={<button aria-label="Undo" />}
+              className={`toolbar-button ${!canUndo ? 'disabled' : ''}`}
+              onClick={undo}
+              render={<button aria-label="Undo" disabled={!canUndo} />}
             >
               <UndoIcon />
             </Tooltip.Trigger>
@@ -268,8 +304,9 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
           <Tooltip.Root>
             <Tooltip.Trigger
               delay={300}
-              className="toolbar-button"
-              render={<button aria-label="Redo" />}
+              className={`toolbar-button ${!canRedo ? 'disabled' : ''}`}
+              onClick={redo}
+              render={<button aria-label="Redo" disabled={!canRedo} />}
             >
               <RedoIcon />
             </Tooltip.Trigger>
@@ -283,10 +320,111 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
 
         <Separator orientation="vertical" className="toolbar-separator" />
 
-        {/* Tool groups */}
-        <ToolGroup tools={sketchTools} />
+        {/* Sketch mode indicator and tools */}
+        {mode.active ? (
+          <div className="toolbar-group">
+            <Tooltip.Root>
+              <Tooltip.Trigger
+                delay={300}
+                className="toolbar-button toolbar-button-finish"
+                onClick={handleFinishSketch}
+                render={<button aria-label="Finish Sketch" />}
+              >
+                <FinishSketchIcon />
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Positioner side="bottom" sideOffset={6}>
+                  <Tooltip.Popup className="toolbar-tooltip">Finish Sketch</Tooltip.Popup>
+                </Tooltip.Positioner>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+            <Tooltip.Root>
+              <Tooltip.Trigger
+                delay={300}
+                className="toolbar-button"
+                render={<button aria-label="Line" />}
+              >
+                <LineIcon />
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Positioner side="bottom" sideOffset={6}>
+                  <Tooltip.Popup className="toolbar-tooltip">Line</Tooltip.Popup>
+                </Tooltip.Positioner>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+            <Tooltip.Root>
+              <Tooltip.Trigger
+                delay={300}
+                className="toolbar-button"
+                onClick={handleAddRectangle}
+                render={<button aria-label="Rectangle" />}
+              >
+                <RectangleIcon />
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Positioner side="bottom" sideOffset={6}>
+                  <Tooltip.Popup className="toolbar-tooltip">Rectangle</Tooltip.Popup>
+                </Tooltip.Positioner>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          </div>
+        ) : (
+          <>
+            {/* Tool groups */}
+            <div className="toolbar-group">
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  delay={300}
+                  className="toolbar-button"
+                  onClick={handleNewSketch}
+                  render={<button aria-label="New Sketch" />}
+                >
+                  <SketchIcon />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Positioner side="bottom" sideOffset={6}>
+                    <Tooltip.Popup className="toolbar-tooltip">New Sketch</Tooltip.Popup>
+                  </Tooltip.Positioner>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </div>
+          </>
+        )}
         <Separator orientation="vertical" className="toolbar-separator" />
-        <ToolGroup tools={featureTools} />
+
+        {/* Feature tools */}
+        <div className="toolbar-group">
+          <Tooltip.Root>
+            <Tooltip.Trigger
+              delay={300}
+              className={`toolbar-button ${sketches.length === 0 ? 'disabled' : ''}`}
+              onClick={handleExtrude}
+              render={<button aria-label="Extrude" disabled={sketches.length === 0} />}
+            >
+              <ExtrudeIcon />
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Positioner side="bottom" sideOffset={6}>
+                <Tooltip.Popup className="toolbar-tooltip">Extrude</Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+          <Tooltip.Root>
+            <Tooltip.Trigger
+              delay={300}
+              className="toolbar-button disabled"
+              render={<button aria-label="Revolve" disabled />}
+            >
+              <RevolveIcon />
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Positioner side="bottom" sideOffset={6}>
+                <Tooltip.Popup className="toolbar-tooltip">Revolve</Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        </div>
+
         <Separator orientation="vertical" className="toolbar-separator" />
         <ToolGroup tools={primitiveTools} />
 
@@ -311,6 +449,21 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
             </Tooltip.Positioner>
           </Tooltip.Portal>
         </Tooltip.Root>
+
+        {/* Plane selector dialog */}
+        <PlaneSelector
+          open={planeSelectorOpen}
+          onClose={() => setPlaneSelectorOpen(false)}
+          onSelect={handlePlaneSelect}
+        />
+
+        {/* Extrude dialog */}
+        <ExtrudeDialog
+          open={extrudeDialogOpen}
+          sketchId={selectedSketchId || ''}
+          onConfirm={handleExtrudeConfirm}
+          onCancel={handleExtrudeCancel}
+        />
       </div>
     </Tooltip.Provider>
   );
