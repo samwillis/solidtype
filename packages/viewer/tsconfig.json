@@ -17,8 +17,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@solidtype/core": ["../core/src"],
-      "@solidtype/oo": ["../oo/src"]
+      "@solidtype/core": ["../core/src"]
     }
   },
   "include": ["src/**/*"],

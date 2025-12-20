@@ -33,9 +33,6 @@ importers:
       '@solidtype/core':
         specifier: workspace:*
         version: link:../core
-      '@solidtype/oo':
-        specifier: workspace:*
-        version: link:../oo
       '@testing-library/jest-dom':
         specifier: ^6.1.5
         version: 6.9.1
@@ -91,33 +88,11 @@ importers:
         specifier: ^1.2.0
         version: 1.6.1(@types/node@20.19.25)(jsdom@24.1.3)
 
-  packages/oo:
-    dependencies:
-      '@solidtype/core':
-        specifier: workspace:*
-        version: link:../core
-    devDependencies:
-      '@types/node':
-        specifier: ^20.11.0
-        version: 20.19.25
-      tsdown:
-        specifier: ^0.16.8
-        version: 0.16.8(typescript@5.9.3)
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
-      vitest:
-        specifier: ^1.2.0
-        version: 1.6.1(@types/node@20.19.25)(jsdom@24.1.3)
-
   packages/viewer:
     dependencies:
       '@solidtype/core':
         specifier: workspace:*
         version: link:../core
-      '@solidtype/oo':
-        specifier: workspace:*
-        version: link:../oo
       three:
         specifier: ^0.161.0
         version: 0.161.0

@@ -6,7 +6,7 @@
  */
 
 import {
-  createEmptyModel,
+  TopoModel,
   createNumericContext,
   createBox,
   tessellateBody,
@@ -30,7 +30,7 @@ const ctx: NumericContext = createNumericContext();
  */
 function benchmarkBoxTessellation(): BenchmarkResult {
   // Pre-create the model
-  const model = createEmptyModel(ctx);
+  const model = new TopoModel(ctx);
   const body = createBox(model, { width: 10, depth: 10, height: 10 });
   
   return runBenchmark('tess box', () => {
@@ -42,7 +42,7 @@ function benchmarkBoxTessellation(): BenchmarkResult {
  * Benchmark tessellating with higher tolerance (fewer triangles)
  */
 function benchmarkCoarseTessellation(): BenchmarkResult {
-  const model = createEmptyModel(ctx);
+  const model = new TopoModel(ctx);
   const body = createBox(model, { width: 10, depth: 10, height: 10 });
   
   return runBenchmark('tess coarse', () => {
@@ -54,7 +54,7 @@ function benchmarkCoarseTessellation(): BenchmarkResult {
  * Benchmark tessellating with fine tolerance (more triangles)
  */
 function benchmarkFineTessellation(): BenchmarkResult {
-  const model = createEmptyModel(ctx);
+  const model = new TopoModel(ctx);
   const body = createBox(model, { width: 10, depth: 10, height: 10 });
   
   return runBenchmark('tess fine', () => {
@@ -71,7 +71,7 @@ function benchmarkFineTessellation(): BenchmarkResult {
  */
 function benchmarkExtrusionTessellation(): BenchmarkResult {
   const plane = createDatumPlaneFromNormal('XY', vec3(0, 0, 0), vec3(0, 0, 1));
-  const model = createEmptyModel(ctx);
+  const model = new TopoModel(ctx);
   const profile = createRectangleProfile(plane, 10, 8);
   const result = extrude(model, profile, { operation: 'add', distance: 5 });
   const body = result.body!;
@@ -85,7 +85,7 @@ function benchmarkExtrusionTessellation(): BenchmarkResult {
  * Benchmark tessellating a multi-face body
  */
 function benchmarkMultiFaceTessellation(): BenchmarkResult {
-  const model = createEmptyModel(ctx);
+  const model = new TopoModel(ctx);
   
   // Create a model with many faces
   const bodies = [];
@@ -141,7 +141,7 @@ function benchmarkPolygonTessellation(): BenchmarkResult {
     }],
   };
   
-  const model = createEmptyModel(ctx);
+  const model = new TopoModel(ctx);
   const result = extrude(model, profile as any, { operation: 'add', distance: 5 });
   const body = result.body!;
   

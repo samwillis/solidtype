@@ -31,10 +31,9 @@ If you are unsure how to implement something:
 
 ## 2. Package & Layer Rules
 
-You are working in a pnpm monorepo with (at minimum):
+You are working in a pnpm monorepo with:
 
-- `@solidtype/core` (functional kernel),
-- `@solidtype/oo` (OO façade),
+- `@solidtype/core` (CAD kernel with OO API),
 - `@solidtype/viewer` (demo app).
 
 ### Core rules
@@ -43,15 +42,12 @@ You are working in a pnpm monorepo with (at minimum):
   - **No DOM / browser APIs.**
   - **No three.js** or other rendering code.
   - Only minimal dependencies (testing, build tooling).
-  - Functional, data-oriented style (plain objects, handles, pure functions where possible).
-
-- `@solidtype/oo`:
-  - Wraps `@solidtype/core` with classes.
-  - No extra geometry/topology logic that isn’t also available in `core`.
+  - Exposes an **object-oriented API** (`SolidSession`, `Body`, `Face`, `Edge`, `Sketch`) as the primary interface.
+  - Internal modules use data-oriented style (struct-of-arrays, handles) for performance.
 
 - `@solidtype/viewer`:
   - May use `three.js`, Vite, etc.
-  - Talks only to the OO façade (and through that, the core).
+  - Uses the OO API from `@solidtype/core` for modeling operations.
 
 If you find yourself wanting to put core geometry or topology logic into `viewer`, stop and move it into `@solidtype/core`.
 
@@ -64,8 +60,8 @@ If you find yourself wanting to put core geometry or topology logic into `viewer
 - Use **TypeScript**, strict mode (`strict: true`).
 - Prefer **ESM** imports/exports.
 - Keep functions **small**, **pure**, and **single-purpose** wherever possible.
-- Don’t introduce new runtime dependencies unless:
-  - They’re already approved (e.g. Vitest, three.js in viewer),
+- Don't introduce new runtime dependencies unless:
+  - They're already approved (e.g. Vitest, three.js in viewer),
   - Or they clearly solve a broad, non-trivial problem (and you add a short comment in the code explaining why).
 
 ### 3.2 Types & Data
@@ -89,7 +85,7 @@ If you find yourself wanting to put core geometry or topology logic into `viewer
 
 ### 3.4 Style & Formatting
 
-* Honour the repo’s existing formatting (Prettier/ESLint configs if present).
+* Honour the repo's existing formatting (Prettier/ESLint configs if present).
 * Use **camelCase** for variables/functions, **PascalCase** for types/classes.
 * Use `const` by default; use `let` only when mutation is necessary.
 * Avoid deeply nested code; extract helper functions instead.
@@ -108,7 +104,7 @@ Guidelines:
 
 * Keep tests **fast** and **deterministic**.
 * Prefer **clear, example-based tests** over heavy randomised tests, unless instructed otherwise in `PLAN.md`.
-* Use the namespacing laid out in `ARCHITECTURE.md` (`num`, `geom`, `topo`, `model`, `sketch`, `naming`, `mesh`).
+* Use the namespacing laid out in `ARCHITECTURE.md` (`num`, `geom`, `topo`, `model`, `sketch`, `naming`, `mesh`, `api`).
 
 ---
 
@@ -120,7 +116,7 @@ When implementing:
 
 1. **Stick to the current phase.**
 
-   * Don’t jump ahead unless a later phase is explicitly required to unblock the current one.
+   * Don't jump ahead unless a later phase is explicitly required to unblock the current one.
 2. After completing a task from the plan:
 
    * Ensure tests pass (`pnpm test`).
@@ -142,7 +138,7 @@ When implementing:
   * Bypass `naming` for external references (constraints, selections, etc.).
   * Implement new features without tests.
 
-If you need functionality that doesn’t fit these guidelines, leave a TODO and implement the best compliant version you can.
+If you need functionality that doesn't fit these guidelines, leave a TODO and implement the best compliant version you can.
 
 ---
 

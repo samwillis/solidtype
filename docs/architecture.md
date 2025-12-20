@@ -18,8 +18,9 @@ SolidType is organized as a pnpm monorepo with three main packages:
 
 ```
 packages/
-├── core/           # Functional kernel (no DOM dependencies)
+├── core/           # CAD kernel with OO API (no DOM dependencies)
 │   ├── src/
+│   │   ├── api/    # Object-oriented API (SolidSession, Body, Face, etc.)
 │   │   ├── num/    # Numeric utilities & tolerances
 │   │   ├── geom/   # Curves & surfaces
 │   │   ├── topo/   # BREP topology
@@ -28,8 +29,6 @@ packages/
 │   │   ├── sketch/ # 2D sketch & solver
 │   │   └── mesh/   # Tessellation
 │   └── bench/      # Performance benchmarks
-├── oo/             # Object-oriented façade
-│   └── src/
 └── viewer/         # WebGL demo application
     └── src/
         └── worker/ # Web Worker integration
@@ -39,13 +38,11 @@ packages/
 
 ```
 @solidtype/viewer
-    └── @solidtype/oo
-            └── @solidtype/core
+    └── @solidtype/core
 ```
 
 - `@solidtype/core` has **no dependencies** other than dev tools
-- `@solidtype/oo` depends only on `@solidtype/core`
-- `@solidtype/viewer` uses both plus `three.js` for rendering
+- `@solidtype/viewer` uses core plus `three.js` for rendering
 
 ---
 
@@ -282,7 +279,7 @@ User Code
     │
     ▼
 ┌─────────────────┐
-│  @solidtype/oo  │  OO façade (classes)
+│  api/           │  OO API (SolidSession, Body, etc.)
 └────────┬────────┘
          │
          ▼
