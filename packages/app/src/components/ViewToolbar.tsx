@@ -1,25 +1,21 @@
 import React from 'react';
 import { Tooltip, Separator } from '@base-ui/react';
-import { useViewer, ViewPreset, DisplayMode } from '../contexts/ViewerContext';
+import { useViewer, DisplayMode } from '../contexts/ViewerContext';
 import './ViewToolbar.css';
 
 // View control icons
-const FrontViewIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <rect x="4" y="4" width="16" height="16" />
-  </svg>
-);
-
-const TopViewIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M4 8l8-4 8 4v8l-8 4-8-4z" />
-  </svg>
-);
-
-const IsoViewIcon = () => (
+const PerspectiveIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
     <path d="M12 2l8 4v12l-8 4-8-4V6l8-4z" />
     <path d="M12 22V10M12 10L4 6M12 10l8-4" />
+  </svg>
+);
+
+const OrthographicIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <rect x="4" y="4" width="16" height="16" />
+    <line x1="4" y1="12" x2="20" y2="12" />
+    <line x1="12" y1="4" x2="12" y2="20" />
   </svg>
 );
 
@@ -68,10 +64,6 @@ const ViewButton: React.FC<ViewButtonProps> = ({ icon, label, onClick, active })
 const ViewToolbar: React.FC = () => {
   const { state, actions } = useViewer();
 
-  const handleViewChange = (view: ViewPreset) => {
-    actions.setView(view);
-  };
-
   const handleDisplayModeChange = (mode: DisplayMode) => {
     actions.setDisplayMode(mode);
   };
@@ -80,22 +72,10 @@ const ViewToolbar: React.FC = () => {
     <Tooltip.Provider>
       <div className="view-toolbar">
         <ViewButton 
-          icon={<FrontViewIcon />} 
-          label="Front" 
-          onClick={() => handleViewChange('front')}
-          active={state.currentView === 'front'}
-        />
-        <ViewButton 
-          icon={<TopViewIcon />} 
-          label="Top" 
-          onClick={() => handleViewChange('top')}
-          active={state.currentView === 'top'}
-        />
-        <ViewButton 
-          icon={<IsoViewIcon />} 
-          label="Isometric" 
-          onClick={() => handleViewChange('isometric')}
-          active={state.currentView === 'isometric'}
+          icon={state.projectionMode === 'perspective' ? <PerspectiveIcon /> : <OrthographicIcon />} 
+          label={state.projectionMode === 'perspective' ? 'Perspective (click for orthographic)' : 'Orthographic (click for perspective)'} 
+          onClick={() => actions.toggleProjection()}
+          active={false}
         />
         <Separator orientation="vertical" className="view-separator" />
         <ViewButton 

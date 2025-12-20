@@ -1,6 +1,7 @@
 import React from 'react';
 import Toolbar from './components/Toolbar';
 import ViewToolbar from './components/ViewToolbar';
+import ViewCube from './components/ViewCube';
 import Viewer from './components/Viewer';
 import FeatureTree from './components/FeatureTree';
 import PropertiesPanel from './components/PropertiesPanel';
@@ -24,6 +25,7 @@ const App: React.FC = () => {
         <main className="app-center">
           <div className="app-viewer">
             <Viewer />
+            <ViewCube />
             <ViewToolbar />
           </div>
         </main>

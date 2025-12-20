@@ -1,24 +1,37 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import * as THREE from 'three';
 
-export type ViewPreset = 'front' | 'back' | 'top' | 'bottom' | 'left' | 'right' | 'isometric';
+export type ViewPreset = 'front' | 'back' | 'top' | 'bottom' | 'left' | 'right' | 'isometric' | 
+  'front-top' | 'front-bottom' | 'front-left' | 'front-right' |
+  'back-top' | 'back-bottom' | 'back-left' | 'back-right' |
+  'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' |
+  'front-top-left' | 'front-top-right' | 'front-bottom-left' | 'front-bottom-right' |
+  'back-top-left' | 'back-top-right' | 'back-bottom-left' | 'back-bottom-right';
+
 export type DisplayMode = 'wireframe' | 'shaded';
+export type ProjectionMode = 'perspective' | 'orthographic';
 
 interface ViewerState {
   displayMode: DisplayMode;
-  currentView: ViewPreset;
+  projectionMode: ProjectionMode;
+  currentView: ViewPreset | null;
+  cameraRotation: { x: number; y: number; z: number; w: number }; // Quaternion
 }
 
 interface ViewerActions {
   setView: (preset: ViewPreset) => void;
   setDisplayMode: (mode: DisplayMode) => void;
+  toggleProjection: () => void;
   zoomToFit: () => void;
+  updateCameraRotation: (rotation: { x: number; y: number; z: number; w: number }) => void;
 }
 
 interface ViewerRefs {
-  camera: React.MutableRefObject<THREE.PerspectiveCamera | null>;
+  camera: React.MutableRefObject<THREE.PerspectiveCamera | THREE.OrthographicCamera | null>;
   scene: React.MutableRefObject<THREE.Scene | null>;
   target: React.MutableRefObject<THREE.Vector3>;
+  container: React.MutableRefObject<HTMLDivElement | null>;
+  updateCamera: (projection: ProjectionMode) => void;
   requestRender: () => void;
 }
 
@@ -41,19 +54,47 @@ export const useViewer = (): ViewerContextValue => {
 // Camera distance for standard views
 const VIEW_DISTANCE = 8;
 
-// Preset camera positions (looking at origin)
-const VIEW_PRESETS: Record<ViewPreset, { position: THREE.Vector3; up: THREE.Vector3 }> = {
-  front: { position: new THREE.Vector3(0, 0, VIEW_DISTANCE), up: new THREE.Vector3(0, 1, 0) },
-  back: { position: new THREE.Vector3(0, 0, -VIEW_DISTANCE), up: new THREE.Vector3(0, 1, 0) },
-  top: { position: new THREE.Vector3(0, VIEW_DISTANCE, 0), up: new THREE.Vector3(0, 0, -1) },
-  bottom: { position: new THREE.Vector3(0, -VIEW_DISTANCE, 0), up: new THREE.Vector3(0, 0, 1) },
-  left: { position: new THREE.Vector3(-VIEW_DISTANCE, 0, 0), up: new THREE.Vector3(0, 1, 0) },
-  right: { position: new THREE.Vector3(VIEW_DISTANCE, 0, 0), up: new THREE.Vector3(0, 1, 0) },
-  isometric: { 
-    position: new THREE.Vector3(VIEW_DISTANCE * 0.577, VIEW_DISTANCE * 0.577, VIEW_DISTANCE * 0.577), 
-    up: new THREE.Vector3(0, 1, 0) 
-  },
-};
+// Calculate position from face/edge/corner name
+function getViewPosition(preset: ViewPreset): { position: THREE.Vector3; up: THREE.Vector3 } {
+  const d = VIEW_DISTANCE;
+  const c = d * 0.577; // For corners (normalized)
+  const e = d * 0.707; // For edges (normalized)
+
+  const positions: Record<ViewPreset, { position: THREE.Vector3; up: THREE.Vector3 }> = {
+    // Faces
+    front: { position: new THREE.Vector3(0, 0, d), up: new THREE.Vector3(0, 1, 0) },
+    back: { position: new THREE.Vector3(0, 0, -d), up: new THREE.Vector3(0, 1, 0) },
+    top: { position: new THREE.Vector3(0, d, 0), up: new THREE.Vector3(0, 0, -1) },
+    bottom: { position: new THREE.Vector3(0, -d, 0), up: new THREE.Vector3(0, 0, 1) },
+    left: { position: new THREE.Vector3(-d, 0, 0), up: new THREE.Vector3(0, 1, 0) },
+    right: { position: new THREE.Vector3(d, 0, 0), up: new THREE.Vector3(0, 1, 0) },
+    isometric: { position: new THREE.Vector3(c, c, c), up: new THREE.Vector3(0, 1, 0) },
+    // Edges (horizontal)
+    'front-top': { position: new THREE.Vector3(0, e, e), up: new THREE.Vector3(0, 1, 0) },
+    'front-bottom': { position: new THREE.Vector3(0, -e, e), up: new THREE.Vector3(0, 1, 0) },
+    'front-left': { position: new THREE.Vector3(-e, 0, e), up: new THREE.Vector3(0, 1, 0) },
+    'front-right': { position: new THREE.Vector3(e, 0, e), up: new THREE.Vector3(0, 1, 0) },
+    'back-top': { position: new THREE.Vector3(0, e, -e), up: new THREE.Vector3(0, 1, 0) },
+    'back-bottom': { position: new THREE.Vector3(0, -e, -e), up: new THREE.Vector3(0, 1, 0) },
+    'back-left': { position: new THREE.Vector3(-e, 0, -e), up: new THREE.Vector3(0, 1, 0) },
+    'back-right': { position: new THREE.Vector3(e, 0, -e), up: new THREE.Vector3(0, 1, 0) },
+    'top-left': { position: new THREE.Vector3(-e, e, 0), up: new THREE.Vector3(0, 1, 0) },
+    'top-right': { position: new THREE.Vector3(e, e, 0), up: new THREE.Vector3(0, 1, 0) },
+    'bottom-left': { position: new THREE.Vector3(-e, -e, 0), up: new THREE.Vector3(0, 1, 0) },
+    'bottom-right': { position: new THREE.Vector3(e, -e, 0), up: new THREE.Vector3(0, 1, 0) },
+    // Corners
+    'front-top-left': { position: new THREE.Vector3(-c, c, c), up: new THREE.Vector3(0, 1, 0) },
+    'front-top-right': { position: new THREE.Vector3(c, c, c), up: new THREE.Vector3(0, 1, 0) },
+    'front-bottom-left': { position: new THREE.Vector3(-c, -c, c), up: new THREE.Vector3(0, 1, 0) },
+    'front-bottom-right': { position: new THREE.Vector3(c, -c, c), up: new THREE.Vector3(0, 1, 0) },
+    'back-top-left': { position: new THREE.Vector3(-c, c, -c), up: new THREE.Vector3(0, 1, 0) },
+    'back-top-right': { position: new THREE.Vector3(c, c, -c), up: new THREE.Vector3(0, 1, 0) },
+    'back-bottom-left': { position: new THREE.Vector3(-c, -c, -c), up: new THREE.Vector3(0, 1, 0) },
+    'back-bottom-right': { position: new THREE.Vector3(c, -c, -c), up: new THREE.Vector3(0, 1, 0) },
+  };
+
+  return positions[preset];
+}
 
 interface ViewerProviderProps {
   children: React.ReactNode;
@@ -62,7 +103,9 @@ interface ViewerProviderProps {
 export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
   const [state, setState] = useState<ViewerState>({
     displayMode: 'shaded',
-    currentView: 'isometric',
+    projectionMode: 'perspective',
+    currentView: null,
+    cameraRotation: { x: 0, y: 0, z: 0, w: 1 },
   });
 
   const viewerRefsRef = useRef<ViewerRefs | null>(null);
@@ -75,7 +118,7 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     const refs = viewerRefsRef.current;
     if (!refs || !refs.camera.current) return;
 
-    const { position, up } = VIEW_PRESETS[preset];
+    const { position, up } = getViewPosition(preset);
     const camera = refs.camera.current;
     const target = refs.target.current;
 
@@ -84,7 +127,13 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     camera.up.copy(up);
     camera.lookAt(target);
 
-    setState((prev) => ({ ...prev, currentView: preset }));
+    // Update camera rotation in state
+    const q = camera.quaternion;
+    setState((prev) => ({ 
+      ...prev, 
+      currentView: preset,
+      cameraRotation: { x: q.x, y: q.y, z: q.z, w: q.w }
+    }));
     refs.requestRender();
   }, []);
 
@@ -104,6 +153,17 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     refs.requestRender();
   }, []);
 
+  const toggleProjection = useCallback(() => {
+    const refs = viewerRefsRef.current;
+    if (!refs) return;
+
+    setState((prev) => {
+      const newMode = prev.projectionMode === 'perspective' ? 'orthographic' : 'perspective';
+      refs.updateCamera(newMode);
+      return { ...prev, projectionMode: newMode };
+    });
+  }, []);
+
   const zoomToFit = useCallback(() => {
     const refs = viewerRefsRef.current;
     if (!refs || !refs.camera.current || !refs.scene.current) return;
@@ -116,8 +176,14 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
-    const fov = camera.fov * (Math.PI / 180);
-    const distance = maxDim / (2 * Math.tan(fov / 2)) * 1.5;
+    
+    let distance: number;
+    if (camera instanceof THREE.PerspectiveCamera) {
+      const fov = camera.fov * (Math.PI / 180);
+      distance = maxDim / (2 * Math.tan(fov / 2)) * 1.5;
+    } else {
+      distance = maxDim * 1.5;
+    }
 
     // Update target to center
     refs.target.current.copy(center);
@@ -130,8 +196,12 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     refs.requestRender();
   }, []);
 
+  const updateCameraRotation = useCallback((rotation: { x: number; y: number; z: number; w: number }) => {
+    setState((prev) => ({ ...prev, cameraRotation: rotation }));
+  }, []);
+
   return (
-    <ViewerContext.Provider value={{ state, actions: { setView, setDisplayMode, zoomToFit }, registerRefs }}>
+    <ViewerContext.Provider value={{ state, actions: { setView, setDisplayMode, toggleProjection, zoomToFit, updateCameraRotation }, registerRefs }}>
       {children}
     </ViewerContext.Provider>
   );

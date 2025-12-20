@@ -1,23 +1,65 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { useTheme } from '../contexts/ThemeContext';
-import { useViewer } from '../contexts/ViewerContext';
+import { useViewer, ProjectionMode } from '../contexts/ViewerContext';
 import './Viewer.css';
 
 const Viewer: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | THREE.OrthographicCamera | null>(null);
   const targetRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
   const animationFrameRef = useRef<number | null>(null);
   const needsRenderRef = useRef(true);
+  const projectionModeRef = useRef<ProjectionMode>('perspective');
 
   const { theme } = useTheme();
-  const { registerRefs } = useViewer();
+  const { registerRefs, actions } = useViewer();
+
+  // Report camera rotation to context
+  const reportCameraRotation = useCallback(() => {
+    if (!cameraRef.current) return;
+    const q = cameraRef.current.quaternion;
+    actions.updateCameraRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
+  }, [actions]);
 
   // Request a render (for use by external controls)
   const requestRender = useCallback(() => {
+    needsRenderRef.current = true;
+  }, []);
+
+  // Update camera projection
+  const updateCamera = useCallback((projection: ProjectionMode) => {
+    if (!containerRef.current || !cameraRef.current) return;
+    
+    const oldCamera = cameraRef.current;
+    const container = containerRef.current;
+    const aspect = container.clientWidth / container.clientHeight;
+    const distance = oldCamera.position.distanceTo(targetRef.current);
+    
+    let newCamera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
+    
+    if (projection === 'orthographic') {
+      const frustumSize = distance * 0.5;
+      newCamera = new THREE.OrthographicCamera(
+        -frustumSize * aspect,
+        frustumSize * aspect,
+        frustumSize,
+        -frustumSize,
+        0.1,
+        1000
+      );
+    } else {
+      newCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
+    }
+    
+    newCamera.position.copy(oldCamera.position);
+    newCamera.up.copy(oldCamera.up);
+    newCamera.lookAt(targetRef.current);
+    
+    cameraRef.current = newCamera;
+    projectionModeRef.current = projection;
     needsRenderRef.current = true;
   }, []);
 
@@ -27,9 +69,11 @@ const Viewer: React.FC = () => {
       camera: cameraRef,
       scene: sceneRef,
       target: targetRef,
+      container: containerRef,
+      updateCamera,
       requestRender,
     });
-  }, [registerRefs, requestRender]);
+  }, [registerRefs, requestRender, updateCamera]);
 
   // Update scene background when theme changes
   useEffect(() => {
@@ -94,16 +138,11 @@ const Viewer: React.FC = () => {
     const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x333333);
     scene.add(gridHelper);
 
-    // Add axes helper
-    const axesHelper = new THREE.AxesHelper(3);
-    scene.add(axesHelper);
-
-    // SolidWorks-style controls:
-    // - Middle mouse drag: Rotate/orbit
-    // - Middle mouse + Ctrl: Pan
-    // - Middle mouse + Shift: Zoom
-    // - Scroll wheel: Zoom
+    // Laptop-friendly controls:
+    // - Left mouse drag: Rotate/orbit
+    // - Left mouse + Shift: Pan
     // - Right mouse drag: Pan (alternative)
+    // - Scroll wheel: Zoom
 
     let isDragging = false;
     let isRotating = false;
@@ -111,12 +150,22 @@ const Viewer: React.FC = () => {
     let previousMousePosition = { x: 0, y: 0 };
 
     const onMouseDown = (e: MouseEvent) => {
-      // Middle mouse button (button 1) or right mouse button (button 2)
-      if (e.button === 1) {
-        // Middle mouse
+      if (e.button === 0) {
+        // Left mouse button
         e.preventDefault();
         isDragging = true;
-        if (e.ctrlKey || e.metaKey) {
+        if (e.shiftKey) {
+          isPanning = true;
+          isRotating = false;
+        } else {
+          isRotating = true;
+          isPanning = false;
+        }
+      } else if (e.button === 1) {
+        // Middle mouse - also rotate
+        e.preventDefault();
+        isDragging = true;
+        if (e.ctrlKey || e.metaKey || e.shiftKey) {
           isPanning = true;
           isRotating = false;
         } else {
@@ -134,15 +183,16 @@ const Viewer: React.FC = () => {
     };
 
     const onMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
+      if (!isDragging || !cameraRef.current) return;
 
       const deltaX = e.clientX - previousMousePosition.x;
       const deltaY = e.clientY - previousMousePosition.y;
+      const currentCamera = cameraRef.current;
 
       if (isRotating) {
         // Orbit around target
         const spherical = new THREE.Spherical();
-        const offset = camera.position.clone().sub(targetRef.current);
+        const offset = currentCamera.position.clone().sub(targetRef.current);
         spherical.setFromVector3(offset);
 
         spherical.theta -= deltaX * 0.01;
@@ -151,9 +201,10 @@ const Viewer: React.FC = () => {
         spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, spherical.phi));
 
         offset.setFromSpherical(spherical);
-        camera.position.copy(targetRef.current).add(offset);
-        camera.lookAt(targetRef.current);
+        currentCamera.position.copy(targetRef.current).add(offset);
+        currentCamera.lookAt(targetRef.current);
         needsRenderRef.current = true;
+        reportCameraRotation();
       } else if (isPanning) {
         // Pan the camera and target
         const panSpeed = 0.01;
@@ -161,17 +212,17 @@ const Viewer: React.FC = () => {
         // Get camera's right and up vectors
         const right = new THREE.Vector3();
         const up = new THREE.Vector3();
-        camera.matrix.extractBasis(right, up, new THREE.Vector3());
+        currentCamera.matrix.extractBasis(right, up, new THREE.Vector3());
 
         // Calculate pan offset
-        const distance = camera.position.distanceTo(targetRef.current);
+        const distance = currentCamera.position.distanceTo(targetRef.current);
         const panX = right.multiplyScalar(-deltaX * panSpeed * distance * 0.1);
         const panY = up.multiplyScalar(deltaY * panSpeed * distance * 0.1);
         const panOffset = panX.add(panY);
 
-        camera.position.add(panOffset);
+        currentCamera.position.add(panOffset);
         targetRef.current.add(panOffset);
-        camera.lookAt(targetRef.current);
+        currentCamera.lookAt(targetRef.current);
         needsRenderRef.current = true;
       }
 
@@ -186,15 +237,30 @@ const Viewer: React.FC = () => {
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      if (!cameraRef.current) return;
+      
+      const currentCamera = cameraRef.current;
       
       // Zoom toward/away from target
       const zoomSpeed = 0.001;
-      const distance = camera.position.distanceTo(targetRef.current);
+      const distance = currentCamera.position.distanceTo(targetRef.current);
       const zoomFactor = 1 + e.deltaY * zoomSpeed;
       const newDistance = Math.max(1, Math.min(100, distance * zoomFactor));
 
-      const direction = camera.position.clone().sub(targetRef.current).normalize();
-      camera.position.copy(targetRef.current).add(direction.multiplyScalar(newDistance));
+      const direction = currentCamera.position.clone().sub(targetRef.current).normalize();
+      currentCamera.position.copy(targetRef.current).add(direction.multiplyScalar(newDistance));
+      
+      // Update orthographic camera frustum if needed
+      if (currentCamera instanceof THREE.OrthographicCamera && containerRef.current) {
+        const aspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
+        const frustumSize = newDistance * 0.5;
+        currentCamera.left = -frustumSize * aspect;
+        currentCamera.right = frustumSize * aspect;
+        currentCamera.top = frustumSize;
+        currentCamera.bottom = -frustumSize;
+        currentCamera.updateProjectionMatrix();
+      }
+      
       needsRenderRef.current = true;
     };
 
@@ -211,8 +277,8 @@ const Viewer: React.FC = () => {
     // Render loop (only renders when needed)
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
-      if (needsRenderRef.current) {
-        renderer.render(scene, camera);
+      if (needsRenderRef.current && cameraRef.current) {
+        renderer.render(scene, cameraRef.current);
         needsRenderRef.current = false;
       }
     };
@@ -223,10 +289,21 @@ const Viewer: React.FC = () => {
 
     // Handle resize
     const handleResize = () => {
-      if (!containerRef.current || !camera || !renderer) return;
-      camera.aspect =
-        containerRef.current.clientWidth / containerRef.current.clientHeight;
-      camera.updateProjectionMatrix();
+      if (!containerRef.current || !cameraRef.current || !renderer) return;
+      const currentCamera = cameraRef.current;
+      const aspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
+      
+      if (currentCamera instanceof THREE.PerspectiveCamera) {
+        currentCamera.aspect = aspect;
+      } else if (currentCamera instanceof THREE.OrthographicCamera) {
+        const distance = currentCamera.position.distanceTo(targetRef.current);
+        const frustumSize = distance * 0.5;
+        currentCamera.left = -frustumSize * aspect;
+        currentCamera.right = frustumSize * aspect;
+        currentCamera.top = frustumSize;
+        currentCamera.bottom = -frustumSize;
+      }
+      currentCamera.updateProjectionMatrix();
       renderer.setSize(
         containerRef.current.clientWidth,
         containerRef.current.clientHeight

@@ -1,0 +1,14 @@
+.view-cube {
+  width: 80px;
+  height: 80px;
+  position: absolute;
+  bottom: 48px;
+  right: 8px;
+  z-index: 10;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.view-cube canvas {
+  display: block;
+}

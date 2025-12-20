@@ -4,9 +4,13 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ViewerProvider } from './contexts/ViewerContext';
 import App from './App';
 
-// Mock the Viewer component to avoid WebGL issues in jsdom
+// Mock the Viewer and ViewCube components to avoid WebGL issues in jsdom
 vi.mock('./components/Viewer', () => ({
   default: () => <div data-testid="viewer">Viewer</div>,
+}));
+
+vi.mock('./components/ViewCube', () => ({
+  default: () => <div data-testid="viewcube">ViewCube</div>,
 }));
 
 const renderApp = () => {
