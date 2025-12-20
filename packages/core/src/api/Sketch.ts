@@ -2,13 +2,12 @@
  * Sketch wrapper class
  * 
  * Provides an object-oriented interface for creating and manipulating 2D sketches.
- * Wraps the core sketch functions.
+ * Uses the SketchModel class directly.
  */
 
 import type { DatumPlane } from '../model/planes.js';
 import type { SketchProfile } from '../model/sketchProfile.js';
 import type {
-  Sketch as CoreSketch,
   SketchPointId,
   SketchEntityId,
   SketchPoint,
@@ -18,26 +17,7 @@ import type {
 } from '../sketch/types.js';
 import type { Constraint } from '../sketch/constraints.js';
 import type { ConstraintId } from '../sketch/types.js';
-import {
-  createSketch as coreCreateSketch,
-  addPoint as coreAddPoint,
-  addFixedPoint as coreAddFixedPoint,
-  addLine as coreAddLine,
-  addArc as coreAddArc,
-  addCircle as coreAddCircle,
-  addRectangle as coreAddRectangle,
-  setPointPosition,
-  setPointFixed,
-  removePoint as coreRemovePoint,
-  removeEntity as coreRemoveEntity,
-  sketchToProfile,
-} from '../sketch/sketch.js';
-import {
-  getSketchPoint,
-  getSketchEntity,
-  getAllSketchPoints,
-  getAllSketchEntities,
-} from '../sketch/types.js';
+import { SketchModel } from '../sketch/SketchModel.js';
 import { solveSketch, analyzeDOF } from '../sketch/solver.js';
 
 /**
@@ -46,50 +26,47 @@ import { solveSketch, analyzeDOF } from '../sketch/solver.js';
  * Provides an object-oriented interface for creating and manipulating 2D sketches.
  */
 export class Sketch {
-  private readonly coreSketch: CoreSketch;
+  private readonly sketchModel: SketchModel;
   private constraints: Constraint[] = [];
   
   constructor(plane: DatumPlane, name?: string) {
-    this.coreSketch = coreCreateSketch(plane, name);
+    this.sketchModel = new SketchModel(plane, name);
   }
   
   /**
-   * Get the underlying core sketch
+   * Get the underlying sketch model
    * @internal For advanced use only
    */
-  getCoreSketch(): CoreSketch {
-    return this.coreSketch;
+  getCoreSketch(): SketchModel {
+    return this.sketchModel;
   }
   
   /**
    * Get the plane this sketch is on
    */
   getPlane(): DatumPlane {
-    return this.coreSketch.plane;
+    return this.sketchModel.plane;
   }
   
   /**
    * Add a point to the sketch
    */
   addPoint(x: number, y: number, options?: { fixed?: boolean; name?: string }): SketchPointId {
-    if (options?.fixed) {
-      return coreAddFixedPoint(this.coreSketch, x, y, options.name);
-    }
-    return coreAddPoint(this.coreSketch, x, y, options);
+    return this.sketchModel.addPoint(x, y, options);
   }
   
   /**
    * Add a fixed point to the sketch
    */
   addFixedPoint(x: number, y: number, name?: string): SketchPointId {
-    return coreAddFixedPoint(this.coreSketch, x, y, name);
+    return this.sketchModel.addFixedPoint(x, y, name);
   }
   
   /**
    * Add a line between two points
    */
   addLine(start: SketchPointId, end: SketchPointId, options?: { construction?: boolean }): SketchEntityId {
-    return coreAddLine(this.coreSketch, start, end, options);
+    return this.sketchModel.addLine(start, end, options);
   }
   
   /**
@@ -102,10 +79,7 @@ export class Sketch {
     y2: number,
     options?: { construction?: boolean }
   ): { start: SketchPointId; end: SketchPointId; line: SketchEntityId } {
-    const start = coreAddPoint(this.coreSketch, x1, y1);
-    const end = coreAddPoint(this.coreSketch, x2, y2);
-    const line = coreAddLine(this.coreSketch, start, end, options);
-    return { start, end, line };
+    return this.sketchModel.addLineByCoords(x1, y1, x2, y2, options);
   }
   
   /**
@@ -118,7 +92,7 @@ export class Sketch {
     ccw?: boolean,
     options?: { construction?: boolean }
   ): SketchEntityId {
-    return coreAddArc(this.coreSketch, start, end, center, ccw, options);
+    return this.sketchModel.addArc(start, end, center, ccw, options);
   }
   
   /**
@@ -130,7 +104,7 @@ export class Sketch {
     radius: number,
     options?: { construction?: boolean }
   ): { center: SketchPointId; arc: SketchEntityId } {
-    return coreAddCircle(this.coreSketch, centerX, centerY, radius, options);
+    return this.sketchModel.addCircle(centerX, centerY, radius, options);
   }
   
   /**
@@ -145,63 +119,63 @@ export class Sketch {
     corners: [SketchPointId, SketchPointId, SketchPointId, SketchPointId];
     sides: [SketchEntityId, SketchEntityId, SketchEntityId, SketchEntityId];
   } {
-    return coreAddRectangle(this.coreSketch, x, y, width, height);
+    return this.sketchModel.addRectangle(x, y, width, height);
   }
   
   /**
    * Set the position of a point
    */
   setPointPosition(pointId: SketchPointId, x: number, y: number): void {
-    setPointPosition(this.coreSketch, pointId, x, y);
+    this.sketchModel.setPointPosition(pointId, x, y);
   }
   
   /**
    * Set whether a point is fixed
    */
   setPointFixed(pointId: SketchPointId, fixed: boolean): void {
-    setPointFixed(this.coreSketch, pointId, fixed);
+    this.sketchModel.setPointFixed(pointId, fixed);
   }
   
   /**
    * Remove a point (and any entities referencing it)
    */
   removePoint(pointId: SketchPointId): boolean {
-    return coreRemovePoint(this.coreSketch, pointId);
+    return this.sketchModel.removePoint(pointId);
   }
   
   /**
    * Remove an entity
    */
   removeEntity(entityId: SketchEntityId): boolean {
-    return coreRemoveEntity(this.coreSketch, entityId);
+    return this.sketchModel.removeEntity(entityId);
   }
   
   /**
    * Get a point by ID
    */
   getPoint(pointId: SketchPointId): SketchPoint | undefined {
-    return getSketchPoint(this.coreSketch, pointId);
+    return this.sketchModel.getPoint(pointId);
   }
   
   /**
    * Get an entity by ID
    */
   getEntity(entityId: SketchEntityId): SketchEntity | undefined {
-    return getSketchEntity(this.coreSketch, entityId);
+    return this.sketchModel.getEntity(entityId);
   }
   
   /**
    * Get all points
    */
   getAllPoints(): SketchPoint[] {
-    return getAllSketchPoints(this.coreSketch);
+    return this.sketchModel.getAllPoints();
   }
   
   /**
    * Get all entities
    */
   getAllEntities(): SketchEntity[] {
-    return getAllSketchEntities(this.coreSketch);
+    return this.sketchModel.getAllEntities();
   }
   
   /**
@@ -248,7 +222,7 @@ export class Sketch {
    * Solve the sketch constraints
    */
   solve(options?: SolveOptions): SolveResult {
-    return solveSketch(this.coreSketch, this.constraints, options);
+    return solveSketch(this.sketchModel, this.constraints, options);
   }
   
   /**
@@ -261,13 +235,13 @@ export class Sketch {
     isFullyConstrained: boolean;
     isOverConstrained: boolean;
   } {
-    return analyzeDOF(this.coreSketch, this.constraints);
+    return analyzeDOF(this.sketchModel, this.constraints);
   }
   
   /**
    * Convert to a SketchProfile for use in modeling operations
    */
   toProfile(): SketchProfile | null {
-    return sketchToProfile(this.coreSketch);
+    return this.sketchModel.toProfile();
   }
 }

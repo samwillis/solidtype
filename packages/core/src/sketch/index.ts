@@ -107,7 +107,10 @@ export {
   describeConstraint,
 } from './constraints.js';
 
-// Sketch creation and manipulation
+// SketchModel class (primary OO API)
+export { SketchModel } from './SketchModel.js';
+
+// Sketch creation and manipulation (backward compatibility - deprecated)
 export {
   allocateSketchId,
   resetSketchIdCounter,

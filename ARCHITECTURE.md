@@ -383,7 +383,31 @@ The strategy is intentionally **pluggable** to allow experimentation with differ
 * Represent 2D sketches on planes.
 * Provide a **constraint system and numeric solver** for interactive sketching.
 
-**Sketch model**
+**SketchModel class**
+
+The `SketchModel` class provides an object-oriented API for creating and manipulating 2D sketches:
+
+```ts
+class SketchModel {
+  // Point operations
+  addPoint(x: number, y: number, options?): SketchPointId;
+  addFixedPoint(x: number, y: number): SketchPointId;
+  getPoint(pointId: SketchPointId): SketchPoint | undefined;
+  setPointPosition(pointId: SketchPointId, x: number, y: number): void;
+  removePoint(pointId: SketchPointId): boolean;
+  
+  // Entity operations
+  addLine(startId: SketchPointId, endId: SketchPointId): SketchEntityId;
+  addArc(startId, endId, centerId, ccw?): SketchEntityId;
+  addCircle(centerX, centerY, radius): { center, arc };
+  addRectangle(x, y, width, height): { corners, sides };
+  
+  // Profile conversion
+  toProfile(): SketchProfile | null;
+}
+```
+
+**Sketch entities**
 
 * Points with coordinates `(x, y)` in sketch plane space.
 * Entities:
