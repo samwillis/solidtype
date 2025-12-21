@@ -11,7 +11,6 @@ import { DocumentProvider, useDocument } from './contexts/DocumentContext';
 import { KernelProvider } from './contexts/KernelContext';
 import { SketchProvider } from './contexts/SketchContext';
 import { SelectionProvider } from './contexts/SelectionContext';
-import SketchCanvas from './components/SketchCanvas';
 import './App.css';
 
 // Inner component that uses the document context
@@ -67,7 +66,6 @@ const AppContent: React.FC = () => {
         <main className="app-center">
           <div className="app-viewer">
             <Viewer />
-            <SketchCanvas />
             <ViewCube />
           </div>
         </main>

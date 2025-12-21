@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import * as THREE from 'three';
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { useTheme } from '../contexts/ThemeContext';
 import { useViewer, ProjectionMode } from '../contexts/ViewerContext';
 import { useKernel } from '../contexts/KernelContext';
@@ -10,9 +11,15 @@ import { useSelection } from '../contexts/SelectionContext';
 import { useSketch } from '../contexts/SketchContext';
 import { useDocument } from '../contexts/DocumentContext';
 import { useRaycast } from '../hooks/useRaycast';
-import { findFeature, getSketchData, getFeaturesArray, parseFeature } from '../document/featureHelpers';
-import type { SketchData, PlaneFeature, OriginFeature, SketchFeature } from '../types/document';
+import { findFeature, getSketchData, setSketchData, getFeaturesArray, parseFeature } from '../document/featureHelpers';
+import type { SketchData, SketchLine, SketchConstraint, PlaneFeature, OriginFeature, SketchFeature } from '../types/document';
 import './Viewer.css';
+
+// Point merge tolerance in sketch units (mm)
+const POINT_MERGE_TOLERANCE_MM = 5;
+
+// Grid size for snapping
+const GRID_SIZE = 1;
 
 /** Get default color for a datum plane based on its ID */
 function getDefaultPlaneColor(planeId: string): number {
@@ -86,6 +93,7 @@ const Viewer: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const labelRendererRef = useRef<CSS2DRenderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | THREE.OrthographicCamera | null>(null);
   const targetRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
   const animationFrameRef = useRef<number | null>(null);
@@ -93,16 +101,47 @@ const Viewer: React.FC = () => {
   const projectionModeRef = useRef<ProjectionMode>('perspective');
   const meshGroupRef = useRef<THREE.Group | null>(null);
   const sketchGroupRef = useRef<THREE.Group | null>(null);
+  const selectionGroupRef = useRef<THREE.Group | null>(null);
+  const constraintLabelsGroupRef = useRef<THREE.Group | null>(null);
   const planesGroupRef = useRef<THREE.Group | null>(null);
   const originGroupRef = useRef<THREE.Group | null>(null);
-  const [sceneReady, setSceneReady] = React.useState(false);
+  const [sceneReady, setSceneReady] = useState(false);
 
   const { theme } = useTheme();
   const { registerRefs, cameraStateRef } = useViewer();
   const { meshes, bodies } = useKernel();
-  const { selectFace, setHover, clearSelection, selectedFeatureId, hoveredFeatureId } = useSelection();
-  const { mode: sketchMode, previewLine } = useSketch();
-  const { doc, features } = useDocument();
+  const { selectFace, setHover, clearSelection: clearFaceSelection, selectedFeatureId, hoveredFeatureId } = useSelection();
+  const { 
+    mode: sketchMode, 
+    previewLine,
+    addPoint,
+    addLine,
+    addArc,
+    addRectangle,
+    findNearbyPoint,
+    setSketchMousePos,
+    setPreviewLine,
+    finishSketch,
+    cancelSketch,
+    selectedPoints,
+    selectedLines,
+    togglePointSelection,
+    toggleLineSelection,
+    clearSelection: clearSketchSelection,
+  } = useSketch();
+  const { doc, features, units } = useDocument();
+
+  // Sketch editing state
+  const [tempStartPoint, setTempStartPoint] = useState<{ x: number; y: number; id?: string } | null>(null);
+  const [arcStartPoint, setArcStartPoint] = useState<{ x: number; y: number; id?: string } | null>(null);
+  const [arcEndPoint, setArcEndPoint] = useState<{ x: number; y: number; id?: string } | null>(null);
+  const [circleCenterPoint, setCircleCenterPoint] = useState<{ x: number; y: number; id?: string } | null>(null);
+  const [sketchPos, setSketchPos] = useState<{ x: number; y: number } | null>(null);
+  
+  // Track mouse for sketch interactions
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
+  const isDraggingViewRef = useRef(false);
+  const DRAG_THRESHOLD = 5;
   
   // Raycast hook for 3D selection
   const { raycast, getFaceId } = useRaycast({
@@ -122,8 +161,8 @@ const Viewer: React.FC = () => {
   selectFaceRef.current = selectFace;
   const setHoverRef = useRef(setHover);
   setHoverRef.current = setHover;
-  const clearSelectionRef = useRef(clearSelection);
-  clearSelectionRef.current = clearSelection;
+  const clearSelectionRef = useRef(clearFaceSelection);
+  clearSelectionRef.current = clearFaceSelection;
 
   // Request a render (for use by external controls)
   const requestRender = useCallback(() => {
@@ -222,6 +261,91 @@ const Viewer: React.FC = () => {
 
     return { x: sketchX, y: sketchY };
   }, []);
+
+  // Snap to grid helper
+  const snapToGrid = useCallback((x: number, y: number): { x: number; y: number } => {
+    return {
+      x: Math.round(x / GRID_SIZE) * GRID_SIZE,
+      y: Math.round(y / GRID_SIZE) * GRID_SIZE,
+    };
+  }, []);
+
+  // Get current sketch data
+  const getSketch = useCallback((): SketchData | null => {
+    if (!sketchMode.sketchId) return null;
+    const sketch = findFeature(doc.features, sketchMode.sketchId);
+    if (!sketch) return null;
+    return getSketchData(sketch);
+  }, [doc.features, sketchMode.sketchId]);
+
+  // Update preview line based on current tool state
+  useEffect(() => {
+    if (!sketchMode.active) {
+      setPreviewLine(null);
+      return;
+    }
+    
+    if (sketchMode.activeTool === 'line' && tempStartPoint && sketchPos) {
+      setPreviewLine({
+        start: { x: tempStartPoint.x, y: tempStartPoint.y },
+        end: { x: sketchPos.x, y: sketchPos.y },
+      });
+    } else {
+      setPreviewLine(null);
+    }
+  }, [sketchMode.active, sketchMode.activeTool, tempStartPoint, sketchPos, setPreviewLine]);
+
+  // Handle escape to cancel current sketch operation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && sketchMode.active) {
+        setTempStartPoint(null);
+        setArcStartPoint(null);
+        setArcEndPoint(null);
+        setCircleCenterPoint(null);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [sketchMode.active]);
+
+  // Constraint value update
+  const updateConstraintValue = useCallback((constraintId: string, value: number) => {
+    if (!sketchMode.sketchId) return;
+    const sketchEl = findFeature(doc.features, sketchMode.sketchId);
+    if (!sketchEl) return;
+    const data = getSketchData(sketchEl);
+    const c = data.constraints.find((cc) => cc.id === constraintId);
+    if (!c) return;
+
+    if (c.type === 'distance') {
+      c.value = value;
+    } else if (c.type === 'angle') {
+      c.value = value;
+    } else {
+      return;
+    }
+
+    doc.ydoc.transact(() => {
+      setSketchData(sketchEl, data);
+    });
+  }, [doc.features, doc.ydoc, sketchMode.sketchId]);
+
+  // Delete constraint
+  const deleteConstraint = useCallback((constraintId: string) => {
+    if (!sketchMode.sketchId) return;
+    const sketchEl = findFeature(doc.features, sketchMode.sketchId);
+    if (!sketchEl) return;
+    const data = getSketchData(sketchEl);
+    const next: SketchData = {
+      ...data,
+      constraints: data.constraints.filter((c) => c.id !== constraintId),
+    };
+    doc.ydoc.transact(() => {
+      setSketchData(sketchEl, next);
+    });
+  }, [doc.features, doc.ydoc, sketchMode.sketchId]);
 
   // Register refs with context
   useEffect(() => {
@@ -796,6 +920,182 @@ const Viewer: React.FC = () => {
     needsRenderRef.current = true;
   }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, doc.features, features, sceneReady, selectedFeatureId, hoveredFeatureId, previewLine]);
 
+  // Render selection highlights and constraint annotations (only when editing sketch)
+  useEffect(() => {
+    const selectionGroup = selectionGroupRef.current;
+    const labelsGroup = constraintLabelsGroupRef.current;
+    if (!selectionGroup || !labelsGroup || !sceneReady) return;
+
+    // Clear existing selection geometry
+    while (selectionGroup.children.length > 0) {
+      const child = selectionGroup.children[0];
+      selectionGroup.remove(child);
+      if ('geometry' in child && child.geometry) {
+        (child.geometry as THREE.BufferGeometry).dispose();
+      }
+      if ('material' in child && child.material) {
+        const material = child.material as THREE.Material | THREE.Material[];
+        if (Array.isArray(material)) material.forEach(m => m.dispose());
+        else material.dispose();
+      }
+    }
+
+    // Clear existing labels
+    while (labelsGroup.children.length > 0) {
+      const child = labelsGroup.children[0];
+      labelsGroup.remove(child);
+    }
+
+    // Only render when actively editing a sketch
+    if (!sketchMode.active || !sketchMode.sketchId || !sketchMode.planeId) return;
+
+    const sketch = getSketch();
+    if (!sketch) return;
+
+    // Get renderer size for LineMaterial resolution
+    const renderer = rendererRef.current;
+    const rendererSize = renderer ? new THREE.Vector2() : null;
+    if (renderer && rendererSize) {
+      renderer.getSize(rendererSize);
+    }
+
+    // Get plane transformation
+    const getPlaneTransform = (planeId: string) => {
+      switch (planeId) {
+        case 'xy':
+          return { origin: new THREE.Vector3(0, 0, 0), xDir: new THREE.Vector3(1, 0, 0), yDir: new THREE.Vector3(0, 1, 0) };
+        case 'xz':
+          return { origin: new THREE.Vector3(0, 0, 0), xDir: new THREE.Vector3(1, 0, 0), yDir: new THREE.Vector3(0, 0, 1) };
+        case 'yz':
+          return { origin: new THREE.Vector3(0, 0, 0), xDir: new THREE.Vector3(0, 1, 0), yDir: new THREE.Vector3(0, 0, 1) };
+        default:
+          return { origin: new THREE.Vector3(0, 0, 0), xDir: new THREE.Vector3(1, 0, 0), yDir: new THREE.Vector3(0, 1, 0) };
+      }
+    };
+
+    const { origin, xDir, yDir } = getPlaneTransform(sketchMode.planeId);
+    const toWorld = (x: number, y: number): THREE.Vector3 => {
+      return new THREE.Vector3(
+        origin.x + x * xDir.x + y * yDir.x,
+        origin.y + x * xDir.y + y * yDir.y,
+        origin.z + x * xDir.z + y * yDir.z
+      );
+    };
+
+    // Draw selection highlights for selected lines (yellow glow)
+    for (const entity of sketch.entities) {
+      if (entity.type === 'line') {
+        const line = entity as SketchLine;
+        if (!selectedLines.has(line.id)) continue;
+
+        const startPoint = sketch.points.find((p) => p.id === line.start);
+        const endPoint = sketch.points.find((p) => p.id === line.end);
+        if (!startPoint || !endPoint) continue;
+
+        const startWorld = toWorld(startPoint.x, startPoint.y);
+        const endWorld = toWorld(endPoint.x, endPoint.y);
+
+        const geometry = new LineGeometry();
+        geometry.setPositions([
+          startWorld.x, startWorld.y, startWorld.z,
+          endWorld.x, endWorld.y, endWorld.z,
+        ]);
+        const material = new LineMaterial({
+          color: 0xffff00, // Yellow for selection
+          linewidth: 6,
+          resolution: rendererSize || new THREE.Vector2(800, 600),
+          depthTest: false,
+          transparent: true,
+          opacity: 0.6,
+        });
+        const selLine = new Line2(geometry, material);
+        selLine.computeLineDistances();
+        selLine.renderOrder = 1; // Below main sketch lines
+        selectionGroup.add(selLine);
+      }
+    }
+
+    // Draw selection highlights for selected points (yellow ring)
+    for (const point of sketch.points) {
+      if (!selectedPoints.has(point.id)) continue;
+
+      const worldPos = toWorld(point.x, point.y);
+      
+      // Create a ring geometry
+      const ringGeometry = new THREE.RingGeometry(3, 5, 16);
+      const ringMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffff00,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.8,
+        depthTest: false,
+      });
+      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+      ring.position.copy(worldPos);
+      ring.renderOrder = 4;
+      
+      // Orient ring to face camera (will be updated in render loop)
+      // For now, orient to sketch plane normal
+      const planeNormal = new THREE.Vector3().crossVectors(xDir, yDir).normalize();
+      ring.lookAt(worldPos.clone().add(planeNormal));
+      
+      selectionGroup.add(ring);
+    }
+
+    // Draw constraint annotations (H, V, C, F labels) - only when editing
+    for (const c of sketch.constraints) {
+      // Skip dimension constraints (shown in panel)
+      if (c.type === 'distance' || c.type === 'angle') continue;
+
+      const label = c.type === 'horizontal' ? 'H' 
+                  : c.type === 'vertical' ? 'V'
+                  : c.type === 'coincident' ? 'C'
+                  : c.type === 'fixed' ? 'F'
+                  : '?';
+
+      let labelPos: THREE.Vector3 | null = null;
+
+      if (c.type === 'fixed') {
+        const p = sketch.points.find((pt) => pt.id === c.point);
+        if (p) {
+          labelPos = toWorld(p.x + 5, p.y + 5);
+        }
+      } else if (c.type === 'coincident' || c.type === 'horizontal' || c.type === 'vertical') {
+        const [a, b] = c.points ?? [];
+        const p1 = sketch.points.find((pt) => pt.id === a);
+        const p2 = sketch.points.find((pt) => pt.id === b);
+        if (p1 && p2 && (c.type === 'horizontal' || c.type === 'vertical')) {
+          labelPos = toWorld((p1.x + p2.x) * 0.5 + 5, (p1.y + p2.y) * 0.5 + 5);
+        } else if (p1) {
+          labelPos = toWorld(p1.x + 5, p1.y + 5);
+        } else if (p2) {
+          labelPos = toWorld(p2.x + 5, p2.y + 5);
+        }
+      }
+
+      if (labelPos) {
+        // Create CSS2D label
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'constraint-label';
+        labelDiv.textContent = label;
+        labelDiv.style.cssText = `
+          background: rgba(0, 120, 212, 0.9);
+          color: white;
+          padding: 2px 5px;
+          border-radius: 3px;
+          font-size: 11px;
+          font-weight: 600;
+          pointer-events: none;
+        `;
+        const labelObject = new CSS2DObject(labelDiv);
+        labelObject.position.copy(labelPos);
+        labelsGroup.add(labelObject);
+      }
+    }
+
+    needsRenderRef.current = true;
+  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, selectedPoints, selectedLines, getSketch, sceneReady]);
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -852,6 +1152,29 @@ const Viewer: React.FC = () => {
     sketchGroup.renderOrder = 1; // Render on top of meshes
     scene.add(sketchGroup);
     sketchGroupRef.current = sketchGroup;
+
+    // Group for selection highlights
+    const selectionGroup = new THREE.Group();
+    selectionGroup.name = 'selection-highlights';
+    selectionGroup.renderOrder = 0.5; // Below sketch lines
+    scene.add(selectionGroup);
+    selectionGroupRef.current = selectionGroup;
+
+    // Group for constraint labels (CSS2D)
+    const constraintLabelsGroup = new THREE.Group();
+    constraintLabelsGroup.name = 'constraint-labels';
+    scene.add(constraintLabelsGroup);
+    constraintLabelsGroupRef.current = constraintLabelsGroup;
+
+    // CSS2D Renderer for constraint labels
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0';
+    labelRenderer.domElement.style.left = '0';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    containerRef.current.appendChild(labelRenderer.domElement);
+    labelRendererRef.current = labelRenderer;
 
     // Group for datum planes visualization
     const planesGroup = new THREE.Group();
@@ -1086,6 +1409,7 @@ const Viewer: React.FC = () => {
         cameraStateRef.current.version++;
         
         renderer.render(scene, cameraRef.current);
+        labelRenderer.render(scene, cameraRef.current);
       }
     };
     animate();
@@ -1119,9 +1443,11 @@ const Viewer: React.FC = () => {
       }
       currentCamera.updateProjectionMatrix();
       renderer.setSize(width, height);
+      labelRenderer.setSize(width, height);
       
       // Immediately render to prevent black flash
       renderer.render(scene, currentCamera);
+      labelRenderer.render(scene, currentCamera);
     };
     
     // Debounced resize for ResizeObserver to reduce flashing
@@ -1164,12 +1490,373 @@ const Viewer: React.FC = () => {
       if (containerRef.current && renderer.domElement.parentNode) {
         renderer.domElement.parentNode.removeChild(renderer.domElement);
       }
+      if (containerRef.current && labelRenderer.domElement.parentNode) {
+        labelRenderer.domElement.parentNode.removeChild(labelRenderer.domElement);
+      }
       renderer.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount - theme changes are handled by a separate effect
 
-  return <div ref={containerRef} className="viewer-container" />;
+  // Sketch editing mouse handlers
+  useEffect(() => {
+    if (!sketchMode.active || !sketchMode.planeId) return;
+    
+    const container = containerRef.current;
+    if (!container) return;
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = container.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      
+      // Track if we're dragging (for distinguishing clicks from drags)
+      if (mouseDownPosRef.current && !isDraggingViewRef.current) {
+        const dx = cx - mouseDownPosRef.current.x;
+        const dy = cy - mouseDownPosRef.current.y;
+        if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
+          isDraggingViewRef.current = true;
+        }
+      }
+      
+      // Update sketch coordinates using 3D ray casting
+      const sketchCoords = screenToSketch(e.clientX, e.clientY, sketchMode.planeId!);
+      if (sketchCoords) {
+        const snapped = snapToGrid(sketchCoords.x, sketchCoords.y);
+        setSketchPos(snapped);
+        setSketchMousePos({ x: snapped.x, y: snapped.y });
+      } else {
+        setSketchMousePos(null);
+        setSketchPos(null);
+      }
+    };
+    
+    const handleMouseDown = (e: MouseEvent) => {
+      const rect = container.getBoundingClientRect();
+      mouseDownPosRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      isDraggingViewRef.current = false;
+    };
+    
+    const handleMouseUp = (e: MouseEvent) => {
+      const wasDragging = isDraggingViewRef.current;
+      mouseDownPosRef.current = null;
+      isDraggingViewRef.current = false;
+      
+      // If we were dragging (rotating view), don't trigger tool action
+      if (wasDragging) return;
+      
+      // Only handle left clicks
+      if (e.button !== 0) return;
+      
+      // Don't handle if shift key (panning)
+      if (e.shiftKey) return;
+      
+      // Convert to sketch coordinates
+      const sketchCoords = screenToSketch(e.clientX, e.clientY, sketchMode.planeId!);
+      if (!sketchCoords) return;
+      
+      const snappedPos = snapToGrid(sketchCoords.x, sketchCoords.y);
+      
+      // Handle sketch tool actions
+      if (sketchMode.activeTool === 'select') {
+        const sketch = getSketch();
+        if (!sketch) return;
+
+        const tol = POINT_MERGE_TOLERANCE_MM;
+        const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, tol);
+        if (nearbyPoint) {
+          togglePointSelection(nearbyPoint.id);
+          return;
+        }
+
+        const nearbyLine = findNearbyLineInSketch(sketch, snappedPos.x, snappedPos.y, tol);
+        if (nearbyLine) {
+          toggleLineSelection(nearbyLine.id);
+          return;
+        }
+
+        clearSketchSelection();
+        return;
+      }
+
+      if (sketchMode.activeTool === 'line') {
+        const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
+
+        if (!tempStartPoint) {
+          if (nearbyPoint) {
+            setTempStartPoint({ x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined });
+          } else {
+            setTempStartPoint({ x: snappedPos.x, y: snappedPos.y });
+          }
+        } else {
+          let startId: string | null | undefined = tempStartPoint.id;
+          let endId: string | null = null;
+
+          if (!startId) {
+            startId = addPoint(tempStartPoint.x, tempStartPoint.y);
+          }
+
+          if (nearbyPoint) {
+            endId = nearbyPoint.id ?? null;
+          } else {
+            endId = addPoint(snappedPos.x, snappedPos.y);
+          }
+
+          if (startId && endId) {
+            addLine(startId, endId);
+          }
+
+          setTempStartPoint(null);
+        }
+        return;
+      }
+
+      if (sketchMode.activeTool === 'arc') {
+        const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
+        const clickPoint = nearbyPoint 
+          ? { x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined }
+          : { x: snappedPos.x, y: snappedPos.y };
+
+        if (!arcStartPoint) {
+          setArcStartPoint(clickPoint);
+        } else if (!arcEndPoint) {
+          setArcEndPoint(clickPoint);
+        } else {
+          // Third click: center point
+          let startId = arcStartPoint.id ?? addPoint(arcStartPoint.x, arcStartPoint.y);
+          let endId = arcEndPoint.id ?? addPoint(arcEndPoint.x, arcEndPoint.y);
+          let centerId = clickPoint.id ?? addPoint(clickPoint.x, clickPoint.y);
+
+          if (startId && endId && centerId) {
+            const ccw = isCounterClockwise(arcStartPoint, arcEndPoint, clickPoint);
+            addArc(startId, endId, centerId, ccw);
+          }
+
+          setArcStartPoint(null);
+          setArcEndPoint(null);
+        }
+        return;
+      }
+
+      if (sketchMode.activeTool === 'circle') {
+        const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
+
+        if (!circleCenterPoint) {
+          if (nearbyPoint) {
+            setCircleCenterPoint({ x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined });
+          } else {
+            setCircleCenterPoint({ x: snappedPos.x, y: snappedPos.y });
+          }
+        } else {
+          const centerId = circleCenterPoint.id ?? addPoint(circleCenterPoint.x, circleCenterPoint.y);
+          const edgeId = nearbyPoint?.id ?? addPoint(snappedPos.x, snappedPos.y);
+
+          if (centerId && edgeId) {
+            addArc(edgeId, edgeId, centerId, true);
+          }
+
+          setCircleCenterPoint(null);
+        }
+        return;
+      }
+
+      if (sketchMode.activeTool === 'rectangle') {
+        const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
+
+        if (!tempStartPoint) {
+          if (nearbyPoint) {
+            setTempStartPoint({ x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined });
+          } else {
+            setTempStartPoint({ x: snappedPos.x, y: snappedPos.y });
+          }
+        } else {
+          const x1 = tempStartPoint.x;
+          const y1 = tempStartPoint.y;
+          const x2 = snappedPos.x;
+          const y2 = snappedPos.y;
+
+          const centerX = (x1 + x2) / 2;
+          const centerY = (y1 + y2) / 2;
+          const width = Math.abs(x2 - x1);
+          const height = Math.abs(y2 - y1);
+
+          if (width > 0.01 && height > 0.01) {
+            addRectangle(centerX, centerY, width, height);
+          }
+
+          setTempStartPoint(null);
+        }
+        return;
+      }
+    };
+    
+    container.addEventListener('mousemove', handleMouseMove);
+    container.addEventListener('mousedown', handleMouseDown);
+    container.addEventListener('mouseup', handleMouseUp);
+    
+    return () => {
+      container.removeEventListener('mousemove', handleMouseMove);
+      container.removeEventListener('mousedown', handleMouseDown);
+      container.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [
+    sketchMode.active,
+    sketchMode.planeId,
+    sketchMode.activeTool,
+    screenToSketch,
+    snapToGrid,
+    setSketchMousePos,
+    getSketch,
+    findNearbyPoint,
+    togglePointSelection,
+    toggleLineSelection,
+    clearSketchSelection,
+    addPoint,
+    addLine,
+    addArc,
+    addRectangle,
+    tempStartPoint,
+    arcStartPoint,
+    arcEndPoint,
+    circleCenterPoint,
+  ]);
+
+  // Get current sketch for dimensions panel
+  const currentSketch = useMemo(() => getSketch(), [getSketch]);
+  const dimensionConstraints = useMemo(() => {
+    if (!currentSketch) return [];
+    return currentSketch.constraints.filter((c) => c.type === 'distance' || c.type === 'angle') as Array<
+      Extract<SketchConstraint, { type: 'distance' | 'angle' }>
+    >;
+  }, [currentSketch]);
+
+  return (
+    <div ref={containerRef} className="viewer-container">
+      {/* Sketch mode overlays */}
+      {sketchMode.active && (
+        <>
+          {/* Accept/Cancel buttons */}
+          <div className="sketch-actions-overlay">
+            <button 
+              className="sketch-action-btn sketch-action-accept"
+              onClick={finishSketch}
+              title="Accept Sketch (Enter)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Accept
+            </button>
+            <button 
+              className="sketch-action-btn sketch-action-cancel"
+              onClick={cancelSketch}
+              title="Cancel Sketch (Escape)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+              Cancel
+            </button>
+          </div>
+
+          {/* Dimensions panel */}
+          {dimensionConstraints.length > 0 && (
+            <div className="sketch-dimensions-panel">
+              <div className="sketch-dimensions-title">Dimensions</div>
+              {dimensionConstraints.map((c) => (
+                <div key={c.id} className="sketch-dimension-row">
+                  <span className="sketch-dimension-label">
+                    {c.type === 'distance' ? 'D' : '∠'} {c.id}
+                  </span>
+                  <input
+                    className="sketch-dimension-input"
+                    type="number"
+                    value={c.value}
+                    onChange={(e) => updateConstraintValue(c.id, parseFloat(e.target.value) || 0)}
+                    step={c.type === 'distance' ? 1 : 1}
+                  />
+                  <span className="sketch-dimension-unit">
+                    {c.type === 'distance' ? units : '°'}
+                  </span>
+                  <button
+                    className="sketch-dimension-delete"
+                    type="button"
+                    title="Delete constraint"
+                    onClick={() => deleteConstraint(c.id)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 };
+
+// Helper functions for sketch editing
+
+function isCounterClockwise(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  third: { x: number; y: number }
+): boolean {
+  const v1x = end.x - start.x;
+  const v1y = end.y - start.y;
+  const v2x = third.x - start.x;
+  const v2y = third.y - start.y;
+  return v1x * v2y - v1y * v2x > 0;
+}
+
+function findNearbyLineInSketch(
+  sketch: SketchData,
+  x: number,
+  y: number,
+  tolerance: number
+): SketchLine | null {
+  let best: { line: SketchLine; dist2: number } | null = null;
+
+  const p: [number, number] = [x, y];
+  for (const entity of sketch.entities) {
+    if (entity.type !== 'line') continue;
+    const line = entity as SketchLine;
+    const a = sketch.points.find((pt) => pt.id === line.start);
+    const b = sketch.points.find((pt) => pt.id === line.end);
+    if (!a || !b) continue;
+
+    const d2 = pointSegmentDistanceSquared(p, [a.x, a.y], [b.x, b.y]);
+    if (d2 <= tolerance * tolerance) {
+      if (!best || d2 < best.dist2) {
+        best = { line, dist2: d2 };
+      }
+    }
+  }
+
+  return best ? best.line : null;
+}
+
+function pointSegmentDistanceSquared(
+  p: [number, number],
+  a: [number, number],
+  b: [number, number]
+): number {
+  const abx = b[0] - a[0];
+  const aby = b[1] - a[1];
+  const apx = p[0] - a[0];
+  const apy = p[1] - a[1];
+  const abLen2 = abx * abx + aby * aby;
+  if (abLen2 === 0) return apx * apx + apy * apy;
+
+  let t = (apx * abx + apy * aby) / abLen2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = a[0] + t * abx;
+  const cy = a[1] + t * aby;
+  const dx = p[0] - cx;
+  const dy = p[1] - cy;
+  return dx * dx + dy * dy;
+}
 
 export default Viewer;
