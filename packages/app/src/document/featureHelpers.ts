@@ -99,6 +99,11 @@ export interface ExtrudeFeatureOptions {
   extent?: 'blind' | 'toFace' | 'toVertex' | 'throughAll';
   extentRef?: string;
   name?: string;
+  // Multi-body merge options
+  mergeScope?: 'auto' | 'new' | 'specific';
+  targetBodies?: string[];
+  resultBodyName?: string;
+  resultBodyColor?: string;
 }
 
 /**
@@ -148,35 +153,85 @@ export function addExtrudeFeature(
     extrude.setAttribute('name', `Extrude${counters['e']}`);
   }
 
+  // Multi-body merge options
+  if (options.mergeScope) {
+    extrude.setAttribute('mergeScope', options.mergeScope);
+  }
+  if (options.targetBodies && options.targetBodies.length > 0) {
+    extrude.setAttribute('targetBodies', options.targetBodies.join(','));
+  }
+  if (options.resultBodyName) {
+    extrude.setAttribute('resultBodyName', options.resultBodyName);
+  }
+  if (options.resultBodyColor) {
+    extrude.setAttribute('resultBodyColor', options.resultBodyColor);
+  }
+
   doc.features.push([extrude]);
   return id;
 }
 
 /**
+ * Options for creating a revolve feature
+ */
+export interface RevolveFeatureOptions {
+  sketchId: string;
+  axis: string;
+  angle?: number;
+  op?: 'add' | 'cut';
+  name?: string;
+  // Multi-body merge options
+  mergeScope?: 'auto' | 'new' | 'specific';
+  targetBodies?: string[];
+  resultBodyName?: string;
+  resultBodyColor?: string;
+}
+
+/**
  * Create a new revolve feature
+ * Supports both positional args (legacy) and options object
  */
 export function addRevolveFeature(
   doc: SolidTypeDoc,
-  sketchId: string,
-  axis: string,
+  sketchIdOrOptions: string | RevolveFeatureOptions,
+  axis?: string,
   angle: number = 360,
   op: 'add' | 'cut' = 'add',
   name?: string
 ): string {
+  // Support both old and new API
+  const options: RevolveFeatureOptions = typeof sketchIdOrOptions === 'string'
+    ? { sketchId: sketchIdOrOptions, axis: axis!, angle, op, name }
+    : sketchIdOrOptions;
+
   const counters = getCounters(doc);
   const id = generateId('revolve', counters);
   updateCounter(doc, 'r', counters['r']);
 
   const revolve = new Y.XmlElement('revolve');
   revolve.setAttribute('id', id);
-  revolve.setAttribute('sketch', sketchId);
-  revolve.setAttribute('axis', axis);
-  revolve.setAttribute('angle', String(angle));
-  revolve.setAttribute('op', op);
-  if (name) {
-    revolve.setAttribute('name', name);
+  revolve.setAttribute('sketch', options.sketchId);
+  revolve.setAttribute('axis', options.axis);
+  revolve.setAttribute('angle', String(options.angle ?? 360));
+  revolve.setAttribute('op', options.op ?? 'add');
+  if (options.name) {
+    revolve.setAttribute('name', options.name);
   } else {
     revolve.setAttribute('name', `Revolve${counters['r']}`);
+  }
+
+  // Multi-body merge options
+  if (options.mergeScope) {
+    revolve.setAttribute('mergeScope', options.mergeScope);
+  }
+  if (options.targetBodies && options.targetBodies.length > 0) {
+    revolve.setAttribute('targetBodies', options.targetBodies.join(','));
+  }
+  if (options.resultBodyName) {
+    revolve.setAttribute('resultBodyName', options.resultBodyName);
+  }
+  if (options.resultBodyColor) {
+    revolve.setAttribute('resultBodyColor', options.resultBodyColor);
   }
 
   doc.features.push([revolve]);
@@ -394,6 +449,7 @@ export function parseFeature(element: Y.XmlElement): Feature | null {
 
     case 'extrude': {
       const extent = (element.getAttribute('extent') ?? 'blind') as 'blind' | 'toFace' | 'toVertex' | 'throughAll';
+      const targetBodiesStr = element.getAttribute('targetBodies');
       return {
         type: 'extrude',
         id,
@@ -405,10 +461,16 @@ export function parseFeature(element: Y.XmlElement): Feature | null {
         direction: (element.getAttribute('direction') ?? 'normal') as 'normal' | 'reverse',
         extent,
         extentRef: element.getAttribute('extentRef') ?? undefined,
+        // Multi-body merge options
+        mergeScope: element.getAttribute('mergeScope') as 'auto' | 'new' | 'specific' | undefined,
+        targetBodies: targetBodiesStr ? targetBodiesStr.split(',').filter(Boolean) : undefined,
+        resultBodyName: element.getAttribute('resultBodyName') ?? undefined,
+        resultBodyColor: element.getAttribute('resultBodyColor') ?? undefined,
       };
     }
 
-    case 'revolve':
+    case 'revolve': {
+      const targetBodiesStr = element.getAttribute('targetBodies');
       return {
         type: 'revolve',
         id,
@@ -418,7 +480,13 @@ export function parseFeature(element: Y.XmlElement): Feature | null {
         axis: element.getAttribute('axis') ?? '',
         angle: parseNumber(element.getAttribute('angle'), 360),
         op: (element.getAttribute('op') ?? 'add') as 'add' | 'cut',
+        // Multi-body merge options
+        mergeScope: element.getAttribute('mergeScope') as 'auto' | 'new' | 'specific' | undefined,
+        targetBodies: targetBodiesStr ? targetBodiesStr.split(',').filter(Boolean) : undefined,
+        resultBodyName: element.getAttribute('resultBodyName') ?? undefined,
+        resultBodyColor: element.getAttribute('resultBodyColor') ?? undefined,
       };
+    }
 
     case 'boolean':
       return {

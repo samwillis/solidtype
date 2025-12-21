@@ -439,11 +439,7 @@ const Viewer: React.FC = () => {
       
       // Get body color from bodies list if available
       const bodyInfo = bodies.find(b => b.featureId === bodyId);
-      let bodyColor: number = 0x0078d4; // default blue
-      if (bodyInfo?.color) {
-        // Convert hex string (e.g. "#6699cc") to number
-        bodyColor = parseInt(bodyInfo.color.replace('#', ''), 16);
-      }
+      const bodyColor = parseHexColor(bodyInfo?.color, 0x0078d4);
       
       const material = new THREE.MeshStandardMaterial({
         color: isPreview ? (isCutPreview ? 0xff4444 : 0x44aaff) : bodyColor,

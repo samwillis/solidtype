@@ -729,6 +729,7 @@ interface ExtrudeEditFormProps {
 }
 
 function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }: ExtrudeEditFormProps) {
+  const { bodies } = useKernel();
   const form = useForm({
     defaultValues: data,
     onSubmit: async () => {
@@ -753,6 +754,10 @@ function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }: ExtrudeEditForm
     });
     return subscription;
   }, [form, onUpdate]);
+
+  const currentOp = form.state.values.op;
+  const currentMergeScope = form.state.values.mergeScope || 'auto';
+  const isAddOperation = currentOp === 'add';
 
   return (
     <form
@@ -827,6 +832,55 @@ function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }: ExtrudeEditForm
         </form.Field>
       </PropertyGroup>
 
+      {/* Multi-Body Options - only shown for add operations when bodies exist */}
+      {isAddOperation && bodies.length > 0 && (
+        <PropertyGroup title="Multi-Body">
+          <form.Field name="mergeScope">
+            {(field) => (
+              <PropertyRow label="Merge">
+                <SelectInput
+                  value={field.state.value || 'auto'}
+                  onChange={(scope) => field.handleChange(scope as 'auto' | 'new' | 'specific')}
+                  options={[
+                    { value: 'auto', label: 'Auto (merge with intersecting)' },
+                    { value: 'new', label: 'Create new body' },
+                    { value: 'specific', label: 'Merge with selected' },
+                  ]}
+                />
+              </PropertyRow>
+            )}
+          </form.Field>
+          
+          {currentMergeScope === 'specific' && (
+            <form.Field name="targetBodies">
+              {(field) => (
+                <PropertyRow label="Target Bodies">
+                  <div className="body-selector">
+                    {bodies.map((body) => (
+                      <label key={body.featureId} className="body-option">
+                        <input
+                          type="checkbox"
+                          checked={(field.state.value || []).includes(body.featureId)}
+                          onChange={(e) => {
+                            const current = field.state.value || [];
+                            const newTargets = e.target.checked
+                              ? [...current, body.featureId]
+                              : current.filter((id: string) => id !== body.featureId);
+                            field.handleChange(newTargets);
+                          }}
+                        />
+                        <span style={{ color: body.color || '#6699cc' }}>●</span>
+                        {body.name || body.featureId}
+                      </label>
+                    ))}
+                  </div>
+                </PropertyRow>
+              )}
+            </form.Field>
+          )}
+        </PropertyGroup>
+      )}
+
       <div className="properties-panel-actions">
         <button
           type="button"
@@ -856,6 +910,7 @@ interface RevolveEditFormProps {
 }
 
 function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }: RevolveEditFormProps) {
+  const { bodies } = useKernel();
   const form = useForm({
     defaultValues: data,
     onSubmit: async () => {
@@ -880,6 +935,10 @@ function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }:
     });
     return subscription;
   }, [form, onUpdate]);
+
+  const currentOp = form.state.values.op;
+  const currentMergeScope = form.state.values.mergeScope || 'auto';
+  const isAddOperation = currentOp === 'add';
 
   return (
     <form
@@ -969,6 +1028,55 @@ function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }:
           )}
         </form.Field>
       </PropertyGroup>
+
+      {/* Multi-Body Options - only shown for add operations when bodies exist */}
+      {isAddOperation && bodies.length > 0 && (
+        <PropertyGroup title="Multi-Body">
+          <form.Field name="mergeScope">
+            {(field) => (
+              <PropertyRow label="Merge">
+                <SelectInput
+                  value={field.state.value || 'auto'}
+                  onChange={(scope) => field.handleChange(scope as 'auto' | 'new' | 'specific')}
+                  options={[
+                    { value: 'auto', label: 'Auto (merge with intersecting)' },
+                    { value: 'new', label: 'Create new body' },
+                    { value: 'specific', label: 'Merge with selected' },
+                  ]}
+                />
+              </PropertyRow>
+            )}
+          </form.Field>
+          
+          {currentMergeScope === 'specific' && (
+            <form.Field name="targetBodies">
+              {(field) => (
+                <PropertyRow label="Target Bodies">
+                  <div className="body-selector">
+                    {bodies.map((body) => (
+                      <label key={body.featureId} className="body-option">
+                        <input
+                          type="checkbox"
+                          checked={(field.state.value || []).includes(body.featureId)}
+                          onChange={(e) => {
+                            const current = field.state.value || [];
+                            const newTargets = e.target.checked
+                              ? [...current, body.featureId]
+                              : current.filter((id: string) => id !== body.featureId);
+                            field.handleChange(newTargets);
+                          }}
+                        />
+                        <span style={{ color: body.color || '#6699cc' }}>●</span>
+                        {body.name || body.featureId}
+                      </label>
+                    ))}
+                  </div>
+                </PropertyRow>
+              )}
+            </form.Field>
+          )}
+        </PropertyGroup>
+      )}
 
       <div className="properties-panel-actions">
         <button
