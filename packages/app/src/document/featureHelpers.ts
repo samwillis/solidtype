@@ -183,6 +183,47 @@ export function addRevolveFeature(
   return id;
 }
 
+/**
+ * Options for creating a boolean feature (Phase 17)
+ */
+export interface BooleanFeatureOptions {
+  operation: 'union' | 'subtract' | 'intersect';
+  /** Feature ID of the target body */
+  target: string;
+  /** Feature ID of the tool body */
+  tool: string;
+  name?: string;
+}
+
+/**
+ * Create a new boolean feature (Phase 17)
+ */
+export function addBooleanFeature(
+  doc: SolidTypeDoc,
+  options: BooleanFeatureOptions
+): string {
+  const counters = getCounters(doc);
+  const id = generateId('boolean', counters);
+  updateCounter(doc, 'b', counters['b']);
+
+  const boolean = new Y.XmlElement('boolean');
+  boolean.setAttribute('id', id);
+  boolean.setAttribute('operation', options.operation);
+  boolean.setAttribute('target', options.target);
+  boolean.setAttribute('tool', options.tool);
+  
+  if (options.name) {
+    boolean.setAttribute('name', options.name);
+  } else {
+    // Capitalize first letter of operation
+    const opName = options.operation.charAt(0).toUpperCase() + options.operation.slice(1);
+    boolean.setAttribute('name', `${opName}${counters['b']}`);
+  }
+
+  doc.features.push([boolean]);
+  return id;
+}
+
 // ============================================================================
 // Sketch Data Manipulation
 // ============================================================================
@@ -377,6 +418,17 @@ export function parseFeature(element: Y.XmlElement): Feature | null {
         axis: element.getAttribute('axis') ?? '',
         angle: parseNumber(element.getAttribute('angle'), 360),
         op: (element.getAttribute('op') ?? 'add') as 'add' | 'cut',
+      };
+
+    case 'boolean':
+      return {
+        type: 'boolean',
+        id,
+        name,
+        suppressed,
+        operation: (element.getAttribute('operation') ?? 'union') as 'union' | 'subtract' | 'intersect',
+        target: element.getAttribute('target') ?? '',
+        tool: element.getAttribute('tool') ?? '',
       };
 
     default:

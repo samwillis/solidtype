@@ -185,6 +185,75 @@ function ColorInput({ value, onChange, defaultColor, disabled }: ColorInputProps
   );
 }
 
+// ============================================================================
+// Face Selector (Phase 14: toFace extent)
+// ============================================================================
+
+interface FaceSelectorProps {
+  value: string | undefined;
+  onChange: (value: string) => void;
+}
+
+function FaceSelector({ value, onChange }: FaceSelectorProps) {
+  const [isSelecting, setIsSelecting] = useState(false);
+  const { setSelectionMode, setOnFaceSelected } = useSelection();
+  
+  const handleStartSelection = useCallback(() => {
+    setIsSelecting(true);
+    setSelectionMode('selectFace');
+    setOnFaceSelected((face) => {
+      // Create persistent reference from face selection
+      const ref = `face:${face.featureId}:${face.faceIndex}`;
+      onChange(ref);
+      setIsSelecting(false);
+      setSelectionMode('default');
+      setOnFaceSelected(undefined);
+    });
+  }, [setSelectionMode, setOnFaceSelected, onChange]);
+  
+  const handleCancelSelection = useCallback(() => {
+    setIsSelecting(false);
+    setSelectionMode('default');
+    setOnFaceSelected(undefined);
+  }, [setSelectionMode, setOnFaceSelected]);
+  
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (isSelecting) {
+        setSelectionMode('default');
+        setOnFaceSelected(undefined);
+      }
+    };
+  }, [isSelecting, setSelectionMode, setOnFaceSelected]);
+  
+  return (
+    <div className="face-selector">
+      {isSelecting ? (
+        <>
+          <span className="face-selector-prompt">Click a face...</span>
+          <button 
+            className="face-selector-cancel"
+            onClick={handleCancelSelection}
+          >
+            Cancel
+          </button>
+        </>
+      ) : (
+        <>
+          <span className="face-selector-value">{value || 'Not selected'}</span>
+          <button 
+            className="face-selector-btn"
+            onClick={handleStartSelection}
+          >
+            Select
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** Get default color for a plane ID */
 function getDefaultPlaneColorHex(planeId: string): string {
   switch (planeId) {
@@ -453,7 +522,10 @@ function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
         )}
         {extent === 'toFace' && (
           <PropertyRow label="Target Face">
-            <span className="readonly-value">{extrude.extentRef || 'Not selected'}</span>
+            <FaceSelector 
+              value={extrude.extentRef}
+              onChange={(ref) => onUpdate({ extentRef: ref })}
+            />
           </PropertyRow>
         )}
       </PropertyGroup>

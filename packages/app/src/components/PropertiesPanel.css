@@ -259,6 +259,54 @@
   cursor: not-allowed;
 }
 
+/* Face Selector (Phase 14) */
+.face-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.face-selector-value {
+  flex: 1;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.face-selector-prompt {
+  flex: 1;
+  font-size: 11px;
+  color: var(--color-accent);
+  font-style: italic;
+}
+
+.face-selector-btn,
+.face-selector-cancel {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.face-selector-btn:hover {
+  background: var(--color-bg-hover);
+}
+
+.face-selector-cancel {
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+}
+
+.face-selector-cancel:hover {
+  background: var(--color-bg-hover);
+}
+
 /* Field with validation error */
 .field-with-error {
   display: flex;

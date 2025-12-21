@@ -69,6 +69,8 @@ interface KernelContextValue {
       };
     }
   >;
+  /** Export model to STL format (Phase 18) */
+  exportStl: (options?: { binary?: boolean; name?: string }) => Promise<ArrayBuffer | string>;
 }
 
 // ============================================================================
@@ -89,6 +91,12 @@ export function KernelProvider({ children }: KernelProviderProps) {
   const { doc } = useDocument();
   const workerRef = useRef<Worker | null>(null);
   const syncRef = useRef<YjsWorkerSync | null>(null);
+  
+  // For STL export promise resolution (Phase 18)
+  const stlResolveRef = useRef<{
+    resolve: (value: ArrayBuffer | string) => void;
+    reject: (reason: Error) => void;
+  } | null>(null);
 
   const [meshes, setMeshes] = useState<Map<string, TransferableMesh>>(
     new Map()
@@ -203,8 +211,26 @@ export function KernelProvider({ children }: KernelProviderProps) {
           break;
         }
 
+        case 'stl-exported':
+          if (stlResolveRef.current) {
+            if (msg.buffer) {
+              stlResolveRef.current.resolve(msg.buffer);
+            } else if (msg.content) {
+              stlResolveRef.current.resolve(msg.content);
+            } else {
+              stlResolveRef.current.reject(new Error('Invalid STL export response'));
+            }
+            stlResolveRef.current = null;
+          }
+          break;
+
         case 'error':
           console.error('Kernel worker error:', msg.message);
+          // Also reject pending STL export if any
+          if (stlResolveRef.current) {
+            stlResolveRef.current.reject(new Error(msg.message));
+            stlResolveRef.current = null;
+          }
           setIsRebuilding(false);
           break;
       }
@@ -265,6 +291,22 @@ export function KernelProvider({ children }: KernelProviderProps) {
     });
   };
 
+  // Export STL (Phase 18)
+  const exportStl = (options?: { binary?: boolean; name?: string }): Promise<ArrayBuffer | string> => {
+    return new Promise((resolve, reject) => {
+      if (!workerRef.current) {
+        reject(new Error('Worker not ready'));
+        return;
+      }
+      stlResolveRef.current = { resolve, reject };
+      workerRef.current.postMessage({ 
+        type: 'export-stl',
+        binary: options?.binary ?? true,
+        name: options?.name ?? 'model',
+      });
+    });
+  };
+
   const value: KernelContextValue = {
     meshes,
     errors,
@@ -277,6 +319,7 @@ export function KernelProvider({ children }: KernelProviderProps) {
     clearPreview,
     previewError,
     sketchSolveInfo,
+    exportStl,
   };
 
   return (

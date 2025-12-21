@@ -13,6 +13,7 @@ import {
   XY_PLANE,
   YZ_PLANE,
   ZX_PLANE,
+  createDatumPlane,
   type DatumPlane,
   planeToWorld,
   sub3,
@@ -23,6 +24,7 @@ import {
   fixed,
   distance,
   angle,
+  exportMeshesToStl,
 } from '@solidtype/core';
 import type {
   MainToWorkerMessage,
@@ -138,17 +140,64 @@ function getDatumPlane(planeId: string): DatumPlane | null {
 }
 
 /**
- * Get sketch plane - supports datum planes
- * TODO(Phase 15): Add support for face references
+ * Get sketch plane - supports datum planes and face references (Phase 15)
  */
 function getSketchPlane(planeRef: string): DatumPlane | null {
   // Try datum plane first
   const datum = getDatumPlane(planeRef);
   if (datum) return datum;
   
-  // Face references (Phase 15) - not yet implemented
+  // Face references (Phase 15)
   if (planeRef.startsWith('face:')) {
-    throw new Error('Sketch on face is not yet implemented');
+    // Parse face reference: face:featureId:faceIndex
+    const parts = planeRef.split(':');
+    if (parts.length < 3) {
+      throw new Error(`Invalid face reference: ${planeRef}`);
+    }
+    const [, featureId, faceIndexStr] = parts;
+    const faceIndex = parseInt(faceIndexStr, 10);
+    
+    // Find the body for this feature
+    const targetBody = bodyMap.get(featureId);
+    if (!targetBody || !session) {
+      throw new Error(`Cannot find body for face reference: ${planeRef}`);
+    }
+    
+    // Get the face from the body
+    const faces = targetBody.getFaces();
+    if (faceIndex < 0 || faceIndex >= faces.length) {
+      throw new Error(`Face index out of range: ${faceIndex} (body has ${faces.length} faces)`);
+    }
+    
+    const face = faces[faceIndex];
+    
+    // Get the face surface from the model
+    const model = session.getModel();
+    const surfaceIdx = model.getFaceSurfaceIndex(face.id);
+    const surface = model.getSurface(surfaceIdx);
+    
+    // Only planar faces can be used as sketch planes
+    if (surface.kind !== 'plane') {
+      throw new Error('Cannot create sketch on non-planar face');
+    }
+    
+    // Adjust normal direction based on face orientation
+    let normal = surface.normal;
+    if (model.isFaceReversed(face.id)) {
+      normal = [-normal[0], -normal[1], -normal[2]] as typeof normal;
+    }
+    
+    // Create a datum plane from the face's planar surface
+    // Use the face's surface directly but flip normal if needed
+    const planeSurface = {
+      kind: 'plane' as const,
+      origin: surface.origin,
+      normal,
+      xDir: surface.xDir,
+      yDir: surface.yDir,
+    };
+    
+    return createDatumPlane(`Face:${featureId}:${faceIndex}`, planeSurface);
   }
   
   return null;
@@ -159,7 +208,8 @@ function getSketchPlane(planeRef: string): DatumPlane | null {
  */
 function calculateExtrudeDistance(
   element: Y.XmlElement,
-  direction: number
+  direction: number,
+  sketchPlane?: DatumPlane
 ): number {
   const extent = element.getAttribute('extent') || 'blind';
   const baseDistance = parseFloat(element.getAttribute('distance') || '10');
@@ -180,10 +230,45 @@ function calculateExtrudeDistance(
         throw new Error('toFace extent requires extentRef');
       }
       
-      // For now, use a simplified approach - in full implementation
-      // we'd intersect rays with the target face
-      // TODO: Implement proper face intersection
-      return baseDistance * direction;
+      // Parse face reference: face:featureId:faceIndex
+      const parts = extentRef.split(':');
+      if (parts.length < 3 || parts[0] !== 'face') {
+        throw new Error(`Invalid face reference: ${extentRef}`);
+      }
+      const [, featureId, faceIndexStr] = parts;
+      const faceIndex = parseInt(faceIndexStr, 10);
+      
+      // Find the body for this feature
+      const targetBody = bodyMap.get(featureId);
+      if (!targetBody || !session || !sketchPlane) {
+        // Fallback to base distance if body not found
+        console.warn(`Cannot resolve toFace reference: ${extentRef}`);
+        return baseDistance * direction;
+      }
+      
+      // Get the face from the body
+      const faces = targetBody.getFaces();
+      if (faceIndex < 0 || faceIndex >= faces.length) {
+        console.warn(`Face index out of range: ${faceIndex}`);
+        return baseDistance * direction;
+      }
+      
+      const targetFace = faces[faceIndex];
+      const faceCentroid = targetFace.getCentroid();
+      
+      // Calculate distance along extrude direction
+      // The extrude direction is the sketch plane normal
+      const planeNormal = sketchPlane.surface.normal;
+      const planeOrigin = sketchPlane.surface.origin;
+      
+      // Distance = (faceCentroid - planeOrigin) · planeNormal
+      const dx = faceCentroid[0] - planeOrigin[0];
+      const dy = faceCentroid[1] - planeOrigin[1];
+      const dz = faceCentroid[2] - planeOrigin[2];
+      const dist = dx * planeNormal[0] + dy * planeNormal[1] + dz * planeNormal[2];
+      
+      // Take absolute value and apply direction
+      return Math.abs(dist) * direction;
     }
       
     case 'toVertex': {
@@ -192,6 +277,7 @@ function calculateExtrudeDistance(
         throw new Error('toVertex extent requires extentRef');
       }
       // TODO: Implement vertex reference resolution
+      // Would need vertex selection UI first
       return baseDistance * direction;
     }
       
@@ -201,7 +287,16 @@ function calculateExtrudeDistance(
 }
 
 interface SketchData {
-  points: Array<{ id: string; x: number; y: number; fixed?: boolean }>;
+  points: Array<{ 
+    id: string; 
+    x: number; 
+    y: number; 
+    fixed?: boolean;
+    /** External attachment (Phase 16) */
+    attachedTo?: string;
+    /** Parameter on edge (0-1) */
+    param?: number;
+  }>;
   entities: Array<{ id: string; type: string; start?: string; end?: string; center?: string; ccw?: boolean }>;
   constraints: any[];
 }
@@ -227,6 +322,142 @@ interface SketchInfo {
 // Map of sketch IDs to their parsed data
 const sketchMap = new Map<string, SketchInfo>();
 
+/**
+ * Resolve an attachment reference to world coordinates (Phase 16)
+ * @returns World position or null if reference cannot be resolved
+ */
+function resolveAttachment(
+  attachedTo: string,
+  param: number = 0.5
+): { x: number; y: number; z: number } | null {
+  if (!session) return null;
+  
+  if (attachedTo.startsWith('edge:')) {
+    // Format: edge:featureId:edgeIndex
+    const parts = attachedTo.split(':');
+    if (parts.length < 3) return null;
+    
+    const [, featureId, edgeIndexStr] = parts;
+    const edgeIndex = parseInt(edgeIndexStr, 10);
+    
+    const body = bodyMap.get(featureId);
+    if (!body) {
+      console.warn(`Cannot resolve edge attachment: body not found for ${featureId}`);
+      return null;
+    }
+    
+    // Get edge from body (need to get edges from the model)
+    const model = session.getModel();
+    const shells = model.getBodyShells(body.id);
+    
+    // Collect all edges from the body (using any for branded types)
+    const allEdges: Array<{ id: unknown; startVertex: unknown; endVertex: unknown }> = [];
+    for (const shellId of shells) {
+      const faces = model.getShellFaces(shellId);
+      for (const faceId of faces) {
+        const loops = model.getFaceLoops(faceId);
+        for (const loopId of loops) {
+          for (const he of model.iterateLoopHalfEdges(loopId)) {
+            const edgeId = model.getHalfEdgeEdge(he);
+            // Avoid duplicates
+            if (!allEdges.some(e => e.id === edgeId)) {
+              const startVertex = model.getHalfEdgeStartVertex(he);
+              const endVertex = model.getHalfEdgeEndVertex(he);
+              allEdges.push({ id: edgeId, startVertex, endVertex });
+            }
+          }
+        }
+      }
+    }
+    
+    if (edgeIndex < 0 || edgeIndex >= allEdges.length) {
+      console.warn(`Edge index out of range: ${edgeIndex}`);
+      return null;
+    }
+    
+    const edge = allEdges[edgeIndex];
+    // Cast back to expected types for model methods
+    const startPos = model.getVertexPosition(edge.startVertex as Parameters<typeof model.getVertexPosition>[0]);
+    const endPos = model.getVertexPosition(edge.endVertex as Parameters<typeof model.getVertexPosition>[0]);
+    
+    // Interpolate along edge based on param
+    const t = Math.max(0, Math.min(1, param));
+    return {
+      x: startPos[0] + t * (endPos[0] - startPos[0]),
+      y: startPos[1] + t * (endPos[1] - startPos[1]),
+      z: startPos[2] + t * (endPos[2] - startPos[2]),
+    };
+  }
+  
+  if (attachedTo.startsWith('vertex:')) {
+    // Format: vertex:featureId:vertexIndex
+    const parts = attachedTo.split(':');
+    if (parts.length < 3) return null;
+    
+    const [, featureId, vertexIndexStr] = parts;
+    const vertexIndex = parseInt(vertexIndexStr, 10);
+    
+    const body = bodyMap.get(featureId);
+    if (!body) {
+      console.warn(`Cannot resolve vertex attachment: body not found for ${featureId}`);
+      return null;
+    }
+    
+    // Get vertex from body
+    const model = session.getModel();
+    const shells = model.getBodyShells(body.id);
+    
+    // Collect all vertices from the body (using unknown for branded types)
+    const allVertices: unknown[] = [];
+    for (const shellId of shells) {
+      const faces = model.getShellFaces(shellId);
+      for (const faceId of faces) {
+        const loops = model.getFaceLoops(faceId);
+        for (const loopId of loops) {
+          for (const he of model.iterateLoopHalfEdges(loopId)) {
+            const vertexId = model.getHalfEdgeStartVertex(he);
+            if (!allVertices.includes(vertexId)) {
+              allVertices.push(vertexId);
+            }
+          }
+        }
+      }
+    }
+    
+    if (vertexIndex < 0 || vertexIndex >= allVertices.length) {
+      console.warn(`Vertex index out of range: ${vertexIndex}`);
+      return null;
+    }
+    
+    // Cast back to expected type for model method
+    const pos = model.getVertexPosition(allVertices[vertexIndex] as Parameters<typeof model.getVertexPosition>[0]);
+    return { x: pos[0], y: pos[1], z: pos[2] };
+  }
+  
+  return null;
+}
+
+/**
+ * Project a world point onto a sketch plane
+ */
+function projectToSketchPlane(
+  worldPos: { x: number; y: number; z: number },
+  plane: DatumPlane
+): { x: number; y: number } {
+  const { origin, xDir, yDir } = plane.surface;
+  
+  // Vector from plane origin to world point
+  const dx = worldPos.x - origin[0];
+  const dy = worldPos.y - origin[1];
+  const dz = worldPos.z - origin[2];
+  
+  // Project onto plane axes
+  const x = dx * xDir[0] + dy * xDir[1] + dz * xDir[2];
+  const y = dx * yDir[0] + dy * yDir[1] + dz * yDir[2];
+  
+  return { x, y };
+}
+
 function interpretSketch(
   session: SolidSession,
   element: Y.XmlElement
@@ -248,7 +479,24 @@ function interpretSketch(
   const entityIdMap = new Map<string, any>();
 
   for (const point of data.points) {
-    const pid = sketch.addPoint(point.x, point.y, { fixed: point.fixed });
+    let x = point.x;
+    let y = point.y;
+    let isFixed = point.fixed;
+    
+    // Resolve external attachment if present (Phase 16)
+    if (point.attachedTo) {
+      const worldPos = resolveAttachment(point.attachedTo, point.param);
+      if (worldPos) {
+        const projected = projectToSketchPlane(worldPos, plane);
+        x = projected.x;
+        y = projected.y;
+        // Attached points are treated as fixed
+        isFixed = true;
+      }
+      // If attachment cannot be resolved, use stored x/y as fallback
+    }
+    
+    const pid = sketch.addPoint(x, y, { fixed: isFixed });
     pointIdMap.set(point.id, pid);
   }
 
@@ -431,7 +679,7 @@ function interpretExtrude(
 
   // Calculate direction multiplier and extent-based distance (Phase 14)
   const dirMultiplier = direction === 'reverse' ? -1 : 1;
-  const finalDistance = calculateExtrudeDistance(element, dirMultiplier);
+  const finalDistance = calculateExtrudeDistance(element, dirMultiplier, sketchInfo.plane);
 
   // Perform extrusion - always use 'add' operation and handle cut separately
   const result = session.extrude(profile, {
@@ -720,6 +968,60 @@ function interpretRevolve(
   return result.body;
 }
 
+/**
+ * Interpret a boolean feature (Phase 17)
+ */
+function interpretBoolean(
+  session: SolidSession,
+  element: Y.XmlElement
+): Body | null {
+  const operation = element.getAttribute('operation') || 'union';
+  const targetId = element.getAttribute('target');
+  const toolId = element.getAttribute('tool');
+
+  if (!targetId || !toolId) {
+    throw new Error('Boolean requires target and tool body references');
+  }
+
+  const targetBody = bodyMap.get(targetId);
+  const toolBody = bodyMap.get(toolId);
+
+  if (!targetBody) {
+    throw new Error(`Target body not found: ${targetId}`);
+  }
+  if (!toolBody) {
+    throw new Error(`Tool body not found: ${toolId}`);
+  }
+
+  let result;
+  
+  switch (operation) {
+    case 'union':
+      result = session.union(targetBody, toolBody);
+      break;
+    case 'subtract':
+      result = session.subtract(targetBody, toolBody);
+      break;
+    case 'intersect':
+      result = session.intersect(targetBody, toolBody);
+      break;
+    default:
+      throw new Error(`Unknown boolean operation: ${operation}`);
+  }
+
+  if (!result.success || !result.body) {
+    throw new Error(result.error || 'Boolean operation failed');
+  }
+
+  // Remove the tool body from bodyMap (it's consumed)
+  bodyMap.delete(toolId);
+
+  // Update the target body entry with the result
+  bodyMap.set(targetId, result.body);
+
+  return result.body;
+}
+
 // ============================================================================
 // Rebuild Logic
 // ============================================================================
@@ -797,6 +1099,19 @@ function performRebuild(): void {
 
         case 'revolve':
           body = interpretRevolve(session!, child);
+          featureStatus[id] = 'computed';
+          if (body) {
+            bodyMap.set(id, body);
+            bodies.push({
+              id: String(body.id),
+              featureId: id,
+              faceCount: body.getFaces().length,
+            });
+          }
+          break;
+
+        case 'boolean':
+          body = interpretBoolean(session!, child);
           featureStatus[id] = 'computed';
           if (body) {
             bodyMap.set(id, body);
@@ -956,6 +1271,36 @@ self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
       } catch (err) {
         self.postMessage({
           type: 'preview-error',
+          message: err instanceof Error ? err.message : String(err),
+        } as WorkerToMainMessage);
+      }
+      break;
+    }
+
+    case 'export-stl': {
+      try {
+        const { binary = true, name = 'model' } = event.data;
+        
+        // Collect all meshes from bodies
+        const meshes = Array.from(bodyMap.values()).map(body => body.tessellate());
+        
+        if (meshes.length === 0) {
+          throw new Error('No bodies to export');
+        }
+        
+        const result = exportMeshesToStl(meshes, { binary, name });
+        
+        if (binary && result instanceof ArrayBuffer) {
+          self.postMessage(
+            { type: 'stl-exported', buffer: result } as WorkerToMainMessage,
+            [result] // Transfer the ArrayBuffer
+          );
+        } else if (typeof result === 'string') {
+          self.postMessage({ type: 'stl-exported', content: result } as WorkerToMainMessage);
+        }
+      } catch (err) {
+        self.postMessage({
+          type: 'error',
           message: err instanceof Error ? err.message : String(err),
         } as WorkerToMainMessage);
       }

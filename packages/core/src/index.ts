@@ -33,7 +33,7 @@ export { vec3, type Vec3, normalize3, add3, sub3, mul3, dot3, cross3, length3 } 
 export { type NumericContext, createNumericContext, type Tolerances } from './num/tolerance.js';
 
 // Datum planes
-export { XY_PLANE, YZ_PLANE, ZX_PLANE, type DatumPlane } from './model/planes.js';
+export { XY_PLANE, YZ_PLANE, ZX_PLANE, createDatumPlane, createDatumPlaneFromNormal, type DatumPlane } from './model/planes.js';
 
 // Sketch types and constraint creators
 export type {
@@ -230,3 +230,6 @@ export type {
   AttachmentConstraintData,
   AttachmentResolutionResult,
 } from './sketch/attachment.js';
+
+// Export module (Phase 18)
+export { exportMeshesToStl, isStlBinary, type StlExportOptions } from './export/stl.js';

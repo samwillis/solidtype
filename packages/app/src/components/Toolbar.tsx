@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Tooltip, Separator } from '@base-ui/react';
 import { useSketch } from '../contexts/SketchContext';
 import { useDocument } from '../contexts/DocumentContext';
 import { useSelection } from '../contexts/SelectionContext';
 import { useFeatureEdit } from '../contexts/FeatureEditContext';
+import { useKernel } from '../contexts/KernelContext';
 import './Toolbar.css';
 
 
@@ -77,6 +78,36 @@ const ConstraintsIcon = () => (
   </svg>
 );
 
+// Boolean operation icons (Phase 17)
+const BooleanIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <circle cx="9" cy="12" r="6" />
+    <circle cx="15" cy="12" r="6" />
+  </svg>
+);
+
+const UnionIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M9 6a6 6 0 1 0 0 12 6 6 0 0 0 6-6 6 6 0 1 1 0-6" />
+    <path d="M15 18a6 6 0 0 0 0-12" />
+  </svg>
+);
+
+const SubtractIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <circle cx="9" cy="12" r="6" />
+    <path d="M15 6a6 6 0 1 1 0 12" strokeDasharray="4 2" />
+  </svg>
+);
+
+const IntersectIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <circle cx="9" cy="12" r="6" strokeDasharray="4 2" />
+    <circle cx="15" cy="12" r="6" strokeDasharray="4 2" />
+    <path d="M12 6v12" />
+  </svg>
+);
+
 const ChevronDownIcon = () => (
   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M6 9l6 6 6-6" />
@@ -107,6 +138,15 @@ const AIIcon = () => (
   </svg>
 );
 
+// Export icon (Phase 18)
+const ExportIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7,10 12,15 17,10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
 
 
 
@@ -118,11 +158,52 @@ interface ToolbarProps {
 
 const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) => {
   const { mode, startSketch, finishSketch, cancelSketch, addRectangle, setTool, canApplyConstraint, applyConstraint, clearSelection: clearSketchSelection } = useSketch();
-  const { undo, redo, canUndo, canRedo, features } = useDocument();
+  const { undo, redo, canUndo, canRedo, features, addBoolean } = useDocument();
   const { selectedFeatureId, selectFeature, clearSelection } = useSelection();
+  const { exportStl, bodies } = useKernel();
   const { startExtrudeEdit, startRevolveEdit, isEditing } = useFeatureEdit();
   const [constraintsDropdownOpen, setConstraintsDropdownOpen] = useState(false);
+  const [booleanDropdownOpen, setBooleanDropdownOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const constraintsDropdownRef = React.useRef<HTMLDivElement>(null);
+  const booleanDropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Check if we can export (have bodies to export)
+  const canExport = bodies.length > 0 && !isExporting;
+  
+  // Handle STL export (Phase 18)
+  const handleExportStl = useCallback(async () => {
+    if (!canExport) return;
+    
+    setIsExporting(true);
+    try {
+      const result = await exportStl({ binary: true, name: 'model' });
+      
+      // Download the file
+      if (result instanceof ArrayBuffer) {
+        const blob = new Blob([result], { type: 'model/stl' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'model.stl';
+        a.click();
+        URL.revokeObjectURL(url);
+      } else if (typeof result === 'string') {
+        const blob = new Blob([result], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'model.stl';
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error('Export failed:', err);
+      alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [canExport, exportStl]);
 
   // Close constraints dropdown when clicking outside
   React.useEffect(() => {
@@ -135,6 +216,18 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [constraintsDropdownOpen]);
+
+  // Close boolean dropdown when clicking outside
+  React.useEffect(() => {
+    if (!booleanDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (booleanDropdownRef.current && !booleanDropdownRef.current.contains(e.target as Node)) {
+        setBooleanDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [booleanDropdownOpen]);
 
   // Get available sketches for extrusion
   const sketches = useMemo(() => {
@@ -150,6 +243,18 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     }
     return null;
   }, [selectedFeatureId, features]);
+  
+  // Check if a face is selected (Phase 15: sketch on face)
+  const { selectedFaces } = useSelection();
+  const selectedFaceRef = useMemo(() => {
+    if (selectedFaces.length !== 1) return null;
+    const face = selectedFaces[0];
+    // Create face reference in format expected by worker
+    return `face:${face.featureId}:${face.faceIndex}`;
+  }, [selectedFaces]);
+  
+  // Effective plane/face reference for sketching
+  const sketchPlaneRef = selectedPlane || selectedFaceRef;
 
   // Check if a sketch is selected (for extrude/revolve)
   const selectedSketch = useMemo(() => {
@@ -195,9 +300,9 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
   }, [mode.active, finishSketch, cancelSketch, selectFeature, clearSelection, clearSketchSelection]);
 
   const handleNewSketch = () => {
-    // Use selected plane if available, otherwise use XY plane
-    const planeId = selectedPlane || 'xy';
-    startSketch(planeId);
+    // Use selected plane/face if available, otherwise use XY plane
+    const planeRef = sketchPlaneRef || 'xy';
+    startSketch(planeRef);
   };
 
   const handleAddRectangle = () => {
@@ -205,8 +310,8 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     addRectangle(0, 0, 4, 3);
   };
 
-  // Check if sketch button should be enabled
-  const canStartSketch = selectedPlane !== null || sketches.length === 0;
+  // Check if sketch button should be enabled (plane, face, or first sketch)
+  const canStartSketch = sketchPlaneRef !== null || sketches.length === 0;
 
   // Check if extrude/revolve can be used (also disabled when already editing a feature)
   const canExtrude = !isEditing && (selectedSketch !== null || sketches.length === 1);
@@ -217,6 +322,29 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     if (sketchId) {
       startExtrudeEdit(sketchId);
     }
+  };
+
+  // Get all body-creating features (extrude, revolve) for boolean operations (Phase 17)
+  const bodyFeatures = useMemo(() => {
+    return features.filter(f => f.type === 'extrude' || f.type === 'revolve');
+  }, [features]);
+  
+  // Check if boolean operations are available (need at least 2 bodies)
+  const canBoolean = !isEditing && bodyFeatures.length >= 2;
+  
+  // Handle boolean operation
+  const handleBoolean = (operation: 'union' | 'subtract' | 'intersect') => {
+    if (bodyFeatures.length < 2) return;
+    
+    // For now, use the last two body features
+    // In a more complete implementation, we'd let the user select bodies
+    const target = bodyFeatures[bodyFeatures.length - 2];
+    const tool = bodyFeatures[bodyFeatures.length - 1];
+    
+    // Add boolean feature to document
+    addBoolean(operation, target.id, tool.id);
+    
+    setBooleanDropdownOpen(false);
   };
 
   const handleRevolve = () => {
@@ -435,7 +563,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
               <Tooltip.Root>
                 <Tooltip.Trigger
                   delay={300}
-                  className={`toolbar-button ${!canStartSketch && !selectedPlane ? '' : ''}`}
+                  className={`toolbar-button ${!canStartSketch && !sketchPlaneRef ? '' : ''}`}
                   onClick={handleNewSketch}
                   render={<button aria-label="New Sketch" />}
                 >
@@ -444,7 +572,11 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
                 <Tooltip.Portal>
                   <Tooltip.Positioner side="bottom" sideOffset={6}>
                     <Tooltip.Popup className="toolbar-tooltip">
-                      {selectedPlane ? `New Sketch on ${selectedPlane.toUpperCase()}` : 'New Sketch (select a plane first)'}
+                      {sketchPlaneRef 
+                        ? (selectedFaceRef 
+                            ? `New Sketch on Face` 
+                            : `New Sketch on ${(selectedPlane || '').toUpperCase()}`)
+                        : 'New Sketch (select a plane or face)'}
                     </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
@@ -503,6 +635,53 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
               </Tooltip.Root>
+
+              {/* Boolean Operations Dropdown (Phase 17) */}
+              <div ref={booleanDropdownRef} className="toolbar-dropdown-wrapper">
+                <Tooltip.Root>
+                  <Tooltip.Trigger
+                    delay={300}
+                    className={`toolbar-button ${!canBoolean ? 'disabled' : ''} ${booleanDropdownOpen ? 'active' : ''}`}
+                    onClick={() => canBoolean && setBooleanDropdownOpen(!booleanDropdownOpen)}
+                    render={<button aria-label="Boolean" disabled={!canBoolean} />}
+                  >
+                    <BooleanIcon />
+                    <ChevronDownIcon />
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Positioner side="bottom" sideOffset={6}>
+                      <Tooltip.Popup className="toolbar-tooltip">
+                        Boolean Operations {canBoolean ? '' : '(need 2+ bodies)'}
+                      </Tooltip.Popup>
+                    </Tooltip.Positioner>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+                {booleanDropdownOpen && (
+                  <div className="toolbar-dropdown">
+                    <button 
+                      className="toolbar-dropdown-item"
+                      onClick={() => handleBoolean('union')}
+                    >
+                      <UnionIcon />
+                      <span>Union</span>
+                    </button>
+                    <button 
+                      className="toolbar-dropdown-item"
+                      onClick={() => handleBoolean('subtract')}
+                    >
+                      <SubtractIcon />
+                      <span>Subtract</span>
+                    </button>
+                    <button 
+                      className="toolbar-dropdown-item"
+                      onClick={() => handleBoolean('intersect')}
+                    >
+                      <IntersectIcon />
+                      <span>Intersect</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}

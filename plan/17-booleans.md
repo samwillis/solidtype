@@ -1,9 +1,33 @@
 # Phase 17: Boolean Operations UI
 
+**Status: ✅ IMPLEMENTED**
+
 ## Prerequisites
 
 - Phase 16: Sketch to Geometry Constraints
 - Phase 11: 3D Selection
+
+## Implementation Notes
+
+### What's Done:
+- `document.ts` - `BooleanFeature` type with `operation`, `target`, `tool` fields
+- `featureSchemas.ts` - Zod validation schema for boolean operations
+- `featureHelpers.ts` - `addBooleanFeature()` helper function
+- `DocumentContext.tsx` - `addBoolean()` function exposed via context
+- `kernel.worker.ts` - `interpretBoolean()` function handles union/subtract/intersect
+- `Toolbar.tsx` - Boolean dropdown with Union, Subtract, Intersect options
+
+### Key Implementation Details:
+1. **Toolbar Dropdown** - Boolean button shows dropdown with 3 operations
+2. **Body Detection** - Checks for features that create bodies (extrude, revolve)
+3. **Auto-Selection** - Uses last two body-creating features as target/tool
+4. **Worker Integration** - Calls `session.union()`, `session.subtract()`, `session.intersect()`
+5. **Body Consumption** - Tool body is removed from bodyMap after operation
+
+### Future Enhancements:
+- Body selection UI to choose specific target and tool
+- Body visibility toggle in feature tree
+- Multi-body result handling
 
 ## Goals
 

@@ -41,13 +41,20 @@ export interface ClearPreviewMessage {
   type: 'clear-preview';
 }
 
+export interface ExportStlMessage {
+  type: 'export-stl';
+  binary?: boolean;
+  name?: string;
+}
+
 export type MainToWorkerMessage =
   | InitSyncMessage
   | YjsInitMessage
   | YjsUpdateMessage
   | PreviewExtrudeMessage
   | PreviewRevolveMessage
-  | ClearPreviewMessage;
+  | ClearPreviewMessage
+  | ExportStlMessage;
 
 // ============================================================================
 // Message Types: Worker → Main Thread
@@ -98,6 +105,14 @@ export interface ErrorMessage {
   message: string;
 }
 
+export interface StlExportedMessage {
+  type: 'stl-exported';
+  /** Binary STL data (if binary format) */
+  buffer?: ArrayBuffer;
+  /** ASCII STL content (if ASCII format) */
+  content?: string;
+}
+
 export type WorkerToMainMessage =
   | ReadyMessage
   | RebuildStartMessage
@@ -105,7 +120,8 @@ export type WorkerToMainMessage =
   | MeshMessage
   | SketchSolvedMessage
   | PreviewErrorMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | StlExportedMessage;
 
 // ============================================================================
 // Shared Types

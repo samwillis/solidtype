@@ -1,6 +1,6 @@
 # Phase 15: Sketch on Face
 
-**Status: ❌ NOT IMPLEMENTED**
+**Status: ✅ IMPLEMENTED**
 
 ## Prerequisites
 
@@ -11,19 +11,27 @@
 
 ### What's Done:
 - `document.ts` - Type documentation for face references in `SketchFeature.plane`
-- Face reference format defined: `face:{featureId}:{selector}`
+- Face reference format: `face:{featureId}:{faceIndex}`
+- `kernel.worker.ts` - `getSketchPlane()` fully implements face→plane extraction:
+  - Parses face reference and looks up body in bodyMap
+  - Gets face from body and checks if it's planar
+  - Extracts `PlaneSurface` from face, respecting face orientation
+  - Creates `DatumPlane` from the face surface
+  - Throws error for non-planar faces
+- `Toolbar.tsx` - Updated to detect selected faces:
+  - `selectedFaceRef` computed from `selectedFaces` in SelectionContext
+  - `sketchPlaneRef` combines datum planes and face selections
+  - Tooltip shows "New Sketch on Face" when face selected
+- Core: Exported `createDatumPlane` for creating planes from surfaces
 
-### What's NOT Done:
-- `kernel.worker.ts` - `getSketchPlane()` throws error: `"Sketch on face is not yet implemented"`
-- No UI for selecting a face when creating a new sketch
-- No face→plane extraction logic
-- No camera alignment to selected face
+### Key Implementation Details:
+1. **Face selection in Toolbar** - When a face is selected in 3D view, sketch button uses it
+2. **Face→Plane extraction** - Uses `model.getSurface()` and checks `surface.kind === 'plane'`
+3. **Normal direction** - Respects face orientation via `model.isFaceReversed()`
+4. **Error handling** - Clear error for non-planar faces
 
-### Remaining Work:
-1. **Face selection UI** - When "New Sketch" is clicked, allow face selection (not just datum planes)
-2. **Face→Plane extraction** - In worker, resolve face reference and extract plane from planar face surface
-3. **Camera alignment** - Align camera to face normal when editing sketch on face
-4. **Non-planar validation** - Error if user tries to sketch on curved face
+### Future Enhancements:
+- Camera auto-alignment to face normal when entering sketch mode on a face
 
 ## Goals
 

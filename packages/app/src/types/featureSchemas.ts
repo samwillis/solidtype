@@ -91,3 +91,25 @@ export const planeFormSchema = z.object({
 });
 
 export type PlaneFormData = z.infer<typeof planeFormSchema>;
+
+// ============================================================================
+// Boolean Feature Schema (Phase 17)
+// ============================================================================
+
+export const booleanOperationSchema = z.enum(['union', 'subtract', 'intersect']);
+
+export const booleanFormSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  operation: booleanOperationSchema,
+  target: z.string().min(1, 'Target body is required'),
+  tool: z.string().min(1, 'Tool body is required'),
+});
+
+export type BooleanFormData = z.infer<typeof booleanFormSchema>;
+
+export const defaultBooleanFormData: BooleanFormData = {
+  name: 'Boolean',
+  operation: 'union',
+  target: '',
+  tool: '',
+};

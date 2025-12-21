@@ -52,7 +52,15 @@ export interface SketchPoint {
   x: number;
   y: number;
   fixed?: boolean;
-  attachedTo?: string; // For Phase 16
+  /** External attachment reference (Phase 16)
+   * - Edge: "edge:{featureId}:{edgeIndex}"
+   * - Vertex: "vertex:{featureId}:{vertexIndex}"
+   */
+  attachedTo?: string;
+  /** Parameter on edge (0-1) for edge attachments */
+  param?: number;
+  /** True if attachment reference is broken (e.g., edge was deleted) */
+  attachmentBroken?: boolean;
 }
 
 export interface SketchLine {
@@ -139,6 +147,19 @@ export interface RevolveFeature extends FeatureBase {
   op: 'add' | 'cut';
 }
 
+/** Boolean operation type (Phase 17) */
+export type BooleanOperation = 'union' | 'subtract' | 'intersect';
+
+export interface BooleanFeature extends FeatureBase {
+  type: 'boolean';
+  /** Boolean operation type */
+  operation: BooleanOperation;
+  /** Feature ID of the target body (the one that gets modified) */
+  target: string;
+  /** Feature ID of the tool body (consumed in the operation) */
+  tool: string;
+}
+
 // ============================================================================
 // Union Type
 // ============================================================================
@@ -148,7 +169,8 @@ export type Feature =
   | PlaneFeature
   | SketchFeature
   | ExtrudeFeature
-  | RevolveFeature;
+  | RevolveFeature
+  | BooleanFeature;
 
 export type FeatureType = Feature['type'];
 

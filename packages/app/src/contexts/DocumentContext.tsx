@@ -11,6 +11,7 @@ import {
   addSketchFeature,
   addExtrudeFeature,
   addRevolveFeature,
+  addBooleanFeature,
   findFeature,
 } from '../document/featureHelpers';
 import type { Feature, DocumentUnits } from '../types/document';
@@ -45,6 +46,12 @@ interface DocumentContextValue {
     axis: string,
     angle: number,
     op?: 'add' | 'cut'
+  ) => string;
+  /** Add a boolean operation (Phase 17) */
+  addBoolean: (
+    operation: 'union' | 'subtract' | 'intersect',
+    target: string,
+    tool: string
   ) => string;
   getFeatureById: (id: string) => Feature | null;
   deleteFeature: (id: string) => boolean;
@@ -174,6 +181,14 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
     return addRevolveFeature(doc, sketchId, axis, angle, op);
   }, [doc]);
 
+  const addBoolean = useCallback((
+    operation: 'union' | 'subtract' | 'intersect',
+    target: string,
+    tool: string
+  ) => {
+    return addBooleanFeature(doc, { operation, target, tool });
+  }, [doc]);
+
   const getFeatureById = useCallback((id: string): Feature | null => {
     const element = findFeature(doc.features, id);
     return element ? parseFeature(element) : null;
@@ -223,6 +238,7 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
     addSketch,
     addExtrude,
     addRevolve,
+    addBoolean,
     getFeatureById,
     deleteFeature,
     renameFeature,
