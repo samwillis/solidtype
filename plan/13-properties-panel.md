@@ -1,6 +1,6 @@
 # Phase 13: Properties Panel
 
-**Status: IMPLEMENTED**
+**Status: ✅ IMPLEMENTED (Enhanced)**
 
 ## Prerequisites
 
@@ -8,18 +8,38 @@
 
 ## Implementation Notes
 
-The properties panel is fully implemented in:
+The properties panel is fully implemented with **enhanced features beyond the original plan**:
+
+### Core Components
 - `PropertiesPanel.tsx` - Complete feature editing UI with:
-  - `NumberInput` component with blur/Enter commit
-  - `TextInput` component for name editing
-  - `SelectInput` component for dropdown options
+  - `NumberInput`, `TextInput`, `SelectInput`, `CheckboxInput`, `ColorInput` components
   - `PropertyRow` and `PropertyGroup` layout components
-  - Feature-specific property editors:
-    - `SketchProperties` - Shows plane, point/entity/constraint counts
-    - `ExtrudeProperties` - Edits distance, operation, direction, extent type
-    - `RevolveProperties` - Edits angle and operation
-- `PropertiesPanel.css` - Styled property groups, rows, and inputs
-- Integration with `SelectionContext` for feature selection from tree or 3D view
+  - Feature-specific property editors for all feature types
+
+### Feature Creation Mode (Enhancement)
+- **`FeatureEditContext.tsx`** - Manages new feature creation state:
+  - Tracks edit mode (extrude, revolve, or none)
+  - Provides live preview during parameter adjustment
+  - Debounced preview updates for performance
+- Properties panel shows **"New Extrude"** or **"New Revolve"** forms with:
+  - Accept/Cancel buttons
+  - Blue border to indicate editing mode
+
+### Form Validation (Enhancement)
+- **`featureSchemas.ts`** - Zod schemas for all features:
+  - `extrudeFormSchema` - Validates distance ≥ 0.1, required fields
+  - `revolveFormSchema` - Validates angle 1-360°, axis required
+- **Tanstack Form integration**:
+  - `useForm` hook with Zod validation
+  - Field-level error display
+  - Submit disabled when validation fails
+  - Real-time validation on change
+
+### Styling
+- `PropertiesPanel.css` - Property groups, rows, inputs
+- `.properties-panel-editing` - Blue border for edit mode
+- `.field-error` - Red error text for validation errors
+- No hover effect on property rows (cleaner look)
 
 ## Goals
 

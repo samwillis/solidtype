@@ -1,6 +1,6 @@
 # Phase 14: Extrude Extents
 
-**Status: IMPLEMENTED**
+**Status: ⚠️ PARTIALLY IMPLEMENTED**
 
 ## Prerequisites
 
@@ -9,17 +9,25 @@
 
 ## Implementation Notes
 
-Extent types are now supported in the document model and worker:
-- `document.ts` - Extended `ExtrudeFeature` with `extent`, `extentRef` fields
-- `featureHelpers.ts` - Updated `addExtrudeFeature` to accept options object with extent parameters
-- `kernel.worker.ts` - Added `calculateExtrudeDistance()` to compute distance based on extent type
-- `PropertiesPanel.tsx` - Extent type selector in extrude properties
+### What's Done:
+- `document.ts` - `ExtrudeExtent` type and `extent`, `extentRef` fields on `ExtrudeFeature`
+- `featureHelpers.ts` - `addExtrudeFeature()` accepts options with extent parameters
+- `PropertiesPanel.tsx` - Extent type dropdown (blind, toFace, throughAll)
+- `kernel.worker.ts` - `calculateExtrudeDistance()` function
 
-Supported extent types:
-- `blind` - Fixed distance (default)
-- `throughAll` - Extends through entire model (uses large distance)
-- `toFace` - Extends to selected face (stores `extentRef`)
-- `toVertex` - Extends to vertex height (stores `extentRef`)
+### Extent Type Status:
+| Type | Status | Notes |
+|------|--------|-------|
+| `blind` | ✅ Working | Fixed distance extrusion |
+| `throughAll` | ✅ Working | Uses large distance (1000 units) |
+| `toFace` | ❌ Stub | Falls back to base distance; face intersection not implemented |
+| `toVertex` | ❌ Stub | Falls back to base distance; vertex resolution not implemented |
+
+### Remaining Work:
+1. **Face selection UI** - Button to enter face selection mode during extrude creation
+2. **Face intersection** - Ray-surface intersection to calculate actual distance to target face
+3. **Persistent reference storage** - Store `extentRef` when face is selected
+4. **Vertex selection** - Similar workflow for `toVertex` extent
 
 ## Goals
 

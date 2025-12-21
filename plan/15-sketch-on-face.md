@@ -1,6 +1,6 @@
 # Phase 15: Sketch on Face
 
-**Status: IMPLEMENTED**
+**Status: ❌ NOT IMPLEMENTED**
 
 ## Prerequisites
 
@@ -9,16 +9,21 @@
 
 ## Implementation Notes
 
-Sketch on face is supported in the document model and worker:
-- `document.ts` - Updated `SketchFeature.plane` documentation to support face references
-- `kernel.worker.ts` - Added `getSketchPlane()` function that:
-  - Resolves datum plane IDs (`xy`, `xz`, `yz`)
-  - Parses face references (`face:{featureId}:{selector}`)
-  - Extracts plane from planar body faces
-- Unit tests added for face reference in plane attribute
+### What's Done:
+- `document.ts` - Type documentation for face references in `SketchFeature.plane`
+- Face reference format defined: `face:{featureId}:{selector}`
 
-Face reference format: `face:{featureId}:{selector}`
-- Example: `face:e1:top` - Top face of extrude feature e1
+### What's NOT Done:
+- `kernel.worker.ts` - `getSketchPlane()` throws error: `"Sketch on face is not yet implemented"`
+- No UI for selecting a face when creating a new sketch
+- No face→plane extraction logic
+- No camera alignment to selected face
+
+### Remaining Work:
+1. **Face selection UI** - When "New Sketch" is clicked, allow face selection (not just datum planes)
+2. **Face→Plane extraction** - In worker, resolve face reference and extract plane from planar face surface
+3. **Camera alignment** - Align camera to face normal when editing sketch on face
+4. **Non-planar validation** - Error if user tries to sketch on curved face
 
 ## Goals
 

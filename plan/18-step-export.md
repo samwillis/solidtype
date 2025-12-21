@@ -1,4 +1,4 @@
-# Phase 18: STEP Export
+# Phase 18: STL Export
 
 ## Prerequisites
 
@@ -6,224 +6,193 @@
 
 ## Goals
 
-- Export model to STEP file format (ISO 10303-21)
-- Support all current geometry types
-- Maintain topology (faces, edges, shells)
+- Export model to STL file format (triangulated mesh)
+- Support binary and ASCII STL formats
 - Allow downloading from browser
+- Foundation for 3D printing workflow
 
 ---
 
 ## User Workflow
 
-1. User clicks "File → Export → STEP"
-2. Export dialog appears with options
+1. User clicks "File → Export → STL"
+2. Export dialog appears with options (format, units)
 3. User selects which bodies to export
 4. User clicks "Export"
-5. STEP file downloads to browser
+5. STL file downloads to browser
 
 ---
 
-## STEP Format Overview
+## STL Format Overview
 
-STEP (Standard for the Exchange of Product Data) uses ISO 10303-21 encoding:
+STL represents 3D geometry as a collection of triangles. Two formats:
 
-```step
-ISO-10303-21;
-HEADER;
-FILE_DESCRIPTION(('SolidType Export'),'2;1');
-FILE_NAME('model.step','2024-01-01T00:00:00',('Author'),('Org'),'SolidType','SolidType','');
-FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));
-ENDSEC;
-DATA;
-#1=CARTESIAN_POINT('',(0.,0.,0.));
-#2=DIRECTION('',(0.,0.,1.));
-#3=DIRECTION('',(1.,0.,0.));
-#4=AXIS2_PLACEMENT_3D('',#1,#2,#3);
-/* ... more entities ... */
-ENDSEC;
-END-ISO-10303-21;
+### ASCII STL
+
+```
+solid model
+  facet normal 0 0 1
+    outer loop
+      vertex 0 0 0
+      vertex 1 0 0
+      vertex 1 1 0
+    endloop
+  endfacet
+  ...
+endsolid model
+```
+
+### Binary STL (more compact)
+
+```
+[80 bytes header]
+[4 bytes: number of triangles]
+[50 bytes per triangle: normal (12) + v1 (12) + v2 (12) + v3 (12) + attribute (2)]
 ```
 
 ---
 
 ## Implementation
 
-### STEP Writer
+### STL Writer
 
 ```typescript
-// packages/core/src/export/step.ts
+// packages/core/src/export/stl.ts
 
-export interface StepExportOptions {
-  precision: number;
-  schema: 'AP203' | 'AP214';  // Application protocols
+export interface StlExportOptions {
+  binary: boolean;        // Binary (default) or ASCII
+  precision: number;      // Decimal places for ASCII
+  name: string;           // Model name for solid
 }
 
-export function exportToStep(
+export function exportToStl(
   bodies: Body[],
-  options: StepExportOptions = { precision: 6, schema: 'AP214' }
-): string {
-  const writer = new StepWriter(options);
+  options: StlExportOptions = { binary: true, precision: 6, name: 'model' }
+): ArrayBuffer | string {
+  // Get tessellated mesh data for all bodies
+  const allTriangles: Triangle[] = [];
   
-  // Write header
-  writer.writeHeader();
-  
-  // Write geometry and topology for each body
   for (const body of bodies) {
-    writer.writeBody(body);
+    const mesh = body.tessellate();
+    const triangles = extractTriangles(mesh);
+    allTriangles.push(...triangles);
   }
   
-  // Write footer
-  writer.writeFooter();
-  
-  return writer.toString();
-}
-
-class StepWriter {
-  private entities: StepEntity[] = [];
-  private nextId = 1;
-  
-  writeBody(body: Body): void {
-    // Write shell structure
-    const shell = this.writeClosedShell(body);
-    
-    // Write manifold solid
-    this.addEntity('MANIFOLD_SOLID_BREP', [
-      `'${body.name}'`,
-      shell,
-    ]);
-  }
-  
-  writeClosedShell(body: Body): string {
-    const faceRefs: string[] = [];
-    
-    for (const face of body.getFaces()) {
-      const faceRef = this.writeFace(face);
-      faceRefs.push(faceRef);
-    }
-    
-    return this.addEntity('CLOSED_SHELL', [
-      "''",
-      `(${faceRefs.join(',')})`,
-    ]);
-  }
-  
-  writeFace(face: Face): string {
-    const surface = this.writeSurface(face.getSurface());
-    const bounds = this.writeFaceBounds(face);
-    
-    return this.addEntity('ADVANCED_FACE', [
-      "''",
-      `(${bounds.join(',')})`,
-      surface,
-      face.isForward() ? '.T.' : '.F.',
-    ]);
-  }
-  
-  writeSurface(surface: Surface): string {
-    switch (surface.kind) {
-      case 'plane':
-        return this.writePlane(surface);
-      case 'cylinder':
-        return this.writeCylinder(surface);
-      case 'cone':
-        return this.writeCone(surface);
-      case 'sphere':
-        return this.writeSphere(surface);
-      default:
-        throw new Error(`Unsupported surface type: ${surface.kind}`);
-    }
-  }
-  
-  writePlane(plane: PlaneSurface): string {
-    const position = this.writeAxis2Placement3D(plane.origin, plane.normal, plane.xDir);
-    return this.addEntity('PLANE', ["''", position]);
-  }
-  
-  writeCylinder(cyl: CylinderSurface): string {
-    const position = this.writeAxis2Placement3D(cyl.origin, cyl.axis, cyl.xDir);
-    return this.addEntity('CYLINDRICAL_SURFACE', ["''", position, cyl.radius.toFixed(6)]);
-  }
-  
-  // ... more surface types ...
-  
-  writeAxis2Placement3D(origin: Vec3, zDir: Vec3, xDir: Vec3): string {
-    const point = this.writeCartesianPoint(origin);
-    const z = this.writeDirection(zDir);
-    const x = this.writeDirection(xDir);
-    return this.addEntity('AXIS2_PLACEMENT_3D', ["''", point, z, x]);
-  }
-  
-  writeCartesianPoint(p: Vec3): string {
-    return this.addEntity('CARTESIAN_POINT', [
-      "''",
-      `(${p[0].toFixed(6)},${p[1].toFixed(6)},${p[2].toFixed(6)})`,
-    ]);
-  }
-  
-  writeDirection(d: Vec3): string {
-    return this.addEntity('DIRECTION', [
-      "''",
-      `(${d[0].toFixed(6)},${d[1].toFixed(6)},${d[2].toFixed(6)})`,
-    ]);
-  }
-  
-  private addEntity(type: string, args: string[]): string {
-    const id = `#${this.nextId++}`;
-    this.entities.push({ id, type, args });
-    return id;
-  }
-  
-  toString(): string {
-    let output = 'ISO-10303-21;\n';
-    output += this.getHeader();
-    output += 'DATA;\n';
-    for (const entity of this.entities) {
-      output += `${entity.id}=${entity.type}(${entity.args.join(',')});\n`;
-    }
-    output += 'ENDSEC;\n';
-    output += 'END-ISO-10303-21;\n';
-    return output;
+  if (options.binary) {
+    return writeBinaryStl(allTriangles);
+  } else {
+    return writeAsciiStl(allTriangles, options.name, options.precision);
   }
 }
-```
 
-### Edge and Loop Writing
-
-```typescript
-writeFaceBounds(face: Face): string[] {
-  const bounds: string[] = [];
-  
-  for (const loop of face.getLoops()) {
-    const bound = this.writeLoop(loop, loop.isOuter());
-    bounds.push(bound);
-  }
-  
-  return bounds;
+interface Triangle {
+  normal: [number, number, number];
+  v1: [number, number, number];
+  v2: [number, number, number];
+  v3: [number, number, number];
 }
 
-writeLoop(loop: Loop, isOuter: boolean): string {
-  const edgeRefs: string[] = [];
+function extractTriangles(mesh: TessellatedMesh): Triangle[] {
+  const triangles: Triangle[] = [];
+  const { positions, normals, indices } = mesh;
   
-  for (const halfEdge of loop.getHalfEdges()) {
-    const edgeRef = this.writeOrientedEdge(halfEdge);
-    edgeRefs.push(edgeRef);
+  for (let i = 0; i < indices.length; i += 3) {
+    const i0 = indices[i];
+    const i1 = indices[i + 1];
+    const i2 = indices[i + 2];
+    
+    // Get vertices
+    const v1: [number, number, number] = [
+      positions[i0 * 3],
+      positions[i0 * 3 + 1],
+      positions[i0 * 3 + 2],
+    ];
+    const v2: [number, number, number] = [
+      positions[i1 * 3],
+      positions[i1 * 3 + 1],
+      positions[i1 * 3 + 2],
+    ];
+    const v3: [number, number, number] = [
+      positions[i2 * 3],
+      positions[i2 * 3 + 1],
+      positions[i2 * 3 + 2],
+    ];
+    
+    // Calculate face normal (or use vertex normal)
+    const normal = calculateFaceNormal(v1, v2, v3);
+    
+    triangles.push({ normal, v1, v2, v3 });
   }
   
-  const edgeLoop = this.addEntity('EDGE_LOOP', ["''", `(${edgeRefs.join(',')})`]);
-  
-  const boundType = isOuter ? 'FACE_OUTER_BOUND' : 'FACE_BOUND';
-  return this.addEntity(boundType, ["''", edgeLoop, '.T.']);
+  return triangles;
 }
 
-writeOrientedEdge(halfEdge: HalfEdge): string {
-  const edge = this.writeEdge(halfEdge.getEdge());
-  return this.addEntity('ORIENTED_EDGE', [
-    "''",
-    '*',
-    '*',
-    edge,
-    halfEdge.isForward() ? '.T.' : '.F.',
-  ]);
+function writeBinaryStl(triangles: Triangle[]): ArrayBuffer {
+  const HEADER_SIZE = 80;
+  const TRIANGLE_SIZE = 50; // 12 (normal) + 36 (vertices) + 2 (attribute)
+  
+  const bufferSize = HEADER_SIZE + 4 + triangles.length * TRIANGLE_SIZE;
+  const buffer = new ArrayBuffer(bufferSize);
+  const view = new DataView(buffer);
+  
+  // Header (80 bytes)
+  const encoder = new TextEncoder();
+  const header = encoder.encode('SolidType STL Export');
+  for (let i = 0; i < Math.min(header.length, HEADER_SIZE); i++) {
+    view.setUint8(i, header[i]);
+  }
+  
+  // Triangle count (4 bytes, little endian)
+  view.setUint32(HEADER_SIZE, triangles.length, true);
+  
+  // Triangles
+  let offset = HEADER_SIZE + 4;
+  for (const tri of triangles) {
+    // Normal
+    view.setFloat32(offset, tri.normal[0], true); offset += 4;
+    view.setFloat32(offset, tri.normal[1], true); offset += 4;
+    view.setFloat32(offset, tri.normal[2], true); offset += 4;
+    
+    // Vertex 1
+    view.setFloat32(offset, tri.v1[0], true); offset += 4;
+    view.setFloat32(offset, tri.v1[1], true); offset += 4;
+    view.setFloat32(offset, tri.v1[2], true); offset += 4;
+    
+    // Vertex 2
+    view.setFloat32(offset, tri.v2[0], true); offset += 4;
+    view.setFloat32(offset, tri.v2[1], true); offset += 4;
+    view.setFloat32(offset, tri.v2[2], true); offset += 4;
+    
+    // Vertex 3
+    view.setFloat32(offset, tri.v3[0], true); offset += 4;
+    view.setFloat32(offset, tri.v3[1], true); offset += 4;
+    view.setFloat32(offset, tri.v3[2], true); offset += 4;
+    
+    // Attribute byte count (unused, set to 0)
+    view.setUint16(offset, 0, true); offset += 2;
+  }
+  
+  return buffer;
+}
+
+function writeAsciiStl(triangles: Triangle[], name: string, precision: number): string {
+  const fmt = (n: number) => n.toFixed(precision);
+  
+  let output = `solid ${name}\n`;
+  
+  for (const tri of triangles) {
+    output += `  facet normal ${fmt(tri.normal[0])} ${fmt(tri.normal[1])} ${fmt(tri.normal[2])}\n`;
+    output += `    outer loop\n`;
+    output += `      vertex ${fmt(tri.v1[0])} ${fmt(tri.v1[1])} ${fmt(tri.v1[2])}\n`;
+    output += `      vertex ${fmt(tri.v2[0])} ${fmt(tri.v2[1])} ${fmt(tri.v2[2])}\n`;
+    output += `      vertex ${fmt(tri.v3[0])} ${fmt(tri.v3[1])} ${fmt(tri.v3[2])}\n`;
+    output += `    endloop\n`;
+    output += `  endfacet\n`;
+  }
+  
+  output += `endsolid ${name}\n`;
+  
+  return output;
 }
 ```
 
@@ -236,22 +205,26 @@ writeOrientedEdge(halfEdge: HalfEdge): string {
 ```typescript
 // packages/app/src/components/dialogs/ExportDialog.tsx
 
-export function ExportDialog({ onClose }) {
+export function ExportStlDialog({ onClose }) {
   const { meshes } = useKernel();
-  const bodies = useBodies();
-  const [selectedBodies, setSelectedBodies] = useState<string[]>(
-    bodies.map(b => b.id) // Default: all bodies
-  );
+  const [format, setFormat] = useState<'binary' | 'ascii'>('binary');
   const [exporting, setExporting] = useState(false);
   
   const handleExport = async () => {
     setExporting(true);
     
-    // Request STEP export from worker
-    const step = await kernel.exportStep(selectedBodies);
+    // Request STL export from worker
+    const result = await kernel.exportStl({ binary: format === 'binary' });
     
     // Download file
-    downloadFile(step, 'model.step', 'application/step');
+    const mimeType = 'model/stl';
+    const filename = 'model.stl';
+    
+    if (format === 'binary') {
+      downloadBinaryFile(result, filename, mimeType);
+    } else {
+      downloadTextFile(result, filename, mimeType);
+    }
     
     setExporting(false);
     onClose();
@@ -259,32 +232,24 @@ export function ExportDialog({ onClose }) {
   
   return (
     <Dialog open onClose={onClose}>
-      <DialogTitle>Export STEP</DialogTitle>
+      <DialogTitle>Export STL</DialogTitle>
       <DialogContent>
-        <div className="export-body-list">
-          <h4>Select Bodies to Export</h4>
-          {bodies.map(body => (
-            <Checkbox
-              key={body.id}
-              label={body.name}
-              checked={selectedBodies.includes(body.id)}
-              onChange={(checked) => {
-                if (checked) {
-                  setSelectedBodies([...selectedBodies, body.id]);
-                } else {
-                  setSelectedBodies(selectedBodies.filter(id => id !== body.id));
-                }
-              }}
-            />
-          ))}
-        </div>
+        <Select
+          label="Format"
+          value={format}
+          onChange={setFormat}
+          options={[
+            { value: 'binary', label: 'Binary (smaller file)' },
+            { value: 'ascii', label: 'ASCII (human readable)' },
+          ]}
+        />
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button 
           onClick={handleExport} 
           variant="primary"
-          disabled={selectedBodies.length === 0 || exporting}
+          disabled={exporting}
         >
           {exporting ? 'Exporting...' : 'Export'}
         </Button>
@@ -293,7 +258,19 @@ export function ExportDialog({ onClose }) {
   );
 }
 
-function downloadFile(content: string, filename: string, mimeType: string) {
+function downloadBinaryFile(buffer: ArrayBuffer, filename: string, mimeType: string) {
+  const blob = new Blob([buffer], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  
+  URL.revokeObjectURL(url);
+}
+
+function downloadTextFile(content: string, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   
@@ -306,15 +283,6 @@ function downloadFile(content: string, filename: string, mimeType: string) {
 }
 ```
 
-### Menu Integration
-
-```typescript
-<MenuItem onClick={() => setExportDialogOpen(true)}>
-  <Icon name="export" />
-  Export STEP...
-</MenuItem>
-```
-
 ---
 
 ## Worker Integration
@@ -322,16 +290,20 @@ function downloadFile(content: string, filename: string, mimeType: string) {
 ```typescript
 // In kernel.worker.ts
 
-case 'exportStep':
-  const bodyIds = command.bodyIds;
-  const bodiesToExport = bodyIds.map(id => bodyMap.get(id)).filter(Boolean);
+case 'exportStl':
+  const { binary } = command;
+  const allBodies = Array.from(bodyMap.values());
   
-  const stepContent = exportToStep(bodiesToExport);
+  const stlResult = exportToStl(allBodies, { binary, precision: 6, name: 'model' });
   
-  self.postMessage({
-    type: 'stepExported',
-    content: stepContent,
-  });
+  if (binary) {
+    self.postMessage(
+      { type: 'stlExported', buffer: stlResult },
+      [stlResult] // Transfer the ArrayBuffer
+    );
+  } else {
+    self.postMessage({ type: 'stlExported', content: stlResult });
+  }
   break;
 ```
 
@@ -342,45 +314,67 @@ case 'exportStep':
 ### Unit Tests
 
 ```typescript
-// Test STEP export
-test('exportToStep generates valid STEP', () => {
+// Test STL export
+test('exportToStl generates valid binary STL', () => {
   const session = new SolidSession();
   const body = createBox(session, 10, 10, 10);
   
-  const step = exportToStep([body]);
+  const buffer = exportToStl([body], { binary: true }) as ArrayBuffer;
   
-  expect(step).toContain('ISO-10303-21');
-  expect(step).toContain('CLOSED_SHELL');
-  expect(step).toContain('ADVANCED_FACE');
-  expect(step).toContain('END-ISO-10303-21');
+  // Check header
+  expect(buffer.byteLength).toBeGreaterThan(84);
+  
+  const view = new DataView(buffer);
+  const triangleCount = view.getUint32(80, true);
+  
+  // Box has 12 triangles (2 per face × 6 faces)
+  expect(triangleCount).toBe(12);
 });
 
-// Test specific geometry
-test('cylinder exports correctly', () => {
+test('exportToStl generates valid ASCII STL', () => {
   const session = new SolidSession();
-  const body = createCylinder(session);
+  const body = createBox(session, 10, 10, 10);
   
-  const step = exportToStep([body]);
+  const ascii = exportToStl([body], { binary: false, name: 'box' }) as string;
   
-  expect(step).toContain('CYLINDRICAL_SURFACE');
+  expect(ascii).toContain('solid box');
+  expect(ascii).toContain('facet normal');
+  expect(ascii).toContain('vertex');
+  expect(ascii).toContain('endsolid box');
+  
+  // Count facets
+  const facetCount = (ascii.match(/facet normal/g) || []).length;
+  expect(facetCount).toBe(12);
 });
 ```
 
 ### Validation
 
-- Import exported STEP into FreeCAD, Fusion 360, or similar
-- Verify geometry matches original
-- Check for any import warnings
+- Open exported STL in slicer software (PrusaSlicer, Cura)
+- Import into Blender or other 3D software
+- Verify geometry is watertight (manifold)
+- Check for inverted normals
+
+---
+
+## Future: STEP Export
+
+STEP export (ISO 10303-21) is more complex but preserves:
+- Exact geometry (not tessellated)
+- Topology information
+- Face/edge structure
+
+This can be added as a separate phase after STL export is working.
 
 ---
 
 ## Open Questions
 
-1. **Application Protocol** - Which STEP AP to use?
-   - Decision: Start with AP214 (broader support)
+1. **Unit conversion** - Should we offer unit scaling on export?
+   - Decision: Default to model units (mm), add unit selector later
 
-2. **Color/material** - Export appearance?
-   - Decision: Not in this phase, geometry only
+2. **Tessellation quality** - Should user control triangle density?
+   - Decision: Use default tessellation settings, add quality slider later
 
-3. **Assembly** - Export as assembly or single part?
-   - Decision: Single part with multiple bodies
+3. **Multiple bodies** - Export as single STL or separate files?
+   - Decision: Single STL with all bodies merged

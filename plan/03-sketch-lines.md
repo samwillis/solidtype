@@ -1,5 +1,7 @@
 # Phase 03: Sketch with Straight Lines
 
+**Status: ✅ IMPLEMENTED (Enhanced)**
+
 ## Prerequisites
 
 - Phase 01: Document Model (Yjs)
@@ -16,14 +18,31 @@
 
 ## User Workflow
 
-1. User clicks "New Sketch" in toolbar
-2. User selects a datum plane (XY, XZ, or YZ)
+> **Enhanced from original plan** with improved sketch mode handling
+
+### Creating a New Sketch
+1. User **selects a datum plane** in feature tree or 3D view
+2. User clicks "New Sketch" in toolbar (enabled when plane is selected)
 3. View switches to 2D sketch mode (camera aligned to plane)
-4. User selects "Line" tool
-5. User clicks to place start point, clicks again for end point
-6. User can continue adding lines or switch tools
-7. User clicks "Finish Sketch" to exit sketch mode
-8. Sketch appears in feature tree
+4. Toolbar shows sketch tools (Line, Arc, Circle, Rectangle, Constraints)
+5. **Feature tree is disabled** during sketch editing
+
+### Drawing
+1. User selects "Line" tool
+2. User clicks to place start point, clicks again for end point
+3. User can continue adding lines or switch tools
+4. Selection highlights render **in the 3D view** (not 2D overlay)
+
+### Finishing/Canceling
+1. **Cmd/Ctrl+Enter** to accept sketch, or click "Finish Sketch"
+2. **Escape** to cancel sketch:
+   - If new sketch: sketch is **deleted**
+   - If editing existing sketch: changes are **reverted** via undo
+3. Sketch appears in feature tree
+
+### Editing Existing Sketch
+1. **Double-click** sketch in feature tree to enter edit mode
+2. Changes can be reverted with Escape
 
 ---
 
