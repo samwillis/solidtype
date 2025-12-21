@@ -13,7 +13,7 @@ import {
   Y_AXIS_REVOLVE,
   Z_AXIS_REVOLVE,
 } from './revolve.js';
-import { createRectangleProfile, createPolygonProfile } from './sketchProfile.js';
+import { createRectangleProfile, createPolygonProfile, createCircleProfile } from './sketchProfile.js';
 import { YZ_PLANE, ZX_PLANE, createDatumPlaneFromNormal } from './planes.js';
 import { vec2 } from '../num/vec2.js';
 import { vec3 } from '../num/vec3.js';
@@ -226,6 +226,26 @@ describe('revolve', () => {
       
       const stats = model.getStats();
       expect(stats.faces).toBeGreaterThanOrEqual(24);
+    });
+
+    it('revolves a circle to create torus side surfaces', () => {
+      // In the YZ plane, x maps to world Y, y maps to world Z.
+      // Offset in Z so the profile is not centered on the Y axis.
+      const profile = createCircleProfile(YZ_PLANE, 1, 0, 3);
+      const result = revolve(model, profile, {
+        operation: 'add',
+        axis: Y_AXIS_REVOLVE,
+      });
+
+      expect(result.success).toBe(true);
+      const shells = model.getBodyShells(result.body!);
+      const faces = model.getShellFaces(shells[0]);
+      const kinds = new Set<string>();
+      for (const f of faces) {
+        const sIdx = model.getFaceSurfaceIndex(f);
+        kinds.add(model.getSurface(sIdx).kind);
+      }
+      expect(kinds.has('torus')).toBe(true);
     });
   });
 });

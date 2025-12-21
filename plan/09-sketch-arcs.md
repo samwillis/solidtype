@@ -37,11 +37,15 @@
 ### Arc Entity
 
 ```xml
-<entities>
-  [
+<sketch
+  id="s1"
+  plane="xy"
+  points='[ ... ]'
+  entities='[
     { "id": "a1", "type": "arc", "start": "p1", "end": "p2", "center": "p3", "ccw": true }
-  ]
-</entities>
+  ]'
+  constraints='[ ... ]'
+/>
 ```
 
 ### Circle as Special Arc
@@ -49,11 +53,15 @@
 A circle is represented as an arc with coincident start/end points:
 
 ```xml
-<entities>
-  [
+<sketch
+  id="s1"
+  plane="xy"
+  points='[ ... ]'
+  entities='[
     { "id": "a1", "type": "arc", "start": "p1", "end": "p1", "center": "p2", "ccw": true }
-  ]
-</entities>
+  ]'
+  constraints='[ ... ]'
+/>
 ```
 
 ### TypeScript Types

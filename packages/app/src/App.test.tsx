@@ -13,6 +13,53 @@ vi.mock('./components/ViewCube', () => ({
   default: () => <div data-testid="viewcube">ViewCube</div>,
 }));
 
+// Mock the KernelContext to avoid Worker issues in jsdom
+vi.mock('./contexts/KernelContext', () => ({
+  KernelProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useKernel: () => ({
+    meshes: new Map(),
+    errors: [],
+    featureStatus: {},
+    bodies: [],
+    isRebuilding: false,
+    isReady: true,
+    previewExtrude: () => {},
+    previewRevolve: () => {},
+    clearPreview: () => {},
+    previewError: null,
+  }),
+}));
+
+// Mock the SketchContext
+vi.mock('./contexts/SketchContext', () => ({
+  SketchProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useSketch: () => ({
+    mode: {
+      active: false,
+      sketchId: null,
+      planeId: null,
+      activeTool: 'line',
+      tempPoints: [],
+    },
+    startSketch: () => {},
+    finishSketch: () => {},
+    setTool: () => {},
+    addPoint: () => null,
+    addLine: () => null,
+    addTempPoint: () => {},
+    clearTempPoints: () => {},
+    getSketchPoints: () => [],
+    updatePointPosition: () => {},
+    findNearbyPoint: () => null,
+    addRectangle: () => {},
+  }),
+}));
+
+// Mock SketchCanvas
+vi.mock('./components/SketchCanvas', () => ({
+  default: () => null,
+}));
+
 const renderApp = () => {
   return render(
     <ThemeProvider>
@@ -38,12 +85,14 @@ describe('App', () => {
     expect(screen.getByLabelText('Box')).toBeInTheDocument();
   });
 
-  it('shows feature tree with mock data', () => {
+  it('shows feature tree with Yjs data', () => {
     renderApp();
     // Check for key elements in the feature tree
     expect(screen.getByText('Bodies')).toBeInTheDocument();
     expect(screen.getByText('Part1')).toBeInTheDocument();
-    expect(screen.getByText('Origin')).toBeInTheDocument();
+    // Default features from Yjs document
+    expect(screen.getByText('origin')).toBeInTheDocument();
+    expect(screen.getByText('XY Plane')).toBeInTheDocument();
   });
 
   it('renders the properties panel', () => {

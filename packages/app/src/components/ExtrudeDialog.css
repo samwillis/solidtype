@@ -1,0 +1,177 @@
+.extrude-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.extrude-dialog {
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 280px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.extrude-dialog h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.extrude-dialog-info {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.extrude-dialog-info .label {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.extrude-dialog-info .value {
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.extrude-dialog-field {
+  margin-bottom: 16px;
+}
+
+.extrude-dialog-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.extrude-dialog-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.extrude-dialog-toggle button {
+  flex: 1;
+  padding: 8px 16px;
+  background: var(--color-bg);
+  border: none;
+  color: var(--color-text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.extrude-dialog-toggle button:not(:last-child) {
+  border-right: 1px solid var(--color-border);
+}
+
+.extrude-dialog-toggle button:hover {
+  background: var(--color-bg-hover);
+}
+
+.extrude-dialog-toggle button.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+.extrude-dialog-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.extrude-dialog-input-group input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+.extrude-dialog-input-group input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.extrude-dialog-unit {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  min-width: 30px;
+}
+
+.extrude-dialog-field select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+.extrude-dialog-field select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.extrude-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.extrude-dialog-actions button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.extrude-dialog-actions .btn-cancel {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.extrude-dialog-actions .btn-cancel:hover {
+  background: var(--color-bg-hover);
+}
+
+.extrude-dialog-actions .btn-confirm {
+  background: var(--color-primary);
+  border: none;
+  color: white;
+}
+
+.extrude-dialog-actions .btn-confirm:hover {
+  background: var(--color-primary-hover);
+}
+
+.extrude-dialog-error {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 80, 80, 0.4);
+  background: rgba(255, 80, 80, 0.12);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 12px;
+}

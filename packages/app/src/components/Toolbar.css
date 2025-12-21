@@ -112,3 +112,102 @@
 [data-theme="dark"] .toolbar-tooltip {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
+
+/* Finish sketch button */
+.toolbar-button-finish {
+  color: #4caf50;
+}
+
+.toolbar-button-finish:hover {
+  background: rgba(76, 175, 80, 0.2);
+}
+
+/* Plane selector dialog */
+.plane-selector-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.plane-selector-dialog {
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 240px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.plane-selector-dialog h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.plane-selector-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plane-selector-options button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.plane-selector-options button:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-primary);
+}
+
+.plane-icon {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.plane-icon.plane-xy {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+}
+
+.plane-icon.plane-xz {
+  background: linear-gradient(135deg, #2ecc71, #27ae60);
+}
+
+.plane-icon.plane-yz {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+
+.plane-selector-cancel {
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.plane-selector-cancel:hover {
+  background: var(--color-bg-hover);
+}

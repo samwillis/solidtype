@@ -32,31 +32,20 @@
 ### Sketch Feature
 
 ```xml
-<sketch id="s1" plane="xy" name="Sketch1">
-  <points>
-    [
-      { "id": "p1", "x": 0, "y": 0 },
-      { "id": "p2", "x": 10, "y": 0 },
-      { "id": "p3", "x": 10, "y": 10 },
-      { "id": "p4", "x": 0, "y": 10 }
-    ]
-  </points>
-  <entities>
-    [
-      { "id": "l1", "type": "line", "start": "p1", "end": "p2" },
-      { "id": "l2", "type": "line", "start": "p2", "end": "p3" },
-      { "id": "l3", "type": "line", "start": "p3", "end": "p4" },
-      { "id": "l4", "type": "line", "start": "p4", "end": "p1" }
-    ]
-  </entities>
-  <constraints>[]</constraints>
-</sketch>
+<sketch
+  id="s1"
+  plane="xy"
+  name="Sketch1"
+  points='[{"id":"pt1","x":0,"y":0},{"id":"pt2","x":10,"y":0},{"id":"pt3","x":10,"y":10},{"id":"pt4","x":0,"y":10}]'
+  entities='[{"id":"ln1","type":"line","start":"pt1","end":"pt2"},{"id":"ln2","type":"line","start":"pt2","end":"pt3"},{"id":"ln3","type":"line","start":"pt3","end":"pt4"},{"id":"ln4","type":"line","start":"pt4","end":"pt1"}]'
+  constraints='[]'
+/>
 ```
 
 ### TypeScript Types
 
 ```typescript
-// packages/app/src/types/sketch.ts
+// packages/app/src/types/document.ts
 
 export interface SketchPoint {
   id: string;

@@ -47,6 +47,38 @@
   text-decoration: line-through;
 }
 
+.tree-item.gated {
+  opacity: 0.4;
+}
+
+.tree-item.error {
+  background: rgba(255, 80, 80, 0.08);
+}
+
+.tree-item-badge {
+  flex-shrink: 0;
+  margin-left: 6px;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.tree-item-badge-error {
+  border-color: rgba(255, 80, 80, 0.5);
+  color: rgba(255, 120, 120, 1);
+}
+
+.tree-item-badge-gated {
+  opacity: 0.8;
+}
+
+.tree-item.drag-over {
+  background: var(--color-bg-active);
+  outline: 1px dashed var(--color-primary);
+}
+
 /* Expand/collapse button */
 .tree-expand-btn {
   display: flex;
@@ -121,4 +153,47 @@
   color: var(--color-text-muted);
   margin-bottom: 8px;
   opacity: 0.5;
+}
+
+/* Rebuild Gate Bar */
+.rebuild-gate-bar {
+  position: relative;
+  height: 8px;
+  margin: 2px 8px 2px 40px;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+}
+
+.rebuild-gate-bar:active {
+  cursor: grabbing;
+}
+
+.rebuild-gate-line {
+  flex: 1;
+  height: 2px;
+  background: var(--color-primary);
+  border-radius: 1px;
+}
+
+.rebuild-gate-handle {
+  position: absolute;
+  left: -16px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.rebuild-gate-bar:hover .rebuild-gate-line {
+  height: 3px;
+  background: var(--color-primary-hover);
+}
+
+.rebuild-gate-bar:hover .rebuild-gate-handle {
+  color: var(--color-primary-hover);
 }

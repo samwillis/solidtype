@@ -104,6 +104,11 @@ function createCylindricalSideFace(arc: Arc2D, distance: number, plane: DatumPla
 
 Update revolve to handle arcs (toroidal surfaces):
 
+**Status (implemented):**
+- `packages/core/src/geom/surface.ts` now includes `TorusSurface` (`kind: 'torus'`) and evaluators.
+- `packages/core/src/model/revolve.ts` assigns analytic side surfaces (`cylinder`/`cone`/`sphere`/`torus`) based on the profile segment.
+- `packages/core/src/mesh/tessellateFace.ts` tessellates `cone`, `sphere`, and `torus` faces (in addition to `plane`/`cylinder`).
+
 ```typescript
 // In model/revolve.ts
 
@@ -127,7 +132,8 @@ function revolveArcToTorus(arc: Arc2D, axis: Axis, angle: number): Surface {
   
   return {
     kind: 'torus',
-    center: axis.origin,
+    // Use the closest point on the axis to the arc center (keeps params stable)
+    center: projectPointOntoAxis(arc.center, axis),
     axis: axis.direction,
     majorRadius,
     minorRadius,
@@ -281,7 +287,7 @@ test('revolve arc creates torus', () => {
 
 ## Open Questions
 
-1. **Torus support in kernel** - Is toroidal surface type implemented?
+1. **Torus support in kernel** - Implemented (`TorusSurface` + revolve side surfaces + tessellation).
    - Check current kernel, add if missing
 
 2. **Tessellation quality** - What's the right default?

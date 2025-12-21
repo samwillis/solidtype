@@ -110,22 +110,16 @@ Features will be added incrementally. Initial set:
 Sketches contain child data structures:
 
 ```xml
-<sketch id="s1" plane="xy">
-  <points>
-    <!-- Y.Array serialized as JSON-like structure -->
-    <!-- Each point: { id: "p1", x: 0, y: 0, fixed?: boolean, attachedTo?: string } -->
-  </points>
-  <entities>
-    <!-- Each entity: { id: "e1", type: "line", start: "p1", end: "p2" } -->
-    <!-- Or: { id: "e2", type: "arc", start: "p3", end: "p4", center: "p5", ccw: true } -->
-  </entities>
-  <constraints>
-    <!-- Each constraint: { id: "c1", type: "horizontal", points: ["p1", "p2"] } -->
-  </constraints>
-</sketch>
+<sketch
+  id="s1"
+  plane="xy"
+  points='[{"id":"pt1","x":0,"y":0},{"id":"pt2","x":10,"y":0}]'
+  entities='[{"id":"ln1","type":"line","start":"pt1","end":"pt2"}]'
+  constraints='[{"id":"cn1","type":"horizontal","points":["pt1","pt2"]}]'
+/>
 ```
 
-Note: The exact serialization format (JSON in CDATA vs nested XML) will be determined during implementation. The key is that sketch data is contained within the sketch element.
+**Pinned implementation note**: In the current codebase, sketch lists are stored as **JSON strings in attributes** on the `<sketch>` element (`points`, `entities`, `constraints`). This keeps sketch edits as single-attribute updates (nice for undo/redo and syncing) and avoids managing nested XML text nodes.
 
 ---
 
@@ -486,12 +480,14 @@ These decisions are **locked** to avoid migrations. Document them here before im
 <!-- Simple vectors: comma-separated (3-6 numbers) -->
 <plane normal="0,0,1" origin="0,0,0" xDir="1,0,0" />
 
-<!-- Complex arrays: JSON in element content -->
-<sketch id="s1" plane="xy">
-  <points>[{"id":"p1","x":0,"y":0},{"id":"p2","x":10,"y":0}]</points>
-  <entities>[{"id":"l1","type":"line","start":"p1","end":"p2"}]</entities>
-  <constraints>[{"id":"c1","type":"horizontal","points":["p1","p2"]}]</constraints>
-</sketch>
+<!-- Complex arrays: JSON in attributes (current implementation) -->
+<sketch
+  id="s1"
+  plane="xy"
+  points='[{"id":"pt1","x":0,"y":0},{"id":"pt2","x":10,"y":0}]'
+  entities='[{"id":"ln1","type":"line","start":"pt1","end":"pt2"}]'
+  constraints='[{"id":"cn1","type":"horizontal","points":["pt1","pt2"]}]'
+/>
 ```
 
 **Rationale**:
@@ -524,23 +520,27 @@ function generateId(type: string, counters: IdCounters): string {
 - Easy to reference in UI and AI context
 - Counter stored in `meta` Y.Map for persistence
 
+**Implementation note**: The current app stores counters in a dedicated top-level `counters` Y.Map (`ydoc.getMap('counters')`) rather than inside `meta`. This keeps `meta` strictly for metadata and avoids mixing numeric counters with user-facing strings.
+
 ### 3. Sketch Child Storage
 
-**Decision**: JSON in text content (not CDATA, not nested XML).
+**Decision (current implementation)**: JSON in `<sketch>` attributes (`points`, `entities`, `constraints`).
 
 ```xml
-<sketch id="s1" plane="xy">
-  <points>[{"id":"p1","x":0,"y":0,"fixed":true}]</points>
-  <entities>[{"id":"l1","type":"line","start":"p1","end":"p2"}]</entities>
-  <constraints>[{"id":"c1","type":"horizontal","points":["p1","p2"]}]</constraints>
-</sketch>
+<sketch
+  id="s1"
+  plane="xy"
+  points='[{"id":"pt1","x":0,"y":0,"fixed":true}]'
+  entities='[{"id":"ln1","type":"line","start":"pt1","end":"pt2"}]'
+  constraints='[{"id":"cn1","type":"horizontal","points":["pt1","pt2"]}]'
+/>
 ```
 
 **Rationale**:
-- Simpler than nested XML for list structures
-- Avoids CDATA parsing complexity
+- Avoids nested XML list management
+- Single-attribute updates are compact and undo-friendly
 - Easy to deserialize with `JSON.parse()`
-- AI can understand and modify directly
+- AI can still understand and modify directly
 
 ### 4. Boolean/Number Attribute Encoding
 

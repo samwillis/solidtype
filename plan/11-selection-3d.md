@@ -1,8 +1,19 @@
 # Phase 11: 3D Selection
 
+**Status: IMPLEMENTED**
+
 ## Prerequisites
 
 - Phase 10: Curves in Features (complete modeling workflow)
+
+## Implementation Notes
+
+The following components have been implemented:
+- `SelectionContext.tsx` - Enhanced with 3D face/edge selection support
+- `useRaycast.ts` hook - Provides raycasting for 3D selection in the viewer
+- `Viewer.tsx` - Updated with click/hover handlers for face selection
+- Multi-selection support with Ctrl/Cmd key
+- Hover highlighting state management
 
 ## Goals
 

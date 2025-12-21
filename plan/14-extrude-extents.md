@@ -1,9 +1,25 @@
 # Phase 14: Extrude Extents
 
+**Status: IMPLEMENTED**
+
 ## Prerequisites
 
 - Phase 13: Properties Panel
 - Phase 11: 3D Selection (for selecting target faces)
+
+## Implementation Notes
+
+Extent types are now supported in the document model and worker:
+- `document.ts` - Extended `ExtrudeFeature` with `extent`, `extentRef` fields
+- `featureHelpers.ts` - Updated `addExtrudeFeature` to accept options object with extent parameters
+- `kernel.worker.ts` - Added `calculateExtrudeDistance()` to compute distance based on extent type
+- `PropertiesPanel.tsx` - Extent type selector in extrude properties
+
+Supported extent types:
+- `blind` - Fixed distance (default)
+- `throughAll` - Extends through entire model (uses large distance)
+- `toFace` - Extends to selected face (stores `extentRef`)
+- `toVertex` - Extends to vertex height (stores `extentRef`)
 
 ## Goals
 

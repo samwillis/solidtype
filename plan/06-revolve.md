@@ -142,8 +142,12 @@ function AxisHighlight({ sketchId, axisId }) {
 ```typescript
 // Show revolve preview with transparency
 function RevolvePreview({ sketch, axis, angle, operation }) {
-  // Request preview from kernel
-  // Render with appropriate color (blue=add, red=cut)
+  const { previewRevolve, clearPreview } = useKernel();
+  useEffect(() => {
+    previewRevolve({ sketchId: sketch.id, axis, angle, op: operation });
+    return () => clearPreview();
+  }, [sketch.id, axis, angle, operation]);
+  // Render with appropriate color (blue=add, red=cut) based on preview mesh id
 }
 ```
 

@@ -117,13 +117,13 @@ export function ExtrudeDialog({ sketchId, onConfirm, onCancel }: ExtrudeDialogPr
 ```typescript
 // Show extrude preview while dialog is open
 function ExtrudePreview({ sketchId, distance, direction }) {
-  const { doc } = useDocument();
-  const sketch = getSketchData(doc, sketchId);
+  const { previewExtrude, clearPreview } = useKernel();
   
   // Request preview mesh from kernel
   useEffect(() => {
-    kernel.previewExtrude(sketchId, distance, direction);
-  }, [sketchId, distance, direction]);
+    previewExtrude({ sketchId, distance, direction, op: 'add' });
+    return () => clearPreview();
+  }, [sketchId, distance, direction, previewExtrude, clearPreview]);
   
   // Kernel sends preview mesh, rendered semi-transparent
   return <PreviewMesh opacity={0.5} />;

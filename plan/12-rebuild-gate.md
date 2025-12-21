@@ -1,8 +1,23 @@
 # Phase 12: Rebuild Gate
 
+**Status: IMPLEMENTED**
+
 ## Prerequisites
 
 - Phase 11: 3D Selection
+
+## Implementation Notes
+
+The rebuild gate UI is fully implemented in:
+- `FeatureTree.tsx` - Contains the `RebuildGateBar` component with drag-and-drop support
+- `DocumentContext.tsx` - Manages `rebuildGate` state synced with Yjs
+- `kernel.worker.ts` - Respects the rebuild gate during feature interpretation
+
+Features:
+- Draggable gate bar between features
+- Features below gate are grayed out and marked as 'gated'
+- Gate position persists in Yjs state
+- CSS styling for gated features with reduced opacity
 
 ## Goals
 
