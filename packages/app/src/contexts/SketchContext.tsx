@@ -23,7 +23,10 @@ import {
 import type { NewSketchConstraint, SketchData, SketchLine, SketchPoint } from '../types/document';
 
 // Constraint types that can be applied
-export type ConstraintType = 'horizontal' | 'vertical' | 'coincident' | 'fixed' | 'distance' | 'angle';
+export type ConstraintType = 
+  | 'horizontal' | 'vertical' | 'coincident' | 'fixed' | 'distance' | 'angle'
+  // Advanced constraints (Phase 19)
+  | 'parallel' | 'perpendicular' | 'equalLength' | 'tangent' | 'symmetric';
 
 // ============================================================================
 // Types
@@ -405,6 +408,18 @@ export function SketchProvider({ children }: SketchProviderProps) {
         return points.length === 2 || lines.length === 1;
       case 'angle':
         return lines.length === 2;
+      // Advanced constraints (Phase 19)
+      case 'parallel':
+      case 'perpendicular':
+      case 'equalLength':
+        return lines.length === 2;
+      case 'tangent':
+        // Need 1 line and 1 arc, but we're simplifying to lines.length >= 1
+        // Full implementation would check for arc selection
+        return lines.length === 2;
+      case 'symmetric':
+        // Need 2 points and 1 line (axis)
+        return points.length === 2 && lines.length === 1;
       default:
         return false;
     }
@@ -461,6 +476,24 @@ export function SketchProvider({ children }: SketchProviderProps) {
       if (!line1 || !line2) return;
       // Default to 90 degrees
       constraint = { type: 'angle', lines: [lines[0], lines[1]], value: 90 };
+    }
+    // Advanced constraints (Phase 19)
+    else if (type === 'parallel') {
+      if (lines.length !== 2) return;
+      constraint = { type: 'parallel', lines: [lines[0], lines[1]] };
+    } else if (type === 'perpendicular') {
+      if (lines.length !== 2) return;
+      constraint = { type: 'perpendicular', lines: [lines[0], lines[1]] };
+    } else if (type === 'equalLength') {
+      if (lines.length !== 2) return;
+      constraint = { type: 'equalLength', lines: [lines[0], lines[1]] };
+    } else if (type === 'tangent') {
+      // Simplified: treat as two-line constraint (full would need line+arc)
+      if (lines.length !== 2) return;
+      constraint = { type: 'tangent', line: lines[0], arc: lines[1], connectionPoint: '' };
+    } else if (type === 'symmetric') {
+      if (points.length !== 2 || lines.length !== 1) return;
+      constraint = { type: 'symmetric', points: [points[0], points[1]], axis: lines[0] };
     }
 
     if (constraint) {

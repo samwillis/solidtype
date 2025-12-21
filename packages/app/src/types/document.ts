@@ -87,7 +87,13 @@ export type SketchConstraint =
   | { id: string; type: 'coincident'; points: [string, string] }
   | { id: string; type: 'fixed'; point: string }
   | { id: string; type: 'distance'; points: [string, string]; value: number }
-  | { id: string; type: 'angle'; lines: [string, string]; value: number };
+  | { id: string; type: 'angle'; lines: [string, string]; value: number }
+  // Advanced constraints (Phase 19)
+  | { id: string; type: 'parallel'; lines: [string, string] }
+  | { id: string; type: 'perpendicular'; lines: [string, string] }
+  | { id: string; type: 'equalLength'; lines: [string, string] }
+  | { id: string; type: 'tangent'; line: string; arc: string; connectionPoint: string }
+  | { id: string; type: 'symmetric'; points: [string, string]; axis: string };
 
 /**
  * A sketch constraint payload for creation (no `id` yet).

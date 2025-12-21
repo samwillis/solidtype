@@ -1,8 +1,27 @@
 # Phase 18: STL Export
 
+**Status: ✅ IMPLEMENTED**
+
 ## Prerequisites
 
 - Phase 17: Boolean Operations
+
+## Implementation Notes
+
+### What's Done:
+- `packages/core/src/export/stl.ts` - Complete STL writer with binary and ASCII formats
+- `packages/core/src/export/stl.test.ts` - 6 tests for STL export
+- `kernel.worker.ts` - `export-stl` message handler
+- `KernelContext.tsx` - `exportStl()` async function with promise-based response
+- `Toolbar.tsx` - Export button with download handling
+- `worker/types.ts` - `ExportStlMessage` and `StlExportedMessage` types
+
+### Key Implementation Details:
+1. **Binary STL** - 80-byte header + 4-byte count + 50 bytes/triangle
+2. **ASCII STL** - `solid`/`endsolid` with `facet normal`/`vertex` entries
+3. **Face normal calculation** - Cross product of triangle edges
+4. **Toolbar button** - Downloads as `model.stl` on click
+5. **Worker transfer** - ArrayBuffer transferred for efficiency
 
 ## Goals
 

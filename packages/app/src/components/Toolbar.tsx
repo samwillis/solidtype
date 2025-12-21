@@ -552,6 +552,43 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
                   >
                     <span className="toolbar-dropdown-key">∠</span> Angle
                   </button>
+                  {/* Advanced constraints (Phase 19) */}
+                  <div className="toolbar-dropdown-separator" />
+                  <button
+                    className="toolbar-dropdown-item"
+                    onClick={() => { applyConstraint('parallel'); setConstraintsDropdownOpen(false); }}
+                    disabled={!canApplyConstraint('parallel')}
+                  >
+                    <span className="toolbar-dropdown-key">∥</span> Parallel
+                  </button>
+                  <button
+                    className="toolbar-dropdown-item"
+                    onClick={() => { applyConstraint('perpendicular'); setConstraintsDropdownOpen(false); }}
+                    disabled={!canApplyConstraint('perpendicular')}
+                  >
+                    <span className="toolbar-dropdown-key">⊥</span> Perpendicular
+                  </button>
+                  <button
+                    className="toolbar-dropdown-item"
+                    onClick={() => { applyConstraint('equalLength'); setConstraintsDropdownOpen(false); }}
+                    disabled={!canApplyConstraint('equalLength')}
+                  >
+                    <span className="toolbar-dropdown-key">=</span> Equal Length
+                  </button>
+                  <button
+                    className="toolbar-dropdown-item"
+                    onClick={() => { applyConstraint('tangent'); setConstraintsDropdownOpen(false); }}
+                    disabled={!canApplyConstraint('tangent')}
+                  >
+                    <span className="toolbar-dropdown-key">⌒</span> Tangent
+                  </button>
+                  <button
+                    className="toolbar-dropdown-item"
+                    onClick={() => { applyConstraint('symmetric'); setConstraintsDropdownOpen(false); }}
+                    disabled={!canApplyConstraint('symmetric')}
+                  >
+                    <span className="toolbar-dropdown-key">⇔</span> Symmetric
+                  </button>
                 </div>
               )}
             </div>
@@ -686,8 +723,27 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
           </>
         )}
 
-        {/* Spacer to push AI button to right */}
+        {/* Spacer to push right-side buttons to right */}
         <div className="toolbar-spacer" />
+
+        {/* Export STL (Phase 18) */}
+        <Tooltip.Root>
+          <Tooltip.Trigger
+            delay={300}
+            className={`toolbar-button ${!canExport ? 'disabled' : ''} ${isExporting ? 'loading' : ''}`}
+            onClick={handleExportStl}
+            render={<button aria-label="Export STL" disabled={!canExport} />}
+          >
+            <ExportIcon />
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Positioner side="bottom" sideOffset={6}>
+              <Tooltip.Popup className="toolbar-tooltip">
+                {isExporting ? 'Exporting...' : (canExport ? 'Export STL' : 'Export STL (no bodies)')}
+              </Tooltip.Popup>
+            </Tooltip.Positioner>
+          </Tooltip.Portal>
+        </Tooltip.Root>
 
         {/* AI Panel Toggle */}
         <Tooltip.Root>

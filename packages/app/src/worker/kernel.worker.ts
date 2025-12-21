@@ -24,6 +24,12 @@ import {
   fixed,
   distance,
   angle,
+  // Advanced constraints (Phase 19)
+  parallel,
+  perpendicular,
+  equalLength,
+  tangent,
+  symmetric,
   exportMeshesToStl,
 } from '@solidtype/core';
 import type {
@@ -577,6 +583,55 @@ function interpretSketch(
         const valDeg = typeof c.value === 'number' ? c.value : Number(c.value);
         if (e1 !== undefined && e2 !== undefined && Number.isFinite(valDeg)) {
           sketch.addConstraint(angle(e1, e2, (valDeg * Math.PI) / 180));
+        }
+        break;
+      }
+      // Advanced constraints (Phase 19)
+      case 'parallel': {
+        const [l1, l2] = c.lines ?? [];
+        const e1 = entityIdMap.get(l1);
+        const e2 = entityIdMap.get(l2);
+        if (e1 !== undefined && e2 !== undefined) {
+          sketch.addConstraint(parallel(e1, e2));
+        }
+        break;
+      }
+      case 'perpendicular': {
+        const [l1, l2] = c.lines ?? [];
+        const e1 = entityIdMap.get(l1);
+        const e2 = entityIdMap.get(l2);
+        if (e1 !== undefined && e2 !== undefined) {
+          sketch.addConstraint(perpendicular(e1, e2));
+        }
+        break;
+      }
+      case 'equalLength': {
+        const [l1, l2] = c.lines ?? [];
+        const e1 = entityIdMap.get(l1);
+        const e2 = entityIdMap.get(l2);
+        if (e1 !== undefined && e2 !== undefined) {
+          sketch.addConstraint(equalLength(e1, e2));
+        }
+        break;
+      }
+      case 'tangent': {
+        // Tangent between line and arc
+        const lineId = entityIdMap.get(c.line);
+        const arcId = entityIdMap.get(c.arc);
+        if (lineId !== undefined && arcId !== undefined) {
+          // Default to 'end' of line touching 'start' of arc
+          // TODO: Allow specifying which endpoints connect
+          sketch.addConstraint(tangent(lineId, arcId, 'end', 'start'));
+        }
+        break;
+      }
+      case 'symmetric': {
+        const [pt1, pt2] = c.points ?? [];
+        const p1 = pointIdMap.get(pt1);
+        const p2 = pointIdMap.get(pt2);
+        const axisId = entityIdMap.get(c.axis);
+        if (p1 !== undefined && p2 !== undefined && axisId !== undefined) {
+          sketch.addConstraint(symmetric(p1, p2, axisId));
         }
         break;
       }
