@@ -20,6 +20,11 @@
   padding: 0;
 }
 
+/* Context menu trigger wrapper - should be transparent */
+.tree-item-context-trigger {
+  display: contents;
+}
+
 .tree-item {
   display: flex;
   align-items: center;
@@ -138,6 +143,20 @@
   text-overflow: ellipsis;
 }
 
+/* Rename input */
+.tree-item-rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 4px;
+  border: 1px solid var(--color-primary);
+  border-radius: 2px;
+  font-size: 12px;
+  font-family: inherit;
+  background: var(--color-surface);
+  color: var(--color-text);
+  outline: none;
+}
+
 /* Empty state (kept for potential future use) */
 .feature-tree-empty {
   display: flex;
@@ -155,14 +174,23 @@
   opacity: 0.5;
 }
 
-/* Rebuild Gate Bar */
+/* Rebuild Gate Bar - just a horizontal line showing current gate position */
 .rebuild-gate-bar {
   position: relative;
-  height: 8px;
-  margin: 2px 8px 2px 40px;
+  height: 16px;
+  margin: 2px 0;
   cursor: grab;
   display: flex;
   align-items: center;
+  padding: 0 8px;
+  background: transparent;
+  z-index: 20;
+  user-select: none;
+  -webkit-user-drag: element;
+}
+
+.rebuild-gate-bar:hover {
+  background: rgba(0, 120, 212, 0.05);
 }
 
 .rebuild-gate-bar:active {
@@ -172,28 +200,48 @@
 .rebuild-gate-line {
   flex: 1;
   height: 2px;
-  background: var(--color-primary);
+  background: var(--color-primary, #0078d4);
   border-radius: 1px;
-}
-
-.rebuild-gate-handle {
-  position: absolute;
-  left: -16px;
-  width: 16px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-primary);
-  font-size: 14px;
-  font-weight: bold;
+  pointer-events: none; /* Allow parent to receive drag events */
 }
 
 .rebuild-gate-bar:hover .rebuild-gate-line {
   height: 3px;
-  background: var(--color-primary-hover);
+  background: var(--color-accent-hover, #1c8ae6);
 }
 
-.rebuild-gate-bar:hover .rebuild-gate-handle {
-  color: var(--color-primary-hover);
+/* Drop zone container - takes zero height in document flow */
+.rebuild-gate-drop-zone-container {
+  position: relative;
+  height: 0;
+  overflow: visible;
+}
+
+/* The actual drop target - hidden by default */
+.rebuild-gate-drop-zone {
+  display: none; /* Hidden when not dragging */
+}
+
+/* Only show and position the drop zone when gate is being dragged */
+.rebuild-gate-drop-zone.active {
+  display: block;
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: -8px;
+  height: 16px;
+  z-index: 10;
+}
+
+/* Show a simple line indicator when dragging over */
+.rebuild-gate-drop-zone.drag-over::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 2px;
+  background: var(--color-primary, #0078d4);
+  border-radius: 1px;
 }

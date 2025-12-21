@@ -27,6 +27,10 @@
   color: var(--color-accent-text);
 }
 
+.status-bar-text.status-error {
+  color: #ffcccc;
+}
+
 .status-bar-solve {
   font-family: var(--font-family-mono);
   font-size: 11px;
@@ -92,4 +96,16 @@
 .status-bar-units option {
   background: var(--color-bg);
   color: var(--color-text);
+}
+
+.status-bar-view-controls {
+  display: flex;
+  gap: 2px;
+  margin-right: 4px;
+  padding-right: 8px;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.status-bar-button.active {
+  background: rgba(255, 255, 255, 0.2);
 }

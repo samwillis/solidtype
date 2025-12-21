@@ -1166,7 +1166,8 @@ const Viewer: React.FC = () => {
       }
       renderer.dispose();
     };
-  }, [theme]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount - theme changes are handled by a separate effect
 
   return <div ref={containerRef} className="viewer-container" />;
 };

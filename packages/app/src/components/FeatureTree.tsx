@@ -1,10 +1,14 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { ContextMenu } from '@base-ui/react/context-menu';
 import { useDocument } from '../contexts/DocumentContext';
 import { useKernel } from '../contexts/KernelContext';
 import { useSelection } from '../contexts/SelectionContext';
+import { useSketch } from '../contexts/SketchContext';
+import { ConfirmDialog } from './ConfirmDialog';
 import type { Feature, FeatureType } from '../types/document';
 import type { FeatureStatus } from '../worker/types';
 import './FeatureTree.css';
+import './ContextMenu.css';
 
 // Tree node types
 type NodeType =
@@ -212,27 +216,77 @@ const Chevron: React.FC<{ expanded: boolean }> = ({ expanded }) => (
   </svg>
 );
 
-// Rebuild gate bar component
+// Rebuild gate bar component (just a line, no handle)
 const RebuildGateBar: React.FC<{
   afterFeatureId: string | null;
   onDragStart: () => void;
-}> = ({ afterFeatureId, onDragStart }) => {
+  onDragEnd: () => void;
+}> = ({ afterFeatureId, onDragStart, onDragEnd }) => {
   return (
     <div
       className="rebuild-gate-bar"
-      draggable
+      draggable={true}
       onDragStart={(e) => {
         e.dataTransfer.setData('text/plain', afterFeatureId || 'top');
         e.dataTransfer.effectAllowed = 'move';
         onDragStart();
       }}
+      onDragEnd={onDragEnd}
       title="Drag to change rebuild position"
     >
       <div className="rebuild-gate-line" />
-      <div className="rebuild-gate-handle">⊣</div>
     </div>
   );
 };
+
+// Drop zone between features for the rebuild gate - zero height container with absolute positioned hit area
+const RebuildGateDropZone: React.FC<{
+  afterFeatureId: string | null;
+  onDrop: (afterId: string | null) => void;
+  isActive: boolean; // Only accept drops when gate is being dragged
+}> = ({ afterFeatureId, onDrop, isActive }) => {
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!isActive) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setIsDragOver(true);
+  }, [isActive]);
+
+  const handleDragLeave = useCallback(() => {
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    if (!isActive) return;
+    e.preventDefault();
+    setIsDragOver(false);
+    onDrop(afterFeatureId);
+  }, [afterFeatureId, onDrop, isActive]);
+
+  return (
+    <div className="rebuild-gate-drop-zone-container">
+      <div
+        className={`rebuild-gate-drop-zone ${isDragOver ? 'drag-over' : ''} ${isActive ? 'active' : ''}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      />
+    </div>
+  );
+};
+
+interface ContextMenuItem {
+  id: string;
+  label: string;
+  icon?: React.ReactNode;
+  shortcut?: string;
+  disabled?: boolean;
+  danger?: boolean;
+  separator?: boolean;
+  onClick?: () => void;
+}
 
 interface TreeNodeItemProps {
   node: TreeNode;
@@ -241,10 +295,18 @@ interface TreeNodeItemProps {
   selectedId: string | null;
   rebuildGate: string | null;
   showGateAfter: boolean;
+  editingId: string | null;
+  isDraggingGate: boolean;
   onToggleExpand: (id: string) => void;
   onSelect: (id: string) => void;
   onHover: (id: string | null) => void;
   onGateDrop: (afterId: string | null) => void;
+  onGateDragStart: () => void;
+  onGateDragEnd: () => void;
+  onDoubleClick: (id: string) => void;
+  onRename: (id: string, name: string) => void;
+  onCancelRename: () => void;
+  getContextMenuItems: (nodeId: string, nodeType: string) => ContextMenuItem[];
 }
 
 const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
@@ -254,78 +316,160 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   selectedId,
   rebuildGate,
   showGateAfter,
+  editingId,
+  isDraggingGate,
   onToggleExpand,
   onSelect,
   onHover,
   onGateDrop,
+  onGateDragStart,
+  onGateDragEnd,
+  onDoubleClick,
+  onRename,
+  onCancelRename,
+  getContextMenuItems,
 }) => {
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
   const isSelected = selectedId === node.id;
-  const [isDragOver, setIsDragOver] = useState(false);
+  const isEditing = editingId === node.id;
+  const [editValue, setEditValue] = useState(node.name);
+  const inputRef = useRef<HTMLInputElement>(null);
   const isError = Boolean(node.errorMessage) || node.status === 'error';
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setIsDragOver(true);
-  }, []);
+  // Focus input when editing starts
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
 
-  const handleDragLeave = useCallback(() => {
-    setIsDragOver(false);
-  }, []);
+  // Reset edit value when node name changes
+  useEffect(() => {
+    setEditValue(node.name);
+  }, [node.name]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    // Drop sets gate to this feature
-    onGateDrop(node.id);
-  }, [node.id, onGateDrop]);
+  const handleRenameSubmit = useCallback(() => {
+    if (editValue.trim() && editValue !== node.name) {
+      onRename(node.id, editValue.trim());
+    } else {
+      onCancelRename();
+    }
+  }, [editValue, node.id, node.name, onRename, onCancelRename]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleRenameSubmit();
+    } else if (e.key === 'Escape') {
+      onCancelRename();
+    }
+  }, [handleRenameSubmit, onCancelRename]);
+
+  const contextMenuItems = getContextMenuItems(node.id, node.type);
+  const showContextMenu = contextMenuItems.length > 0;
+
+  const itemContent = (
+    <li
+      className={`tree-item ${isSelected ? 'selected' : ''} ${node.suppressed ? 'suppressed' : ''} ${node.gated ? 'gated' : ''} ${isError ? 'error' : ''}`}
+      style={{ paddingLeft: `${8 + level * 16}px` }}
+      onClick={() => !isEditing && onSelect(node.id)}
+      onDoubleClick={() => onDoubleClick(node.id)}
+      onMouseEnter={() => onHover(node.id)}
+      onMouseLeave={() => onHover(null)}
+    >
+      {hasChildren ? (
+        <span
+          className="tree-expand-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleExpand(node.id);
+          }}
+        >
+          <Chevron expanded={isExpanded} />
+        </span>
+      ) : (
+        <span className="tree-expand-placeholder" />
+      )}
+      <NodeIcon type={node.type} />
+      {isEditing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          className="tree-item-rename-input"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={handleRenameSubmit}
+          onKeyDown={handleKeyDown}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span className="tree-item-name">{node.name}</span>
+      )}
+      {isError && !isEditing && (
+        <span className="tree-item-badge tree-item-badge-error" title={node.errorMessage || 'Build error'}>
+          !
+        </span>
+      )}
+      {node.gated && !isError && !isEditing && (
+        <span className="tree-item-badge tree-item-badge-gated" title="Gated by rebuild gate">
+          ⏸
+        </span>
+      )}
+    </li>
+  );
 
   return (
     <>
-      <li
-        className={`tree-item ${isSelected ? 'selected' : ''} ${node.suppressed ? 'suppressed' : ''} ${node.gated ? 'gated' : ''} ${isError ? 'error' : ''} ${isDragOver ? 'drag-over' : ''}`}
-        style={{ paddingLeft: `${8 + level * 16}px` }}
-        onClick={() => onSelect(node.id)}
-        onMouseEnter={() => onHover(node.id)}
-        onMouseLeave={() => onHover(null)}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        {hasChildren ? (
-          <span
-            className="tree-expand-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleExpand(node.id);
-            }}
-          >
-            <Chevron expanded={isExpanded} />
-          </span>
-        ) : (
-          <span className="tree-expand-placeholder" />
-        )}
-        <NodeIcon type={node.type} />
-        <span className="tree-item-name">{node.name}</span>
-        {isError && (
-          <span className="tree-item-badge tree-item-badge-error" title={node.errorMessage || 'Build error'}>
-            !
-          </span>
-        )}
-        {node.gated && !isError && (
-          <span className="tree-item-badge tree-item-badge-gated" title="Gated by rebuild gate">
-            ⏸
-          </span>
-        )}
-      </li>
-      {/* Show rebuild gate bar after this item if it's the gate position */}
-      {showGateAfter && rebuildGate === node.id && (
+      {showContextMenu ? (
+        <ContextMenu.Root>
+          <ContextMenu.Trigger render={<div className="tree-item-context-trigger" />}>
+            {itemContent}
+          </ContextMenu.Trigger>
+          <ContextMenu.Portal>
+            <ContextMenu.Positioner className="context-menu-positioner">
+              <ContextMenu.Popup className="context-menu">
+                {contextMenuItems.map((item, index) => {
+                  if (item.separator) {
+                    return <ContextMenu.Separator key={`sep-${index}`} className="context-menu-separator" />;
+                  }
+                  return (
+                    <ContextMenu.Item
+                      key={item.id}
+                      className={`context-menu-item ${item.danger ? 'danger' : ''}`}
+                      disabled={item.disabled}
+                      onClick={item.onClick}
+                    >
+                      {item.icon && <span className="context-menu-icon">{item.icon}</span>}
+                      <span className="context-menu-label">{item.label}</span>
+                      {item.shortcut && <span className="context-menu-shortcut">{item.shortcut}</span>}
+                    </ContextMenu.Item>
+                  );
+                })}
+              </ContextMenu.Popup>
+            </ContextMenu.Positioner>
+          </ContextMenu.Portal>
+        </ContextMenu.Root>
+      ) : (
+        itemContent
+      )}
+      {/* Drop zone after this item (and gate bar if this is the gate position) */}
+      {showGateAfter && (
+        <>
+          {rebuildGate === node.id ? (
             <RebuildGateBar
               afterFeatureId={node.id}
-              onDragStart={() => {}}
+              onDragStart={onGateDragStart}
+              onDragEnd={onGateDragEnd}
             />
+          ) : (
+            <RebuildGateDropZone
+              afterFeatureId={node.id}
+              onDrop={onGateDrop}
+              isActive={isDraggingGate}
+            />
+          )}
+        </>
       )}
       {hasChildren && isExpanded && (
         <ul className="tree-children">
@@ -338,17 +482,32 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
                 selectedId={selectedId}
                 rebuildGate={rebuildGate}
                 showGateAfter={true}
+                editingId={editingId}
+                isDraggingGate={isDraggingGate}
                 onToggleExpand={onToggleExpand}
                 onSelect={onSelect}
                 onHover={onHover}
                 onGateDrop={onGateDrop}
+                onGateDragStart={onGateDragStart}
+                onGateDragEnd={onGateDragEnd}
+                onDoubleClick={onDoubleClick}
+                onRename={onRename}
+                onCancelRename={onCancelRename}
+                getContextMenuItems={getContextMenuItems}
               />
           ))}
-          {/* Show gate at end if no gate is set */}
-          {rebuildGate === null && (
+          {/* Show gate at end if no gate is set, otherwise show drop zone */}
+          {rebuildGate === null ? (
             <RebuildGateBar
               afterFeatureId={null}
-              onDragStart={() => {}}
+              onDragStart={onGateDragStart}
+              onDragEnd={onGateDragEnd}
+            />
+          ) : (
+            <RebuildGateDropZone
+              afterFeatureId={null}
+              onDrop={onGateDrop}
+              isActive={isDraggingGate}
             />
           )}
         </ul>
@@ -358,9 +517,23 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
 };
 
 const FeatureTree: React.FC = () => {
-  const { features, rebuildGate, setRebuildGate } = useDocument();
+  const { features, rebuildGate, setRebuildGate, deleteFeature, renameFeature } = useDocument();
   const { featureStatus, errors, bodies } = useKernel();
   const { selectedFeatureId, selectFeature, setHoveredFeature } = useSelection();
+  const { startSketch } = useSketch();
+  
+  // Rename state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Gate drag state - tracks when the rebuild gate is being dragged
+  const [isDraggingGate, setIsDraggingGate] = useState(false);
+  
+  // Delete confirmation state
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; name: string }>({
+    open: false,
+    id: '',
+    name: '',
+  });
 
   const errorsByFeature = useMemo(() => {
     const map: Record<string, string> = {};
@@ -417,6 +590,121 @@ const FeatureTree: React.FC = () => {
     setRebuildGate(afterId);
   }, [setRebuildGate]);
 
+  const handleDoubleClick = useCallback((id: string) => {
+    // Don't allow renaming folders or system nodes
+    if (id === 'part' || id === 'bodies' || id === 'origin' || id === 'xy' || id === 'xz' || id === 'yz') return;
+    setEditingId(id);
+  }, []);
+
+  const handleRename = useCallback((id: string, name: string) => {
+    renameFeature(id, name);
+    setEditingId(null);
+  }, [renameFeature]);
+
+  const handleCancelRename = useCallback(() => {
+    setEditingId(null);
+  }, []);
+
+  const handleDeleteConfirm = useCallback(() => {
+    if (deleteConfirm.id) {
+      deleteFeature(deleteConfirm.id);
+    }
+    setDeleteConfirm({ open: false, id: '', name: '' });
+  }, [deleteConfirm.id, deleteFeature]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteConfirm({ open: false, id: '', name: '' });
+  }, []);
+
+  // Build context menu items for a specific node
+  const getContextMenuItems = useCallback((nodeId: string, nodeType: string): ContextMenuItem[] => {
+    // Don't show context menu for folder nodes
+    if (nodeId === 'part' || nodeId === 'bodies') return [];
+
+    const items: ContextMenuItem[] = [];
+    const feature = features.find(f => f.id === nodeId);
+
+    if (nodeType === 'sketch') {
+      items.push({
+        id: 'edit',
+        label: 'Edit Sketch',
+        icon: (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M12 19l7-7 3 3-7 7-3-3z" />
+            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+          </svg>
+        ),
+        onClick: () => {
+          if (feature && feature.type === 'sketch') {
+            // TODO: Roll back rebuild gate before sketch, then roll forward after editing
+            startSketch((feature as { plane: string }).plane || 'xy');
+          }
+        },
+      });
+      items.push({ id: 'sep1', label: '', separator: true });
+    }
+
+    items.push({
+      id: 'rename',
+      label: 'Rename',
+      shortcut: 'F2',
+      onClick: () => {
+        setEditingId(nodeId);
+      },
+    });
+
+    // Only allow delete for non-system features
+    if (nodeType !== 'origin' && nodeType !== 'plane') {
+      items.push({ id: 'sep2', label: '', separator: true });
+      items.push({
+        id: 'delete',
+        label: 'Delete',
+        shortcut: '⌫',
+        danger: true,
+        onClick: () => {
+          if (feature) {
+            setDeleteConfirm({
+              open: true,
+              id: feature.id,
+              name: feature.name || feature.id,
+            });
+          }
+        },
+      });
+    }
+
+    return items;
+  }, [features, startSketch]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Delete key
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedFeatureId) {
+        const feature = features.find(f => f.id === selectedFeatureId);
+        if (feature && feature.type !== 'origin' && feature.type !== 'plane') {
+          e.preventDefault();
+          setDeleteConfirm({
+            open: true,
+            id: feature.id,
+            name: feature.name || feature.id,
+          });
+        }
+      }
+      // F2 for rename
+      if (e.key === 'F2' && selectedFeatureId) {
+        const feature = features.find(f => f.id === selectedFeatureId);
+        if (feature && feature.type !== 'origin' && feature.type !== 'plane') {
+          e.preventDefault();
+          setEditingId(selectedFeatureId);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedFeatureId, features]);
+
   return (
     <div className="feature-tree">
       <div className="panel-header">Features</div>
@@ -431,14 +719,33 @@ const FeatureTree: React.FC = () => {
               selectedId={selectedFeatureId}
               rebuildGate={rebuildGate}
               showGateAfter={false}
+              editingId={editingId}
+              isDraggingGate={isDraggingGate}
               onToggleExpand={handleToggleExpand}
               onSelect={handleSelect}
               onHover={handleHover}
               onGateDrop={handleGateDrop}
+              onGateDragStart={() => setIsDraggingGate(true)}
+              onGateDragEnd={() => setIsDraggingGate(false)}
+              onDoubleClick={handleDoubleClick}
+              onRename={handleRename}
+              onCancelRename={handleCancelRename}
+              getContextMenuItems={getContextMenuItems}
             />
           ))}
         </ul>
       </div>
+      
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        title="Delete Feature"
+        message={`Are you sure you want to delete "${deleteConfirm.name}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+      />
     </div>
   );
 };

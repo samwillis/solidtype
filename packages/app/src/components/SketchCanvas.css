@@ -23,18 +23,61 @@
   cursor: default;
 }
 
-.sketch-toolbar {
+/* Sketch actions overlay (accept/cancel) */
+.sketch-actions-overlay {
   position: absolute;
-  top: 8px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 4px;
-  padding: 4px;
-  background: var(--color-bg-light);
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(37, 37, 38, 0.85);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  pointer-events: auto; /* Override parent's pointer-events: none */
+}
+
+[data-theme="light"] .sketch-actions-overlay {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.sketch-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.1s, transform 0.1s;
+}
+
+.sketch-action-btn:active {
+  opacity: 0.9;
+}
+
+.sketch-action-accept {
+  background: var(--color-accent, #0078d4);
+  color: white;
+}
+
+.sketch-action-accept:hover {
+  background: var(--color-accent-hover, #1c8ae6);
+}
+
+.sketch-action-cancel {
+  background: var(--color-surface-alt, #383838);
+  color: var(--color-text, #ccc);
+  border: 1px solid var(--color-border);
+}
+
+.sketch-action-cancel:hover {
+  background: var(--color-hover, #3c3c3c);
 }
 
 .sketch-constraints-toolbar {
@@ -48,6 +91,7 @@
   border: 1px solid var(--color-border);
   border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  pointer-events: auto; /* Override parent's pointer-events: none */
 }
 
 .sketch-dimensions-panel {
@@ -60,6 +104,7 @@
   border: 1px solid var(--color-border);
   border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  pointer-events: auto; /* Override parent's pointer-events: none */
 }
 
 .sketch-dimensions-title {

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import Toolbar from './components/Toolbar';
-import ViewToolbar from './components/ViewToolbar';
 import ViewCube from './components/ViewCube';
 import Viewer from './components/Viewer';
 import FeatureTree from './components/FeatureTree';
@@ -70,7 +69,6 @@ const AppContent: React.FC = () => {
             <Viewer />
             <SketchCanvas />
             <ViewCube />
-            <ViewToolbar />
           </div>
         </main>
         
@@ -87,7 +85,7 @@ const AppContent: React.FC = () => {
       </div>
       
       {/* Status bar at bottom */}
-      <StatusBar status="Ready" />
+      <StatusBar />
     </div>
   );
 };

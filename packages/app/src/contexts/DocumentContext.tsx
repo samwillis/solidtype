@@ -47,6 +47,8 @@ interface DocumentContextValue {
     op?: 'add' | 'cut'
   ) => string;
   getFeatureById: (id: string) => Feature | null;
+  deleteFeature: (id: string) => boolean;
+  renameFeature: (id: string, name: string) => boolean;
 }
 
 // ============================================================================
@@ -177,6 +179,35 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
     return element ? parseFeature(element) : null;
   }, [doc]);
 
+  const deleteFeature = useCallback((id: string): boolean => {
+    const elements = getFeaturesArray(doc.features);
+    const index = elements.findIndex(el => el.getAttribute('id') === id);
+    if (index === -1) return false;
+    
+    // Don't allow deleting origin or default planes
+    const element = elements[index];
+    const type = element.getAttribute('type');
+    if (type === 'origin' || type === 'plane') {
+      return false;
+    }
+    
+    // If deleting the gated feature, clear the gate
+    if (rebuildGate === id) {
+      doc.state.set('rebuildGate', null);
+    }
+    
+    doc.features.delete(index, 1);
+    return true;
+  }, [doc, rebuildGate]);
+
+  const renameFeature = useCallback((id: string, name: string): boolean => {
+    const element = findFeature(doc.features, id);
+    if (!element) return false;
+    
+    element.setAttribute('name', name);
+    return true;
+  }, [doc]);
+
   const value: DocumentContextValue = {
     doc,
     features,
@@ -193,6 +224,8 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
     addExtrude,
     addRevolve,
     getFeatureById,
+    deleteFeature,
+    renameFeature,
   };
 
   return (

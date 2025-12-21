@@ -6,14 +6,6 @@ import ExtrudeDialog from './ExtrudeDialog';
 import RevolveDialog from './RevolveDialog';
 import './Toolbar.css';
 
-// Toolbar tool definition
-interface ToolItem {
-  id: string;
-  label: string;
-  icon: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-}
 
 // SVG Icons as simple components
 const SketchIcon = () => (
@@ -38,18 +30,10 @@ const RevolveIcon = () => (
   </svg>
 );
 
-const BoxIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
-    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-    <line x1="12" y1="22.08" x2="12" y2="12" />
-  </svg>
-);
 
-const CylinderIcon = () => (
+const SelectIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <ellipse cx="12" cy="5" rx="9" ry="3" />
-    <path d="M21 5v14a9 3 0 01-18 0V5" />
+    <path d="M5 3l14 10-6 2-4 6L5 3z" />
   </svg>
 );
 
@@ -65,9 +49,30 @@ const RectangleIcon = () => (
   </svg>
 );
 
-const PlaneIcon = () => (
+const ArcIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M4 4l16 8-16 8z" />
+    <path d="M5 19a14 14 0 0 1 14-14" />
+  </svg>
+);
+
+const CircleIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <circle cx="12" cy="12" r="9" />
+  </svg>
+);
+
+const ConstraintsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M4 12h16" />
+    <path d="M12 4v16" />
+    <circle cx="4" cy="12" r="2" fill="currentColor" />
+    <circle cx="20" cy="12" r="2" fill="currentColor" />
+  </svg>
+);
+
+const ChevronDownIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M6 9l6 6 6-6" />
   </svg>
 );
 
@@ -95,64 +100,8 @@ const AIIcon = () => (
   </svg>
 );
 
-// Tool groups
-const primitiveTools: ToolItem[] = [
-  { id: 'box', label: 'Box', icon: <BoxIcon /> },
-  { id: 'cylinder', label: 'Cylinder', icon: <CylinderIcon />, disabled: true },
-  { id: 'plane', label: 'Plane', icon: <PlaneIcon />, disabled: true },
-];
 
-interface ToolButtonProps {
-  tool: ToolItem;
-}
 
-const ToolButton: React.FC<ToolButtonProps> = ({ tool }) => {
-  // Disabled buttons just render without tooltip
-  if (tool.disabled) {
-    return (
-      <button
-        className="toolbar-button disabled"
-        onClick={tool.onClick}
-        disabled
-        aria-label={tool.label}
-      >
-        {tool.icon}
-      </button>
-    );
-  }
-
-  return (
-    <Tooltip.Root>
-      <Tooltip.Trigger
-        delay={300}
-        className="toolbar-button"
-        onClick={tool.onClick}
-        render={<button aria-label={tool.label} />}
-      >
-        {tool.icon}
-      </Tooltip.Trigger>
-      <Tooltip.Portal>
-        <Tooltip.Positioner side="bottom" sideOffset={6}>
-          <Tooltip.Popup className="toolbar-tooltip">
-            {tool.label}
-          </Tooltip.Popup>
-        </Tooltip.Positioner>
-      </Tooltip.Portal>
-    </Tooltip.Root>
-  );
-};
-
-interface ToolGroupProps {
-  tools: ToolItem[];
-}
-
-const ToolGroup: React.FC<ToolGroupProps> = ({ tools }) => (
-  <div className="toolbar-group">
-    {tools.map((tool) => (
-      <ToolButton key={tool.id} tool={tool} />
-    ))}
-  </div>
-);
 
 // Plane selector dialog
 interface PlaneSelectorProps {
@@ -188,25 +137,32 @@ const PlaneSelector: React.FC<PlaneSelectorProps> = ({ open, onClose, onSelect }
   );
 };
 
-// Finish Sketch button
-const FinishSketchIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-
 interface ToolbarProps {
   onToggleAIPanel?: () => void;
   aiPanelVisible?: boolean;
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) => {
-  const { mode, startSketch, finishSketch, addRectangle, setTool } = useSketch();
+  const { mode, startSketch, addRectangle, setTool, canApplyConstraint, applyConstraint } = useSketch();
   const { undo, redo, canUndo, canRedo, features, addExtrude, addRevolve } = useDocument();
   const [planeSelectorOpen, setPlaneSelectorOpen] = useState(false);
   const [extrudeDialogOpen, setExtrudeDialogOpen] = useState(false);
   const [revolveDialogOpen, setRevolveDialogOpen] = useState(false);
   const [selectedSketchId, setSelectedSketchId] = useState<string | null>(null);
+  const [constraintsDropdownOpen, setConstraintsDropdownOpen] = useState(false);
+  const constraintsDropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Close constraints dropdown when clicking outside
+  React.useEffect(() => {
+    if (!constraintsDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (constraintsDropdownRef.current && !constraintsDropdownRef.current.contains(e.target as Node)) {
+        setConstraintsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [constraintsDropdownOpen]);
 
   // Get available sketches for extrusion
   const sketches = useMemo(() => {
@@ -220,10 +176,6 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
   const handlePlaneSelect = (planeId: string) => {
     startSketch(planeId);
     setPlaneSelectorOpen(false);
-  };
-
-  const handleFinishSketch = () => {
-    finishSketch();
   };
 
   const handleAddRectangle = () => {
@@ -351,22 +303,22 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
             <Tooltip.Root>
               <Tooltip.Trigger
                 delay={300}
-                className="toolbar-button toolbar-button-finish"
-                onClick={handleFinishSketch}
-                render={<button aria-label="Finish Sketch" />}
+                className={`toolbar-button ${mode.activeTool === 'select' ? 'active' : ''}`}
+                onClick={() => setTool('select')}
+                render={<button aria-label="Select" />}
               >
-                <FinishSketchIcon />
+                <SelectIcon />
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Positioner side="bottom" sideOffset={6}>
-                  <Tooltip.Popup className="toolbar-tooltip">Finish Sketch</Tooltip.Popup>
+                  <Tooltip.Popup className="toolbar-tooltip">Select</Tooltip.Popup>
                 </Tooltip.Positioner>
               </Tooltip.Portal>
             </Tooltip.Root>
             <Tooltip.Root>
               <Tooltip.Trigger
                 delay={300}
-                className="toolbar-button"
+                className={`toolbar-button ${mode.activeTool === 'line' ? 'active' : ''}`}
                 onClick={() => setTool('line')}
                 render={<button aria-label="Line" />}
               >
@@ -375,6 +327,36 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
               <Tooltip.Portal>
                 <Tooltip.Positioner side="bottom" sideOffset={6}>
                   <Tooltip.Popup className="toolbar-tooltip">Line</Tooltip.Popup>
+                </Tooltip.Positioner>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+            <Tooltip.Root>
+              <Tooltip.Trigger
+                delay={300}
+                className={`toolbar-button ${mode.activeTool === 'arc' ? 'active' : ''}`}
+                onClick={() => setTool('arc')}
+                render={<button aria-label="Arc" />}
+              >
+                <ArcIcon />
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Positioner side="bottom" sideOffset={6}>
+                  <Tooltip.Popup className="toolbar-tooltip">Arc</Tooltip.Popup>
+                </Tooltip.Positioner>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+            <Tooltip.Root>
+              <Tooltip.Trigger
+                delay={300}
+                className={`toolbar-button ${mode.activeTool === 'circle' ? 'active' : ''}`}
+                onClick={() => setTool('circle')}
+                render={<button aria-label="Circle" />}
+              >
+                <CircleIcon />
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Positioner side="bottom" sideOffset={6}>
+                  <Tooltip.Popup className="toolbar-tooltip">Circle</Tooltip.Popup>
                 </Tooltip.Positioner>
               </Tooltip.Portal>
             </Tooltip.Root>
@@ -393,6 +375,65 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
                 </Tooltip.Positioner>
               </Tooltip.Portal>
             </Tooltip.Root>
+
+            {/* Constraints dropdown */}
+            <div className="toolbar-dropdown-container" ref={constraintsDropdownRef}>
+              <button
+                className={`toolbar-button toolbar-dropdown-button ${constraintsDropdownOpen ? 'active' : ''}`}
+                onClick={() => setConstraintsDropdownOpen(!constraintsDropdownOpen)}
+                aria-label="Constraints"
+                title="Constraints"
+              >
+                <ConstraintsIcon />
+                <ChevronDownIcon />
+              </button>
+              {constraintsDropdownOpen && (
+                <div className="toolbar-dropdown-menu">
+                  <button
+                    className="toolbar-dropdown-item"
+                    onClick={() => { applyConstraint('horizontal'); setConstraintsDropdownOpen(false); }}
+                    disabled={!canApplyConstraint('horizontal')}
+                  >
+                    <span className="toolbar-dropdown-key">H</span> Horizontal
+                  </button>
+                  <button
+                    className="toolbar-dropdown-item"
+                    onClick={() => { applyConstraint('vertical'); setConstraintsDropdownOpen(false); }}
+                    disabled={!canApplyConstraint('vertical')}
+                  >
+                    <span className="toolbar-dropdown-key">V</span> Vertical
+                  </button>
+                  <button
+                    className="toolbar-dropdown-item"
+                    onClick={() => { applyConstraint('coincident'); setConstraintsDropdownOpen(false); }}
+                    disabled={!canApplyConstraint('coincident')}
+                  >
+                    <span className="toolbar-dropdown-key">C</span> Coincident
+                  </button>
+                  <button
+                    className="toolbar-dropdown-item"
+                    onClick={() => { applyConstraint('fixed'); setConstraintsDropdownOpen(false); }}
+                    disabled={!canApplyConstraint('fixed')}
+                  >
+                    <span className="toolbar-dropdown-key">F</span> Fixed
+                  </button>
+                  <button
+                    className="toolbar-dropdown-item"
+                    onClick={() => { applyConstraint('distance'); setConstraintsDropdownOpen(false); }}
+                    disabled={!canApplyConstraint('distance')}
+                  >
+                    <span className="toolbar-dropdown-key">D</span> Distance
+                  </button>
+                  <button
+                    className="toolbar-dropdown-item"
+                    onClick={() => { applyConstraint('angle'); setConstraintsDropdownOpen(false); }}
+                    disabled={!canApplyConstraint('angle')}
+                  >
+                    <span className="toolbar-dropdown-key">∠</span> Angle
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <>
@@ -451,9 +492,6 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
             </Tooltip.Portal>
           </Tooltip.Root>
         </div>
-
-        <Separator orientation="vertical" className="toolbar-separator" />
-        <ToolGroup tools={primitiveTools} />
 
         {/* Spacer to push AI button to right */}
         <div className="toolbar-spacer" />

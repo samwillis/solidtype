@@ -82,7 +82,7 @@ describe('App', () => {
     // Check for some toolbar buttons by aria-label
     expect(screen.getByLabelText('New Sketch')).toBeInTheDocument();
     expect(screen.getByLabelText('Extrude')).toBeInTheDocument();
-    expect(screen.getByLabelText('Box')).toBeInTheDocument();
+    expect(screen.getByLabelText('Revolve')).toBeInTheDocument();
   });
 
   it('shows feature tree with Yjs data', () => {

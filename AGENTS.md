@@ -53,25 +53,67 @@ If you find yourself wanting to put core geometry or topology logic into `viewer
 
 ---
 
-## 3. Coding Style Guide (TypeScript)
+## 3. Preferred Libraries & Tooling
 
-### 3.1 General
+When building UI and application logic in the viewer/app package, use these approved libraries:
+
+### 3.1 UI Components – Base UI
+
+Use **[Base UI](https://base-ui.com/react/components)** for all UI components wherever possible.
+
+- Base UI is a headless component library (similar to Radix UI) that provides unstyled, accessible primitives.
+- Available components include: Dialog, Menu, Context Menu, Popover, Tooltip, Select, Tabs, Accordion, Checkbox, Radio, Switch, Slider, Progress, Toast, and many more.
+- Prefer Base UI over building custom components from scratch.
+- Style components using CSS (the project already uses `.css` files alongside components).
+
+### 3.2 Schemas & Validation – Zod
+
+Use **[Zod](https://zod.dev)** for runtime schema validation and type inference.
+
+- Define schemas for data structures that need validation (e.g., user input, API responses, file formats).
+- Use `z.infer<typeof schema>` to derive TypeScript types from Zod schemas.
+- Prefer Zod over manual validation logic.
+
+### 3.3 Tanstack Libraries
+
+Prefer **[Tanstack](https://tanstack.com)** libraries for common UI patterns:
+
+- **Tanstack Form** – for form state management and validation.
+- **Tanstack Table** – for data tables with sorting, filtering, and pagination.
+- **Tanstack Virtual** – for virtualized/windowed scrolling of large lists.
+- **[Tanstack AI](https://tanstack.com/ai/latest)** – for AI integrations with a unified interface across providers (OpenAI, Anthropic, Ollama, Gemini). Type-safe with full tool/function calling support.
+
+These libraries are headless and integrate well with Base UI components.
+
+### 3.4 When to Add New Dependencies
+
+Before adding a dependency not listed here:
+
+1. Check if an approved library already covers the use case.
+2. Prefer small, focused libraries over large frameworks.
+3. Add a comment in the code explaining why the dependency is needed.
+
+---
+
+## 4. Coding Style Guide (TypeScript)
+
+### 4.1 General
 
 - Use **TypeScript**, strict mode (`strict: true`).
 - Prefer **ESM** imports/exports.
 - Keep functions **small**, **pure**, and **single-purpose** wherever possible.
 - Don't introduce new runtime dependencies unless:
-  - They're already approved (e.g. Vitest, three.js in viewer),
+  - They're already approved (see section 3 for preferred libraries),
   - Or they clearly solve a broad, non-trivial problem (and you add a short comment in the code explaining why).
 
-### 3.2 Types & Data
+### 4.2 Types & Data
 
 - Use **explicit types** for public functions and exported symbols.
 - Use **branded IDs** for handles (e.g. `type FaceId = number & { __brand: "FaceId" };`).
 - Avoid `any`. If you must use it temporarily, leave a `// TODO(agent): remove any` comment.
 - Prefer **struct-of-arrays** for performance-critical tables in the core (as per `ARCHITECTURE.md`).
 
-### 3.3 Functions & Errors
+### 4.3 Functions & Errors
 
 - For internal helpers, throw `Error` only for truly exceptional situations.
 - For modeling operations, prefer result types like:
@@ -83,7 +125,7 @@ If you find yourself wanting to put core geometry or topology logic into `viewer
 
   * `computeFaceNormal`, not `doFaceStuff`.
 
-### 3.4 Style & Formatting
+### 4.4 Style & Formatting
 
 * Honour the repo's existing formatting (Prettier/ESLint configs if present).
 * Use **camelCase** for variables/functions, **PascalCase** for types/classes.
@@ -92,7 +134,7 @@ If you find yourself wanting to put core geometry or topology logic into `viewer
 
 ---
 
-## 4. Testing Expectations
+## 5. Testing Expectations
 
 SolidType is TDD-oriented:
 
@@ -108,7 +150,7 @@ Guidelines:
 
 ---
 
-## 5. How to Work With the Plan
+## 6. How to Work With the Plan
 
 `PLAN.md` is written in phases (Phase 0, Phase 1, …).
 
@@ -136,7 +178,7 @@ When implementing:
 
 ---
 
-## 6. Things You Should Not Do
+## 7. Things You Should Not Do
 
 * Do **not**:
 
@@ -150,7 +192,7 @@ If you need functionality that doesn't fit these guidelines, leave a TODO and im
 
 ---
 
-## 7. Summary
+## 8. Summary
 
 * Read `OVERVIEW.md`, `ARCHITECTURE.md`, and `/plan/*` first.
 * Respect package boundaries and layer responsibilities.

@@ -11,7 +11,7 @@ import { useDocument } from '../contexts/DocumentContext';
 import { useSelection } from '../contexts/SelectionContext';
 import { useViewer } from '../contexts/ViewerContext';
 import { findFeature, getSketchData, setSketchData } from '../document/featureHelpers';
-import type { NewSketchConstraint, SketchConstraint, SketchData, SketchLine } from '../types/document';
+import type { SketchConstraint, SketchData, SketchLine } from '../types/document';
 import './SketchCanvas.css';
 
 // Point merge tolerance in sketch units (mm)
@@ -33,10 +33,15 @@ const SketchCanvas: React.FC = () => {
     addArc,
     addRectangle,
     findNearbyPoint,
-    setTool,
-    addConstraint,
     setSketchMousePos,
     setPreviewLine,
+    finishSketch,
+    cancelSketch,
+    selectedPoints,
+    selectedLines,
+    togglePointSelection,
+    toggleLineSelection,
+    clearSelection,
   } = useSketch();
   const { doc, units } = useDocument();
   const { highlightedSketchId, highlightedEntityIds } = useSelection();
@@ -90,9 +95,6 @@ const SketchCanvas: React.FC = () => {
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingViewRef = useRef(false);
   const DRAG_THRESHOLD = 5; // pixels of movement to consider it a drag
-
-  const [selectedPoints, setSelectedPoints] = useState<Set<string>>(() => new Set());
-  const [selectedLines, setSelectedLines] = useState<Set<string>>(() => new Set());
 
   const updateConstraintValue = useCallback((constraintId: string, value: number) => {
     if (!mode.sketchId) return;
@@ -371,30 +373,17 @@ const SketchCanvas: React.FC = () => {
         const tol = POINT_MERGE_TOLERANCE_MM;
         const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, tol);
         if (nearbyPoint) {
-          setSelectedPoints((prev) => {
-            const next = new Set(prev);
-            if (next.has(nearbyPoint.id)) next.delete(nearbyPoint.id);
-            else next.add(nearbyPoint.id);
-            return next;
-          });
-          setSelectedLines(new Set());
+          togglePointSelection(nearbyPoint.id);
           return;
         }
 
         const nearbyLine = findNearbyLine(sketch, snappedPos.x, snappedPos.y, tol);
         if (nearbyLine) {
-          setSelectedLines((prev) => {
-            const next = new Set(prev);
-            if (next.has(nearbyLine.id)) next.delete(nearbyLine.id);
-            else next.add(nearbyLine.id);
-            return next;
-          });
-          setSelectedPoints(new Set());
+          toggleLineSelection(nearbyLine.id);
           return;
         }
 
-        setSelectedPoints(new Set());
-        setSelectedLines(new Set());
+        clearSelection();
         return;
       }
 
@@ -576,123 +565,27 @@ const SketchCanvas: React.FC = () => {
         ref={canvasRef}
         className="sketch-canvas"
       />
-      <div className="sketch-toolbar">
-        <SketchToolButton 
-          icon="cursor" 
-          active={mode.activeTool === 'select'}
-          onClick={() => setTool('select')}
-          label="Select"
-        />
-        <SketchToolButton 
-          icon="line" 
-          active={mode.activeTool === 'line'}
-          onClick={() => setTool('line')}
-          label="Line"
-        />
-        <SketchToolButton
-          icon="arc"
-          active={mode.activeTool === 'arc'}
-          onClick={() => setTool('arc')}
-          label="Arc"
-        />
-        <SketchToolButton
-          icon="circle"
-          active={mode.activeTool === 'circle'}
-          onClick={() => setTool('circle')}
-          label="Circle"
-        />
-      </div>
-
-      <div className="sketch-constraints-toolbar">
-        <button
-          className="sketch-constraint-btn"
-          onClick={() => {
-            const constraint = buildConstraintFromSelection('horizontal', selectedPoints, selectedLines, getSketch());
-            if (constraint) {
-              addConstraint(constraint);
-              setSelectedPoints(new Set());
-              setSelectedLines(new Set());
-            }
-          }}
-          disabled={!canBuildConstraint('horizontal', selectedPoints, selectedLines, getSketch())}
-          title="Horizontal"
+      <div className="sketch-actions-overlay">
+        <button 
+          className="sketch-action-btn sketch-action-accept"
+          onClick={finishSketch}
+          title="Accept Sketch (Enter)"
         >
-          H
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Accept
         </button>
-        <button
-          className="sketch-constraint-btn"
-          onClick={() => {
-            const constraint = buildConstraintFromSelection('vertical', selectedPoints, selectedLines, getSketch());
-            if (constraint) {
-              addConstraint(constraint);
-              setSelectedPoints(new Set());
-              setSelectedLines(new Set());
-            }
-          }}
-          disabled={!canBuildConstraint('vertical', selectedPoints, selectedLines, getSketch())}
-          title="Vertical"
+        <button 
+          className="sketch-action-btn sketch-action-cancel"
+          onClick={cancelSketch}
+          title="Cancel Sketch (Escape)"
         >
-          V
-        </button>
-        <button
-          className="sketch-constraint-btn"
-          onClick={() => {
-            const constraint = buildConstraintFromSelection('coincident', selectedPoints, selectedLines, getSketch());
-            if (constraint) {
-              addConstraint(constraint);
-              setSelectedPoints(new Set());
-              setSelectedLines(new Set());
-            }
-          }}
-          disabled={!canBuildConstraint('coincident', selectedPoints, selectedLines, getSketch())}
-          title="Coincident"
-        >
-          C
-        </button>
-        <button
-          className="sketch-constraint-btn"
-          onClick={() => {
-            const constraint = buildConstraintFromSelection('fixed', selectedPoints, selectedLines, getSketch());
-            if (constraint) {
-              addConstraint(constraint);
-              setSelectedPoints(new Set());
-              setSelectedLines(new Set());
-            }
-          }}
-          disabled={!canBuildConstraint('fixed', selectedPoints, selectedLines, getSketch())}
-          title="Fixed"
-        >
-          F
-        </button>
-        <button
-          className="sketch-constraint-btn"
-          onClick={() => {
-            const sketch = getSketch();
-            const constraint = buildDimensionConstraintFromSelection('distance', selectedPoints, selectedLines, sketch);
-            if (!constraint) return;
-            addConstraint(constraint);
-            setSelectedPoints(new Set());
-            setSelectedLines(new Set());
-          }}
-          disabled={!canBuildConstraint('distance', selectedPoints, selectedLines, getSketch())}
-          title="Distance"
-        >
-          D
-        </button>
-        <button
-          className="sketch-constraint-btn"
-          onClick={() => {
-            const sketch = getSketch();
-            const constraint = buildDimensionConstraintFromSelection('angle', selectedPoints, selectedLines, sketch);
-            if (!constraint) return;
-            addConstraint(constraint);
-            setSelectedPoints(new Set());
-            setSelectedLines(new Set());
-          }}
-          disabled={!canBuildConstraint('angle', selectedPoints, selectedLines, getSketch())}
-          title="Angle"
-        >
-          ∠
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+          Cancel
         </button>
       </div>
 
@@ -743,47 +636,6 @@ const SketchCanvas: React.FC = () => {
 // ============================================================================
 // Helper Components
 // ============================================================================
-
-interface SketchToolButtonProps {
-  icon: string;
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}
-
-const SketchToolButton: React.FC<SketchToolButtonProps> = ({
-  icon,
-  active,
-  onClick,
-  label,
-}) => (
-  <button
-    className={`sketch-tool-btn ${active ? 'active' : ''}`}
-    onClick={onClick}
-    title={label}
-  >
-    {icon === 'cursor' && (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M3 3l7 19 2-7 7-2z" />
-      </svg>
-    )}
-    {icon === 'line' && (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <line x1="5" y1="19" x2="19" y2="5" />
-      </svg>
-    )}
-    {icon === 'arc' && (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M6 18a8 8 0 0112 0" />
-      </svg>
-    )}
-    {icon === 'circle' && (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="12" cy="12" r="7" />
-      </svg>
-    )}
-  </button>
-);
 
 // ============================================================================
 // Drawing Helpers
@@ -900,136 +752,6 @@ function isCounterClockwise(
   const v2x = third.x - start.x;
   const v2y = third.y - start.y;
   return v1x * v2y - v1y * v2x > 0;
-}
-
-function canBuildConstraint(
-  type: SketchConstraint['type'],
-  selectedPoints: Set<string>,
-  selectedLines: Set<string>,
-  sketch: SketchData | null
-): boolean {
-  if (!sketch) return false;
-  const points = Array.from(selectedPoints);
-  const lines = Array.from(selectedLines);
-
-  switch (type) {
-    case 'horizontal':
-    case 'vertical':
-      return points.length === 2 || lines.length === 1;
-    case 'coincident':
-      return points.length === 2;
-    case 'fixed':
-      return points.length === 1;
-    case 'distance':
-      return points.length === 2 || lines.length === 1;
-    case 'angle':
-      return lines.length === 2;
-    default:
-      return false;
-  }
-}
-
-function buildConstraintFromSelection(
-  type: SketchConstraint['type'],
-  selectedPoints: Set<string>,
-  selectedLines: Set<string>,
-  sketch: SketchData | null
-): NewSketchConstraint | null {
-  if (!sketch) return null;
-  const points = Array.from(selectedPoints);
-  const lines = Array.from(selectedLines);
-
-  if (type === 'fixed') {
-    if (points.length !== 1) return null;
-    return { type: 'fixed', point: points[0] };
-  }
-
-  if (type === 'coincident') {
-    if (points.length !== 2) return null;
-    return { type: 'coincident', points: [points[0], points[1]] };
-  }
-
-  if (type === 'horizontal' || type === 'vertical') {
-    if (points.length === 2) {
-      return { type, points: [points[0], points[1]] };
-    }
-    if (lines.length === 1) {
-      const line = sketch.entities.find((e) => e.type === 'line' && e.id === lines[0]) as SketchLine | undefined;
-      if (!line) return null;
-      return { type, points: [line.start, line.end] };
-    }
-    return null;
-  }
-
-  return null;
-}
-
-function buildDimensionConstraintFromSelection(
-  type: 'distance' | 'angle',
-  selectedPoints: Set<string>,
-  selectedLines: Set<string>,
-  sketch: SketchData | null
-): NewSketchConstraint | null {
-  if (!sketch) return null;
-  const points = Array.from(selectedPoints);
-  const lines = Array.from(selectedLines);
-
-  if (type === 'distance') {
-    let p1: string | null = null;
-    let p2: string | null = null;
-
-    if (points.length === 2) {
-      p1 = points[0];
-      p2 = points[1];
-    } else if (lines.length === 1) {
-      const line = sketch.entities.find((e) => e.type === 'line' && e.id === lines[0]) as SketchLine | undefined;
-      if (!line) return null;
-      p1 = line.start;
-      p2 = line.end;
-    } else {
-      return null;
-    }
-
-    const a = sketch.points.find((p) => p.id === p1);
-    const b = sketch.points.find((p) => p.id === p2);
-    if (!a || !b) return null;
-    const current = Math.hypot(b.x - a.x, b.y - a.y);
-    const raw = window.prompt('Distance', String(Number.isFinite(current) ? current.toFixed(3) : 10));
-    if (raw === null) return null;
-    const value = parseFloat(raw);
-    if (!Number.isFinite(value) || value <= 0) return null;
-    return { type: 'distance', points: [p1, p2], value };
-  }
-
-  // angle
-  if (lines.length !== 2) return null;
-  const l1 = sketch.entities.find((e) => e.type === 'line' && e.id === lines[0]) as SketchLine | undefined;
-  const l2 = sketch.entities.find((e) => e.type === 'line' && e.id === lines[1]) as SketchLine | undefined;
-  if (!l1 || !l2) return null;
-
-  const a0 = sketch.points.find((p) => p.id === l1.start);
-  const a1 = sketch.points.find((p) => p.id === l1.end);
-  const b0 = sketch.points.find((p) => p.id === l2.start);
-  const b1 = sketch.points.find((p) => p.id === l2.end);
-  if (!a0 || !a1 || !b0 || !b1) return null;
-
-  const ax = a1.x - a0.x;
-  const ay = a1.y - a0.y;
-  const bx = b1.x - b0.x;
-  const by = b1.y - b0.y;
-  const aLen = Math.hypot(ax, ay);
-  const bLen = Math.hypot(bx, by);
-  if (aLen === 0 || bLen === 0) return null;
-
-  const dot = (ax * bx + ay * by) / (aLen * bLen);
-  const clamped = Math.max(-1, Math.min(1, dot));
-  const currentDeg = (Math.acos(clamped) * 180) / Math.PI;
-  const raw = window.prompt('Angle (deg)', String(Number.isFinite(currentDeg) ? currentDeg.toFixed(2) : 90));
-  if (raw === null) return null;
-  const value = parseFloat(raw);
-  if (!Number.isFinite(value) || value <= 0) return null;
-
-  return { type: 'angle', lines: [l1.id, l2.id], value };
 }
 
 function findNearbyLine(

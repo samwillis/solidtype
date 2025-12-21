@@ -19,7 +19,10 @@ import {
   getSketchData,
   setSketchData,
 } from '../document/featureHelpers';
-import type { NewSketchConstraint, SketchPoint } from '../types/document';
+import type { NewSketchConstraint, SketchData, SketchLine, SketchPoint } from '../types/document';
+
+// Constraint types that can be applied
+export type ConstraintType = 'horizontal' | 'vertical' | 'coincident' | 'fixed' | 'distance' | 'angle';
 
 // ============================================================================
 // Types
@@ -57,6 +60,7 @@ interface SketchContextValue {
   setPreviewLine: (line: SketchPreviewLine | null) => void;
   startSketch: (planeId: string) => void;
   finishSketch: () => void;
+  cancelSketch: () => void;
   setTool: (tool: SketchTool) => void;
   addPoint: (x: number, y: number) => string | null;
   addLine: (startId: string, endId: string) => string | null;
@@ -69,6 +73,20 @@ interface SketchContextValue {
   /** Draw a rectangle at the given center with width and height */
   addRectangle: (centerX: number, centerY: number, width: number, height: number) => void;
   addConstraint: (constraint: NewSketchConstraint) => string | null;
+  
+  // Selection state for constraints
+  selectedPoints: Set<string>;
+  selectedLines: Set<string>;
+  setSelectedPoints: React.Dispatch<React.SetStateAction<Set<string>>>;
+  setSelectedLines: React.Dispatch<React.SetStateAction<Set<string>>>;
+  togglePointSelection: (pointId: string) => void;
+  toggleLineSelection: (lineId: string) => void;
+  clearSelection: () => void;
+  
+  // Constraint helpers
+  canApplyConstraint: (type: ConstraintType) => boolean;
+  applyConstraint: (type: ConstraintType) => void;
+  getSketchData: () => SketchData | null;
 }
 
 // ============================================================================
@@ -143,6 +161,17 @@ export function SketchProvider({ children }: SketchProviderProps) {
   }, [addSketch, actions, state.currentView]);
 
   const finishSketch = useCallback(() => {
+    setMode({
+      active: false,
+      sketchId: null,
+      planeId: null,
+      activeTool: 'line',
+      tempPoints: [],
+    });
+  }, []);
+
+  const cancelSketch = useCallback(() => {
+    // TODO: Undo changes made during sketch mode
     setMode({
       active: false,
       sketchId: null,
@@ -253,6 +282,131 @@ export function SketchProvider({ children }: SketchProviderProps) {
     return addConstraintToSketch(sketch, constraint);
   }, [getSketchElement]);
 
+  // Selection state for constraints
+  const [selectedPoints, setSelectedPoints] = useState<Set<string>>(() => new Set());
+  const [selectedLines, setSelectedLines] = useState<Set<string>>(() => new Set());
+
+  const togglePointSelection = useCallback((pointId: string) => {
+    setSelectedPoints((prev) => {
+      const next = new Set(prev);
+      if (next.has(pointId)) {
+        next.delete(pointId);
+      } else {
+        next.add(pointId);
+      }
+      return next;
+    });
+    setSelectedLines(new Set());
+  }, []);
+
+  const toggleLineSelection = useCallback((lineId: string) => {
+    setSelectedLines((prev) => {
+      const next = new Set(prev);
+      if (next.has(lineId)) {
+        next.delete(lineId);
+      } else {
+        next.add(lineId);
+      }
+      return next;
+    });
+    setSelectedPoints(new Set());
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedPoints(new Set());
+    setSelectedLines(new Set());
+  }, []);
+
+  // Get current sketch data
+  const getSketchDataFn = useCallback((): SketchData | null => {
+    const sketch = getSketchElement();
+    if (!sketch) return null;
+    return getSketchData(sketch);
+  }, [getSketchElement]);
+
+  // Check if a constraint can be applied with current selection
+  const canApplyConstraint = useCallback((type: ConstraintType): boolean => {
+    const sketch = getSketchDataFn();
+    if (!sketch) return false;
+    const points = Array.from(selectedPoints);
+    const lines = Array.from(selectedLines);
+
+    switch (type) {
+      case 'horizontal':
+      case 'vertical':
+        return points.length === 2 || lines.length === 1;
+      case 'coincident':
+        return points.length === 2;
+      case 'fixed':
+        return points.length === 1;
+      case 'distance':
+        return points.length === 2 || lines.length === 1;
+      case 'angle':
+        return lines.length === 2;
+      default:
+        return false;
+    }
+  }, [getSketchDataFn, selectedPoints, selectedLines]);
+
+  // Build and apply a constraint
+  const applyConstraint = useCallback((type: ConstraintType) => {
+    const sketch = getSketchDataFn();
+    if (!sketch) return;
+    
+    const points = Array.from(selectedPoints);
+    const lines = Array.from(selectedLines);
+    let constraint: NewSketchConstraint | null = null;
+
+    if (type === 'fixed') {
+      if (points.length !== 1) return;
+      constraint = { type: 'fixed', point: points[0] };
+    } else if (type === 'coincident') {
+      if (points.length !== 2) return;
+      constraint = { type: 'coincident', points: [points[0], points[1]] };
+    } else if (type === 'horizontal' || type === 'vertical') {
+      if (points.length === 2) {
+        constraint = { type, points: [points[0], points[1]] };
+      } else if (lines.length === 1) {
+        const line = sketch.entities.find((e) => e.type === 'line' && e.id === lines[0]) as SketchLine | undefined;
+        if (!line) return;
+        constraint = { type, points: [line.start, line.end] };
+      }
+    } else if (type === 'distance') {
+      if (points.length === 2) {
+        // Calculate current distance
+        const p1 = sketch.points.find((p) => p.id === points[0]);
+        const p2 = sketch.points.find((p) => p.id === points[1]);
+        if (!p1 || !p2) return;
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        constraint = { type: 'distance', points: [points[0], points[1]], value: dist };
+      } else if (lines.length === 1) {
+        const line = sketch.entities.find((e) => e.type === 'line' && e.id === lines[0]) as SketchLine | undefined;
+        if (!line) return;
+        const p1 = sketch.points.find((p) => p.id === line.start);
+        const p2 = sketch.points.find((p) => p.id === line.end);
+        if (!p1 || !p2) return;
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        constraint = { type: 'distance', points: [line.start, line.end], value: dist };
+      }
+    } else if (type === 'angle') {
+      if (lines.length !== 2) return;
+      const line1 = sketch.entities.find((e) => e.type === 'line' && e.id === lines[0]) as SketchLine | undefined;
+      const line2 = sketch.entities.find((e) => e.type === 'line' && e.id === lines[1]) as SketchLine | undefined;
+      if (!line1 || !line2) return;
+      // Default to 90 degrees
+      constraint = { type: 'angle', lines: [lines[0], lines[1]], value: 90 };
+    }
+
+    if (constraint) {
+      addConstraint(constraint);
+      clearSelection();
+    }
+  }, [getSketchDataFn, selectedPoints, selectedLines, addConstraint, clearSelection]);
+
   const value: SketchContextValue = {
     mode,
     sketchMousePos,
@@ -261,6 +415,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     setPreviewLine,
     startSketch,
     finishSketch,
+    cancelSketch,
     setTool,
     addPoint,
     addLine,
@@ -272,6 +427,18 @@ export function SketchProvider({ children }: SketchProviderProps) {
     findNearbyPoint,
     addRectangle,
     addConstraint,
+    // Selection state
+    selectedPoints,
+    selectedLines,
+    setSelectedPoints,
+    setSelectedLines,
+    togglePointSelection,
+    toggleLineSelection,
+    clearSelection,
+    // Constraint helpers
+    canApplyConstraint,
+    applyConstraint,
+    getSketchData: getSketchDataFn,
   };
 
   return (

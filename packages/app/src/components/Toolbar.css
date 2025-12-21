@@ -1,12 +1,13 @@
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 8px;
+  padding: 8px 16px;
   background: var(--color-bg-light);
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
   user-select: none;
+  min-height: 44px;
 }
 
 .toolbar-logo {
@@ -37,14 +38,14 @@
 
 .toolbar-group {
   display: flex;
-  gap: 2px;
+  gap: 6px;
 }
 
 .toolbar-separator {
   width: 1px;
-  height: 18px;
+  height: 24px;
   background: var(--color-border);
-  margin: 0 6px;
+  margin: 0 10px;
 }
 
 .toolbar-spacer {
@@ -55,8 +56,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   background: transparent;
   border: none;
@@ -210,4 +211,83 @@
 
 .plane-selector-cancel:hover {
   background: var(--color-bg-hover);
+}
+
+/* Dropdown styles */
+.toolbar-dropdown-container {
+  position: relative;
+}
+
+.toolbar-dropdown-button {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+  width: auto;
+}
+
+.toolbar-dropdown-button svg:last-child {
+  opacity: 0.6;
+}
+
+.toolbar-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 140px;
+  background: var(--color-surface, #2d2d2d);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  padding: 4px;
+}
+
+.toolbar-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.toolbar-dropdown-item:hover:not(:disabled) {
+  background: var(--color-hover, #3c3c3c);
+}
+
+.toolbar-dropdown-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolbar-dropdown-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: var(--color-surface-alt, #383838);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+[data-theme="light"] .toolbar-dropdown-menu {
+  background: white;
+}
+
+[data-theme="light"] .toolbar-dropdown-item:hover:not(:disabled) {
+  background: #f0f0f0;
+}
+
+[data-theme="light"] .toolbar-dropdown-key {
+  background: #e8e8e8;
 }

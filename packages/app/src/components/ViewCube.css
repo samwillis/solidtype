@@ -1,12 +1,12 @@
 .view-cube {
-  width: 130px;
-  height: 130px;
+  width: 100px;
+  height: 100px;
   position: absolute;
-  bottom: 44px;
-  right: -7px;
+  bottom: 16px;
+  right: 20px;
   z-index: 10;
   border-radius: 4px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .view-cube-tooltip {
