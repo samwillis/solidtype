@@ -35,8 +35,26 @@ export interface SketchModeState {
   tempPoints: { x: number; y: number }[];
 }
 
+/** Mouse position in sketch coordinates */
+export interface SketchMousePos {
+  x: number;
+  y: number;
+}
+
+/** Preview line for draft rendering in 3D */
+export interface SketchPreviewLine {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+}
+
 interface SketchContextValue {
   mode: SketchModeState;
+  /** Current mouse position in sketch coordinates (for status bar display) */
+  sketchMousePos: SketchMousePos | null;
+  setSketchMousePos: (pos: SketchMousePos | null) => void;
+  /** Preview line for draft rendering (set by SketchCanvas, rendered by Viewer) */
+  previewLine: SketchPreviewLine | null;
+  setPreviewLine: (line: SketchPreviewLine | null) => void;
   startSketch: (planeId: string) => void;
   finishSketch: () => void;
   setTool: (tool: SketchTool) => void;
@@ -78,6 +96,12 @@ export function SketchProvider({ children }: SketchProviderProps) {
     activeTool: 'line',
     tempPoints: [],
   });
+  
+  // Mouse position in sketch coordinates (shared with StatusBar)
+  const [sketchMousePos, setSketchMousePos] = useState<SketchMousePos | null>(null);
+  
+  // Preview line for draft rendering (shared with Viewer)
+  const [previewLine, setPreviewLine] = useState<SketchPreviewLine | null>(null);
 
   const startSketch = useCallback((planeId: string) => {
     // Create new sketch in Yjs
@@ -85,13 +109,16 @@ export function SketchProvider({ children }: SketchProviderProps) {
     
     // Rotate camera to face the sketch plane normal
     // Map plane ID to appropriate view preset
+    // XY plane (Z=0, normal=+Z) → front view (camera at +Z looking at origin)
+    // XZ plane (Y=0, normal=+Y) → top view (camera at +Y looking down)
+    // YZ plane (X=0, normal=+X) → right view (camera at +X looking at origin)
     let targetView: ViewPreset;
     switch (planeId) {
       case 'xy':
-        targetView = 'top';
+        targetView = 'front';
         break;
       case 'xz':
-        targetView = 'front';
+        targetView = 'top';
         break;
       case 'yz':
         targetView = 'right';
@@ -228,6 +255,10 @@ export function SketchProvider({ children }: SketchProviderProps) {
 
   const value: SketchContextValue = {
     mode,
+    sketchMousePos,
+    setSketchMousePos,
+    previewLine,
+    setPreviewLine,
     startSketch,
     finishSketch,
     setTool,

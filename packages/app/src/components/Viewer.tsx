@@ -101,7 +101,7 @@ const Viewer: React.FC = () => {
   const { registerRefs, cameraStateRef } = useViewer();
   const { meshes, bodies } = useKernel();
   const { selectFace, setHover, clearSelection, selectedFeatureId, hoveredFeatureId } = useSelection();
-  const { mode: sketchMode } = useSketch();
+  const { mode: sketchMode, previewLine } = useSketch();
   const { doc, features } = useDocument();
   
   // Raycast hook for 3D selection
@@ -164,6 +164,65 @@ const Viewer: React.FC = () => {
     needsRenderRef.current = true;
   }, []);
 
+  // Convert screen coordinates to sketch coordinates via ray-plane intersection
+  const screenToSketch = useCallback((screenX: number, screenY: number, planeId: string): { x: number; y: number } | null => {
+    const camera = cameraRef.current;
+    const container = containerRef.current;
+    if (!camera || !container) return null;
+
+    // Get normalized device coordinates (-1 to 1)
+    const rect = container.getBoundingClientRect();
+    const ndcX = ((screenX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -((screenY - rect.top) / rect.height) * 2 + 1;
+
+    // Create ray from camera through mouse position
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+
+    // Define sketch plane based on planeId
+    let planeNormal: THREE.Vector3;
+    let planePoint: THREE.Vector3;
+    let xDir: THREE.Vector3;
+    let yDir: THREE.Vector3;
+
+    switch (planeId) {
+      case 'xy':
+        planeNormal = new THREE.Vector3(0, 0, 1);
+        planePoint = new THREE.Vector3(0, 0, 0);
+        xDir = new THREE.Vector3(1, 0, 0);
+        yDir = new THREE.Vector3(0, 1, 0);
+        break;
+      case 'xz':
+        planeNormal = new THREE.Vector3(0, 1, 0);
+        planePoint = new THREE.Vector3(0, 0, 0);
+        xDir = new THREE.Vector3(1, 0, 0);
+        yDir = new THREE.Vector3(0, 0, -1);
+        break;
+      case 'yz':
+        planeNormal = new THREE.Vector3(1, 0, 0);
+        planePoint = new THREE.Vector3(0, 0, 0);
+        xDir = new THREE.Vector3(0, 0, -1);
+        yDir = new THREE.Vector3(0, 1, 0);
+        break;
+      default:
+        return null;
+    }
+
+    // Intersect ray with plane
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, planePoint);
+    const intersection = new THREE.Vector3();
+    const hit = raycaster.ray.intersectPlane(plane, intersection);
+    
+    if (!hit) return null;
+
+    // Convert world intersection point to sketch 2D coordinates
+    const offset = intersection.clone().sub(planePoint);
+    const sketchX = offset.dot(xDir);
+    const sketchY = offset.dot(yDir);
+
+    return { x: sketchX, y: sketchY };
+  }, []);
+
   // Register refs with context
   useEffect(() => {
     registerRefs({
@@ -173,8 +232,9 @@ const Viewer: React.FC = () => {
       container: containerRef,
       updateCamera,
       requestRender,
+      screenToSketch,
     });
-  }, [registerRefs, requestRender, updateCamera]);
+  }, [registerRefs, requestRender, updateCamera, screenToSketch]);
 
   // Update scene background when theme changes
   useEffect(() => {
@@ -576,7 +636,7 @@ const Viewer: React.FC = () => {
         geometry.setPositions(positions);
         const material = new LineMaterial({
           color: lineColor,
-          linewidth: 3,
+          linewidth: 1.5,
           resolution: rendererSize || new THREE.Vector2(800, 600),
           depthTest: false,
         });
@@ -640,16 +700,28 @@ const Viewer: React.FC = () => {
         }
       }
 
-      // Draw points as small spheres
-      const pointGeometry = new THREE.SphereGeometry(pointSize, 8, 8);
-      const pointMaterial = new THREE.MeshBasicMaterial({ color, depthTest: false });
-
+      // Draw points as screen-space points (don't scale with zoom)
+      // Point size is ~2x the line width (linewidth is 1.5, so point size is 3-4)
+      const positions: number[] = [];
       for (const point of sketchData.points) {
         const worldPos = toWorld(point.x, point.y);
-        const sphere = new THREE.Mesh(pointGeometry, pointMaterial.clone());
-        sphere.position.copy(worldPos);
-        sphere.renderOrder = 3;
-        sketchGroup.add(sphere);
+        positions.push(worldPos.x, worldPos.y, worldPos.z);
+      }
+      
+      if (positions.length > 0) {
+        const pointsGeometry = new THREE.BufferGeometry();
+        pointsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        
+        const pointsMaterial = new THREE.PointsMaterial({
+          color,
+          size: pointSize * 3, // Screen-space size in pixels (2x line width)
+          sizeAttenuation: false, // Don't scale with distance
+          depthTest: false,
+        });
+        
+        const points = new THREE.Points(pointsGeometry, pointsMaterial);
+        points.renderOrder = 3;
+        sketchGroup.add(points);
       }
     };
 
@@ -660,6 +732,42 @@ const Viewer: React.FC = () => {
         const sketchData = getSketchData(sketchElement);
         console.log('[Viewer] Rendering active sketch:', sketchMode.sketchId, 'points:', sketchData.points.length);
         renderSketch(sketchData, sketchMode.planeId, 0x00aaff, 1.5); // Blue, larger points
+      }
+      
+      // Render preview line (green dashed) for line tool
+      if (previewLine && sketchMode.planeId) {
+        const { origin, xDir, yDir } = getPlaneTransform(sketchMode.planeId);
+        
+        const toWorld = (x: number, y: number): THREE.Vector3 => {
+          return new THREE.Vector3(
+            origin.x + x * xDir.x + y * yDir.x,
+            origin.y + x * xDir.y + y * yDir.y,
+            origin.z + x * xDir.z + y * yDir.z
+          );
+        };
+        
+        const startWorld = toWorld(previewLine.start.x, previewLine.start.y);
+        const endWorld = toWorld(previewLine.end.x, previewLine.end.y);
+        
+        const geometry = new LineGeometry();
+        geometry.setPositions([
+          startWorld.x, startWorld.y, startWorld.z,
+          endWorld.x, endWorld.y, endWorld.z,
+        ]);
+        const material = new LineMaterial({
+          color: 0x00ff00, // Green for preview
+          linewidth: 2,
+          resolution: rendererSize || new THREE.Vector2(800, 600),
+          depthTest: false,
+          dashed: true,
+          dashScale: 10,
+          dashSize: 3,
+          gapSize: 3,
+        });
+        const line = new Line2(geometry, material);
+        line.computeLineDistances();
+        line.renderOrder = 3; // On top of everything
+        sketchGroup.add(line);
       }
     }
 
@@ -686,7 +794,7 @@ const Viewer: React.FC = () => {
     }
 
     needsRenderRef.current = true;
-  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, doc.features, features, sceneReady, selectedFeatureId, hoveredFeatureId]);
+  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, doc.features, features, sceneReady, selectedFeatureId, hoveredFeatureId, previewLine]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -869,7 +977,7 @@ const Viewer: React.FC = () => {
       const zoomSpeed = 0.001;
       const distance = currentCamera.position.distanceTo(targetRef.current);
       const zoomFactor = 1 + e.deltaY * zoomSpeed;
-      const newDistance = Math.max(1, Math.min(100, distance * zoomFactor));
+      const newDistance = Math.max(10, Math.min(5000, distance * zoomFactor));
 
       const direction = currentCamera.position.clone().sub(targetRef.current).normalize();
       currentCamera.position.copy(targetRef.current).add(direction.multiplyScalar(newDistance));
@@ -968,10 +1076,13 @@ const Viewer: React.FC = () => {
       animationFrameRef.current = requestAnimationFrame(animate);
       if (cameraRef.current) {
         // Update camera state ref for ViewCube sync every frame
-        // Store camera direction (position relative to target, normalized)
-        const direction = cameraRef.current.position.clone().sub(targetRef.current).normalize();
+        // Store camera direction and distance (position relative to target)
+        const offset = cameraRef.current.position.clone().sub(targetRef.current);
+        const distance = offset.length();
+        const direction = offset.normalize();
         cameraStateRef.current.position.copy(direction);
         cameraStateRef.current.up.copy(cameraRef.current.up);
+        cameraStateRef.current.distance = distance;
         cameraStateRef.current.version++;
         
         renderer.render(scene, cameraRef.current);

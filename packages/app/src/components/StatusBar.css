@@ -27,6 +27,15 @@
   color: var(--color-accent-text);
 }
 
+.status-bar-solve {
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  padding: 1px 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  color: var(--color-accent-text);
+}
+
 .status-bar-coordinates {
   font-family: var(--font-family-mono);
   font-size: 11px;

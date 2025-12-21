@@ -5,20 +5,23 @@
  * and editing sketch entities (lines, arcs, etc.)
  */
 
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { useSketch } from '../contexts/SketchContext';
 import { useDocument } from '../contexts/DocumentContext';
-import { useKernel } from '../contexts/KernelContext';
 import { useSelection } from '../contexts/SelectionContext';
+import { useViewer } from '../contexts/ViewerContext';
 import { findFeature, getSketchData, setSketchData } from '../document/featureHelpers';
 import type { NewSketchConstraint, SketchConstraint, SketchData, SketchLine } from '../types/document';
 import './SketchCanvas.css';
 
-// Point merge tolerance in canvas units
-const POINT_MERGE_TOLERANCE = 10;
+// Point merge tolerance in sketch units (mm)
+const POINT_MERGE_TOLERANCE_MM = 5;
 
 // Grid size in sketch units
 const GRID_SIZE = 1;
+
+// Camera FOV in degrees (must match Viewer.tsx)
+const CAMERA_FOV = 45;
 
 const SketchCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -28,29 +31,65 @@ const SketchCanvas: React.FC = () => {
     addPoint,
     addLine,
     addArc,
+    addRectangle,
     findNearbyPoint,
-    updatePointPosition,
     setTool,
     addConstraint,
+    setSketchMousePos,
+    setPreviewLine,
   } = useSketch();
   const { doc, units } = useDocument();
-  const { sketchSolveInfo } = useKernel();
   const { highlightedSketchId, highlightedEntityIds } = useSelection();
+  const { cameraStateRef, screenToSketch } = useViewer();
   
-  // View transform state
-  const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
-  const [viewScale, setViewScale] = useState(20); // pixels per unit
-  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  // View transform state (kept for 2D canvas drawing only)
+  const [viewOffset] = useState({ x: 0, y: 0 });
+  const [cameraVersion, setCameraVersion] = useState(0);
+  // Store sketch coordinates from ray casting
+  const [sketchPos, setSketchPos] = useState<{ x: number; y: number } | null>(null);
+  
+  // Poll camera state to sync viewScale with 3D camera
+  useEffect(() => {
+    if (!mode.active) return;
+    const interval = setInterval(() => {
+      if (cameraStateRef.current.version !== cameraVersion) {
+        setCameraVersion(cameraStateRef.current.version);
+      }
+    }, 50);
+    return () => clearInterval(interval);
+  }, [mode.active, cameraStateRef, cameraVersion]);
+  
+  // Compute viewScale from camera distance (for 2D canvas drawing only)
+  const viewScale = useMemo(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return 2; // Default fallback
+    
+    // Get camera distance from cameraStateRef
+    const distance = cameraStateRef.current.distance || 350;
+    
+    // Calculate pixels per mm based on perspective projection
+    // At distance D with FOV, visible height = 2 * D * tan(FOV/2)
+    const fovRad = (CAMERA_FOV * Math.PI) / 180;
+    const visibleHeight = 2 * distance * Math.tan(fovRad / 2);
+    const pixelsPerMm = canvas.height / visibleHeight;
+    
+    return Math.max(0.5, pixelsPerMm);
+  }, [cameraVersion, cameraStateRef]);
+  
+  // Convert screen coordinates to sketch coordinates using 3D ray casting
+  const screenToSketchCoords = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
+    if (!mode.planeId) return null;
+    return screenToSketch(clientX, clientY, mode.planeId);
+  }, [mode.planeId, screenToSketch]);
   const [tempStartPoint, setTempStartPoint] = useState<{ x: number; y: number; id?: string } | null>(null);
   const [arcStartPoint, setArcStartPoint] = useState<{ x: number; y: number; id?: string } | null>(null);
   const [arcEndPoint, setArcEndPoint] = useState<{ x: number; y: number; id?: string } | null>(null);
   const [circleCenterPoint, setCircleCenterPoint] = useState<{ x: number; y: number; id?: string } | null>(null);
-  const [isPanning, setIsPanning] = useState(false);
-  const [lastPanPos, setLastPanPos] = useState({ x: 0, y: 0 });
-  const [draggingPointId, setDraggingPointId] = useState<string | null>(null);
-  const dragRafRef = useRef<number | null>(null);
-  const dragLatestRef = useRef<{ id: string; x: number; y: number } | null>(null);
-  const justFinishedDragRef = useRef(false);
+  
+  // Track mouse down position for distinguishing clicks from drags
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
+  const isDraggingViewRef = useRef(false);
+  const DRAG_THRESHOLD = 5; // pixels of movement to consider it a drag
 
   const [selectedPoints, setSelectedPoints] = useState<Set<string>>(() => new Set());
   const [selectedLines, setSelectedLines] = useState<Set<string>>(() => new Set());
@@ -112,19 +151,6 @@ const SketchCanvas: React.FC = () => {
     };
   }, [viewOffset, viewScale]);
 
-  // Convert canvas coordinates to sketch coordinates
-  const canvasToSketch = useCallback((cx: number, cy: number): { x: number; y: number } => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    
-    const centerX = canvas.width / 2 + viewOffset.x;
-    const centerY = canvas.height / 2 + viewOffset.y;
-    
-    return {
-      x: (cx - centerX) / viewScale,
-      y: -(cy - centerY) / viewScale, // Y is inverted
-    };
-  }, [viewOffset, viewScale]);
 
   // Snap to grid
   const snapToGrid = useCallback((x: number, y: number): { x: number; y: number } => {
@@ -158,113 +184,17 @@ const SketchCanvas: React.FC = () => {
       );
     }
 
-    // Draw temp line if in line tool mode
-    if (mode.activeTool === 'line' && tempStartPoint && mousePos) {
-      const startCanvas = sketchToCanvas(tempStartPoint.x, tempStartPoint.y);
-      const endSketch = canvasToSketch(mousePos.x, mousePos.y);
-      const snappedEnd = snapToGrid(endSketch.x, endSketch.y);
-      const endCanvas = sketchToCanvas(snappedEnd.x, snappedEnd.y);
-      
-      ctx.beginPath();
-      ctx.moveTo(startCanvas.x, startCanvas.y);
-      ctx.lineTo(endCanvas.x, endCanvas.y);
-      ctx.strokeStyle = '#00ff00';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 5]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // Draw temp arc preview
-    if (mode.activeTool === 'arc' && arcStartPoint && arcEndPoint && mousePos) {
-      const start = arcStartPoint;
-      const end = arcEndPoint;
-      const thirdSketch = canvasToSketch(mousePos.x, mousePos.y);
-      const third = snapToGrid(thirdSketch.x, thirdSketch.y);
-
-      const center = calculateArcCenter(
-        { x: start.x, y: start.y },
-        { x: end.x, y: end.y },
-        third
-      );
-
-      if (center) {
-        const startCanvas = sketchToCanvas(start.x, start.y);
-        const endCanvas = sketchToCanvas(end.x, end.y);
-        const centerCanvas = sketchToCanvas(center.x, center.y);
-
-        const r = Math.hypot(startCanvas.x - centerCanvas.x, startCanvas.y - centerCanvas.y);
-        const a0 = Math.atan2(startCanvas.y - centerCanvas.y, startCanvas.x - centerCanvas.x);
-        const a1 = Math.atan2(endCanvas.y - centerCanvas.y, endCanvas.x - centerCanvas.x);
-
-        const ccw = isCounterClockwise(
-          { x: start.x, y: start.y },
-          { x: end.x, y: end.y },
-          third
-        );
-
-        ctx.beginPath();
-        ctx.arc(centerCanvas.x, centerCanvas.y, r, a0, a1, ccw);
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-    }
-
-    // Draw temp circle preview
-    if (mode.activeTool === 'circle' && circleCenterPoint && mousePos) {
-      const centerSketch = { x: circleCenterPoint.x, y: circleCenterPoint.y };
-      const edgeSketch = canvasToSketch(mousePos.x, mousePos.y);
-      const edge = snapToGrid(edgeSketch.x, edgeSketch.y);
-      const radius = Math.hypot(edge.x - centerSketch.x, edge.y - centerSketch.y);
-      if (radius > 1e-9) {
-        const c = sketchToCanvas(centerSketch.x, centerSketch.y);
-        const r = radius * viewScale;
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-    }
-
-    // Highlight nearby point when hovering
-    if (mousePos && (mode.activeTool === 'line' || mode.activeTool === 'arc' || mode.activeTool === 'circle')) {
-      const sketchPos = canvasToSketch(mousePos.x, mousePos.y);
-      const nearbyPoint = findNearbyPoint(
-        sketchPos.x,
-        sketchPos.y,
-        POINT_MERGE_TOLERANCE / viewScale
-      );
-      if (nearbyPoint) {
-        const canvasPos = sketchToCanvas(nearbyPoint.x, nearbyPoint.y);
-        ctx.beginPath();
-        ctx.arc(canvasPos.x, canvasPos.y, 8, 0, Math.PI * 2);
-        ctx.strokeStyle = '#ffff00';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-    }
+    // Note: Preview lines (line, arc, circle) are now rendered in 3D by the Viewer
+    // using the previewLine context value for perfect alignment with the 3D scene.
+    // Only selection highlights are drawn on the 2D canvas overlay.
   }, [
     getSketch,
-    mode.activeTool,
-    tempStartPoint,
-    arcStartPoint,
-    arcEndPoint,
-    circleCenterPoint,
-    mousePos,
-    viewOffset,
-    viewScale,
+    mode.sketchId,
     sketchToCanvas,
-    canvasToSketch,
-    findNearbyPoint,
-    snapToGrid,
     selectedLines,
     selectedPoints,
+    highlightedSketchId,
+    highlightedEntityIds,
   ]);
 
   // Resize canvas when container resizes
@@ -294,298 +224,26 @@ const SketchCanvas: React.FC = () => {
     draw();
   }, [draw]);
 
-  // Handle mouse click
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    if (isPanning) return;
-    if (justFinishedDragRef.current) {
-      justFinishedDragRef.current = false;
+  // Update preview line in context for 3D rendering by Viewer
+  useEffect(() => {
+    if (!mode.active) {
+      setPreviewLine(null);
       return;
     }
     
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    
-    const sketchPos = canvasToSketch(cx, cy);
-    const snappedPos = snapToGrid(sketchPos.x, sketchPos.y);
-
-    if (mode.activeTool === 'select') {
-      const sketch = getSketch();
-      if (!sketch) return;
-
-      const tol = POINT_MERGE_TOLERANCE / viewScale;
-      const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, tol);
-      if (nearbyPoint) {
-        setSelectedPoints((prev) => {
-          const next = new Set(prev);
-          if (next.has(nearbyPoint.id)) next.delete(nearbyPoint.id);
-          else next.add(nearbyPoint.id);
-          return next;
-        });
-        // Selecting a point clears line selection to keep UI simple
-        setSelectedLines(new Set());
-        return;
-      }
-
-      const nearbyLine = findNearbyLine(sketch, snappedPos.x, snappedPos.y, tol);
-      if (nearbyLine) {
-        setSelectedLines((prev) => {
-          const next = new Set(prev);
-          if (next.has(nearbyLine.id)) next.delete(nearbyLine.id);
-          else next.add(nearbyLine.id);
-          return next;
-        });
-        setSelectedPoints(new Set());
-        return;
-      }
-
-      // Clicked empty space: clear selection
-      setSelectedPoints(new Set());
-      setSelectedLines(new Set());
-      return;
+    // Line tool: preview from tempStartPoint to current mouse position
+    if (mode.activeTool === 'line' && tempStartPoint && sketchPos) {
+      setPreviewLine({
+        start: { x: tempStartPoint.x, y: tempStartPoint.y },
+        end: { x: sketchPos.x, y: sketchPos.y },
+      });
+    } else {
+      setPreviewLine(null);
     }
+  }, [mode.active, mode.activeTool, tempStartPoint, sketchPos, setPreviewLine]);
 
-    if (mode.activeTool === 'line') {
-      // Check for nearby existing point
-      const nearbyPoint = findNearbyPoint(
-        snappedPos.x,
-        snappedPos.y,
-        POINT_MERGE_TOLERANCE / viewScale
-      );
-
-      if (!tempStartPoint) {
-        // First click - start line
-        if (nearbyPoint) {
-          setTempStartPoint({ x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined });
-        } else {
-          setTempStartPoint({ x: snappedPos.x, y: snappedPos.y });
-        }
-      } else {
-        // Second click - end line
-        let startId: string | null | undefined = tempStartPoint.id;
-        let endId: string | null = null;
-
-        // Add start point if it doesn't exist
-        if (!startId) {
-          startId = addPoint(tempStartPoint.x, tempStartPoint.y);
-        }
-
-        // Add end point or reuse existing
-        if (nearbyPoint) {
-          endId = nearbyPoint.id ?? null;
-        } else {
-          endId = addPoint(snappedPos.x, snappedPos.y);
-        }
-
-        // Add line
-        if (startId && endId) {
-          addLine(startId, endId);
-        }
-
-        // Clear temp start and prepare for next line
-        setTempStartPoint(null);
-      }
-    }
-
-    if (mode.activeTool === 'arc') {
-      const nearbyPoint = findNearbyPoint(
-        snappedPos.x,
-        snappedPos.y,
-        POINT_MERGE_TOLERANCE / viewScale
-      );
-
-      if (!arcStartPoint) {
-        if (nearbyPoint) {
-          setArcStartPoint({ x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined });
-        } else {
-          setArcStartPoint({ x: snappedPos.x, y: snappedPos.y });
-        }
-        setArcEndPoint(null);
-        return;
-      }
-
-      if (!arcEndPoint) {
-        if (nearbyPoint) {
-          setArcEndPoint({ x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined });
-        } else {
-          setArcEndPoint({ x: snappedPos.x, y: snappedPos.y });
-        }
-        return;
-      }
-
-      // Third click: define curvature via a point on the arc
-      const start = arcStartPoint;
-      const end = arcEndPoint;
-      const third = snappedPos;
-      const center = calculateArcCenter({ x: start.x, y: start.y }, { x: end.x, y: end.y }, third);
-      if (!center) {
-        // Collinear: reset to start over
-        setArcStartPoint(null);
-        setArcEndPoint(null);
-        return;
-      }
-
-      const ccw = isCounterClockwise({ x: start.x, y: start.y }, { x: end.x, y: end.y }, third);
-
-      let startId: string | null | undefined = start.id;
-      let endId: string | null | undefined = end.id;
-      if (!startId) startId = addPoint(start.x, start.y);
-      if (!endId) endId = addPoint(end.x, end.y);
-      const centerId = addPoint(center.x, center.y);
-
-      if (startId && endId && centerId) {
-        addArc(startId, endId, centerId, ccw);
-      }
-
-      setArcStartPoint(null);
-      setArcEndPoint(null);
-      return;
-    }
-
-    if (mode.activeTool === 'circle') {
-      const nearbyPoint = findNearbyPoint(
-        snappedPos.x,
-        snappedPos.y,
-        POINT_MERGE_TOLERANCE / viewScale
-      );
-
-      if (!circleCenterPoint) {
-        if (nearbyPoint) {
-          setCircleCenterPoint({ x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined });
-        } else {
-          setCircleCenterPoint({ x: snappedPos.x, y: snappedPos.y });
-        }
-        return;
-      }
-
-      const center = circleCenterPoint;
-      const radius = Math.hypot(snappedPos.x - center.x, snappedPos.y - center.y);
-      if (radius <= 1e-9) {
-        setCircleCenterPoint(null);
-        return;
-      }
-
-      let centerId: string | null | undefined = center.id;
-      if (!centerId) centerId = addPoint(center.x, center.y);
-
-      // Use the clicked edge point as start/end to preserve the user's intent.
-      let startEndId: string | null | undefined = nearbyPoint?.id ?? undefined;
-      if (!startEndId) startEndId = addPoint(snappedPos.x, snappedPos.y);
-
-      if (centerId && startEndId) {
-        addArc(startEndId, startEndId, centerId, true);
-      }
-
-      setCircleCenterPoint(null);
-      return;
-    }
-  }, [
-    isPanning,
-    mode.activeTool,
-    getSketch,
-    tempStartPoint,
-    arcStartPoint,
-    arcEndPoint,
-    circleCenterPoint,
-    canvasToSketch,
-    snapToGrid,
-    findNearbyPoint,
-    addPoint,
-    addLine,
-    addArc,
-    viewScale,
-  ]);
-
-  // Handle mouse move
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-
-    if (isPanning) {
-      const dx = cx - lastPanPos.x;
-      const dy = cy - lastPanPos.y;
-      setViewOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
-      setLastPanPos({ x: cx, y: cy });
-    }
-
-    if (draggingPointId) {
-      const sketchPos = canvasToSketch(cx, cy);
-      // Drag is intentionally "free" (no constraints yet), but we keep grid snap for now.
-      const snapped = snapToGrid(sketchPos.x, sketchPos.y);
-
-      dragLatestRef.current = { id: draggingPointId, x: snapped.x, y: snapped.y };
-      if (dragRafRef.current === null) {
-        dragRafRef.current = window.requestAnimationFrame(() => {
-          dragRafRef.current = null;
-          const latest = dragLatestRef.current;
-          if (latest) {
-            updatePointPosition(latest.id, latest.x, latest.y);
-          }
-        });
-      }
-    }
-
-    setMousePos({ x: cx, y: cy });
-  }, [isPanning, lastPanPos, draggingPointId, canvasToSketch, snapToGrid, updatePointPosition]);
-
-  // Handle mouse down
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
-      // Middle mouse or left + shift for panning
-      e.preventDefault();
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      
-      const rect = canvas.getBoundingClientRect();
-      setIsPanning(true);
-      setLastPanPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-      return;
-    }
-
-    if (e.button !== 0) return;
-    if (mode.activeTool !== 'select') return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    const sketchPos = canvasToSketch(cx, cy);
-
-    const nearbyPoint = findNearbyPoint(
-      sketchPos.x,
-      sketchPos.y,
-      POINT_MERGE_TOLERANCE / viewScale
-    );
-
-    if (!nearbyPoint || nearbyPoint.fixed) return;
-
-    e.preventDefault();
-    setDraggingPointId(nearbyPoint.id);
-  }, [canvasToSketch, findNearbyPoint, mode.activeTool, viewScale]);
-
-  // Handle mouse up
-  const handleMouseUp = useCallback(() => {
-    setIsPanning(false);
-    if (draggingPointId) {
-      justFinishedDragRef.current = true;
-    }
-    setDraggingPointId(null);
-  }, [draggingPointId]);
-
-  // Handle wheel for zoom
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    setViewScale((prev) => Math.max(5, Math.min(100, prev * zoomFactor)));
-  }, []);
+  // Note: Mouse handling has been moved to document-level event listeners
+  // to allow events to pass through to the Viewer for rotation
 
   // Handle escape to cancel current operation
   useEffect(() => {
@@ -595,7 +253,6 @@ const SketchCanvas: React.FC = () => {
         setArcStartPoint(null);
         setArcEndPoint(null);
         setCircleCenterPoint(null);
-        setDraggingPointId(null);
       }
     };
     
@@ -603,14 +260,310 @@ const SketchCanvas: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Cleanup any pending drag RAF
+  // Use document-level event listeners so events pass through to Viewer for rotation
+  // but we can still detect clicks for sketch operations
   useEffect(() => {
-    return () => {
-      if (dragRafRef.current !== null) {
-        window.cancelAnimationFrame(dragRafRef.current);
+    if (!mode.active) return;
+    
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const isWithinCanvas = (e: MouseEvent): boolean => {
+      const rect = canvas.getBoundingClientRect();
+      return e.clientX >= rect.left && e.clientX <= rect.right &&
+             e.clientY >= rect.top && e.clientY <= rect.bottom;
+    };
+    
+    const onDocumentMouseDown = (e: MouseEvent) => {
+      if (!isWithinCanvas(e)) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      
+      mouseDownPosRef.current = { x: cx, y: cy };
+      isDraggingViewRef.current = false;
+    };
+    
+    const onDocumentMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      
+      // Track if we're dragging
+      if (mouseDownPosRef.current && !isDraggingViewRef.current) {
+        const dx = cx - mouseDownPosRef.current.x;
+        const dy = cy - mouseDownPosRef.current.y;
+        if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
+          isDraggingViewRef.current = true;
+        }
+      }
+      
+      // Update sketch coordinates using 3D ray casting
+      if (isWithinCanvas(e)) {
+        const sketchCoords = screenToSketchCoords(e.clientX, e.clientY);
+        if (sketchCoords) {
+          const snapped = snapToGrid(sketchCoords.x, sketchCoords.y);
+          setSketchPos(snapped);
+          setSketchMousePos({ x: snapped.x, y: snapped.y });
+        }
+      } else {
+        setSketchMousePos(null);
+        setSketchPos(null);
       }
     };
-  }, []);
+    
+    const onDocumentMouseUp = (e: MouseEvent) => {
+      if (!isWithinCanvas(e)) {
+        mouseDownPosRef.current = null;
+        isDraggingViewRef.current = false;
+        return;
+      }
+      
+      const wasDragging = isDraggingViewRef.current;
+      mouseDownPosRef.current = null;
+      isDraggingViewRef.current = false;
+      
+      // If we were dragging (rotating), don't trigger tool action
+      if (wasDragging) return;
+      
+      // This was a click - trigger tool action
+      if (e.button !== 0) return;
+      
+      // Pass screen coordinates (clientX/clientY) for 3D ray casting
+      const clickEvent = new CustomEvent('sketchclick', {
+        detail: { clientX: e.clientX, clientY: e.clientY }
+      });
+      canvas.dispatchEvent(clickEvent);
+    };
+    
+    document.addEventListener('mousedown', onDocumentMouseDown);
+    document.addEventListener('mousemove', onDocumentMouseMove);
+    document.addEventListener('mouseup', onDocumentMouseUp);
+    
+    return () => {
+      document.removeEventListener('mousedown', onDocumentMouseDown);
+      document.removeEventListener('mousemove', onDocumentMouseMove);
+      document.removeEventListener('mouseup', onDocumentMouseUp);
+    };
+  }, [mode.active]);
+
+  // Handle custom sketch click events
+  useEffect(() => {
+    if (!mode.active) return;
+    
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const onSketchClick = (e: Event) => {
+      const { clientX, clientY } = (e as CustomEvent).detail;
+      
+      // Convert screen coordinates to sketch coordinates using 3D ray casting
+      const sketchCoords = screenToSketchCoords(clientX, clientY);
+      if (!sketchCoords) return;
+      
+      const snappedPos = snapToGrid(sketchCoords.x, sketchCoords.y);
+
+      if (mode.activeTool === 'select') {
+        const sketch = getSketch();
+        if (!sketch) return;
+
+        const tol = POINT_MERGE_TOLERANCE_MM;
+        const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, tol);
+        if (nearbyPoint) {
+          setSelectedPoints((prev) => {
+            const next = new Set(prev);
+            if (next.has(nearbyPoint.id)) next.delete(nearbyPoint.id);
+            else next.add(nearbyPoint.id);
+            return next;
+          });
+          setSelectedLines(new Set());
+          return;
+        }
+
+        const nearbyLine = findNearbyLine(sketch, snappedPos.x, snappedPos.y, tol);
+        if (nearbyLine) {
+          setSelectedLines((prev) => {
+            const next = new Set(prev);
+            if (next.has(nearbyLine.id)) next.delete(nearbyLine.id);
+            else next.add(nearbyLine.id);
+            return next;
+          });
+          setSelectedPoints(new Set());
+          return;
+        }
+
+        setSelectedPoints(new Set());
+        setSelectedLines(new Set());
+        return;
+      }
+
+      if (mode.activeTool === 'line') {
+        const nearbyPoint = findNearbyPoint(
+          snappedPos.x,
+          snappedPos.y,
+          POINT_MERGE_TOLERANCE_MM
+        );
+
+        if (!tempStartPoint) {
+          if (nearbyPoint) {
+            setTempStartPoint({ x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined });
+          } else {
+            setTempStartPoint({ x: snappedPos.x, y: snappedPos.y });
+          }
+        } else {
+          let startId: string | null | undefined = tempStartPoint.id;
+          let endId: string | null = null;
+
+          if (!startId) {
+            startId = addPoint(tempStartPoint.x, tempStartPoint.y);
+          }
+
+          if (nearbyPoint) {
+            endId = nearbyPoint.id ?? null;
+          } else {
+            endId = addPoint(snappedPos.x, snappedPos.y);
+          }
+
+          if (startId && endId) {
+            addLine(startId, endId);
+          }
+
+          setTempStartPoint(null);
+        }
+        return;
+      }
+
+      if (mode.activeTool === 'arc') {
+        const nearbyPoint = findNearbyPoint(
+          snappedPos.x,
+          snappedPos.y,
+          POINT_MERGE_TOLERANCE_MM
+        );
+
+        if (!arcStartPoint) {
+          if (nearbyPoint) {
+            setArcStartPoint({ x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined });
+          } else {
+            setArcStartPoint({ x: snappedPos.x, y: snappedPos.y });
+          }
+        } else if (!arcEndPoint) {
+          if (nearbyPoint) {
+            setArcEndPoint({ x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined });
+          } else {
+            setArcEndPoint({ x: snappedPos.x, y: snappedPos.y });
+          }
+        } else {
+          let startId = arcStartPoint.id;
+          let endId = arcEndPoint.id;
+          let centerId: string | null = null;
+
+          if (!startId) {
+            startId = addPoint(arcStartPoint.x, arcStartPoint.y) ?? undefined;
+          }
+          if (!endId) {
+            endId = addPoint(arcEndPoint.x, arcEndPoint.y) ?? undefined;
+          }
+
+          if (nearbyPoint) {
+            centerId = nearbyPoint.id ?? null;
+          } else {
+            centerId = addPoint(snappedPos.x, snappedPos.y);
+          }
+
+          if (startId && endId && centerId) {
+            const ccw = isCounterClockwise(
+              { x: arcStartPoint.x, y: arcStartPoint.y },
+              { x: arcEndPoint.x, y: arcEndPoint.y },
+              { x: snappedPos.x, y: snappedPos.y }
+            );
+            addArc(startId, endId, centerId, ccw);
+          }
+
+          setArcStartPoint(null);
+          setArcEndPoint(null);
+        }
+        return;
+      }
+
+      if (mode.activeTool === 'circle') {
+        const nearbyPoint = findNearbyPoint(
+          snappedPos.x,
+          snappedPos.y,
+          POINT_MERGE_TOLERANCE_MM
+        );
+
+        if (!circleCenterPoint) {
+          if (nearbyPoint) {
+            setCircleCenterPoint({ x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined });
+          } else {
+            setCircleCenterPoint({ x: snappedPos.x, y: snappedPos.y });
+          }
+        } else {
+          let centerId = circleCenterPoint.id;
+          let edgeId: string | null = null;
+
+          if (!centerId) {
+            centerId = addPoint(circleCenterPoint.x, circleCenterPoint.y) ?? undefined;
+          }
+
+          if (nearbyPoint) {
+            edgeId = nearbyPoint.id ?? null;
+          } else {
+            edgeId = addPoint(snappedPos.x, snappedPos.y);
+          }
+
+          if (centerId && edgeId) {
+            addArc(edgeId, edgeId, centerId, true);
+          }
+
+          setCircleCenterPoint(null);
+        }
+        return;
+      }
+
+      if (mode.activeTool === 'rectangle') {
+        if (!tempStartPoint) {
+          setTempStartPoint({ x: snappedPos.x, y: snappedPos.y });
+        } else {
+          const x1 = tempStartPoint.x;
+          const y1 = tempStartPoint.y;
+          const x2 = snappedPos.x;
+          const y2 = snappedPos.y;
+
+          const width = Math.abs(x2 - x1);
+          const height = Math.abs(y2 - y1);
+          const centerX = (x1 + x2) / 2;
+          const centerY = (y1 + y2) / 2;
+
+          if (width > 0.001 && height > 0.001) {
+            addRectangle(centerX, centerY, width, height);
+          }
+
+          setTempStartPoint(null);
+        }
+        return;
+      }
+    };
+    
+    canvas.addEventListener('sketchclick', onSketchClick);
+    return () => canvas.removeEventListener('sketchclick', onSketchClick);
+  }, [
+    mode.active,
+    mode.activeTool,
+    screenToSketchCoords,
+    snapToGrid,
+    getSketch,
+    findNearbyPoint,
+    tempStartPoint,
+    arcStartPoint,
+    arcEndPoint,
+    circleCenterPoint,
+    addPoint,
+    addLine,
+    addArc,
+    addRectangle,
+  ]);
 
   if (!mode.active) return null;
 
@@ -622,13 +575,6 @@ const SketchCanvas: React.FC = () => {
       <canvas
         ref={canvasRef}
         className="sketch-canvas"
-        onClick={handleClick}
-        onMouseMove={handleMouseMove}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
-        onContextMenu={(e) => e.preventDefault()}
       />
       <div className="sketch-toolbar">
         <SketchToolButton 
@@ -790,32 +736,6 @@ const SketchCanvas: React.FC = () => {
           </div>
         );
       })()}
-      <div className="sketch-info">
-        {mousePos && (
-          <span>
-            {(() => {
-              const pos = canvasToSketch(mousePos.x, mousePos.y);
-              const snapped = snapToGrid(pos.x, pos.y);
-              return `X: ${snapped.x.toFixed(1)} ${units}, Y: ${snapped.y.toFixed(1)} ${units}`;
-            })()}
-          </span>
-        )}
-        {mode.sketchId && sketchSolveInfo[mode.sketchId] && (
-          <span className="sketch-solve-status">
-            {(() => {
-              const info = sketchSolveInfo[mode.sketchId!];
-              const dof = info.dof;
-              if (!dof) return `Solve: ${info.status}`;
-              const tag = dof.isOverConstrained
-                ? 'Over'
-                : dof.isFullyConstrained
-                  ? 'Fully'
-                  : `DOF ${dof.remainingDOF}`;
-              return `Solve: ${info.status} • ${tag}`;
-            })()}
-          </span>
-        )}
-      </div>
     </div>
   );
 };
@@ -968,35 +888,6 @@ function drawSketchSelectionHighlights(
       continue;
     }
   }
-}
-
-function calculateArcCenter(
-  p1: { x: number; y: number },
-  p2: { x: number; y: number },
-  p3: { x: number; y: number }
-): { x: number; y: number } | null {
-  const ax = p1.x;
-  const ay = p1.y;
-  const bx = p2.x;
-  const by = p2.y;
-  const cx = p3.x;
-  const cy = p3.y;
-
-  const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-  if (Math.abs(d) < 1e-12) return null;
-
-  const ux =
-    ((ax * ax + ay * ay) * (by - cy) +
-      (bx * bx + by * by) * (cy - ay) +
-      (cx * cx + cy * cy) * (ay - by)) /
-    d;
-  const uy =
-    ((ax * ax + ay * ay) * (cx - bx) +
-      (bx * bx + by * by) * (ax - cx) +
-      (cx * cx + cy * cy) * (bx - ax)) /
-    d;
-
-  return { x: ux, y: uy };
 }
 
 function isCounterClockwise(

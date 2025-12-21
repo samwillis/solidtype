@@ -1,6 +1,8 @@
 import React from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useDocument } from '../contexts/DocumentContext';
+import { useSketch } from '../contexts/SketchContext';
+import { useKernel } from '../contexts/KernelContext';
 import type { DocumentUnits } from '../types/document';
 import './StatusBar.css';
 
@@ -40,6 +42,8 @@ const UNIT_OPTIONS: DocumentUnits[] = ['mm', 'cm', 'm', 'in', 'ft'];
 const StatusBar: React.FC<StatusBarProps> = ({ status = 'Ready' }) => {
   const { mode, cycleMode } = useTheme();
   const { units, setUnits } = useDocument();
+  const { mode: sketchMode, sketchMousePos } = useSketch();
+  const { sketchSolveInfo } = useKernel();
 
   const getIcon = () => {
     switch (mode) {
@@ -61,13 +65,43 @@ const StatusBar: React.FC<StatusBarProps> = ({ status = 'Ready' }) => {
     setUnits(e.target.value as DocumentUnits);
   };
 
+  // Get solve status for active sketch
+  const getSolveStatus = () => {
+    if (!sketchMode.active || !sketchMode.sketchId) return null;
+    const info = sketchSolveInfo[sketchMode.sketchId];
+    if (!info) return null;
+    
+    const dof = info.dof;
+    if (!dof) return `Solve: ${info.status}`;
+    
+    const tag = dof.isOverConstrained
+      ? 'Over'
+      : dof.isFullyConstrained
+        ? 'Fully'
+        : `DOF ${dof.remainingDOF}`;
+    return `Solve: ${info.status} • ${tag}`;
+  };
+
+  // Format coordinates
+  const getCoordinates = () => {
+    if (sketchMode.active && sketchMousePos) {
+      return `X: ${sketchMousePos.x.toFixed(2)} Y: ${sketchMousePos.y.toFixed(2)} ${units}`;
+    }
+    return 'X: 0.00 Y: 0.00 Z: 0.00';
+  };
+
+  const solveStatus = getSolveStatus();
+
   return (
     <div className="status-bar">
       <div className="status-bar-left">
         <span className="status-bar-text">{status}</span>
+        {solveStatus && (
+          <span className="status-bar-solve">{solveStatus}</span>
+        )}
       </div>
       <div className="status-bar-right">
-        <span className="status-bar-coordinates">X: 0.00 Y: 0.00 Z: 0.00</span>
+        <span className="status-bar-coordinates">{getCoordinates()}</span>
         <select 
           className="status-bar-units"
           value={units}

@@ -26,8 +26,9 @@ interface ViewerActions {
 
 // Shared camera state ref for real-time sync between Viewer and ViewCube
 export interface CameraStateRef {
-  position: THREE.Vector3;  // Camera position relative to target
+  position: THREE.Vector3;  // Camera position relative to target (normalized direction)
   up: THREE.Vector3;        // Camera up vector
+  distance: number;         // Camera distance from target in mm
   version: number;          // Incremented on each update to trigger checks
 }
 
@@ -38,6 +39,8 @@ interface ViewerRefs {
   container: React.MutableRefObject<HTMLDivElement | null>;
   updateCamera: (projection: ProjectionMode) => void;
   requestRender: () => void;
+  /** Convert screen coordinates to sketch coordinates via ray-plane intersection */
+  screenToSketch: (screenX: number, screenY: number, planeId: string) => { x: number; y: number } | null;
 }
 
 interface ViewerContextValue {
@@ -45,6 +48,8 @@ interface ViewerContextValue {
   actions: ViewerActions;
   registerRefs: (refs: ViewerRefs) => void;
   cameraStateRef: React.MutableRefObject<CameraStateRef>;
+  /** Convert screen coordinates to sketch coordinates via ray-plane intersection */
+  screenToSketch: (screenX: number, screenY: number, planeId: string) => { x: number; y: number } | null;
 }
 
 const ViewerContext = createContext<ViewerContextValue | null>(null);
@@ -57,8 +62,8 @@ export const useViewer = (): ViewerContextValue => {
   return context;
 };
 
-// Camera distance for standard views
-const VIEW_DISTANCE = 8;
+// Camera distance for standard views (in mm units, scaled for ~300mm workspace)
+const VIEW_DISTANCE = 350;
 
 // Calculate position from face/edge/corner name
 function getViewPosition(preset: ViewPreset): { position: THREE.Vector3; up: THREE.Vector3 } {
@@ -117,6 +122,7 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
   const cameraStateRef = useRef<CameraStateRef>({
     position: new THREE.Vector3(1, 1, 1).normalize(),
     up: new THREE.Vector3(0, 1, 0),
+    distance: VIEW_DISTANCE,
     version: 0,
   });
 
@@ -207,8 +213,17 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     refs.requestRender();
   }, []);
 
+  // Convert screen coordinates to sketch coordinates via ray-plane intersection
+  const screenToSketch = useCallback((screenX: number, screenY: number, planeId: string): { x: number; y: number } | null => {
+    const refs = viewerRefsRef.current;
+    if (!refs || !refs.camera.current || !refs.container.current) return null;
+    if (!refs.screenToSketch) return null;
+    
+    return refs.screenToSketch(screenX, screenY, planeId);
+  }, []);
+
   return (
-    <ViewerContext.Provider value={{ state, actions: { setView, setDisplayMode, toggleProjection, zoomToFit }, registerRefs, cameraStateRef }}>
+    <ViewerContext.Provider value={{ state, actions: { setView, setDisplayMode, toggleProjection, zoomToFit }, registerRefs, cameraStateRef, screenToSketch }}>
       {children}
     </ViewerContext.Provider>
   );
