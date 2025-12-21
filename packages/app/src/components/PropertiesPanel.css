@@ -258,3 +258,23 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Field with validation error */
+.field-with-error {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.field-error {
+  font-size: 10px;
+  color: var(--color-error, #dc2626);
+}
+
+/* Input error state */
+.field-with-error .number-input input.has-error,
+.field-with-error .text-input.has-error,
+.field-with-error .select-input.has-error {
+  border-color: var(--color-error, #dc2626);
+}

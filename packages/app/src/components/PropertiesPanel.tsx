@@ -3,12 +3,15 @@
  * Phase 13: Properties Panel
  * 
  * Also handles feature creation with accept/cancel buttons when in edit mode.
+ * Uses Tanstack Form with Zod validation for feature editing.
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useForm } from '@tanstack/react-form';
 import { useDocument } from '../contexts/DocumentContext';
 import { useSelection } from '../contexts/SelectionContext';
 import { useFeatureEdit } from '../contexts/FeatureEditContext';
+import { extrudeFormSchema, revolveFormSchema, type ExtrudeFormData, type RevolveFormData } from '../types/featureSchemas';
 import type { Feature, ExtrudeFeature, RevolveFeature, SketchFeature, PlaneFeature, OriginFeature, SketchLine } from '../types/document';
 import './PropertiesPanel.css';
 
@@ -530,101 +533,275 @@ function GenericProperties({ feature, onUpdate }: FeaturePropertiesProps) {
 }
 
 // ============================================================================
-// Feature Edit Forms (for creating new features)
+// Feature Edit Forms (using Tanstack Form with Zod validation)
 // ============================================================================
 
 interface ExtrudeEditFormProps {
-  data: { sketch: string; op: 'add' | 'cut'; direction: 'normal' | 'reverse'; distance?: number };
-  onUpdate: (updates: Record<string, string | number | boolean>) => void;
+  data: ExtrudeFormData;
+  onUpdate: (updates: Partial<ExtrudeFormData>) => void;
+  onAccept: () => void;
+  onCancel: () => void;
 }
 
-function ExtrudeEditForm({ data, onUpdate }: ExtrudeEditFormProps) {
+function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }: ExtrudeEditFormProps) {
+  const form = useForm({
+    defaultValues: data,
+    onSubmit: async () => {
+      onAccept();
+    },
+    validators: {
+      onChange: ({ value }) => {
+        const result = extrudeFormSchema.safeParse(value);
+        if (!result.success) {
+          return result.error.issues[0]?.message;
+        }
+        return undefined;
+      },
+    },
+  });
+
+  // Sync form values to parent on change
+  useEffect(() => {
+    const subscription = form.store.subscribe(() => {
+      const values = form.state.values;
+      onUpdate(values);
+    });
+    return subscription;
+  }, [form, onUpdate]);
+
   return (
-    <>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        form.handleSubmit();
+      }}
+    >
       <PropertyGroup title="Extrude">
         <PropertyRow label="Sketch">
           <span className="readonly-value">{data.sketch}</span>
         </PropertyRow>
-        <PropertyRow label="Operation">
-          <SelectInput
-            value={data.op}
-            onChange={(op) => onUpdate({ op })}
-            options={[
-              { value: 'add', label: 'Add' },
-              { value: 'cut', label: 'Cut' },
-            ]}
-          />
-        </PropertyRow>
-        <PropertyRow label="Direction">
-          <SelectInput
-            value={data.direction}
-            onChange={(direction) => onUpdate({ direction })}
-            options={[
-              { value: 'normal', label: 'Normal' },
-              { value: 'reverse', label: 'Reverse' },
-            ]}
-          />
-        </PropertyRow>
-        <PropertyRow label="Distance">
-          <NumberInput
-            value={data.distance ?? 10}
-            onChange={(distance) => onUpdate({ distance })}
-            min={0.1}
-            step={1}
-            unit="mm"
-          />
-        </PropertyRow>
+
+        <form.Field name="op">
+          {(field) => (
+            <PropertyRow label="Operation">
+              <SelectInput
+                value={field.state.value}
+                onChange={(op) => field.handleChange(op as 'add' | 'cut')}
+                options={[
+                  { value: 'add', label: 'Add' },
+                  { value: 'cut', label: 'Cut' },
+                ]}
+              />
+            </PropertyRow>
+          )}
+        </form.Field>
+
+        <form.Field name="direction">
+          {(field) => (
+            <PropertyRow label="Direction">
+              <SelectInput
+                value={field.state.value}
+                onChange={(dir) => field.handleChange(dir as 'normal' | 'reverse')}
+                options={[
+                  { value: 'normal', label: 'Normal' },
+                  { value: 'reverse', label: 'Reverse' },
+                ]}
+              />
+            </PropertyRow>
+          )}
+        </form.Field>
+
+        <form.Field
+          name="distance"
+          validators={{
+            onChange: ({ value }) => {
+              if (value === undefined || value < 0.1) {
+                return 'Distance must be at least 0.1';
+              }
+              return undefined;
+            },
+          }}
+        >
+          {(field) => (
+            <PropertyRow label="Distance">
+              <div className="field-with-error">
+                <NumberInput
+                  value={field.state.value ?? 10}
+                  onChange={(distance) => field.handleChange(distance)}
+                  min={0.1}
+                  step={1}
+                  unit="mm"
+                />
+                {field.state.meta.errors.length > 0 && (
+                  <span className="field-error">{field.state.meta.errors[0]}</span>
+                )}
+              </div>
+            </PropertyRow>
+          )}
+        </form.Field>
       </PropertyGroup>
-    </>
+
+      <div className="properties-panel-actions">
+        <button
+          type="button"
+          className="properties-btn properties-btn-cancel"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="properties-btn properties-btn-accept"
+          disabled={!form.state.canSubmit}
+        >
+          Accept
+        </button>
+      </div>
+    </form>
   );
 }
 
 interface RevolveEditFormProps {
-  data: { sketch: string; axis: string; angle: number; op: 'add' | 'cut' };
+  data: RevolveFormData;
   axisCandidates: Array<{ id: string }>;
-  onUpdate: (updates: Record<string, string | number | boolean>) => void;
+  onUpdate: (updates: Partial<RevolveFormData>) => void;
+  onAccept: () => void;
+  onCancel: () => void;
 }
 
-function RevolveEditForm({ data, axisCandidates, onUpdate }: RevolveEditFormProps) {
+function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }: RevolveEditFormProps) {
+  const form = useForm({
+    defaultValues: data,
+    onSubmit: async () => {
+      onAccept();
+    },
+    validators: {
+      onChange: ({ value }) => {
+        const result = revolveFormSchema.safeParse(value);
+        if (!result.success) {
+          return result.error.issues[0]?.message;
+        }
+        return undefined;
+      },
+    },
+  });
+
+  // Sync form values to parent on change
+  useEffect(() => {
+    const subscription = form.store.subscribe(() => {
+      const values = form.state.values;
+      onUpdate(values);
+    });
+    return subscription;
+  }, [form, onUpdate]);
+
   return (
-    <>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        form.handleSubmit();
+      }}
+    >
       <PropertyGroup title="Revolve">
         <PropertyRow label="Sketch">
           <span className="readonly-value">{data.sketch}</span>
         </PropertyRow>
-        <PropertyRow label="Operation">
-          <SelectInput
-            value={data.op}
-            onChange={(op) => onUpdate({ op })}
-            options={[
-              { value: 'add', label: 'Add' },
-              { value: 'cut', label: 'Cut' },
-            ]}
-          />
-        </PropertyRow>
-        <PropertyRow label="Axis">
-          <SelectInput
-            value={data.axis}
-            onChange={(axis) => onUpdate({ axis })}
-            options={axisCandidates.length > 0 
-              ? axisCandidates.map(l => ({ value: l.id, label: l.id }))
-              : [{ value: '', label: 'No lines in sketch' }]
-            }
-            disabled={axisCandidates.length === 0}
-          />
-        </PropertyRow>
-        <PropertyRow label="Angle">
-          <NumberInput
-            value={data.angle}
-            onChange={(angle) => onUpdate({ angle })}
-            min={1}
-            max={360}
-            step={15}
-            unit="°"
-          />
-        </PropertyRow>
+
+        <form.Field name="op">
+          {(field) => (
+            <PropertyRow label="Operation">
+              <SelectInput
+                value={field.state.value}
+                onChange={(op) => field.handleChange(op as 'add' | 'cut')}
+                options={[
+                  { value: 'add', label: 'Add' },
+                  { value: 'cut', label: 'Cut' },
+                ]}
+              />
+            </PropertyRow>
+          )}
+        </form.Field>
+
+        <form.Field
+          name="axis"
+          validators={{
+            onChange: ({ value }) => {
+              if (!value) {
+                return 'Axis is required';
+              }
+              return undefined;
+            },
+          }}
+        >
+          {(field) => (
+            <PropertyRow label="Axis">
+              <div className="field-with-error">
+                <SelectInput
+                  value={field.state.value}
+                  onChange={(axis) => field.handleChange(axis)}
+                  options={axisCandidates.length > 0
+                    ? axisCandidates.map(l => ({ value: l.id, label: l.id }))
+                    : [{ value: '', label: 'No lines in sketch' }]
+                  }
+                  disabled={axisCandidates.length === 0}
+                />
+                {field.state.meta.errors.length > 0 && (
+                  <span className="field-error">{field.state.meta.errors[0]}</span>
+                )}
+              </div>
+            </PropertyRow>
+          )}
+        </form.Field>
+
+        <form.Field
+          name="angle"
+          validators={{
+            onChange: ({ value }) => {
+              if (value < 1) return 'Angle must be at least 1°';
+              if (value > 360) return 'Angle must be at most 360°';
+              return undefined;
+            },
+          }}
+        >
+          {(field) => (
+            <PropertyRow label="Angle">
+              <div className="field-with-error">
+                <NumberInput
+                  value={field.state.value}
+                  onChange={(angle) => field.handleChange(angle)}
+                  min={1}
+                  max={360}
+                  step={15}
+                  unit="°"
+                />
+                {field.state.meta.errors.length > 0 && (
+                  <span className="field-error">{field.state.meta.errors[0]}</span>
+                )}
+              </div>
+            </PropertyRow>
+          )}
+        </form.Field>
       </PropertyGroup>
-    </>
+
+      <div className="properties-panel-actions">
+        <button
+          type="button"
+          className="properties-btn properties-btn-cancel"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="properties-btn properties-btn-accept"
+          disabled={!form.state.canSubmit || axisCandidates.length === 0}
+        >
+          Accept
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -680,31 +857,21 @@ const PropertiesPanel: React.FC = () => {
         <div className="properties-panel-content">
           {editMode.type === 'extrude' && (
             <ExtrudeEditForm 
-              data={editMode.data} 
+              data={editMode.data as ExtrudeFormData} 
               onUpdate={updateFormData}
+              onAccept={acceptEdit}
+              onCancel={cancelEdit}
             />
           )}
           {editMode.type === 'revolve' && (
             <RevolveEditForm 
-              data={editMode.data}
+              data={editMode.data as RevolveFormData}
               axisCandidates={axisCandidates}
               onUpdate={updateFormData}
+              onAccept={acceptEdit}
+              onCancel={cancelEdit}
             />
           )}
-        </div>
-        <div className="properties-panel-actions">
-          <button 
-            className="properties-btn properties-btn-cancel"
-            onClick={cancelEdit}
-          >
-            Cancel
-          </button>
-          <button 
-            className="properties-btn properties-btn-accept"
-            onClick={acceptEdit}
-          >
-            Accept
-          </button>
         </div>
       </div>
     );

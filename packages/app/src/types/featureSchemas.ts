@@ -3,7 +3,7 @@
  * Used with Tanstack Form for feature editing
  */
 
-import { z } from 'zod';
+import { z } from 'zod/v4';
 
 // ============================================================================
 // Common Schemas
@@ -27,7 +27,7 @@ export const extrudeFormSchema = z.object({
   op: z.enum(['add', 'cut']),
   direction: z.enum(['normal', 'reverse']),
   extent: extrudeExtentSchema,
-  distance: z.number().min(0.1, 'Distance must be at least 0.1').optional(),
+  distance: z.number().min(0.1, 'Distance must be at least 0.1'),
   extentRef: z.string().optional(),
 });
 
