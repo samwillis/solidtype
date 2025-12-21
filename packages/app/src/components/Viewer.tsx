@@ -142,6 +142,10 @@ const Viewer: React.FC = () => {
   const [editingDimensionId, setEditingDimensionId] = useState<string | null>(null);
   const [editingDimensionValue, setEditingDimensionValue] = useState<string>('');
   
+  // Dimension dragging state
+  const [draggingDimensionId, setDraggingDimensionId] = useState<string | null>(null);
+  const [dragCurrentOffset, setDragCurrentOffset] = useState<{ x: number; y: number } | null>(null);
+  
   // Track mouse for sketch interactions
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingViewRef = useRef(false);
@@ -327,6 +331,27 @@ const Viewer: React.FC = () => {
       c.value = value;
     } else if (c.type === 'angle') {
       c.value = value;
+    } else {
+      return;
+    }
+
+    doc.ydoc.transact(() => {
+      setSketchData(sketchEl, data);
+    });
+  }, [doc.features, doc.ydoc, sketchMode.sketchId]);
+
+  // Update constraint offset (for draggable dimensions)
+  const updateConstraintOffset = useCallback((constraintId: string, offsetX: number, offsetY: number) => {
+    if (!sketchMode.sketchId) return;
+    const sketchEl = findFeature(doc.features, sketchMode.sketchId);
+    if (!sketchEl) return;
+    const data = getSketchData(sketchEl);
+    const c = data.constraints.find((cc) => cc.id === constraintId);
+    if (!c) return;
+
+    if (c.type === 'distance' || c.type === 'angle') {
+      c.offsetX = offsetX;
+      c.offsetY = offsetY;
     } else {
       return;
     }
@@ -1063,9 +1088,17 @@ const Viewer: React.FC = () => {
         const len = Math.sqrt(dx * dx + dy * dy);
         const perpX = len > 0 ? -dy / len : 0;
         const perpY = len > 0 ? dx / len : 1;
-        const offset = 15; // offset distance in sketch units
-        const labelX = midX + perpX * offset;
-        const labelY = midY + perpY * offset;
+        
+        // Use stored offset or default to 15
+        const storedOffsetX = c.offsetX ?? 0;
+        const storedOffsetY = c.offsetY ?? 15;
+        // If being dragged, use current drag offset
+        const effectiveOffsetX = (draggingDimensionId === c.id && dragCurrentOffset) ? dragCurrentOffset.x : storedOffsetX;
+        const effectiveOffsetY = (draggingDimensionId === c.id && dragCurrentOffset) ? dragCurrentOffset.y : storedOffsetY;
+        
+        const labelX = midX + perpX * effectiveOffsetY + (dx / len || 0) * effectiveOffsetX;
+        const labelY = midY + perpY * effectiveOffsetY + (dy / len || 0) * effectiveOffsetX;
+        const offset = effectiveOffsetY; // for extension lines
 
         // Draw extension lines
         const extA = toWorld(pA.x + perpX * offset * 0.7, pA.y + perpY * offset * 0.7);
@@ -1098,10 +1131,10 @@ const Viewer: React.FC = () => {
         dimLine.computeLineDistances();
         selectionGroup.add(dimLine);
 
-        // Create dimension label (editable on double-click)
+        // Create dimension label (editable on double-click, draggable)
         const labelPos = toWorld(labelX, labelY);
         const labelDiv = document.createElement('div');
-        labelDiv.className = 'dimension-label';
+        labelDiv.className = 'dimension-label draggable-dimension';
         labelDiv.textContent = `${c.value.toFixed(1)}`;
         labelDiv.style.cssText = `
           background: rgba(0, 170, 0, 0.95);
@@ -1110,11 +1143,13 @@ const Viewer: React.FC = () => {
           border-radius: 4px;
           font-size: 12px;
           font-weight: 600;
-          cursor: pointer;
+          cursor: move;
           user-select: none;
         `;
         labelDiv.dataset.constraintId = c.id;
         labelDiv.dataset.constraintType = 'distance';
+        labelDiv.dataset.storedOffsetX = String(storedOffsetX);
+        labelDiv.dataset.storedOffsetY = String(storedOffsetY);
         const labelObject = new CSS2DObject(labelDiv);
         labelObject.position.copy(labelPos);
         labelsGroup.add(labelObject);
@@ -1138,8 +1173,8 @@ const Viewer: React.FC = () => {
         else if (l1p2.id === l2p1.id || l1p2.id === l2p2.id) centerPt = { x: l1p2.x, y: l1p2.y };
         else centerPt = { x: (l1p1.x + l1p2.x + l2p1.x + l2p2.x) / 4, y: (l1p1.y + l1p2.y + l2p1.y + l2p2.y) / 4 };
 
-        // Place label near the center
-        const labelOffset = 25;
+        // Place label near the center with user offset
+        const baseOffset = 25;
         const dir1x = (l1p2.x - l1p1.x);
         const dir1y = (l1p2.y - l1p1.y);
         const dir2x = (l2p2.x - l2p1.x);
@@ -1147,13 +1182,21 @@ const Viewer: React.FC = () => {
         const avgDirX = (dir1x + dir2x) / 2;
         const avgDirY = (dir1y + dir2y) / 2;
         const avgLen = Math.sqrt(avgDirX * avgDirX + avgDirY * avgDirY) || 1;
-        const labelX = centerPt.x + (avgDirX / avgLen) * labelOffset;
-        const labelY = centerPt.y + (avgDirY / avgLen) * labelOffset;
+        
+        // Use stored offset or default
+        const storedOffsetX = c.offsetX ?? 0;
+        const storedOffsetY = c.offsetY ?? baseOffset;
+        // If being dragged, use current drag offset
+        const effectiveOffsetX = (draggingDimensionId === c.id && dragCurrentOffset) ? dragCurrentOffset.x : storedOffsetX;
+        const effectiveOffsetY = (draggingDimensionId === c.id && dragCurrentOffset) ? dragCurrentOffset.y : storedOffsetY;
+        
+        const labelX = centerPt.x + (avgDirX / avgLen) * effectiveOffsetY + effectiveOffsetX;
+        const labelY = centerPt.y + (avgDirY / avgLen) * effectiveOffsetY;
 
-        // Create angle label
+        // Create angle label (draggable)
         const labelPos = toWorld(labelX, labelY);
         const labelDiv = document.createElement('div');
-        labelDiv.className = 'dimension-label angle-label';
+        labelDiv.className = 'dimension-label angle-label draggable-dimension';
         labelDiv.textContent = `${c.value.toFixed(1)}°`;
         labelDiv.style.cssText = `
           background: rgba(170, 85, 0, 0.95);
@@ -1162,11 +1205,13 @@ const Viewer: React.FC = () => {
           border-radius: 4px;
           font-size: 12px;
           font-weight: 600;
-          cursor: pointer;
+          cursor: move;
           user-select: none;
         `;
         labelDiv.dataset.constraintId = c.id;
         labelDiv.dataset.constraintType = 'angle';
+        labelDiv.dataset.storedOffsetX = String(storedOffsetX);
+        labelDiv.dataset.storedOffsetY = String(storedOffsetY);
         const labelObject = new CSS2DObject(labelDiv);
         labelObject.position.copy(labelPos);
         labelsGroup.add(labelObject);
@@ -1225,7 +1270,81 @@ const Viewer: React.FC = () => {
     }
 
     needsRenderRef.current = true;
-  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, selectedPoints, selectedLines, getSketch, sceneReady]);
+  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, selectedPoints, selectedLines, getSketch, sceneReady, draggingDimensionId, dragCurrentOffset]);
+
+  // Handle dimension label dragging for repositioning
+  useEffect(() => {
+    if (!sketchMode.active) return;
+
+    let isDragging = false;
+    let currentDragId: string | null = null;
+    let startX = 0;
+    let startY = 0;
+    let initialOffsetX = 0;
+    let initialOffsetY = 0;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('draggable-dimension') && e.button === 0) {
+        // Start drag on left mouse button
+        const constraintId = target.dataset.constraintId;
+        if (constraintId) {
+          isDragging = true;
+          currentDragId = constraintId;
+          startX = e.clientX;
+          startY = e.clientY;
+          initialOffsetX = parseFloat(target.dataset.storedOffsetX ?? '0');
+          initialOffsetY = parseFloat(target.dataset.storedOffsetY ?? '15');
+          setDraggingDimensionId(constraintId);
+          setDragCurrentOffset({ x: initialOffsetX, y: initialOffsetY });
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !currentDragId) return;
+      
+      // Calculate offset delta (scaled to sketch units - approximate)
+      const deltaX = (e.clientX - startX) * 0.5; // Rough scaling factor
+      const deltaY = -(e.clientY - startY) * 0.5; // Invert Y for sketch coords
+      
+      setDragCurrentOffset({
+        x: initialOffsetX + deltaX,
+        y: initialOffsetY + deltaY,
+      });
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!isDragging || !currentDragId) return;
+      
+      // Calculate final offset
+      const deltaX = (e.clientX - startX) * 0.5;
+      const deltaY = -(e.clientY - startY) * 0.5;
+      const finalOffsetX = initialOffsetX + deltaX;
+      const finalOffsetY = initialOffsetY + deltaY;
+      
+      // Save to document
+      updateConstraintOffset(currentDragId, finalOffsetX, finalOffsetY);
+      
+      // Reset drag state
+      isDragging = false;
+      currentDragId = null;
+      setDraggingDimensionId(null);
+      setDragCurrentOffset(null);
+    };
+
+    document.addEventListener('mousedown', handleMouseDown, true);
+    document.addEventListener('mousemove', handleMouseMove, true);
+    document.addEventListener('mouseup', handleMouseUp, true);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown, true);
+      document.removeEventListener('mousemove', handleMouseMove, true);
+      document.removeEventListener('mouseup', handleMouseUp, true);
+    };
+  }, [sketchMode.active, updateConstraintOffset]);
 
   // Handle double-click on dimension labels for inline editing
   useEffect(() => {

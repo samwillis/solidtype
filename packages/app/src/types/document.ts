@@ -86,8 +86,8 @@ export type SketchConstraint =
   | { id: string; type: 'vertical'; points: [string, string] }
   | { id: string; type: 'coincident'; points: [string, string] }
   | { id: string; type: 'fixed'; point: string }
-  | { id: string; type: 'distance'; points: [string, string]; value: number }
-  | { id: string; type: 'angle'; lines: [string, string]; value: number }
+  | { id: string; type: 'distance'; points: [string, string]; value: number; offsetX?: number; offsetY?: number }
+  | { id: string; type: 'angle'; lines: [string, string]; value: number; offsetX?: number; offsetY?: number }
   // Advanced constraints (Phase 19)
   | { id: string; type: 'parallel'; lines: [string, string] }
   | { id: string; type: 'perpendicular'; lines: [string, string] }
