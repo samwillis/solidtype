@@ -7,6 +7,7 @@ import React, {
   useContext,
   useState,
   useCallback,
+  useRef,
 } from 'react';
 import { useDocument } from './DocumentContext';
 import { useViewer, type ViewPreset } from './ViewerContext';
@@ -36,6 +37,8 @@ export interface SketchModeState {
   planeId: string | null;
   activeTool: SketchTool;
   tempPoints: { x: number; y: number }[];
+  /** Whether this is a new sketch (should be deleted on cancel) or editing existing */
+  isNewSketch: boolean;
 }
 
 /** Mouse position in sketch coordinates */
@@ -58,7 +61,10 @@ interface SketchContextValue {
   /** Preview line for draft rendering (set by SketchCanvas, rendered by Viewer) */
   previewLine: SketchPreviewLine | null;
   setPreviewLine: (line: SketchPreviewLine | null) => void;
+  /** Start a new sketch on the given plane */
   startSketch: (planeId: string) => void;
+  /** Edit an existing sketch */
+  editSketch: (sketchId: string, planeId: string) => void;
   finishSketch: () => void;
   cancelSketch: () => void;
   setTool: (tool: SketchTool) => void;
@@ -104,7 +110,7 @@ interface SketchProviderProps {
 }
 
 export function SketchProvider({ children }: SketchProviderProps) {
-  const { doc, addSketch } = useDocument();
+  const { doc, addSketch, deleteFeature, undoManager } = useDocument();
   const { actions, state } = useViewer();
   
   const [mode, setMode] = useState<SketchModeState>({
@@ -113,7 +119,11 @@ export function SketchProvider({ children }: SketchProviderProps) {
     planeId: null,
     activeTool: 'line',
     tempPoints: [],
+    isNewSketch: false,
   });
+  
+  // Store the undo stack position when we start editing, so we can revert on cancel
+  const undoStackPositionRef = useRef<number>(0);
   
   // Mouse position in sketch coordinates (shared with StatusBar)
   const [sketchMousePos, setSketchMousePos] = useState<SketchMousePos | null>(null);
@@ -157,8 +167,43 @@ export function SketchProvider({ children }: SketchProviderProps) {
       planeId,
       activeTool: 'line',
       tempPoints: [],
+      isNewSketch: true,
     });
   }, [addSketch, actions, state.currentView]);
+
+  const editSketch = useCallback((sketchId: string, planeId: string) => {
+    // Store current undo stack position so we can revert on cancel
+    undoStackPositionRef.current = undoManager.undoStack.length;
+    
+    // Rotate camera to face the sketch plane
+    let targetView: ViewPreset;
+    switch (planeId) {
+      case 'xy':
+        targetView = 'front';
+        break;
+      case 'xz':
+        targetView = 'top';
+        break;
+      case 'yz':
+        targetView = 'right';
+        break;
+      default:
+        targetView = 'isometric';
+    }
+    
+    if (state.currentView !== targetView) {
+      actions.setView(targetView);
+    }
+    
+    setMode({
+      active: true,
+      sketchId,
+      planeId,
+      activeTool: 'line',
+      tempPoints: [],
+      isNewSketch: false,
+    });
+  }, [actions, state.currentView, undoManager]);
 
   const finishSketch = useCallback(() => {
     setMode({
@@ -167,19 +212,36 @@ export function SketchProvider({ children }: SketchProviderProps) {
       planeId: null,
       activeTool: 'line',
       tempPoints: [],
+      isNewSketch: false,
     });
   }, []);
 
   const cancelSketch = useCallback(() => {
-    // TODO: Undo changes made during sketch mode
+    const { sketchId, isNewSketch } = mode;
+    
+    if (isNewSketch && sketchId) {
+      // New sketch - delete it entirely
+      deleteFeature(sketchId);
+    } else if (!isNewSketch && sketchId) {
+      // Existing sketch - undo all changes made during editing
+      const targetPosition = undoStackPositionRef.current;
+      const currentPosition = undoManager.undoStack.length;
+      const undoCount = currentPosition - targetPosition;
+      
+      for (let i = 0; i < undoCount; i++) {
+        undoManager.undo();
+      }
+    }
+    
     setMode({
       active: false,
       sketchId: null,
       planeId: null,
       activeTool: 'line',
       tempPoints: [],
+      isNewSketch: false,
     });
-  }, []);
+  }, [mode, deleteFeature, undoManager]);
 
   const setTool = useCallback((tool: SketchTool) => {
     setMode((prev) => ({
@@ -414,6 +476,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     previewLine,
     setPreviewLine,
     startSketch,
+    editSketch,
     finishSketch,
     cancelSketch,
     setTool,

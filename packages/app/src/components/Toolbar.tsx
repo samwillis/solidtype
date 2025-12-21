@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Tooltip, Separator } from '@base-ui/react';
 import { useSketch } from '../contexts/SketchContext';
 import { useDocument } from '../contexts/DocumentContext';
-import ExtrudeDialog from './ExtrudeDialog';
-import RevolveDialog from './RevolveDialog';
+import { useSelection } from '../contexts/SelectionContext';
+import { useFeatureEdit } from '../contexts/FeatureEditContext';
 import './Toolbar.css';
 
 
@@ -27,6 +27,13 @@ const RevolveIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
     <path d="M21 12a9 9 0 11-9-9" />
     <path d="M12 3v9l5 5" />
+  </svg>
+);
+
+const PlaneIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M4 6l8 4 8-4" />
+    <path d="M4 6v8l8 4 8-4V6" />
   </svg>
 );
 
@@ -103,39 +110,6 @@ const AIIcon = () => (
 
 
 
-// Plane selector dialog
-interface PlaneSelectorProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (planeId: string) => void;
-}
-
-const PlaneSelector: React.FC<PlaneSelectorProps> = ({ open, onClose, onSelect }) => {
-  if (!open) return null;
-
-  return (
-    <div className="plane-selector-overlay" onClick={onClose}>
-      <div className="plane-selector-dialog" onClick={(e) => e.stopPropagation()}>
-        <h3>Select a Plane</h3>
-        <div className="plane-selector-options">
-          <button onClick={() => onSelect('xy')}>
-            <span className="plane-icon plane-xy" />
-            XY Plane (Top)
-          </button>
-          <button onClick={() => onSelect('xz')}>
-            <span className="plane-icon plane-xz" />
-            XZ Plane (Front)
-          </button>
-          <button onClick={() => onSelect('yz')}>
-            <span className="plane-icon plane-yz" />
-            YZ Plane (Right)
-          </button>
-        </div>
-        <button className="plane-selector-cancel" onClick={onClose}>Cancel</button>
-      </div>
-    </div>
-  );
-};
 
 interface ToolbarProps {
   onToggleAIPanel?: () => void;
@@ -143,12 +117,10 @@ interface ToolbarProps {
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) => {
-  const { mode, startSketch, addRectangle, setTool, canApplyConstraint, applyConstraint } = useSketch();
-  const { undo, redo, canUndo, canRedo, features, addExtrude, addRevolve } = useDocument();
-  const [planeSelectorOpen, setPlaneSelectorOpen] = useState(false);
-  const [extrudeDialogOpen, setExtrudeDialogOpen] = useState(false);
-  const [revolveDialogOpen, setRevolveDialogOpen] = useState(false);
-  const [selectedSketchId, setSelectedSketchId] = useState<string | null>(null);
+  const { mode, startSketch, finishSketch, cancelSketch, addRectangle, setTool, canApplyConstraint, applyConstraint, clearSelection: clearSketchSelection } = useSketch();
+  const { undo, redo, canUndo, canRedo, features } = useDocument();
+  const { selectedFeatureId, selectFeature, clearSelection } = useSelection();
+  const { startExtrudeEdit, startRevolveEdit, isEditing } = useFeatureEdit();
   const [constraintsDropdownOpen, setConstraintsDropdownOpen] = useState(false);
   const constraintsDropdownRef = React.useRef<HTMLDivElement>(null);
 
@@ -169,13 +141,63 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     return features.filter((f) => f.type === 'sketch');
   }, [features]);
 
-  const handleNewSketch = () => {
-    setPlaneSelectorOpen(true);
-  };
+  // Check if a plane is selected (for starting sketch on selected plane)
+  const selectedPlane = useMemo(() => {
+    if (!selectedFeatureId) return null;
+    const feature = features.find(f => f.id === selectedFeatureId);
+    if (feature?.type === 'plane') {
+      return feature.id;
+    }
+    return null;
+  }, [selectedFeatureId, features]);
 
-  const handlePlaneSelect = (planeId: string) => {
+  // Check if a sketch is selected (for extrude/revolve)
+  const selectedSketch = useMemo(() => {
+    if (!selectedFeatureId) return null;
+    const feature = features.find(f => f.id === selectedFeatureId);
+    if (feature?.type === 'sketch') {
+      return feature;
+    }
+    return null;
+  }, [selectedFeatureId, features]);
+
+  // Keyboard shortcuts for sketch mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const modKey = isMac ? e.metaKey : e.ctrlKey;
+      
+      // Cmd/Ctrl + Enter to accept sketch
+      if (modKey && e.key === 'Enter' && mode.active) {
+        e.preventDefault();
+        finishSketch();
+        return;
+      }
+      
+      // Escape to cancel sketch or clear selection
+      if (e.key === 'Escape') {
+        if (mode.active) {
+          e.preventDefault();
+          cancelSketch();
+        } else {
+          // Clear selection from feature tree and 3D view
+          e.preventDefault();
+          selectFeature(null);
+          clearSelection();
+          clearSketchSelection();
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mode.active, finishSketch, cancelSketch, selectFeature, clearSelection, clearSketchSelection]);
+
+  const handleNewSketch = () => {
+    // Use selected plane if available, otherwise use XY plane
+    const planeId = selectedPlane || 'xy';
     startSketch(planeId);
-    setPlaneSelectorOpen(false);
   };
 
   const handleAddRectangle = () => {
@@ -183,54 +205,25 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     addRectangle(0, 0, 4, 3);
   };
 
+  // Check if sketch button should be enabled
+  const canStartSketch = selectedPlane !== null || sketches.length === 0;
+
+  // Check if extrude/revolve can be used (also disabled when already editing a feature)
+  const canExtrude = !isEditing && (selectedSketch !== null || sketches.length === 1);
+  const canRevolve = !isEditing && (selectedSketch !== null || sketches.length === 1);
+
   const handleExtrude = () => {
-    // If there's only one sketch, use it directly
-    if (sketches.length === 1) {
-      setSelectedSketchId(sketches[0].id);
-      setExtrudeDialogOpen(true);
-    } else if (sketches.length > 1) {
-      // For now, use the last sketch
-      // TODO: Add sketch selector
-      setSelectedSketchId(sketches[sketches.length - 1].id);
-      setExtrudeDialogOpen(true);
+    const sketchId = selectedSketch?.id || (sketches.length === 1 ? sketches[0].id : null);
+    if (sketchId) {
+      startExtrudeEdit(sketchId);
     }
   };
 
   const handleRevolve = () => {
-    if (sketches.length === 1) {
-      setSelectedSketchId(sketches[0].id);
-      setRevolveDialogOpen(true);
-    } else if (sketches.length > 1) {
-      // For now, use the last sketch
-      setSelectedSketchId(sketches[sketches.length - 1].id);
-      setRevolveDialogOpen(true);
+    const sketchId = selectedSketch?.id || (sketches.length === 1 ? sketches[0].id : null);
+    if (sketchId) {
+      startRevolveEdit(sketchId);
     }
-  };
-
-  const handleExtrudeConfirm = (distance: number, direction: 'normal' | 'reverse', op: 'add' | 'cut') => {
-    if (selectedSketchId) {
-      addExtrude(selectedSketchId, distance, op, direction);
-    }
-    setExtrudeDialogOpen(false);
-    setSelectedSketchId(null);
-  };
-
-  const handleExtrudeCancel = () => {
-    setExtrudeDialogOpen(false);
-    setSelectedSketchId(null);
-  };
-
-  const handleRevolveConfirm = (axis: string, angle: number, op: 'add' | 'cut') => {
-    if (selectedSketchId) {
-      addRevolve(selectedSketchId, axis, angle, op);
-    }
-    setRevolveDialogOpen(false);
-    setSelectedSketchId(null);
-  };
-
-  const handleRevolveCancel = () => {
-    setRevolveDialogOpen(false);
-    setSelectedSketchId(null);
   };
 
   return (
@@ -437,12 +430,12 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
           </div>
         ) : (
           <>
-            {/* Tool groups */}
+            {/* Feature mode: Sketch, Plane, Extrude, Revolve */}
             <div className="toolbar-group">
               <Tooltip.Root>
                 <Tooltip.Trigger
                   delay={300}
-                  className="toolbar-button"
+                  className={`toolbar-button ${!canStartSketch && !selectedPlane ? '' : ''}`}
                   onClick={handleNewSketch}
                   render={<button aria-label="New Sketch" />}
                 >
@@ -450,48 +443,69 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Positioner side="bottom" sideOffset={6}>
-                    <Tooltip.Popup className="toolbar-tooltip">New Sketch</Tooltip.Popup>
+                    <Tooltip.Popup className="toolbar-tooltip">
+                      {selectedPlane ? `New Sketch on ${selectedPlane.toUpperCase()}` : 'New Sketch (select a plane first)'}
+                    </Tooltip.Popup>
+                  </Tooltip.Positioner>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  delay={300}
+                  className="toolbar-button disabled"
+                  render={<button aria-label="Plane" disabled />}
+                >
+                  <PlaneIcon />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Positioner side="bottom" sideOffset={6}>
+                    <Tooltip.Popup className="toolbar-tooltip">Plane (coming soon)</Tooltip.Popup>
+                  </Tooltip.Positioner>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </div>
+            
+            <Separator orientation="vertical" className="toolbar-separator" />
+
+            {/* Feature tools - only visible in feature mode */}
+            <div className="toolbar-group">
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  delay={300}
+                  className={`toolbar-button ${!canExtrude ? 'disabled' : ''}`}
+                  onClick={handleExtrude}
+                  render={<button aria-label="Extrude" disabled={!canExtrude} />}
+                >
+                  <ExtrudeIcon />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Positioner side="bottom" sideOffset={6}>
+                    <Tooltip.Popup className="toolbar-tooltip">
+                      {selectedSketch ? `Extrude ${selectedSketch.name || selectedSketch.id}` : 'Extrude (select a sketch)'}
+                    </Tooltip.Popup>
+                  </Tooltip.Positioner>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  delay={300}
+                  className={`toolbar-button ${!canRevolve ? 'disabled' : ''}`}
+                  onClick={handleRevolve}
+                  render={<button aria-label="Revolve" disabled={!canRevolve} />}
+                >
+                  <RevolveIcon />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Positioner side="bottom" sideOffset={6}>
+                    <Tooltip.Popup className="toolbar-tooltip">
+                      {selectedSketch ? `Revolve ${selectedSketch.name || selectedSketch.id}` : 'Revolve (select a sketch)'}
+                    </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
               </Tooltip.Root>
             </div>
           </>
         )}
-        <Separator orientation="vertical" className="toolbar-separator" />
-
-        {/* Feature tools */}
-        <div className="toolbar-group">
-          <Tooltip.Root>
-            <Tooltip.Trigger
-              delay={300}
-              className={`toolbar-button ${sketches.length === 0 ? 'disabled' : ''}`}
-              onClick={handleExtrude}
-              render={<button aria-label="Extrude" disabled={sketches.length === 0} />}
-            >
-              <ExtrudeIcon />
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-              <Tooltip.Positioner side="bottom" sideOffset={6}>
-                <Tooltip.Popup className="toolbar-tooltip">Extrude</Tooltip.Popup>
-              </Tooltip.Positioner>
-            </Tooltip.Portal>
-          </Tooltip.Root>
-          <Tooltip.Root>
-            <Tooltip.Trigger
-              delay={300}
-              className={`toolbar-button ${sketches.length === 0 ? 'disabled' : ''}`}
-              onClick={handleRevolve}
-              render={<button aria-label="Revolve" disabled={sketches.length === 0} />}
-            >
-              <RevolveIcon />
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-              <Tooltip.Positioner side="bottom" sideOffset={6}>
-                <Tooltip.Popup className="toolbar-tooltip">Revolve</Tooltip.Popup>
-              </Tooltip.Positioner>
-            </Tooltip.Portal>
-          </Tooltip.Root>
-        </div>
 
         {/* Spacer to push AI button to right */}
         <div className="toolbar-spacer" />
@@ -514,29 +528,6 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
             </Tooltip.Positioner>
           </Tooltip.Portal>
         </Tooltip.Root>
-
-        {/* Plane selector dialog */}
-        <PlaneSelector
-          open={planeSelectorOpen}
-          onClose={() => setPlaneSelectorOpen(false)}
-          onSelect={handlePlaneSelect}
-        />
-
-        {/* Extrude dialog */}
-        <ExtrudeDialog
-          open={extrudeDialogOpen}
-          sketchId={selectedSketchId || ''}
-          onConfirm={handleExtrudeConfirm}
-          onCancel={handleExtrudeCancel}
-        />
-
-        {/* Revolve dialog */}
-        <RevolveDialog
-          open={revolveDialogOpen}
-          sketchId={selectedSketchId || ''}
-          onConfirm={handleRevolveConfirm}
-          onCancel={handleRevolveCancel}
-        />
       </div>
     </Tooltip.Provider>
   );

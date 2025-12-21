@@ -66,10 +66,6 @@
   border-radius: 4px;
 }
 
-.property-row:hover {
-  background: var(--color-bg-hover);
-}
-
 .property-label {
   flex: 0 0 80px;
   color: var(--color-text-secondary);
@@ -213,4 +209,52 @@
 
 .color-input .reset-color:hover {
   background: var(--color-bg-hover);
+}
+
+/* Properties Panel Editing Mode */
+.properties-panel-editing {
+  border: 2px solid var(--color-accent);
+}
+
+.properties-panel-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.properties-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.properties-btn-cancel {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.properties-btn-cancel:hover {
+  background: var(--color-bg-hover);
+}
+
+.properties-btn-accept {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.properties-btn-accept:hover {
+  background: var(--color-accent-hover, #1c8ae6);
+}
+
+.properties-btn-accept:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

@@ -1,12 +1,15 @@
 /**
  * Properties Panel - displays and edits properties of selected features
  * Phase 13: Properties Panel
+ * 
+ * Also handles feature creation with accept/cancel buttons when in edit mode.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDocument } from '../contexts/DocumentContext';
 import { useSelection } from '../contexts/SelectionContext';
-import type { Feature, ExtrudeFeature, RevolveFeature, SketchFeature, PlaneFeature, OriginFeature } from '../types/document';
+import { useFeatureEdit } from '../contexts/FeatureEditContext';
+import type { Feature, ExtrudeFeature, RevolveFeature, SketchFeature, PlaneFeature, OriginFeature, SketchLine } from '../types/document';
 import './PropertiesPanel.css';
 
 // ============================================================================
@@ -527,12 +530,120 @@ function GenericProperties({ feature, onUpdate }: FeaturePropertiesProps) {
 }
 
 // ============================================================================
+// Feature Edit Forms (for creating new features)
+// ============================================================================
+
+interface ExtrudeEditFormProps {
+  data: { sketch: string; op: 'add' | 'cut'; direction: 'normal' | 'reverse'; distance?: number };
+  onUpdate: (updates: Record<string, string | number | boolean>) => void;
+}
+
+function ExtrudeEditForm({ data, onUpdate }: ExtrudeEditFormProps) {
+  return (
+    <>
+      <PropertyGroup title="Extrude">
+        <PropertyRow label="Sketch">
+          <span className="readonly-value">{data.sketch}</span>
+        </PropertyRow>
+        <PropertyRow label="Operation">
+          <SelectInput
+            value={data.op}
+            onChange={(op) => onUpdate({ op })}
+            options={[
+              { value: 'add', label: 'Add' },
+              { value: 'cut', label: 'Cut' },
+            ]}
+          />
+        </PropertyRow>
+        <PropertyRow label="Direction">
+          <SelectInput
+            value={data.direction}
+            onChange={(direction) => onUpdate({ direction })}
+            options={[
+              { value: 'normal', label: 'Normal' },
+              { value: 'reverse', label: 'Reverse' },
+            ]}
+          />
+        </PropertyRow>
+        <PropertyRow label="Distance">
+          <NumberInput
+            value={data.distance ?? 10}
+            onChange={(distance) => onUpdate({ distance })}
+            min={0.1}
+            step={1}
+            unit="mm"
+          />
+        </PropertyRow>
+      </PropertyGroup>
+    </>
+  );
+}
+
+interface RevolveEditFormProps {
+  data: { sketch: string; axis: string; angle: number; op: 'add' | 'cut' };
+  axisCandidates: Array<{ id: string }>;
+  onUpdate: (updates: Record<string, string | number | boolean>) => void;
+}
+
+function RevolveEditForm({ data, axisCandidates, onUpdate }: RevolveEditFormProps) {
+  return (
+    <>
+      <PropertyGroup title="Revolve">
+        <PropertyRow label="Sketch">
+          <span className="readonly-value">{data.sketch}</span>
+        </PropertyRow>
+        <PropertyRow label="Operation">
+          <SelectInput
+            value={data.op}
+            onChange={(op) => onUpdate({ op })}
+            options={[
+              { value: 'add', label: 'Add' },
+              { value: 'cut', label: 'Cut' },
+            ]}
+          />
+        </PropertyRow>
+        <PropertyRow label="Axis">
+          <SelectInput
+            value={data.axis}
+            onChange={(axis) => onUpdate({ axis })}
+            options={axisCandidates.length > 0 
+              ? axisCandidates.map(l => ({ value: l.id, label: l.id }))
+              : [{ value: '', label: 'No lines in sketch' }]
+            }
+            disabled={axisCandidates.length === 0}
+          />
+        </PropertyRow>
+        <PropertyRow label="Angle">
+          <NumberInput
+            value={data.angle}
+            onChange={(angle) => onUpdate({ angle })}
+            min={1}
+            max={360}
+            step={15}
+            unit="°"
+          />
+        </PropertyRow>
+      </PropertyGroup>
+    </>
+  );
+}
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
 const PropertiesPanel: React.FC = () => {
   const { doc, getFeatureById } = useDocument();
   const { selectedFeatureId, selectedFaces } = useSelection();
+  const { editMode, updateFormData, acceptEdit, cancelEdit, isEditing } = useFeatureEdit();
+  
+  // Get axis candidates for revolve
+  const axisCandidates = useMemo(() => {
+    if (editMode.type !== 'revolve') return [];
+    const sketch = getFeatureById(editMode.sketchId);
+    if (!sketch || sketch.type !== 'sketch' || !sketch.data) return [];
+    return sketch.data.entities.filter((e): e is SketchLine => e.type === 'line');
+  }, [editMode, getFeatureById]);
   
   // Get the selected feature
   const selectedFeature = selectedFeatureId ? getFeatureById(selectedFeatureId) : null;
@@ -558,6 +669,46 @@ const PropertiesPanel: React.FC = () => {
       }
     }
   }, [effectiveFeature, doc]);
+
+  // If in edit mode, show the feature creation form
+  if (isEditing) {
+    const panelTitle = editMode.type === 'extrude' ? 'New Extrude' : editMode.type === 'revolve' ? 'New Revolve' : 'Edit Feature';
+    
+    return (
+      <div className="properties-panel properties-panel-editing">
+        <div className="panel-header">{panelTitle}</div>
+        <div className="properties-panel-content">
+          {editMode.type === 'extrude' && (
+            <ExtrudeEditForm 
+              data={editMode.data} 
+              onUpdate={updateFormData}
+            />
+          )}
+          {editMode.type === 'revolve' && (
+            <RevolveEditForm 
+              data={editMode.data}
+              axisCandidates={axisCandidates}
+              onUpdate={updateFormData}
+            />
+          )}
+        </div>
+        <div className="properties-panel-actions">
+          <button 
+            className="properties-btn properties-btn-cancel"
+            onClick={cancelEdit}
+          >
+            Cancel
+          </button>
+          <button 
+            className="properties-btn properties-btn-accept"
+            onClick={acceptEdit}
+          >
+            Accept
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!effectiveFeature) {
     return (

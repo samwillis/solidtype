@@ -520,7 +520,10 @@ const FeatureTree: React.FC = () => {
   const { features, rebuildGate, setRebuildGate, deleteFeature, renameFeature } = useDocument();
   const { featureStatus, errors, bodies } = useKernel();
   const { selectedFeatureId, selectFeature, setHoveredFeature } = useSelection();
-  const { startSketch } = useSketch();
+  const { mode: sketchMode, editSketch } = useSketch();
+  
+  // Feature tree is disabled while in sketch mode
+  const isDisabled = sketchMode.active;
   
   // Rename state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -574,8 +577,10 @@ const FeatureTree: React.FC = () => {
   const handleSelect = useCallback((id: string) => {
     // Don't select folder nodes
     if (id === 'part' || id === 'bodies') return;
+    // Don't allow selection in sketch mode
+    if (sketchMode.active) return;
     selectFeature(id);
-  }, [selectFeature]);
+  }, [selectFeature, sketchMode.active]);
 
   const handleHover = useCallback((id: string | null) => {
     // Don't track hover for folder nodes
@@ -591,10 +596,21 @@ const FeatureTree: React.FC = () => {
   }, [setRebuildGate]);
 
   const handleDoubleClick = useCallback((id: string) => {
+    // Don't allow interaction in sketch mode
+    if (sketchMode.active) return;
     // Don't allow renaming folders or system nodes
     if (id === 'part' || id === 'bodies' || id === 'origin' || id === 'xy' || id === 'xz' || id === 'yz') return;
+    
+    // If double-clicking a sketch, edit it instead of renaming
+    const feature = features.find(f => f.id === id);
+    if (feature?.type === 'sketch' && 'plane' in feature) {
+      editSketch(id, feature.plane);
+      return;
+    }
+    
+    // Otherwise start renaming
     setEditingId(id);
-  }, []);
+  }, [sketchMode.active, features, editSketch]);
 
   const handleRename = useCallback((id: string, name: string) => {
     renameFeature(id, name);
@@ -618,8 +634,9 @@ const FeatureTree: React.FC = () => {
 
   // Build context menu items for a specific node
   const getContextMenuItems = useCallback((nodeId: string, nodeType: string): ContextMenuItem[] => {
-    // Don't show context menu for folder nodes
+    // Don't show context menu for folder nodes or when in sketch mode
     if (nodeId === 'part' || nodeId === 'bodies') return [];
+    if (sketchMode.active) return [];
 
     const items: ContextMenuItem[] = [];
     const feature = features.find(f => f.id === nodeId);
@@ -635,9 +652,8 @@ const FeatureTree: React.FC = () => {
           </svg>
         ),
         onClick: () => {
-          if (feature && feature.type === 'sketch') {
-            // TODO: Roll back rebuild gate before sketch, then roll forward after editing
-            startSketch((feature as { plane: string }).plane || 'xy');
+          if (feature && feature.type === 'sketch' && 'plane' in feature) {
+            editSketch(feature.id, feature.plane);
           }
         },
       });
@@ -647,7 +663,7 @@ const FeatureTree: React.FC = () => {
     items.push({
       id: 'rename',
       label: 'Rename',
-      shortcut: 'F2',
+      shortcut: 'Double-click',
       onClick: () => {
         setEditingId(nodeId);
       },
@@ -674,11 +690,14 @@ const FeatureTree: React.FC = () => {
     }
 
     return items;
-  }, [features, startSketch]);
+  }, [features, editSketch, sketchMode.active]);
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Disable keyboard shortcuts in sketch mode
+      if (sketchMode.active) return;
+      
       // Delete key
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedFeatureId) {
         const feature = features.find(f => f.id === selectedFeatureId);
@@ -691,22 +710,15 @@ const FeatureTree: React.FC = () => {
           });
         }
       }
-      // F2 for rename
-      if (e.key === 'F2' && selectedFeatureId) {
-        const feature = features.find(f => f.id === selectedFeatureId);
-        if (feature && feature.type !== 'origin' && feature.type !== 'plane') {
-          e.preventDefault();
-          setEditingId(selectedFeatureId);
-        }
-      }
+      // Removed F2 shortcut - use double-click to rename instead
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedFeatureId, features]);
+  }, [selectedFeatureId, features, sketchMode.active]);
 
   return (
-    <div className="feature-tree">
+    <div className={`feature-tree ${isDisabled ? 'disabled' : ''}`}>
       <div className="panel-header">Features</div>
       <div className="feature-tree-content">
         <ul className="tree-list">

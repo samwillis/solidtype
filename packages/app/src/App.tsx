@@ -11,6 +11,7 @@ import { DocumentProvider, useDocument } from './contexts/DocumentContext';
 import { KernelProvider } from './contexts/KernelContext';
 import { SketchProvider } from './contexts/SketchContext';
 import { SelectionProvider } from './contexts/SelectionContext';
+import { FeatureEditProvider } from './contexts/FeatureEditContext';
 import './App.css';
 
 // Inner component that uses the document context
@@ -95,7 +96,9 @@ const App: React.FC = () => {
       <KernelProvider>
         <SelectionProvider>
           <SketchProvider>
-            <AppContent />
+            <FeatureEditProvider>
+              <AppContent />
+            </FeatureEditProvider>
           </SketchProvider>
         </SelectionProvider>
       </KernelProvider>
