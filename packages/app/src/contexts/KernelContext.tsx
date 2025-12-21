@@ -139,12 +139,17 @@ export function KernelProvider({ children }: KernelProviderProps) {
           break;
 
         case 'rebuild-start':
+          console.log('[Kernel] Rebuild starting');
           setIsRebuilding(true);
           // Clear old meshes at start of rebuild
           setMeshes(new Map());
           break;
 
         case 'rebuild-complete':
+          console.log('[Kernel] Rebuild complete, bodies:', msg.bodies.length, 'errors:', msg.errors.length);
+          if (msg.errors.length > 0) {
+            console.log('[Kernel] Errors:', msg.errors);
+          }
           setErrors(msg.errors);
           setFeatureStatus(msg.featureStatus);
           setBodies(msg.bodies);
@@ -152,6 +157,7 @@ export function KernelProvider({ children }: KernelProviderProps) {
           break;
 
         case 'mesh':
+          console.log('[Kernel] Received mesh for body:', msg.bodyId);
           setMeshes((prev) => {
             const next = new Map(prev);
             next.set(msg.bodyId, msg.mesh);
@@ -206,6 +212,12 @@ export function KernelProvider({ children }: KernelProviderProps) {
 
     worker.onerror = (err) => {
       console.error('Kernel worker error:', err);
+      console.error('Worker error details:', {
+        message: err.message,
+        filename: err.filename,
+        lineno: err.lineno,
+        colno: err.colno,
+      });
       setIsRebuilding(false);
     };
 

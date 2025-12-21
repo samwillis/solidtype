@@ -36,6 +36,18 @@ import type {
 // Declare self as a worker global scope
 declare const self: DedicatedWorkerGlobalScope;
 
+// Global error handler for the worker
+self.onerror = (event) => {
+  console.error('[Worker] Unhandled error:', event);
+  return false;
+};
+
+self.onunhandledrejection = (event) => {
+  console.error('[Worker] Unhandled promise rejection:', event.reason);
+};
+
+console.log('[Worker] Kernel worker starting...');
+
 // ============================================================================
 // Worker State
 // ============================================================================
@@ -77,6 +89,7 @@ function setupYjsSync(port: MessagePort): void {
   });
 
   // Signal ready
+  console.log('[Worker] Yjs sync setup complete, signaling ready');
   self.postMessage({ type: 'ready' } as WorkerToMainMessage);
 }
 
@@ -125,71 +138,17 @@ function getDatumPlane(planeId: string): DatumPlane | null {
 }
 
 /**
- * Get sketch plane - supports both datum planes and face references (Phase 15)
+ * Get sketch plane - supports datum planes
+ * TODO(Phase 15): Add support for face references
  */
 function getSketchPlane(planeRef: string): DatumPlane | null {
   // Try datum plane first
   const datum = getDatumPlane(planeRef);
   if (datum) return datum;
   
-  // Check for face reference (Phase 15)
+  // Face references (Phase 15) - not yet implemented
   if (planeRef.startsWith('face:')) {
-    // Parse face:featureId:selector format
-    const parts = planeRef.split(':');
-    if (parts.length >= 3) {
-      const featureId = parts[1];
-      const selector = parts.slice(2).join(':');
-      
-      // Get the body from the feature
-      const body = bodyMap.get(featureId);
-      if (!body) {
-        throw new Error(`Cannot resolve face reference: body for feature ${featureId} not found`);
-      }
-      
-      // Try to find the face - for now use a simple selector approach
-      // In a full implementation, this would use the persistent naming system
-      const faces = body.getFaces();
-      if (faces.length === 0) {
-        throw new Error(`Body has no faces`);
-      }
-      
-      // Simple selector parsing for top/bottom/side
-      if (selector === 'top' && faces.length > 0) {
-        // Find the top face (highest Z normal or based on extrude direction)
-        const topFace = faces[0]; // Simplified - in reality would analyze normals
-        const surface = topFace.getSurface();
-        if (surface.kind !== 'plane') {
-          throw new Error('Cannot sketch on non-planar face');
-        }
-        return {
-          surface: {
-            kind: 'plane',
-            origin: surface.origin,
-            normal: surface.normal,
-            xDir: surface.xDir,
-            yDir: surface.yDir,
-          },
-        };
-      }
-      
-      // Default to first planar face
-      for (const face of faces) {
-        const surface = face.getSurface();
-        if (surface.kind === 'plane') {
-          return {
-            surface: {
-              kind: 'plane',
-              origin: surface.origin,
-              normal: surface.normal,
-              xDir: surface.xDir,
-              yDir: surface.yDir,
-            },
-          };
-        }
-      }
-      
-      throw new Error('No planar face found for sketch');
-    }
+    throw new Error('Sketch on face is not yet implemented');
   }
   
   return null;
@@ -500,6 +459,164 @@ function interpretExtrude(
   return result.body;
 }
 
+/**
+ * Perform preview extrusion without using Yjs elements
+ * This avoids the "Invalid access" error when creating temporary Yjs elements
+ */
+function performPreviewExtrude(
+  session: SolidSession,
+  sketchId: string,
+  distance: number,
+  direction: string,
+  _op: string
+): Body | null {
+  const sketchInfo = sketchMap.get(sketchId);
+  if (!sketchInfo) {
+    throw new Error(`Sketch not found: ${sketchId}`);
+  }
+
+  // Create sketch and add entities
+  const sketch = session.createSketch(sketchInfo.plane);
+  const pointIdMap = new Map<string, any>();
+
+  // Add points
+  for (const point of sketchInfo.data.points) {
+    const pid = sketch.addPoint(point.x, point.y, { fixed: point.fixed });
+    pointIdMap.set(point.id, pid);
+  }
+
+  // Add lines and arcs
+  for (const entity of sketchInfo.data.entities) {
+    if (entity.type === 'line' && entity.start && entity.end) {
+      const startId = pointIdMap.get(entity.start);
+      const endId = pointIdMap.get(entity.end);
+      if (startId !== undefined && endId !== undefined) {
+        sketch.addLine(startId, endId);
+      }
+    }
+    if (entity.type === 'arc' && entity.start && entity.end && entity.center) {
+      const startId = pointIdMap.get(entity.start);
+      const endId = pointIdMap.get(entity.end);
+      const centerId = pointIdMap.get(entity.center);
+      if (startId !== undefined && endId !== undefined && centerId !== undefined) {
+        sketch.addArc(startId, endId, centerId, entity.ccw ?? true);
+      }
+    }
+  }
+
+  // Attempt to get a profile from the sketch
+  const profile = sketch.toProfile();
+  if (!profile) {
+    throw new Error('Sketch does not contain a closed profile');
+  }
+
+  // Calculate direction multiplier
+  const dirMultiplier = direction === 'reverse' ? -1 : 1;
+  const finalDistance = distance * dirMultiplier;
+
+  // Perform extrusion
+  const result = session.extrude(profile, {
+    operation: 'add',
+    distance: finalDistance,
+  });
+
+  if (!result.success || !result.body) {
+    throw new Error(result.error || 'Extrude failed');
+  }
+
+  // For preview, we don't actually do boolean operations on existing bodies
+  // Just return the tool body
+  return result.body;
+}
+
+/**
+ * Perform preview revolve without using Yjs elements
+ */
+function performPreviewRevolve(
+  session: SolidSession,
+  sketchId: string,
+  axisId: string,
+  angleDeg: number,
+  _op: string
+): Body | null {
+  const sketchInfo = sketchMap.get(sketchId);
+  if (!sketchInfo) {
+    throw new Error(`Sketch not found: ${sketchId}`);
+  }
+
+  const axisEntity = sketchInfo.data.entities.find((e) => e.id === axisId);
+  if (!axisEntity || axisEntity.type !== 'line' || !axisEntity.start || !axisEntity.end) {
+    throw new Error('Invalid axis selection');
+  }
+
+  const axisStart2d = sketchInfo.data.points.find((p) => p.id === axisEntity.start);
+  const axisEnd2d = sketchInfo.data.points.find((p) => p.id === axisEntity.end);
+  if (!axisStart2d || !axisEnd2d) {
+    throw new Error('Axis references missing sketch points');
+  }
+
+  // Create sketch and add entities
+  const sketch = session.createSketch(sketchInfo.plane);
+  const pointIdMap = new Map<string, any>();
+  const entityIdMap = new Map<string, any>();
+
+  for (const point of sketchInfo.data.points) {
+    const pid = sketch.addPoint(point.x, point.y, { fixed: point.fixed });
+    pointIdMap.set(point.id, pid);
+  }
+
+  for (const entity of sketchInfo.data.entities) {
+    if (entity.type === 'line' && entity.start && entity.end) {
+      const startId = pointIdMap.get(entity.start);
+      const endId = pointIdMap.get(entity.end);
+      if (startId !== undefined && endId !== undefined) {
+        const isAxis = entity.id === axisId;
+        const eid = sketch.addLine(startId, endId, { construction: isAxis });
+        entityIdMap.set(entity.id, eid);
+      }
+    }
+    if (entity.type === 'arc' && entity.start && entity.end && entity.center) {
+      const startId = pointIdMap.get(entity.start);
+      const endId = pointIdMap.get(entity.end);
+      const centerId = pointIdMap.get(entity.center);
+      if (startId !== undefined && endId !== undefined && centerId !== undefined) {
+        const eid = sketch.addArc(startId, endId, centerId, entity.ccw ?? true);
+        entityIdMap.set(entity.id, eid);
+      }
+    }
+  }
+
+  const profileEntityIds: any[] = [];
+  for (const entity of sketchInfo.data.entities) {
+    if (entity.id === axisId) continue;
+    const eid = entityIdMap.get(entity.id);
+    if (eid !== undefined) profileEntityIds.push(eid);
+  }
+
+  const profile = sketch.getCoreSketch().toProfile(profileEntityIds);
+  if (!profile) {
+    throw new Error('Sketch does not contain a closed profile');
+  }
+
+  const axisStartWorld = planeToWorld(sketchInfo.plane, axisStart2d.x, axisStart2d.y);
+  const axisEndWorld = planeToWorld(sketchInfo.plane, axisEnd2d.x, axisEnd2d.y);
+  const axisDir = sub3(axisEndWorld, axisStartWorld);
+
+  const angleRad = (angleDeg * Math.PI) / 180;
+  const result = session.revolve(profile, {
+    operation: 'add',
+    axis: { origin: axisStartWorld, direction: axisDir },
+    angle: angleRad,
+  });
+
+  if (!result.success || !result.body) {
+    throw new Error(result.error || 'Revolve failed');
+  }
+
+  // For preview, just return the tool body
+  return result.body;
+}
+
 function interpretRevolve(
   session: SolidSession,
   element: Y.XmlElement
@@ -797,17 +914,11 @@ self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
         sketchMap.clear();
         interpretSketch(previewSession, sketchEl);
 
-        const tmp = new Y.XmlElement('extrude');
-        tmp.setAttribute('sketch', sketchId);
-        tmp.setAttribute('distance', String(distance));
-        tmp.setAttribute('direction', direction);
-        tmp.setAttribute('op', op);
-
-        const body = interpretExtrude(previewSession, tmp);
+        // Perform preview extrusion directly without using Yjs elements
+        const body = performPreviewExtrude(previewSession, sketchId, distance, direction, op);
         if (!body) {
           // cut previews: show tool body only by extruding as add
-          tmp.setAttribute('op', 'add');
-          const tool = interpretExtrude(previewSession, tmp);
+          const tool = performPreviewExtrude(previewSession, sketchId, distance, direction, 'add');
           if (!tool) throw new Error('Preview failed');
           sendPreviewMesh(`__preview_extrude_${op}`, tool);
         } else {
@@ -833,16 +944,10 @@ self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
         sketchMap.clear();
         interpretSketch(previewSession, sketchEl);
 
-        const tmp = new Y.XmlElement('revolve');
-        tmp.setAttribute('sketch', sketchId);
-        tmp.setAttribute('axis', axis);
-        tmp.setAttribute('angle', String(angle));
-        tmp.setAttribute('op', op);
-
-        const body = interpretRevolve(previewSession, tmp);
+        // Perform preview revolve directly without using Yjs elements
+        const body = performPreviewRevolve(previewSession, sketchId, axis, angle, op);
         if (!body) {
-          tmp.setAttribute('op', 'add');
-          const tool = interpretRevolve(previewSession, tmp);
+          const tool = performPreviewRevolve(previewSession, sketchId, axis, angle, 'add');
           if (!tool) throw new Error('Preview failed');
           sendPreviewMesh(`__preview_revolve_${op}`, tool);
         } else {

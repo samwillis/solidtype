@@ -145,3 +145,72 @@
 .select-input {
   cursor: pointer;
 }
+
+/* Checkbox Input */
+.checkbox-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text);
+}
+
+.checkbox-input input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.checkbox-input input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Color Input */
+.color-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-input input[type="color"] {
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+}
+
+.color-input input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.color-input input[type="color"]::-webkit-color-swatch {
+  border-radius: 2px;
+  border: none;
+}
+
+.color-input .color-value {
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--color-text-muted);
+}
+
+.color-input .reset-color {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.color-input .reset-color:hover {
+  background: var(--color-bg-hover);
+}

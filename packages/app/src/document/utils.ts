@@ -130,8 +130,11 @@ export function serializeSketchData(data: SketchData): {
 
 /**
  * Parse a boolean attribute value
+ * @param value The string value to parse
+ * @param defaultValue The default value if the string is null/undefined (default: false)
  */
-export function parseBoolean(value: string | null | undefined): boolean {
+export function parseBoolean(value: string | null | undefined, defaultValue: boolean = false): boolean {
+  if (value === null || value === undefined) return defaultValue;
   return value === 'true';
 }
 

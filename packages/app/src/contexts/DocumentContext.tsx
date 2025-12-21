@@ -13,7 +13,7 @@ import {
   addRevolveFeature,
   findFeature,
 } from '../document/featureHelpers';
-import type { Feature } from '../types/document';
+import type { Feature, DocumentUnits } from '../types/document';
 
 // ============================================================================
 // Context Types
@@ -29,6 +29,9 @@ interface DocumentContextValue {
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  // Units
+  units: DocumentUnits;
+  setUnits: (units: DocumentUnits) => void;
   // Feature operations
   addSketch: (planeId: string, name?: string) => string;
   addExtrude: (
@@ -76,6 +79,7 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
   const [features, setFeatures] = useState<Feature[]>([]);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const [units, setUnitsState] = useState<DocumentUnits>('mm');
 
   // Sync rebuild gate from Yjs
   useEffect(() => {
@@ -86,6 +90,18 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
     updateGate();
     state.observe(updateGate);
     return () => state.unobserve(updateGate);
+  }, [doc]);
+
+  // Sync units from Yjs meta
+  useEffect(() => {
+    const meta = doc.meta;
+    const updateUnits = () => {
+      const u = meta.get('units') as DocumentUnits | undefined;
+      setUnitsState(u ?? 'mm');
+    };
+    updateUnits();
+    meta.observe(updateUnits);
+    return () => meta.unobserve(updateUnits);
   }, [doc]);
 
   // Sync features from Yjs
@@ -120,6 +136,10 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
   // Actions
   const setRebuildGate = useCallback((featureId: string | null) => {
     doc.state.set('rebuildGate', featureId);
+  }, [doc]);
+
+  const setUnits = useCallback((newUnits: DocumentUnits) => {
+    doc.meta.set('units', newUnits);
   }, [doc]);
 
   const undo = useCallback(() => {
@@ -167,6 +187,8 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
     redo,
     canUndo,
     canRedo,
+    units,
+    setUnits,
     addSketch,
     addExtrude,
     addRevolve,

@@ -315,7 +315,13 @@ export function parseFeature(element: Y.XmlElement): Feature | null {
 
   switch (type) {
     case 'origin':
-      return { type: 'origin', id, name, suppressed };
+      return { 
+        type: 'origin', 
+        id, 
+        name, 
+        suppressed,
+        visible: parseBoolean(element.getAttribute('visible'), false),
+      };
 
     case 'plane':
       return {
@@ -326,6 +332,12 @@ export function parseFeature(element: Y.XmlElement): Feature | null {
         normal: parseVector3(element.getAttribute('normal') || '0,0,1'),
         origin: parseVector3(element.getAttribute('origin') || '0,0,0'),
         xDir: parseVector3(element.getAttribute('xDir') || '1,0,0'),
+        visible: parseBoolean(element.getAttribute('visible'), true), // default true for planes
+        width: parseNumber(element.getAttribute('width'), 100),
+        height: parseNumber(element.getAttribute('height'), 100),
+        offsetX: parseNumber(element.getAttribute('offsetX'), 0),
+        offsetY: parseNumber(element.getAttribute('offsetY'), 0),
+        color: element.getAttribute('color') || undefined,
       };
 
     case 'sketch':
@@ -336,6 +348,7 @@ export function parseFeature(element: Y.XmlElement): Feature | null {
         suppressed,
         plane: element.getAttribute('plane') ?? 'xy',
         data: getSketchData(element),
+        visible: parseBoolean(element.getAttribute('visible'), false), // default false for sketches
       };
 
     case 'extrude': {

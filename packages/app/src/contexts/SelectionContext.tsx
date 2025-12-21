@@ -2,7 +2,7 @@
  * Selection Context - manages selection state for both sketch entities and 3D geometry
  */
 
-import React, { createContext, useContext, useMemo, useState, useCallback } from 'react';
+import React, { createContext, useContext, useMemo, useState } from 'react';
 
 // ============================================================================
 // Types
@@ -52,6 +52,8 @@ interface SelectionContextValue {
   selectedFaces: SelectedFace[];
   selectedEdges: SelectedEdge[];
   selectedFeatureId: string | null;
+  /** Feature ID being hovered in the feature tree */
+  hoveredFeatureId: string | null;
   hover: HoverState | null;
   selectionMode: SelectionMode;
   
@@ -59,6 +61,8 @@ interface SelectionContextValue {
   selectFace: (face: SelectedFace, multi?: boolean) => void;
   selectEdge: (edge: SelectedEdge, multi?: boolean) => void;
   selectFeature: (featureId: string | null) => void;
+  /** Set the hovered feature ID (for feature tree hover) */
+  setHoveredFeature: (featureId: string | null) => void;
   clearSelection: () => void;
   setHover: (hover: HoverState | null) => void;
   setSelectionMode: (mode: SelectionMode) => void;
@@ -87,6 +91,7 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
   const [selectedFaces, setSelectedFaces] = useState<SelectedFace[]>([]);
   const [selectedEdges, setSelectedEdges] = useState<SelectedEdge[]>([]);
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
+  const [hoveredFeatureId, setHoveredFeatureId] = useState<string | null>(null);
   const [hover, setHover] = useState<HoverState | null>(null);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('default');
   
@@ -123,6 +128,7 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
       selectedFaces,
       selectedEdges,
       selectedFeatureId,
+      hoveredFeatureId,
       hover,
       selectionMode,
       
@@ -169,6 +175,10 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
         setSelectedEdges([]);
       },
       
+      setHoveredFeature: (featureId: string | null) => {
+        setHoveredFeatureId(featureId);
+      },
+      
       clearSelection: () => {
         setSelectedFaces([]);
         setSelectedEdges([]);
@@ -190,6 +200,7 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
     selectedFaces,
     selectedEdges,
     selectedFeatureId,
+    hoveredFeatureId,
     hover,
     selectionMode,
     onFaceSelected,

@@ -20,6 +20,8 @@ export interface FeatureBase {
 
 export interface OriginFeature extends FeatureBase {
   type: 'origin';
+  /** Whether the origin is visible in the 3D view */
+  visible?: boolean;
 }
 
 export interface PlaneFeature extends FeatureBase {
@@ -27,6 +29,18 @@ export interface PlaneFeature extends FeatureBase {
   normal: [number, number, number];
   origin: [number, number, number];
   xDir: [number, number, number];
+  /** Whether the plane is visible in the 3D view (default: true) */
+  visible?: boolean;
+  /** Width of the plane visual in document units (default: 100) */
+  width?: number;
+  /** Height of the plane visual in document units (default: 100) */
+  height?: number;
+  /** Offset of plane center along X direction */
+  offsetX?: number;
+  /** Offset of plane center along Y direction (plane local Y, not world Y) */
+  offsetY?: number;
+  /** Custom color for the plane (hex string like "#ff0000", or null for default) */
+  color?: string;
 }
 
 // ============================================================================
@@ -91,6 +105,8 @@ export interface SketchFeature extends FeatureBase {
    */
   plane: string;
   data?: SketchData;
+  /** Whether the sketch is visible in the 3D view when not being edited (default: false) */
+  visible?: boolean;
 }
 
 // ============================================================================
@@ -140,11 +156,15 @@ export type FeatureType = Feature['type'];
 // Document State Types
 // ============================================================================
 
+/** Supported unit systems */
+export type DocumentUnits = 'mm' | 'cm' | 'm' | 'in' | 'ft';
+
 export interface DocumentMeta {
   name: string;
   created: number;
   modified: number;
   version: number;
+  units: DocumentUnits;
 }
 
 export interface DocumentState {

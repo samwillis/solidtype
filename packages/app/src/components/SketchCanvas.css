@@ -12,7 +12,8 @@
   width: 100%;
   height: 100%;
   cursor: crosshair;
-  background: rgba(26, 26, 46, 0.95);
+  /* Transparent background - 3D sketch is rendered in the Viewer */
+  background: transparent;
 }
 
 .sketch-canvas.tool-select {
