@@ -108,7 +108,7 @@ const ExtrudeDialog: React.FC<ExtrudeDialogProps> = ({
                 value={distance}
                 onChange={(e) => setDistance(Math.max(0.1, parseFloat(e.target.value) || 0))}
                 min="0.1"
-                step="1"
+                step="any"
               />
               <span className="extrude-dialog-unit">mm</span>
             </div>

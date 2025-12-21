@@ -1,5 +1,7 @@
 import React from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useDocument } from '../contexts/DocumentContext';
+import type { DocumentUnits } from '../types/document';
 import './StatusBar.css';
 
 interface StatusBarProps {
@@ -33,8 +35,11 @@ const AutoIcon = () => (
   </svg>
 );
 
+const UNIT_OPTIONS: DocumentUnits[] = ['mm', 'cm', 'm', 'in', 'ft'];
+
 const StatusBar: React.FC<StatusBarProps> = ({ status = 'Ready' }) => {
   const { mode, cycleMode } = useTheme();
+  const { units, setUnits } = useDocument();
 
   const getIcon = () => {
     switch (mode) {
@@ -52,6 +57,10 @@ const StatusBar: React.FC<StatusBarProps> = ({ status = 'Ready' }) => {
     }
   };
 
+  const handleUnitsChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setUnits(e.target.value as DocumentUnits);
+  };
+
   return (
     <div className="status-bar">
       <div className="status-bar-left">
@@ -59,6 +68,16 @@ const StatusBar: React.FC<StatusBarProps> = ({ status = 'Ready' }) => {
       </div>
       <div className="status-bar-right">
         <span className="status-bar-coordinates">X: 0.00 Y: 0.00 Z: 0.00</span>
+        <select 
+          className="status-bar-units"
+          value={units}
+          onChange={handleUnitsChange}
+          title="Document units"
+        >
+          {UNIT_OPTIONS.map(unit => (
+            <option key={unit} value={unit}>{unit}</option>
+          ))}
+        </select>
         <button 
           className="status-bar-button" 
           onClick={cycleMode}

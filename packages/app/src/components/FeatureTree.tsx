@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useDocument } from '../contexts/DocumentContext';
 import { useKernel } from '../contexts/KernelContext';
 import { useSelection } from '../contexts/SelectionContext';
@@ -243,6 +243,7 @@ interface TreeNodeItemProps {
   showGateAfter: boolean;
   onToggleExpand: (id: string) => void;
   onSelect: (id: string) => void;
+  onHover: (id: string | null) => void;
   onGateDrop: (afterId: string | null) => void;
 }
 
@@ -255,6 +256,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   showGateAfter,
   onToggleExpand,
   onSelect,
+  onHover,
   onGateDrop,
 }) => {
   const hasChildren = node.children && node.children.length > 0;
@@ -286,6 +288,8 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
         className={`tree-item ${isSelected ? 'selected' : ''} ${node.suppressed ? 'suppressed' : ''} ${node.gated ? 'gated' : ''} ${isError ? 'error' : ''} ${isDragOver ? 'drag-over' : ''}`}
         style={{ paddingLeft: `${8 + level * 16}px` }}
         onClick={() => onSelect(node.id)}
+        onMouseEnter={() => onHover(node.id)}
+        onMouseLeave={() => onHover(null)}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -336,6 +340,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
                 showGateAfter={true}
                 onToggleExpand={onToggleExpand}
                 onSelect={onSelect}
+                onHover={onHover}
                 onGateDrop={onGateDrop}
               />
           ))}
@@ -355,7 +360,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
 const FeatureTree: React.FC = () => {
   const { features, rebuildGate, setRebuildGate } = useDocument();
   const { featureStatus, errors, bodies } = useKernel();
-  const { selectedFeatureId, selectFeature } = useSelection();
+  const { selectedFeatureId, selectFeature, setHoveredFeature } = useSelection();
 
   const errorsByFeature = useMemo(() => {
     const map: Record<string, string> = {};
@@ -399,6 +404,15 @@ const FeatureTree: React.FC = () => {
     selectFeature(id);
   }, [selectFeature]);
 
+  const handleHover = useCallback((id: string | null) => {
+    // Don't track hover for folder nodes
+    if (id === 'part' || id === 'bodies') {
+      setHoveredFeature(null);
+      return;
+    }
+    setHoveredFeature(id);
+  }, [setHoveredFeature]);
+
   const handleGateDrop = useCallback((afterId: string | null) => {
     setRebuildGate(afterId);
   }, [setRebuildGate]);
@@ -419,6 +433,7 @@ const FeatureTree: React.FC = () => {
               showGateAfter={false}
               onToggleExpand={handleToggleExpand}
               onSelect={handleSelect}
+              onHover={handleHover}
               onGateDrop={handleGateDrop}
             />
           ))}

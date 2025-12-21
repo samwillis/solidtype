@@ -9,6 +9,7 @@ import React, {
   useCallback,
 } from 'react';
 import { useDocument } from './DocumentContext';
+import { useViewer, type ViewPreset } from './ViewerContext';
 import {
   findFeature,
   addPointToSketch,
@@ -68,6 +69,7 @@ interface SketchProviderProps {
 
 export function SketchProvider({ children }: SketchProviderProps) {
   const { doc, addSketch } = useDocument();
+  const { actions, state } = useViewer();
   
   const [mode, setMode] = useState<SketchModeState>({
     active: false,
@@ -81,6 +83,29 @@ export function SketchProvider({ children }: SketchProviderProps) {
     // Create new sketch in Yjs
     const sketchId = addSketch(planeId);
     
+    // Rotate camera to face the sketch plane normal
+    // Map plane ID to appropriate view preset
+    let targetView: ViewPreset;
+    switch (planeId) {
+      case 'xy':
+        targetView = 'top';
+        break;
+      case 'xz':
+        targetView = 'front';
+        break;
+      case 'yz':
+        targetView = 'right';
+        break;
+      default:
+        // For face references or custom planes, default to isometric
+        targetView = 'isometric';
+    }
+    
+    // If not already in a standard view, switch to the plane-normal view
+    if (state.currentView !== targetView) {
+      actions.setView(targetView);
+    }
+    
     setMode({
       active: true,
       sketchId,
@@ -88,7 +113,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
       activeTool: 'line',
       tempPoints: [],
     });
-  }, [addSketch]);
+  }, [addSketch, actions, state.currentView]);
 
   const finishSketch = useCallback(() => {
     setMode({

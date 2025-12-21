@@ -58,3 +58,29 @@
   width: 14px;
   height: 14px;
 }
+
+.status-bar-units {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  color: var(--color-accent-text);
+  font-size: 11px;
+  font-family: var(--font-family-mono);
+  padding: 1px 4px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.1s ease;
+}
+
+.status-bar-units:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.status-bar-units:focus {
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.status-bar-units option {
+  background: var(--color-bg);
+  color: var(--color-text);
+}

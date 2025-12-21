@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDocument } from '../contexts/DocumentContext';
 import { useSelection } from '../contexts/SelectionContext';
-import type { Feature, ExtrudeFeature, RevolveFeature, SketchFeature } from '../types/document';
+import type { Feature, ExtrudeFeature, RevolveFeature, SketchFeature, PlaneFeature, OriginFeature } from '../types/document';
 import './PropertiesPanel.css';
 
 // ============================================================================
@@ -23,7 +23,7 @@ interface NumberInputProps {
   disabled?: boolean;
 }
 
-function NumberInput({ value, onChange, min, max, step = 1, unit, disabled }: NumberInputProps) {
+function NumberInput({ value, onChange, min, max, step: _step, unit, disabled }: NumberInputProps) {
   const [localValue, setLocalValue] = useState(String(value));
 
   useEffect(() => {
@@ -125,6 +125,70 @@ function SelectInput<T extends string>({ value, onChange, options, disabled }: S
   );
 }
 
+interface CheckboxInputProps {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label?: string;
+  disabled?: boolean;
+}
+
+function CheckboxInput({ checked, onChange, label, disabled }: CheckboxInputProps) {
+  return (
+    <label className="checkbox-input">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        disabled={disabled}
+      />
+      {label && <span>{label}</span>}
+    </label>
+  );
+}
+
+interface ColorInputProps {
+  value: string | undefined;
+  onChange: (value: string | undefined) => void;
+  defaultColor: string;
+  disabled?: boolean;
+}
+
+function ColorInput({ value, onChange, defaultColor, disabled }: ColorInputProps) {
+  const currentColor = value || defaultColor;
+  const isDefault = !value;
+  
+  return (
+    <div className="color-input">
+      <input
+        type="color"
+        value={currentColor}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+      />
+      <span className="color-value">{currentColor}</span>
+      {!isDefault && (
+        <button
+          className="reset-color"
+          onClick={() => onChange(undefined)}
+          disabled={disabled}
+        >
+          Reset
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Get default color for a plane ID */
+function getDefaultPlaneColorHex(planeId: string): string {
+  switch (planeId) {
+    case 'xy': return '#0088ff';
+    case 'xz': return '#00cc44';
+    case 'yz': return '#ff4444';
+    default: return '#888888';
+  }
+}
+
 // ============================================================================
 // Property Row
 // ============================================================================
@@ -166,6 +230,107 @@ interface FeaturePropertiesProps {
   onUpdate: (updates: Record<string, string | number | boolean>) => void;
 }
 
+function OriginProperties({ feature, onUpdate }: FeaturePropertiesProps) {
+  const origin = feature as OriginFeature;
+  
+  return (
+    <>
+      <PropertyGroup title="General">
+        <PropertyRow label="Name">
+          <TextInput
+            value={origin.name || 'Origin'}
+            onChange={(name) => onUpdate({ name })}
+          />
+        </PropertyRow>
+        <PropertyRow label="Type">
+          <span className="readonly-value">Origin</span>
+        </PropertyRow>
+        <PropertyRow label="ID">
+          <span className="readonly-value">{origin.id}</span>
+        </PropertyRow>
+      </PropertyGroup>
+      
+      <PropertyGroup title="Display">
+        <PropertyRow label="Visible">
+          <CheckboxInput
+            checked={origin.visible ?? false}
+            onChange={(visible) => onUpdate({ visible })}
+          />
+        </PropertyRow>
+      </PropertyGroup>
+    </>
+  );
+}
+
+function PlaneProperties({ feature, onUpdate }: FeaturePropertiesProps) {
+  const plane = feature as PlaneFeature;
+  
+  return (
+    <>
+      <PropertyGroup title="General">
+        <PropertyRow label="Name">
+          <TextInput
+            value={plane.name || plane.id}
+            onChange={(name) => onUpdate({ name })}
+          />
+        </PropertyRow>
+        <PropertyRow label="Type">
+          <span className="readonly-value">Datum Plane</span>
+        </PropertyRow>
+        <PropertyRow label="ID">
+          <span className="readonly-value">{plane.id}</span>
+        </PropertyRow>
+      </PropertyGroup>
+      
+      <PropertyGroup title="Display">
+        <PropertyRow label="Visible">
+          <CheckboxInput
+            checked={plane.visible ?? true}
+            onChange={(visible) => onUpdate({ visible })}
+          />
+        </PropertyRow>
+        <PropertyRow label="Width">
+          <NumberInput
+            value={plane.width ?? 100}
+            onChange={(width) => onUpdate({ width })}
+            min={1}
+            unit="mm"
+          />
+        </PropertyRow>
+        <PropertyRow label="Height">
+          <NumberInput
+            value={plane.height ?? 100}
+            onChange={(height) => onUpdate({ height })}
+            min={1}
+            unit="mm"
+          />
+        </PropertyRow>
+        <PropertyRow label="Offset X">
+          <NumberInput
+            value={plane.offsetX ?? 0}
+            onChange={(offsetX) => onUpdate({ offsetX })}
+            unit="mm"
+          />
+        </PropertyRow>
+        <PropertyRow label="Offset Y">
+          <NumberInput
+            value={plane.offsetY ?? 0}
+            onChange={(offsetY) => onUpdate({ offsetY })}
+            unit="mm"
+          />
+        </PropertyRow>
+        <PropertyRow label="Color">
+          <ColorInput
+            value={plane.color}
+            onChange={(color) => onUpdate({ color: color || '' })}
+            defaultColor={getDefaultPlaneColorHex(plane.id)}
+          />
+        </PropertyRow>
+      </PropertyGroup>
+    </>
+  );
+}
+
 function SketchProperties({ feature, onUpdate }: FeaturePropertiesProps) {
   const sketch = feature as SketchFeature;
   
@@ -183,6 +348,15 @@ function SketchProperties({ feature, onUpdate }: FeaturePropertiesProps) {
         </PropertyRow>
         <PropertyRow label="ID">
           <span className="readonly-value">{sketch.id}</span>
+        </PropertyRow>
+      </PropertyGroup>
+      
+      <PropertyGroup title="Display">
+        <PropertyRow label="Visible">
+          <CheckboxInput
+            checked={sketch.visible ?? false}
+            onChange={(visible) => onUpdate({ visible })}
+          />
         </PropertyRow>
       </PropertyGroup>
       
@@ -357,7 +531,7 @@ function GenericProperties({ feature, onUpdate }: FeaturePropertiesProps) {
 // ============================================================================
 
 const PropertiesPanel: React.FC = () => {
-  const { features, doc, getFeatureById } = useDocument();
+  const { doc, getFeatureById } = useDocument();
   const { selectedFeatureId, selectedFaces } = useSelection();
   
   // Get the selected feature
@@ -406,6 +580,10 @@ const PropertiesPanel: React.FC = () => {
 
   const renderProperties = () => {
     switch (effectiveFeature.type) {
+      case 'origin':
+        return <OriginProperties feature={effectiveFeature} onUpdate={handleUpdate} />;
+      case 'plane':
+        return <PlaneProperties feature={effectiveFeature} onUpdate={handleUpdate} />;
       case 'sketch':
         return <SketchProperties feature={effectiveFeature} onUpdate={handleUpdate} />;
       case 'extrude':

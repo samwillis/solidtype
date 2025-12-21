@@ -33,7 +33,7 @@ const SketchCanvas: React.FC = () => {
     setTool,
     addConstraint,
   } = useSketch();
-  const { doc } = useDocument();
+  const { doc, units } = useDocument();
   const { sketchSolveInfo } = useKernel();
   const { highlightedSketchId, highlightedEntityIds } = useSelection();
   
@@ -134,25 +134,21 @@ const SketchCanvas: React.FC = () => {
     };
   }, []);
 
-  // Draw the canvas
+  // Draw the canvas (now only draws temporary construction elements)
+  // The actual sketch geometry is rendered in 3D by the Viewer component
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    // Clear canvas
+    // Clear canvas (transparent background - 3D view shows through)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw grid
-    drawGrid(ctx, canvas, viewOffset, viewScale);
-
-    // Draw axes
-    drawAxes(ctx, canvas, viewOffset, viewScale);
-
-    // Draw sketch entities
+    // Get sketch data for selection highlighting (drawn as subtle overlays)
     const sketch = getSketch();
     if (sketch) {
-      drawSketchEntities(
+      // Draw selection highlights only (not the main geometry which is in 3D)
+      drawSketchSelectionHighlights(
         ctx,
         sketch,
         sketchToCanvas,
@@ -779,7 +775,7 @@ const SketchCanvas: React.FC = () => {
                   step={c.type === 'distance' ? 1 : 1}
                 />
                 <span className="sketch-dimension-unit">
-                  {c.type === 'distance' ? '' : '°'}
+                  {c.type === 'distance' ? units : '°'}
                 </span>
                 <button
                   className="sketch-dimension-delete"
@@ -800,7 +796,7 @@ const SketchCanvas: React.FC = () => {
             {(() => {
               const pos = canvasToSketch(mousePos.x, mousePos.y);
               const snapped = snapToGrid(pos.x, pos.y);
-              return `X: ${snapped.x.toFixed(1)}, Y: ${snapped.y.toFixed(1)}`;
+              return `X: ${snapped.x.toFixed(1)} ${units}, Y: ${snapped.y.toFixed(1)} ${units}`;
             })()}
           </span>
         )}
@@ -873,72 +869,10 @@ const SketchToolButton: React.FC<SketchToolButtonProps> = ({
 // Drawing Helpers
 // ============================================================================
 
-function drawGrid(
-  ctx: CanvasRenderingContext2D,
-  canvas: HTMLCanvasElement,
-  viewOffset: { x: number; y: number },
-  viewScale: number
-): void {
-  const gridSpacing = viewScale; // 1 unit = viewScale pixels
-  
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-  ctx.lineWidth = 1;
-
-  const centerX = canvas.width / 2 + viewOffset.x;
-  const centerY = canvas.height / 2 + viewOffset.y;
-
-  // Vertical lines
-  const startX = centerX % gridSpacing;
-  for (let x = startX; x < canvas.width; x += gridSpacing) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, canvas.height);
-    ctx.stroke();
-  }
-
-  // Horizontal lines
-  const startY = centerY % gridSpacing;
-  for (let y = startY; y < canvas.height; y += gridSpacing) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(canvas.width, y);
-    ctx.stroke();
-  }
-}
-
-function drawAxes(
-  ctx: CanvasRenderingContext2D,
-  canvas: HTMLCanvasElement,
-  viewOffset: { x: number; y: number },
-  _viewScale: number
-): void {
-  const centerX = canvas.width / 2 + viewOffset.x;
-  const centerY = canvas.height / 2 + viewOffset.y;
-
-  // X axis (red)
-  ctx.beginPath();
-  ctx.moveTo(0, centerY);
-  ctx.lineTo(canvas.width, centerY);
-  ctx.strokeStyle = '#ff4444';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // Y axis (green)
-  ctx.beginPath();
-  ctx.moveTo(centerX, 0);
-  ctx.lineTo(centerX, canvas.height);
-  ctx.strokeStyle = '#44ff44';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // Origin dot
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, 4, 0, Math.PI * 2);
-  ctx.fillStyle = '#ffffff';
-  ctx.fill();
-}
-
-function drawSketchEntities(
+/**
+ * Draw selection highlights only (main geometry is rendered in 3D by Viewer using Line2)
+ */
+function drawSketchSelectionHighlights(
   ctx: CanvasRenderingContext2D,
   sketch: SketchData,
   sketchToCanvas: (x: number, y: number) => { x: number; y: number },
@@ -946,10 +880,15 @@ function drawSketchEntities(
   selectedLines: Set<string>,
   highlightedLines?: Set<string>
 ): void {
-  // Draw lines
+  // Only draw selected/highlighted lines with a subtle glow effect
   for (const entity of sketch.entities) {
     if (entity.type === 'line') {
       const line = entity as SketchLine;
+      const isSelected = selectedLines.has(line.id);
+      const isHighlighted = highlightedLines?.has(line.id) ?? false;
+      
+      if (!isSelected && !isHighlighted) continue;
+      
       const startPoint = sketch.points.find((p) => p.id === line.start);
       const endPoint = sketch.points.find((p) => p.id === line.end);
       
@@ -957,68 +896,37 @@ function drawSketchEntities(
         const start = sketchToCanvas(startPoint.x, startPoint.y);
         const end = sketchToCanvas(endPoint.x, endPoint.y);
         
+        // Draw glow effect for selection
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
         ctx.lineTo(end.x, end.y);
-        const isSelected = selectedLines.has(line.id);
-        const isHighlighted = highlightedLines?.has(line.id) ?? false;
-        ctx.strokeStyle = isSelected ? '#ffff00' : isHighlighted ? '#ffaa00' : '#00aaff';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = isSelected ? 'rgba(255, 255, 0, 0.6)' : 'rgba(255, 170, 0, 0.4)';
+        ctx.lineWidth = 6;
         ctx.stroke();
       }
     }
   }
 
-  // Draw arcs
-  for (const entity of sketch.entities) {
-    if (entity.type !== 'arc') continue;
-    const start = sketch.points.find((p) => p.id === (entity as any).start);
-    const end = sketch.points.find((p) => p.id === (entity as any).end);
-    const center = sketch.points.find((p) => p.id === (entity as any).center);
-    const ccw = Boolean((entity as any).ccw);
-    if (!start || !end || !center) continue;
-
-    const s = sketchToCanvas(start.x, start.y);
-    const e = sketchToCanvas(end.x, end.y);
-    const c = sketchToCanvas(center.x, center.y);
-    const r = Math.hypot(s.x - c.x, s.y - c.y);
-
+  // Draw selection highlights for points
+  for (const point of sketch.points) {
+    if (!selectedPoints.has(point.id)) continue;
+    
+    const pos = sketchToCanvas(point.x, point.y);
+    
+    // Draw selection ring
     ctx.beginPath();
-    if (start.id === end.id) {
-      ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
-    } else {
-      const a0 = Math.atan2(s.y - c.y, s.x - c.x);
-      const a1 = Math.atan2(e.y - c.y, e.x - c.x);
-      ctx.arc(c.x, c.y, r, a0, a1, ccw);
-    }
-    ctx.strokeStyle = '#00aaff';
+    ctx.arc(pos.x, pos.y, 10, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
     ctx.lineWidth = 2;
     ctx.stroke();
   }
 
-  // Draw points
-  for (const point of sketch.points) {
-    const pos = sketchToCanvas(point.x, point.y);
-    
-    ctx.beginPath();
-    ctx.arc(pos.x, pos.y, 4, 0, Math.PI * 2);
-    ctx.fillStyle = selectedPoints.has(point.id)
-      ? '#ffff00'
-      : point.fixed
-        ? '#ffaa00'
-        : '#00aaff';
-    ctx.fill();
-    
-    ctx.beginPath();
-    ctx.arc(pos.x, pos.y, 4, 0, Math.PI * 2);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-
-  // Constraint indicators (lightweight visual hints)
+  // Constraint indicators (lightweight visual hints) - keep these as 2D overlay
   ctx.font = '11px system-ui, sans-serif';
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.lineWidth = 2;
+  
   for (const c of sketch.constraints) {
     // Skip dimensions here (handled in a panel; on-canvas dims can come later).
     if (c.type === 'distance' || c.type === 'angle') continue;
@@ -1037,6 +945,7 @@ function drawSketchEntities(
       const p = sketch.points.find((pt) => pt.id === c.point);
       if (!p) continue;
       const pos = sketchToCanvas(p.x, p.y);
+      ctx.strokeText(label, pos.x + 6, pos.y - 6);
       ctx.fillText(label, pos.x + 6, pos.y - 6);
       continue;
     }
@@ -1049,9 +958,11 @@ function drawSketchEntities(
       if (!p) continue;
       if (p1 && p2 && (c.type === 'horizontal' || c.type === 'vertical')) {
         const mid = sketchToCanvas((p1.x + p2.x) * 0.5, (p1.y + p2.y) * 0.5);
+        ctx.strokeText(label, mid.x + 6, mid.y - 6);
         ctx.fillText(label, mid.x + 6, mid.y - 6);
       } else {
         const pos = sketchToCanvas(p.x, p.y);
+        ctx.strokeText(label, pos.x + 6, pos.y - 6);
         ctx.fillText(label, pos.x + 6, pos.y - 6);
       }
       continue;
