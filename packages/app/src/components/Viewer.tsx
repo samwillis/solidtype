@@ -138,6 +138,10 @@ const Viewer: React.FC = () => {
   const [circleCenterPoint, setCircleCenterPoint] = useState<{ x: number; y: number; id?: string } | null>(null);
   const [sketchPos, setSketchPos] = useState<{ x: number; y: number } | null>(null);
   
+  // Inline dimension editing state
+  const [editingDimensionId, setEditingDimensionId] = useState<string | null>(null);
+  const [editingDimensionValue, setEditingDimensionValue] = useState<string>('');
+  
   // Track mouse for sketch interactions
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingViewRef = useRef(false);
@@ -1042,9 +1046,136 @@ const Viewer: React.FC = () => {
       selectionGroup.add(ring);
     }
 
-    // Draw constraint annotations (H, V, C, F labels) - only when editing
+    // Draw dimension annotations (distance and angle) - SolidWorks style
     for (const c of sketch.constraints) {
-      // Skip dimension constraints (shown in panel)
+      if (c.type === 'distance') {
+        // Distance constraint: draw dimension line with arrows and value
+        const [ptIdA, ptIdB] = c.points ?? [];
+        const pA = sketch.points.find((p) => p.id === ptIdA);
+        const pB = sketch.points.find((p) => p.id === ptIdB);
+        if (!pA || !pB) continue;
+
+        const midX = (pA.x + pB.x) / 2;
+        const midY = (pA.y + pB.y) / 2;
+        // Offset the dimension line perpendicular to the constraint
+        const dx = pB.x - pA.x;
+        const dy = pB.y - pA.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const perpX = len > 0 ? -dy / len : 0;
+        const perpY = len > 0 ? dx / len : 1;
+        const offset = 15; // offset distance in sketch units
+        const labelX = midX + perpX * offset;
+        const labelY = midY + perpY * offset;
+
+        // Draw extension lines
+        const extA = toWorld(pA.x + perpX * offset * 0.7, pA.y + perpY * offset * 0.7);
+        const extB = toWorld(pB.x + perpX * offset * 0.7, pB.y + perpY * offset * 0.7);
+        const dimA = toWorld(pA.x + perpX * offset, pA.y + perpY * offset);
+        const dimB = toWorld(pB.x + perpX * offset, pB.y + perpY * offset);
+        const worldA = toWorld(pA.x, pA.y);
+        const worldB = toWorld(pB.x, pB.y);
+
+        // Extension lines (from point to dimension line)
+        const extGeom1 = new LineGeometry();
+        extGeom1.setPositions([worldA.x, worldA.y, worldA.z, extA.x, extA.y, extA.z]);
+        const extMat1 = new LineMaterial({ color: 0x00aa00, linewidth: 1, resolution: rendererSize ?? new THREE.Vector2(1, 1) });
+        const extLine1 = new Line2(extGeom1, extMat1);
+        extLine1.computeLineDistances();
+        selectionGroup.add(extLine1);
+
+        const extGeom2 = new LineGeometry();
+        extGeom2.setPositions([worldB.x, worldB.y, worldB.z, extB.x, extB.y, extB.z]);
+        const extMat2 = new LineMaterial({ color: 0x00aa00, linewidth: 1, resolution: rendererSize ?? new THREE.Vector2(1, 1) });
+        const extLine2 = new Line2(extGeom2, extMat2);
+        extLine2.computeLineDistances();
+        selectionGroup.add(extLine2);
+
+        // Dimension line (between extension lines)
+        const dimGeom = new LineGeometry();
+        dimGeom.setPositions([dimA.x, dimA.y, dimA.z, dimB.x, dimB.y, dimB.z]);
+        const dimMat = new LineMaterial({ color: 0x00aa00, linewidth: 2, resolution: rendererSize ?? new THREE.Vector2(1, 1) });
+        const dimLine = new Line2(dimGeom, dimMat);
+        dimLine.computeLineDistances();
+        selectionGroup.add(dimLine);
+
+        // Create dimension label (editable on double-click)
+        const labelPos = toWorld(labelX, labelY);
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'dimension-label';
+        labelDiv.textContent = `${c.value.toFixed(1)}`;
+        labelDiv.style.cssText = `
+          background: rgba(0, 170, 0, 0.95);
+          color: white;
+          padding: 3px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          user-select: none;
+        `;
+        labelDiv.dataset.constraintId = c.id;
+        labelDiv.dataset.constraintType = 'distance';
+        const labelObject = new CSS2DObject(labelDiv);
+        labelObject.position.copy(labelPos);
+        labelsGroup.add(labelObject);
+      } else if (c.type === 'angle') {
+        // Angle constraint: draw arc between lines with angle value
+        const [lineId1, lineId2] = c.lines ?? [];
+        const line1 = sketch.entities.find((e) => e.type === 'line' && e.id === lineId1) as SketchLine | undefined;
+        const line2 = sketch.entities.find((e) => e.type === 'line' && e.id === lineId2) as SketchLine | undefined;
+        if (!line1 || !line2) continue;
+
+        // Find intersection point of the two lines
+        const l1p1 = sketch.points.find((p) => p.id === line1.start);
+        const l1p2 = sketch.points.find((p) => p.id === line1.end);
+        const l2p1 = sketch.points.find((p) => p.id === line2.start);
+        const l2p2 = sketch.points.find((p) => p.id === line2.end);
+        if (!l1p1 || !l1p2 || !l2p1 || !l2p2) continue;
+
+        // Find common point (intersection)
+        let centerPt: { x: number; y: number } | null = null;
+        if (l1p1.id === l2p1.id || l1p1.id === l2p2.id) centerPt = { x: l1p1.x, y: l1p1.y };
+        else if (l1p2.id === l2p1.id || l1p2.id === l2p2.id) centerPt = { x: l1p2.x, y: l1p2.y };
+        else centerPt = { x: (l1p1.x + l1p2.x + l2p1.x + l2p2.x) / 4, y: (l1p1.y + l1p2.y + l2p1.y + l2p2.y) / 4 };
+
+        // Place label near the center
+        const labelOffset = 25;
+        const dir1x = (l1p2.x - l1p1.x);
+        const dir1y = (l1p2.y - l1p1.y);
+        const dir2x = (l2p2.x - l2p1.x);
+        const dir2y = (l2p2.y - l2p1.y);
+        const avgDirX = (dir1x + dir2x) / 2;
+        const avgDirY = (dir1y + dir2y) / 2;
+        const avgLen = Math.sqrt(avgDirX * avgDirX + avgDirY * avgDirY) || 1;
+        const labelX = centerPt.x + (avgDirX / avgLen) * labelOffset;
+        const labelY = centerPt.y + (avgDirY / avgLen) * labelOffset;
+
+        // Create angle label
+        const labelPos = toWorld(labelX, labelY);
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'dimension-label angle-label';
+        labelDiv.textContent = `${c.value.toFixed(1)}°`;
+        labelDiv.style.cssText = `
+          background: rgba(170, 85, 0, 0.95);
+          color: white;
+          padding: 3px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          user-select: none;
+        `;
+        labelDiv.dataset.constraintId = c.id;
+        labelDiv.dataset.constraintType = 'angle';
+        const labelObject = new CSS2DObject(labelDiv);
+        labelObject.position.copy(labelPos);
+        labelsGroup.add(labelObject);
+      }
+    }
+
+    // Draw constraint annotations (H, V, C, F, etc. labels) - only when editing
+    for (const c of sketch.constraints) {
+      // Skip dimension constraints (already drawn above)
       if (c.type === 'distance' || c.type === 'angle') continue;
 
       const label = c.type === 'horizontal' ? 'H' 
@@ -1095,6 +1226,67 @@ const Viewer: React.FC = () => {
 
     needsRenderRef.current = true;
   }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, selectedPoints, selectedLines, getSketch, sceneReady]);
+
+  // Handle double-click on dimension labels for inline editing
+  useEffect(() => {
+    if (!sketchMode.active) return;
+
+    const handleDimensionDoubleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('dimension-label')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const constraintId = target.dataset.constraintId;
+        if (constraintId) {
+          const sketch = getSketch();
+          if (sketch) {
+            const constraint = sketch.constraints.find((c) => c.id === constraintId);
+            if (constraint && (constraint.type === 'distance' || constraint.type === 'angle')) {
+              setEditingDimensionId(constraintId);
+              setEditingDimensionValue(String(constraint.value));
+            }
+          }
+        }
+      }
+    };
+
+    document.addEventListener('dblclick', handleDimensionDoubleClick, true);
+    return () => {
+      document.removeEventListener('dblclick', handleDimensionDoubleClick, true);
+    };
+  }, [sketchMode.active, getSketch]);
+
+  // Handle inline dimension edit submission
+  const handleDimensionEditSubmit = useCallback(() => {
+    if (!editingDimensionId) return;
+    const value = parseFloat(editingDimensionValue);
+    if (!isNaN(value) && value > 0) {
+      updateConstraintValue(editingDimensionId, value);
+    }
+    setEditingDimensionId(null);
+    setEditingDimensionValue('');
+  }, [editingDimensionId, editingDimensionValue, updateConstraintValue]);
+
+  // Handle escape to cancel dimension editing
+  useEffect(() => {
+    if (!editingDimensionId) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleDimensionEditSubmit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setEditingDimensionId(null);
+        setEditingDimensionValue('');
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [editingDimensionId, handleDimensionEditSubmit]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -1792,6 +1984,31 @@ const Viewer: React.FC = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* Inline dimension edit overlay */}
+      {editingDimensionId && (
+        <div className="dimension-edit-overlay" onClick={() => { setEditingDimensionId(null); setEditingDimensionValue(''); }}>
+          <div className="dimension-edit-popup" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="number"
+              className="dimension-edit-input"
+              value={editingDimensionValue}
+              onChange={(e) => setEditingDimensionValue(e.target.value)}
+              autoFocus
+              step="0.1"
+              min="0"
+            />
+            <div className="dimension-edit-buttons">
+              <button className="dimension-edit-ok" onClick={handleDimensionEditSubmit}>
+                ✓
+              </button>
+              <button className="dimension-edit-cancel" onClick={() => { setEditingDimensionId(null); setEditingDimensionValue(''); }}>
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
