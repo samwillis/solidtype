@@ -13,6 +13,7 @@ import { useSelection } from '../contexts/SelectionContext';
 import { useFeatureEdit } from '../contexts/FeatureEditContext';
 import { extrudeFormSchema, revolveFormSchema, type ExtrudeFormData, type RevolveFormData } from '../types/featureSchemas';
 import type { Feature, ExtrudeFeature, RevolveFeature, SketchFeature, PlaneFeature, OriginFeature, SketchLine } from '../types/document';
+import { useKernel } from '../contexts/KernelContext';
 import './PropertiesPanel.css';
 
 // ============================================================================
@@ -456,6 +457,9 @@ function SketchProperties({ feature, onUpdate }: FeaturePropertiesProps) {
 function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
   const extrude = feature as ExtrudeFeature;
   const extent = extrude.extent ?? 'blind';
+  const { bodies } = useKernel();
+  const mergeScope = extrude.mergeScope ?? 'auto';
+  const isAddOperation = extrude.op === 'add';
   
   return (
     <>
@@ -529,12 +533,68 @@ function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           </PropertyRow>
         )}
       </PropertyGroup>
+      
+      {isAddOperation && (
+        <PropertyGroup title="Multi-Body">
+          <PropertyRow label="Merge">
+            <SelectInput
+              value={mergeScope}
+              onChange={(scope) => onUpdate({ mergeScope: scope })}
+              options={[
+                { value: 'auto', label: 'Auto (merge with intersecting)' },
+                { value: 'new', label: 'Create new body' },
+                { value: 'specific', label: 'Merge with selected' },
+              ]}
+            />
+          </PropertyRow>
+          {mergeScope === 'specific' && bodies.length > 0 && (
+            <PropertyRow label="Target Bodies">
+              <div className="body-selector">
+                {bodies.map((body) => (
+                  <label key={body.featureId} className="body-option">
+                    <input
+                      type="checkbox"
+                      checked={(extrude.targetBodies || []).includes(body.featureId)}
+                      onChange={(e) => {
+                        const current = extrude.targetBodies || [];
+                        const newTargets = e.target.checked
+                          ? [...current, body.featureId]
+                          : current.filter(id => id !== body.featureId);
+                        onUpdate({ targetBodies: newTargets.join(',') });
+                      }}
+                    />
+                    <span style={{ color: body.color || '#6699cc' }}>●</span>
+                    {body.name || body.featureId}
+                  </label>
+                ))}
+              </div>
+            </PropertyRow>
+          )}
+          <PropertyRow label="Body Name">
+            <TextInput
+              value={extrude.resultBodyName || ''}
+              onChange={(name) => onUpdate({ resultBodyName: name })}
+              placeholder="Auto"
+            />
+          </PropertyRow>
+          <PropertyRow label="Body Color">
+            <ColorInput
+              value={extrude.resultBodyColor}
+              onChange={(color) => onUpdate({ resultBodyColor: color || '' })}
+              defaultColor="#6699cc"
+            />
+          </PropertyRow>
+        </PropertyGroup>
+      )}
     </>
   );
 }
 
 function RevolveProperties({ feature, onUpdate }: FeaturePropertiesProps) {
   const revolve = feature as RevolveFeature;
+  const { bodies } = useKernel();
+  const mergeScope = revolve.mergeScope ?? 'auto';
+  const isAddOperation = revolve.op === 'add';
   
   return (
     <>
@@ -581,6 +641,59 @@ function RevolveProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           />
         </PropertyRow>
       </PropertyGroup>
+      
+      {isAddOperation && (
+        <PropertyGroup title="Multi-Body">
+          <PropertyRow label="Merge">
+            <SelectInput
+              value={mergeScope}
+              onChange={(scope) => onUpdate({ mergeScope: scope })}
+              options={[
+                { value: 'auto', label: 'Auto (merge with intersecting)' },
+                { value: 'new', label: 'Create new body' },
+                { value: 'specific', label: 'Merge with selected' },
+              ]}
+            />
+          </PropertyRow>
+          {mergeScope === 'specific' && bodies.length > 0 && (
+            <PropertyRow label="Target Bodies">
+              <div className="body-selector">
+                {bodies.map((body) => (
+                  <label key={body.featureId} className="body-option">
+                    <input
+                      type="checkbox"
+                      checked={(revolve.targetBodies || []).includes(body.featureId)}
+                      onChange={(e) => {
+                        const current = revolve.targetBodies || [];
+                        const newTargets = e.target.checked
+                          ? [...current, body.featureId]
+                          : current.filter(id => id !== body.featureId);
+                        onUpdate({ targetBodies: newTargets.join(',') });
+                      }}
+                    />
+                    <span style={{ color: body.color || '#6699cc' }}>●</span>
+                    {body.name || body.featureId}
+                  </label>
+                ))}
+              </div>
+            </PropertyRow>
+          )}
+          <PropertyRow label="Body Name">
+            <TextInput
+              value={revolve.resultBodyName || ''}
+              onChange={(name) => onUpdate({ resultBodyName: name })}
+              placeholder="Auto"
+            />
+          </PropertyRow>
+          <PropertyRow label="Body Color">
+            <ColorInput
+              value={revolve.resultBodyColor}
+              onChange={(color) => onUpdate({ resultBodyColor: color || '' })}
+              defaultColor="#6699cc"
+            />
+          </PropertyRow>
+        </PropertyGroup>
+      )}
     </>
   );
 }

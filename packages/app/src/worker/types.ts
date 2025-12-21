@@ -79,6 +79,8 @@ export interface MeshMessage {
   type: 'mesh';
   bodyId: string;
   mesh: TransferableMesh;
+  /** Body color (hex string like "#6699cc") */
+  color?: string;
 }
 
 export interface SketchSolvedMessage {
@@ -139,6 +141,10 @@ export interface BodyInfo {
   id: string;
   featureId: string;
   faceCount: number;
+  /** Display name for the body */
+  name?: string;
+  /** Display color for the body (hex string like "#6699cc") */
+  color?: string;
 }
 
 export interface TransferableMesh {

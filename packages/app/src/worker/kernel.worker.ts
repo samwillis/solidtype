@@ -65,8 +65,42 @@ let syncPort: MessagePort | null = null;
 let session: SolidSession | null = null;
 let rebuildTimeout: ReturnType<typeof setTimeout> | null = null;
 
-// Map of feature IDs to their created bodies
-const bodyMap = new Map<string, Body>();
+/**
+ * Body entry in the bodyMap - stores body with metadata
+ */
+interface BodyEntry {
+  body: Body;
+  name: string;
+  color: string;
+  /** Feature ID that created this body (for reference tracking) */
+  sourceFeatureId: string;
+}
+
+// Map of body IDs to their entries (body + metadata)
+// Key is the feature ID that created/owns the body
+const bodyMap = new Map<string, BodyEntry>();
+
+/** Default body colors - cycle through these for new bodies */
+const DEFAULT_BODY_COLORS = [
+  '#6699cc', // blue-gray
+  '#99cc99', // green
+  '#cc9999', // red
+  '#cccc99', // yellow
+  '#cc99cc', // purple
+  '#99cccc', // cyan
+];
+
+let bodyColorIndex = 0;
+
+function getNextBodyColor(): string {
+  const color = DEFAULT_BODY_COLORS[bodyColorIndex % DEFAULT_BODY_COLORS.length];
+  bodyColorIndex++;
+  return color;
+}
+
+function resetBodyColorIndex(): void {
+  bodyColorIndex = 0;
+}
 
 // ============================================================================
 // Yjs Sync Setup
@@ -164,13 +198,13 @@ function getSketchPlane(planeRef: string): DatumPlane | null {
     const faceIndex = parseInt(faceIndexStr, 10);
     
     // Find the body for this feature
-    const targetBody = bodyMap.get(featureId);
-    if (!targetBody || !session) {
+    const targetEntry = bodyMap.get(featureId);
+    if (!targetEntry || !session) {
       throw new Error(`Cannot find body for face reference: ${planeRef}`);
     }
     
     // Get the face from the body
-    const faces = targetBody.getFaces();
+    const faces = targetEntry.body.getFaces();
     if (faceIndex < 0 || faceIndex >= faces.length) {
       throw new Error(`Face index out of range: ${faceIndex} (body has ${faces.length} faces)`);
     }
@@ -245,15 +279,15 @@ function calculateExtrudeDistance(
       const faceIndex = parseInt(faceIndexStr, 10);
       
       // Find the body for this feature
-      const targetBody = bodyMap.get(featureId);
-      if (!targetBody || !session || !sketchPlane) {
+      const targetEntry = bodyMap.get(featureId);
+      if (!targetEntry || !session || !sketchPlane) {
         // Fallback to base distance if body not found
         console.warn(`Cannot resolve toFace reference: ${extentRef}`);
         return baseDistance * direction;
       }
       
       // Get the face from the body
-      const faces = targetBody.getFaces();
+      const faces = targetEntry.body.getFaces();
       if (faceIndex < 0 || faceIndex >= faces.length) {
         console.warn(`Face index out of range: ${faceIndex}`);
         return baseDistance * direction;
@@ -346,15 +380,15 @@ function resolveAttachment(
     const [, featureId, edgeIndexStr] = parts;
     const edgeIndex = parseInt(edgeIndexStr, 10);
     
-    const body = bodyMap.get(featureId);
-    if (!body) {
+    const entry = bodyMap.get(featureId);
+    if (!entry) {
       console.warn(`Cannot resolve edge attachment: body not found for ${featureId}`);
       return null;
     }
     
     // Get edge from body (need to get edges from the model)
     const model = session.getModel();
-    const shells = model.getBodyShells(body.id);
+    const shells = model.getBodyShells(entry.body.id);
     
     // Collect all edges from the body (using any for branded types)
     const allEdges: Array<{ id: unknown; startVertex: unknown; endVertex: unknown }> = [];
@@ -403,15 +437,15 @@ function resolveAttachment(
     const [, featureId, vertexIndexStr] = parts;
     const vertexIndex = parseInt(vertexIndexStr, 10);
     
-    const body = bodyMap.get(featureId);
-    if (!body) {
+    const entry = bodyMap.get(featureId);
+    if (!entry) {
       console.warn(`Cannot resolve vertex attachment: body not found for ${featureId}`);
       return null;
     }
     
     // Get vertex from body
     const model = session.getModel();
-    const shells = model.getBodyShells(body.id);
+    const shells = model.getBodyShells(entry.body.id);
     
     // Collect all vertices from the body (using unknown for branded types)
     const allVertices: unknown[] = [];
@@ -680,13 +714,31 @@ function interpretSketch(
   sketchMap.set(id, { planeId, plane, data });
 }
 
+/**
+ * Result from interpretExtrude/interpretRevolve with metadata
+ */
+interface FeatureInterpretResult {
+  body: Body | null;
+  /** ID of the body entry that was created or merged into */
+  bodyEntryId: string | null;
+  /** Name of the result body */
+  bodyName?: string;
+  /** Color of the result body */
+  bodyColor?: string;
+}
+
 function interpretExtrude(
   session: SolidSession,
-  element: Y.XmlElement
-): Body | null {
+  element: Y.XmlElement,
+  featureId: string
+): FeatureInterpretResult {
   const sketchId = element.getAttribute('sketch');
   const op = element.getAttribute('op') || 'add';
   const direction = element.getAttribute('direction') || 'normal';
+  const mergeScope = element.getAttribute('mergeScope') || 'auto';
+  const targetBodiesStr = element.getAttribute('targetBodies') || '';
+  const resultBodyName = element.getAttribute('resultBodyName') || '';
+  const resultBodyColor = element.getAttribute('resultBodyColor') || '';
 
   if (!sketchId) {
     throw new Error('Extrude requires a sketch reference');
@@ -749,17 +801,115 @@ function interpretExtrude(
   // Handle cut operation
   if (op === 'cut') {
     // Subtract from all existing bodies
-    for (const [existingId, existingBody] of bodyMap) {
-      const boolResult = session.subtract(existingBody, result.body);
+    for (const [existingId, entry] of bodyMap) {
+      const boolResult = session.subtract(entry.body, result.body);
       if (boolResult.success && boolResult.body) {
-        bodyMap.set(existingId, boolResult.body);
+        bodyMap.set(existingId, { ...entry, body: boolResult.body });
       }
     }
     // Tool body is consumed, return null
-    return null;
+    return { body: null, bodyEntryId: null };
   }
 
-  return result.body;
+  // Handle add operation with merge logic
+  const targetBodies = targetBodiesStr ? targetBodiesStr.split(',').filter(Boolean) : [];
+  
+  // Determine body name and color
+  let finalBodyName = resultBodyName || `Body${bodyMap.size + 1}`;
+  let finalBodyColor = resultBodyColor || getNextBodyColor();
+
+  if (mergeScope === 'new' || bodyMap.size === 0) {
+    // Create new body - no merging
+    return {
+      body: result.body,
+      bodyEntryId: featureId,
+      bodyName: finalBodyName,
+      bodyColor: finalBodyColor,
+    };
+  }
+
+  if (mergeScope === 'specific' && targetBodies.length > 0) {
+    // Merge with specific bodies
+    let mergedBody = result.body;
+    let mergedIntoId: string | null = null;
+    let mergedEntry: BodyEntry | null = null;
+
+    for (const targetId of targetBodies) {
+      const targetEntry = bodyMap.get(targetId);
+      if (targetEntry) {
+        const unionResult = session.union(targetEntry.body, mergedBody);
+        if (unionResult.success && unionResult.body) {
+          mergedBody = unionResult.body;
+          if (!mergedIntoId) {
+            mergedIntoId = targetId;
+            mergedEntry = targetEntry;
+          }
+        }
+      }
+    }
+
+    if (mergedIntoId && mergedEntry) {
+      // Update the target body with merged result
+      bodyMap.set(mergedIntoId, {
+        ...mergedEntry,
+        body: mergedBody,
+      });
+      return {
+        body: null,
+        bodyEntryId: mergedIntoId,
+        bodyName: mergedEntry.name,
+        bodyColor: mergedEntry.color,
+      };
+    }
+
+    // If no valid target found, create new body
+    return {
+      body: result.body,
+      bodyEntryId: featureId,
+      bodyName: finalBodyName,
+      bodyColor: finalBodyColor,
+    };
+  }
+
+  // mergeScope === 'auto' - merge with any overlapping body
+  // Try to union with existing bodies
+  let mergedBody = result.body;
+  let mergedIntoId: string | null = null;
+  let mergedEntry: BodyEntry | null = null;
+
+  for (const [existingId, entry] of bodyMap) {
+    const unionResult = session.union(entry.body, mergedBody);
+    if (unionResult.success && unionResult.body) {
+      // Successfully merged - update the existing body
+      mergedBody = unionResult.body;
+      if (!mergedIntoId) {
+        mergedIntoId = existingId;
+        mergedEntry = entry;
+      }
+    }
+  }
+
+  if (mergedIntoId && mergedEntry) {
+    // Update the merged body entry
+    bodyMap.set(mergedIntoId, {
+      ...mergedEntry,
+      body: mergedBody,
+    });
+    return {
+      body: null,
+      bodyEntryId: mergedIntoId,
+      bodyName: mergedEntry.name,
+      bodyColor: mergedEntry.color,
+    };
+  }
+
+  // No overlap with existing bodies - create new body
+  return {
+    body: result.body,
+    bodyEntryId: featureId,
+    bodyName: finalBodyName,
+    bodyColor: finalBodyColor,
+  };
 }
 
 /**
@@ -922,12 +1072,17 @@ function performPreviewRevolve(
 
 function interpretRevolve(
   session: SolidSession,
-  element: Y.XmlElement
-): Body | null {
+  element: Y.XmlElement,
+  featureId: string
+): FeatureInterpretResult {
   const sketchId = element.getAttribute('sketch');
   const axisId = element.getAttribute('axis') || '';
   const angleDeg = parseFloat(element.getAttribute('angle') || '360');
   const op = element.getAttribute('op') || 'add';
+  const mergeScope = element.getAttribute('mergeScope') || 'auto';
+  const targetBodiesStr = element.getAttribute('targetBodies') || '';
+  const resultBodyName = element.getAttribute('resultBodyName') || '';
+  const resultBodyColor = element.getAttribute('resultBodyColor') || '';
 
   if (!sketchId) {
     throw new Error('Revolve requires a sketch reference');
@@ -1010,17 +1165,110 @@ function interpretRevolve(
     throw new Error(result.error || 'Revolve failed');
   }
 
+  // Handle cut operation
   if (op === 'cut') {
-    for (const [existingId, existingBody] of bodyMap) {
-      const boolResult = session.subtract(existingBody, result.body);
+    for (const [existingId, entry] of bodyMap) {
+      const boolResult = session.subtract(entry.body, result.body);
       if (boolResult.success && boolResult.body) {
-        bodyMap.set(existingId, boolResult.body);
+        bodyMap.set(existingId, { ...entry, body: boolResult.body });
       }
     }
-    return null;
+    return { body: null, bodyEntryId: null };
   }
 
-  return result.body;
+  // Handle add operation with merge logic (same as extrude)
+  const targetBodies = targetBodiesStr ? targetBodiesStr.split(',').filter(Boolean) : [];
+  
+  // Determine body name and color
+  let finalBodyName = resultBodyName || `Body${bodyMap.size + 1}`;
+  let finalBodyColor = resultBodyColor || getNextBodyColor();
+
+  if (mergeScope === 'new' || bodyMap.size === 0) {
+    // Create new body - no merging
+    return {
+      body: result.body,
+      bodyEntryId: featureId,
+      bodyName: finalBodyName,
+      bodyColor: finalBodyColor,
+    };
+  }
+
+  if (mergeScope === 'specific' && targetBodies.length > 0) {
+    // Merge with specific bodies
+    let mergedBody = result.body;
+    let mergedIntoId: string | null = null;
+    let mergedEntry: BodyEntry | null = null;
+
+    for (const targetId of targetBodies) {
+      const targetEntry = bodyMap.get(targetId);
+      if (targetEntry) {
+        const unionResult = session.union(targetEntry.body, mergedBody);
+        if (unionResult.success && unionResult.body) {
+          mergedBody = unionResult.body;
+          if (!mergedIntoId) {
+            mergedIntoId = targetId;
+            mergedEntry = targetEntry;
+          }
+        }
+      }
+    }
+
+    if (mergedIntoId && mergedEntry) {
+      bodyMap.set(mergedIntoId, {
+        ...mergedEntry,
+        body: mergedBody,
+      });
+      return {
+        body: null,
+        bodyEntryId: mergedIntoId,
+        bodyName: mergedEntry.name,
+        bodyColor: mergedEntry.color,
+      };
+    }
+
+    return {
+      body: result.body,
+      bodyEntryId: featureId,
+      bodyName: finalBodyName,
+      bodyColor: finalBodyColor,
+    };
+  }
+
+  // mergeScope === 'auto' - merge with any overlapping body
+  let mergedBody = result.body;
+  let mergedIntoId: string | null = null;
+  let mergedEntry: BodyEntry | null = null;
+
+  for (const [existingId, entry] of bodyMap) {
+    const unionResult = session.union(entry.body, mergedBody);
+    if (unionResult.success && unionResult.body) {
+      mergedBody = unionResult.body;
+      if (!mergedIntoId) {
+        mergedIntoId = existingId;
+        mergedEntry = entry;
+      }
+    }
+  }
+
+  if (mergedIntoId && mergedEntry) {
+    bodyMap.set(mergedIntoId, {
+      ...mergedEntry,
+      body: mergedBody,
+    });
+    return {
+      body: null,
+      bodyEntryId: mergedIntoId,
+      bodyName: mergedEntry.name,
+      bodyColor: mergedEntry.color,
+    };
+  }
+
+  return {
+    body: result.body,
+    bodyEntryId: featureId,
+    bodyName: finalBodyName,
+    bodyColor: finalBodyColor,
+  };
 }
 
 /**
@@ -1029,7 +1277,7 @@ function interpretRevolve(
 function interpretBoolean(
   session: SolidSession,
   element: Y.XmlElement
-): Body | null {
+): FeatureInterpretResult {
   const operation = element.getAttribute('operation') || 'union';
   const targetId = element.getAttribute('target');
   const toolId = element.getAttribute('tool');
@@ -1038,13 +1286,13 @@ function interpretBoolean(
     throw new Error('Boolean requires target and tool body references');
   }
 
-  const targetBody = bodyMap.get(targetId);
-  const toolBody = bodyMap.get(toolId);
+  const targetEntry = bodyMap.get(targetId);
+  const toolEntry = bodyMap.get(toolId);
 
-  if (!targetBody) {
+  if (!targetEntry) {
     throw new Error(`Target body not found: ${targetId}`);
   }
-  if (!toolBody) {
+  if (!toolEntry) {
     throw new Error(`Tool body not found: ${toolId}`);
   }
 
@@ -1052,13 +1300,13 @@ function interpretBoolean(
   
   switch (operation) {
     case 'union':
-      result = session.union(targetBody, toolBody);
+      result = session.union(targetEntry.body, toolEntry.body);
       break;
     case 'subtract':
-      result = session.subtract(targetBody, toolBody);
+      result = session.subtract(targetEntry.body, toolEntry.body);
       break;
     case 'intersect':
-      result = session.intersect(targetBody, toolBody);
+      result = session.intersect(targetEntry.body, toolEntry.body);
       break;
     default:
       throw new Error(`Unknown boolean operation: ${operation}`);
@@ -1072,9 +1320,17 @@ function interpretBoolean(
   bodyMap.delete(toolId);
 
   // Update the target body entry with the result
-  bodyMap.set(targetId, result.body);
+  bodyMap.set(targetId, {
+    ...targetEntry,
+    body: result.body,
+  });
 
-  return result.body;
+  return {
+    body: null, // The body is updated in bodyMap, not returned as new
+    bodyEntryId: targetId,
+    bodyName: targetEntry.name,
+    bodyColor: targetEntry.color,
+  };
 }
 
 // ============================================================================
@@ -1094,6 +1350,7 @@ function performRebuild(): void {
   session = new SolidSession();
   bodyMap.clear();
   sketchMap.clear();
+  resetBodyColorIndex();
 
   const bodies: BodyInfo[] = [];
   const errors: BuildError[] = [];
@@ -1124,7 +1381,7 @@ function performRebuild(): void {
     }
 
     try {
-      let body: Body | null = null;
+      let result: FeatureInterpretResult | null = null;
 
       switch (type) {
         case 'origin':
@@ -1139,43 +1396,40 @@ function performRebuild(): void {
           break;
 
         case 'extrude':
-          body = interpretExtrude(session!, child);
+          result = interpretExtrude(session!, child, id);
           featureStatus[id] = 'computed';
           
-          if (body) {
-            bodyMap.set(id, body);
-            bodies.push({
-              id: String(body.id),
-              featureId: id,
-              faceCount: body.getFaces().length,
-            });
+          // If a new body was created, add it to bodyMap
+          if (result.body && result.bodyEntryId) {
+            const entry: BodyEntry = {
+              body: result.body,
+              name: result.bodyName || `Body${bodyMap.size + 1}`,
+              color: result.bodyColor || getNextBodyColor(),
+              sourceFeatureId: id,
+            };
+            bodyMap.set(result.bodyEntryId, entry);
           }
           break;
 
         case 'revolve':
-          body = interpretRevolve(session!, child);
+          result = interpretRevolve(session!, child, id);
           featureStatus[id] = 'computed';
-          if (body) {
-            bodyMap.set(id, body);
-            bodies.push({
-              id: String(body.id),
-              featureId: id,
-              faceCount: body.getFaces().length,
-            });
+          
+          if (result.body && result.bodyEntryId) {
+            const entry: BodyEntry = {
+              body: result.body,
+              name: result.bodyName || `Body${bodyMap.size + 1}`,
+              color: result.bodyColor || getNextBodyColor(),
+              sourceFeatureId: id,
+            };
+            bodyMap.set(result.bodyEntryId, entry);
           }
           break;
 
         case 'boolean':
-          body = interpretBoolean(session!, child);
+          result = interpretBoolean(session!, child);
           featureStatus[id] = 'computed';
-          if (body) {
-            bodyMap.set(id, body);
-            bodies.push({
-              id: String(body.id),
-              featureId: id,
-              faceCount: body.getFaces().length,
-            });
-          }
+          // Boolean updates existing entry, no new body created
           break;
 
         default:
@@ -1198,6 +1452,17 @@ function performRebuild(): void {
     }
   }
 
+  // Build bodies list from bodyMap with metadata
+  for (const [entryId, entry] of bodyMap) {
+    bodies.push({
+      id: String(entry.body.id),
+      featureId: entryId,
+      faceCount: entry.body.getFaces().length,
+      name: entry.name,
+      color: entry.color,
+    });
+  }
+
   // Send rebuild complete message
   self.postMessage({
     type: 'rebuild-complete',
@@ -1206,13 +1471,13 @@ function performRebuild(): void {
     errors,
   } as WorkerToMainMessage);
 
-  // Send meshes for all bodies
-  for (const [featureId, body] of bodyMap) {
-    sendMesh(featureId, body);
+  // Send meshes for all bodies with their colors
+  for (const [featureId, entry] of bodyMap) {
+    sendMeshWithColor(featureId, entry.body, entry.color);
   }
 }
 
-function sendMesh(featureId: string, body: Body): void {
+function sendMesh(featureId: string, body: Body, color?: string): void {
   try {
     const mesh = body.tessellate();
     
@@ -1232,12 +1497,17 @@ function sendMesh(featureId: string, body: Body): void {
         type: 'mesh',
         bodyId: featureId,
         mesh: transferableMesh,
+        color,
       } as WorkerToMainMessage,
       { transfer: [positions.buffer, normals.buffer, indices.buffer] }
     );
   } catch (err) {
     console.error('Failed to tessellate body:', err);
   }
+}
+
+function sendMeshWithColor(featureId: string, body: Body, color: string): void {
+  sendMesh(featureId, body, color);
 }
 
 function sendPreviewMesh(previewKey: string, body: Body): void {
@@ -1337,7 +1607,7 @@ self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
         const { binary = true, name = 'model' } = event.data;
         
         // Collect all meshes from bodies
-        const meshes = Array.from(bodyMap.values()).map(body => body.tessellate());
+        const meshes = Array.from(bodyMap.values()).map(entry => entry.body.tessellate());
         
         if (meshes.length === 0) {
           throw new Error('No bodies to export');

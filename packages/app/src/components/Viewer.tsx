@@ -436,8 +436,17 @@ const Viewer: React.FC = () => {
 
       const isPreview = bodyId.startsWith('__preview');
       const isCutPreview = bodyId.includes('cut');
+      
+      // Get body color from bodies list if available
+      const bodyInfo = bodies.find(b => b.featureId === bodyId);
+      let bodyColor: number = 0x0078d4; // default blue
+      if (bodyInfo?.color) {
+        // Convert hex string (e.g. "#6699cc") to number
+        bodyColor = parseInt(bodyInfo.color.replace('#', ''), 16);
+      }
+      
       const material = new THREE.MeshStandardMaterial({
-        color: isPreview ? (isCutPreview ? 0xff4444 : 0x44aaff) : 0x0078d4,
+        color: isPreview ? (isCutPreview ? 0xff4444 : 0x44aaff) : bodyColor,
         side: THREE.DoubleSide,
         transparent: isPreview,
         opacity: isPreview ? 0.45 : 1,
@@ -451,7 +460,7 @@ const Viewer: React.FC = () => {
 
 
     needsRenderRef.current = true;
-  }, [meshes, sceneReady]);
+  }, [meshes, bodies, sceneReady]);
 
   // Render datum planes
   useEffect(() => {

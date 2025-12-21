@@ -21,6 +21,9 @@ export const featureBaseSchema = z.object({
 
 export const extrudeExtentSchema = z.enum(['blind', 'toFace', 'toVertex', 'throughAll']);
 
+/** Merge scope for add operations - SolidWorks-like multi-body support */
+export const mergeScopeSchema = z.enum(['auto', 'new', 'specific']);
+
 export const extrudeFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   sketch: z.string().min(1, 'Sketch is required'),
@@ -29,6 +32,11 @@ export const extrudeFormSchema = z.object({
   extent: extrudeExtentSchema,
   distance: z.number().min(0.1, 'Distance must be at least 0.1'),
   extentRef: z.string().optional(),
+  // Multi-body merge options
+  mergeScope: mergeScopeSchema.optional(),
+  targetBodies: z.array(z.string()).optional(),
+  resultBodyName: z.string().optional(),
+  resultBodyColor: z.string().optional(),
 });
 
 export type ExtrudeFormData = z.infer<typeof extrudeFormSchema>;
@@ -40,6 +48,7 @@ export const defaultExtrudeFormData: ExtrudeFormData = {
   direction: 'normal',
   extent: 'blind',
   distance: 10,
+  mergeScope: 'auto',
 };
 
 // ============================================================================
@@ -52,6 +61,11 @@ export const revolveFormSchema = z.object({
   axis: z.string().min(1, 'Axis is required'),
   angle: z.number().min(1, 'Angle must be at least 1').max(360, 'Angle must be at most 360'),
   op: z.enum(['add', 'cut']),
+  // Multi-body merge options
+  mergeScope: mergeScopeSchema.optional(),
+  targetBodies: z.array(z.string()).optional(),
+  resultBodyName: z.string().optional(),
+  resultBodyColor: z.string().optional(),
 });
 
 export type RevolveFormData = z.infer<typeof revolveFormSchema>;
@@ -62,6 +76,7 @@ export const defaultRevolveFormData: RevolveFormData = {
   axis: '',
   angle: 360,
   op: 'add',
+  mergeScope: 'auto',
 };
 
 // ============================================================================

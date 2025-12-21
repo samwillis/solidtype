@@ -127,6 +127,14 @@ export interface SketchFeature extends FeatureBase {
 // Modeling Features
 // ============================================================================
 
+/** 
+ * Merge scope for add operations - SolidWorks-like multi-body support
+ * - 'auto': Merge with any body the new geometry interacts with
+ * - 'new': Create a new separate body
+ * - 'specific': Merge with specifically selected bodies
+ */
+export type MergeScope = 'auto' | 'new' | 'specific';
+
 /** Extent type for extrude operations (Phase 14) */
 export type ExtrudeExtent = 'blind' | 'toFace' | 'toVertex' | 'throughAll';
 
@@ -142,6 +150,15 @@ export interface ExtrudeFeature extends FeatureBase {
   distance?: number;
   /** Persistent reference to target face or vertex for 'toFace' or 'toVertex' extent */
   extentRef?: string;
+  
+  /** Merge scope for 'add' operations (default: 'auto') */
+  mergeScope?: MergeScope;
+  /** Body IDs to merge with when mergeScope is 'specific' */
+  targetBodies?: string[];
+  /** Name for the resulting body (used when creating new body or first extrude) */
+  resultBodyName?: string;
+  /** Color for the resulting body (hex string like "#ff0000") */
+  resultBodyColor?: string;
 }
 
 export interface RevolveFeature extends FeatureBase {
@@ -151,6 +168,15 @@ export interface RevolveFeature extends FeatureBase {
   axis: string;
   angle: number;
   op: 'add' | 'cut';
+  
+  /** Merge scope for 'add' operations (default: 'auto') */
+  mergeScope?: MergeScope;
+  /** Body IDs to merge with when mergeScope is 'specific' */
+  targetBodies?: string[];
+  /** Name for the resulting body (used when creating new body or first revolve) */
+  resultBodyName?: string;
+  /** Color for the resulting body (hex string like "#ff0000") */
+  resultBodyColor?: string;
 }
 
 /** Boolean operation type (Phase 17) */
@@ -228,4 +254,8 @@ export interface BodyInfo {
   id: string;
   featureId: string;
   faceCount: number;
+  /** Display name for the body */
+  name?: string;
+  /** Display color for the body (hex string like "#ff0000") */
+  color?: string;
 }
