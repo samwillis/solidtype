@@ -283,6 +283,17 @@ function sampleProfileLoop(loop: ProfileLoop): { vertices2D: Vec2[]; segmentCurv
       continue;
     }
 
+    if (curve.kind === 'polyline') {
+      // For polylines, sample each segment
+      const pts = curve.pts;
+      for (let i = 0; i < pts.length - 1; i++) {
+        vertices.push(pts[i]);
+        segmentCurves.push(curve);
+      }
+      continue;
+    }
+
+    // Arc case
     const span = arcAngleSpan(curve);
     const segments = Math.max(ARC_MIN_SEGMENTS, Math.ceil(Math.abs(span) * ARC_SEGMENTS_PER_RADIAN));
     for (let i = 0; i < segments; i++) {

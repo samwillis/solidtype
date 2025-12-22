@@ -231,3 +231,102 @@ export function triangulatePolygon(polygon: Vec2[]): TriangleIndices {
 export function triangulate2D(vertices2D: Vec2[]): TriangleIndices {
   return triangulatePolygon(vertices2D);
 }
+
+/**
+ * Triangulate a polygon with holes using bridge edges
+ * 
+ * This connects each hole to the outer boundary with bridge edges,
+ * creating a single simple polygon that can be triangulated.
+ * 
+ * @param outer Outer boundary vertices (CCW)
+ * @param holes Array of hole vertices (CW - opposite winding)
+ * @returns Array of triangle indices into concatenated vertex array [outer...holes[0]...holes[1]...]
+ */
+export function triangulatePolygonWithHoles(
+  outer: Vec2[],
+  holes: Vec2[][]
+): TriangleIndices {
+  if (holes.length === 0) {
+    return triangulatePolygon(outer);
+  }
+  
+  // Create combined polygon by connecting holes to outer via bridge edges
+  // This is a simplified implementation using the rightmost vertex of each hole
+  
+  let combined = [...outer];
+  let vertexOffset = outer.length;
+  const indexMap: number[] = outer.map((_, i) => i);
+  
+  for (const hole of holes) {
+    if (hole.length < 3) continue;
+    
+    // Find rightmost point in hole
+    let rightmostIdx = 0;
+    for (let i = 1; i < hole.length; i++) {
+      if (hole[i][0] > hole[rightmostIdx][0]) {
+        rightmostIdx = i;
+      }
+    }
+    const holePoint = hole[rightmostIdx];
+    
+    // Find closest point on outer boundary to the right of hole point
+    // For simplicity, find the nearest outer vertex
+    let bestOuterIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < combined.length; i++) {
+      const dx = combined[i][0] - holePoint[0];
+      const dy = combined[i][1] - holePoint[1];
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestOuterIdx = i;
+      }
+    }
+    
+    // Create bridge: insert hole into combined polygon
+    // Split combined at bestOuterIdx, insert hole starting at rightmostIdx,
+    // then bridge back to bestOuterIdx
+    
+    const newCombined: Vec2[] = [];
+    const newIndexMap: number[] = [];
+    
+    // Part before bridge point (inclusive)
+    for (let i = 0; i <= bestOuterIdx; i++) {
+      newCombined.push(combined[i]);
+      newIndexMap.push(indexMap[i]);
+    }
+    
+    // Insert hole vertices starting from rightmost, going around
+    for (let i = 0; i < hole.length; i++) {
+      const holeIdx = (rightmostIdx + i) % hole.length;
+      newCombined.push(hole[holeIdx]);
+      newIndexMap.push(vertexOffset + holeIdx);
+    }
+    
+    // Bridge back: repeat hole's rightmost and outer's bridge point
+    newCombined.push(hole[rightmostIdx]);
+    newIndexMap.push(vertexOffset + rightmostIdx);
+    
+    // Part after bridge point
+    for (let i = bestOuterIdx; i < combined.length; i++) {
+      newCombined.push(combined[i]);
+      newIndexMap.push(indexMap[i]);
+    }
+    
+    combined = newCombined;
+    indexMap.length = 0;
+    indexMap.push(...newIndexMap);
+    vertexOffset += hole.length;
+  }
+  
+  // Triangulate combined polygon
+  const localIndices = triangulatePolygon(combined);
+  
+  // Map back to original indices
+  const result: TriangleIndices = [];
+  for (const localIdx of localIndices) {
+    result.push(indexMap[localIdx]);
+  }
+  
+  return result;
+}

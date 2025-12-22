@@ -63,6 +63,18 @@ export type SurfaceIndex = number & { __brand: 'SurfaceIndex' };
 export type Curve3DIndex = number & { __brand: 'Curve3DIndex' };
 
 /**
+ * Index into the 2D curve array (geometry)
+ */
+export type Curve2DIndex = number & { __brand: 'Curve2DIndex' };
+
+/**
+ * Index into the p-curve array
+ * A p-curve represents a 2D curve in the UV space of a surface,
+ * corresponding to a 3D edge projected onto that surface.
+ */
+export type PCurveIndex = number & { __brand: 'PCurveIndex' };
+
+/**
  * Sentinel value for "null" handles
  * Used to represent missing/invalid references in tables
  */
@@ -145,4 +157,20 @@ export function asSurfaceIndex(id: number): SurfaceIndex {
  */
 export function asCurve3DIndex(id: number): Curve3DIndex {
   return id as Curve3DIndex;
+}
+
+/**
+ * Cast a number to a Curve2DIndex
+ * @internal Use with caution - only when reading from known valid sources
+ */
+export function asCurve2DIndex(id: number): Curve2DIndex {
+  return id as Curve2DIndex;
+}
+
+/**
+ * Cast a number to a PCurveIndex
+ * @internal Use with caution - only when reading from known valid sources
+ */
+export function asPCurveIndex(id: number): PCurveIndex {
+  return id as PCurveIndex;
 }

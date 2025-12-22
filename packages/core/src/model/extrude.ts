@@ -17,6 +17,7 @@ import { TopoModel } from '../topo/TopoModel.js';
 import type { BodyId, EdgeId, VertexId, HalfEdgeId, FaceId, ShellId, SurfaceIndex } from '../topo/handles.js';
 import type { SketchProfile, ProfileLoop } from './sketchProfile.js';
 import { planeToWorld } from './planes.js';
+import { computeFacePCurves } from './pcurveHelpers.js';
 import type { NamingStrategy, FeatureId, PersistentRef } from '../naming/index.js';
 import {
   faceRef,
@@ -377,6 +378,10 @@ function createBottomFace(
   const face = model.addFace(surface, false);
   model.addLoopToFace(face, loop);
   model.addFaceToShell(shell, face);
+  
+  // Compute p-curves for the face
+  computeFacePCurves(model, [loop], surface);
+  
   return face;
 }
 
@@ -411,6 +416,10 @@ function createTopFace(
   const face = model.addFace(surface, false);
   model.addLoopToFace(face, loop);
   model.addFaceToShell(shell, face);
+  
+  // Compute p-curves for the face
+  computeFacePCurves(model, [loop], surface);
+  
   return face;
 }
 
@@ -498,6 +507,10 @@ function createSideFaces(
     const face = model.addFace(surface, faceReversed);
     model.addLoopToFace(face, faceLoop);
     model.addFaceToShell(shell, face);
+    
+    // Compute p-curves for the face
+    computeFacePCurves(model, [faceLoop], surface);
+    
     createdFaces.push(face);
   }
   

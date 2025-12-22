@@ -12,8 +12,9 @@
 export * from './handles.js';
 
 // Export the OO TopoModel class
-export { TopoModel, EntityFlags, type ModelStats } from './TopoModel.js';
+export { TopoModel, EntityFlags, type ModelStats, type PCurve } from './TopoModel.js';
 
 // Re-export validation and healing
 export * from './validate.js';
 export * from './heal.js';
+export * from './sameParameter.js';

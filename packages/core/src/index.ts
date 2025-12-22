@@ -114,6 +114,7 @@ export * from './geom/curve2d.js';
 export * from './geom/intersect2d.js';
 export * from './geom/curve3d.js';
 export * from './geom/surface.js';
+export * from './geom/surfaceUv.js';
 
 // topo: BREP topology (OO TopoModel class)
 export * from './topo/index.js';

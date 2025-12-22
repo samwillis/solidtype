@@ -18,6 +18,7 @@
 import type { Vec3 } from '../num/vec3.js';
 import type { Surface } from '../geom/surface.js';
 import type { Curve3D } from '../geom/curve3d.js';
+import type { Curve2D } from '../geom/curve2d.js';
 import type { NumericContext } from '../num/tolerance.js';
 import {
   type BodyId,
@@ -29,6 +30,8 @@ import {
   type VertexId,
   type SurfaceIndex,
   type Curve3DIndex,
+  type Curve2DIndex,
+  type PCurveIndex,
   NULL_ID,
   asBodyId,
   asShellId,
@@ -39,8 +42,24 @@ import {
   asVertexId,
   asSurfaceIndex,
   asCurve3DIndex,
+  asCurve2DIndex,
+  asPCurveIndex,
   isNullId,
 } from './handles.js';
+
+/**
+ * PCurve - parametric curve in surface UV space
+ * 
+ * A p-curve represents a 2D curve in the (u,v) domain of a surface,
+ * corresponding to a 3D edge curve. The p-curve uses the same parameter
+ * t ∈ [0,1] as the edge curve (SameParameter discipline).
+ */
+export interface PCurve {
+  /** Index of the 2D curve in the model's curve2d array */
+  curve2dIndex: Curve2DIndex;
+  /** Index of the surface this p-curve lies on */
+  surfaceIndex: SurfaceIndex;
+}
 
 /**
  * Entity flags (shared across entity types)
@@ -91,6 +110,8 @@ interface HalfEdgeTable {
   prev: Int32Array;
   twin: Int32Array;
   direction: Int8Array;
+  /** P-curve index for UV trimming on the face. NULL_ID if not set. */
+  pcurve: Int32Array;
   flags: Uint8Array;
   count: number;
   liveCount: number;
@@ -194,6 +215,7 @@ function createHalfEdgeTable(capacity: number = DEFAULT_INITIAL_CAPACITY): HalfE
     prev: arrays.int32(),
     twin: arrays.int32(),
     direction: arrays.int8(),
+    pcurve: arrays.int32(),
     flags: arrays.uint8(),
     count: 0,
     liveCount: 0,
@@ -275,7 +297,9 @@ export interface ModelStats {
   shells: number;
   bodies: number;
   curves: number;
+  curves2d: number;
   surfaces: number;
+  pcurves: number;
 }
 
 /**
@@ -301,7 +325,9 @@ export class TopoModel {
   
   // Geometry storage
   private _curves: Curve3D[] = [];
+  private _curves2d: Curve2D[] = [];
   private _surfaces: Surface[] = [];
+  private _pcurves: PCurve[] = [];
   
   // Numeric context
   private _ctx: NumericContext;
@@ -419,6 +445,39 @@ export class TopoModel {
     return this._curves[idx];
   }
   
+  /**
+   * Add a 2D curve to the model
+   */
+  addCurve2D(curve: Curve2D): Curve2DIndex {
+    const idx = this._curves2d.length;
+    this._curves2d.push(curve);
+    return asCurve2DIndex(idx);
+  }
+  
+  /**
+   * Get a 2D curve by index
+   */
+  getCurve2D(idx: Curve2DIndex): Curve2D {
+    return this._curves2d[idx];
+  }
+  
+  /**
+   * Add a p-curve to the model
+   * A p-curve is a 2D curve in UV space representing an edge on a surface
+   */
+  addPCurve(curve2dIndex: Curve2DIndex, surfaceIndex: SurfaceIndex): PCurveIndex {
+    const idx = this._pcurves.length;
+    this._pcurves.push({ curve2dIndex, surfaceIndex });
+    return asPCurveIndex(idx);
+  }
+  
+  /**
+   * Get a p-curve by index
+   */
+  getPCurve(idx: PCurveIndex): PCurve {
+    return this._pcurves[idx];
+  }
+  
   // ==========================================================================
   // Edge operations
   // ==========================================================================
@@ -501,6 +560,7 @@ export class TopoModel {
     this._halfEdges.prev[id] = NULL_ID;
     this._halfEdges.twin[id] = NULL_ID;
     this._halfEdges.direction[id] = direction;
+    this._halfEdges.pcurve[id] = NULL_ID;
     this._halfEdges.flags[id] = EntityFlags.NONE;
     this._halfEdges.count++;
     this._halfEdges.liveCount++;
@@ -558,6 +618,22 @@ export class TopoModel {
   }
   
   /**
+   * Get the p-curve index for this half-edge
+   * Returns NULL_ID if no p-curve is set
+   */
+  getHalfEdgePCurve(id: HalfEdgeId): PCurveIndex | typeof NULL_ID {
+    const pcId = this._halfEdges.pcurve[id];
+    return pcId === NULL_ID ? NULL_ID : asPCurveIndex(pcId);
+  }
+  
+  /**
+   * Set the p-curve for this half-edge
+   */
+  setHalfEdgePCurve(id: HalfEdgeId, pcurve: PCurveIndex): void {
+    this._halfEdges.pcurve[id] = pcurve;
+  }
+  
+  /**
    * Get the start vertex of a half-edge (considering direction)
    */
   getHalfEdgeStartVertex(id: HalfEdgeId): VertexId {
@@ -584,6 +660,7 @@ export class TopoModel {
       this._halfEdges.prev = growTypedArray(this._halfEdges.prev, newCapacity);
       this._halfEdges.twin = growTypedArray(this._halfEdges.twin, newCapacity);
       this._halfEdges.direction = growTypedArray(this._halfEdges.direction, newCapacity);
+      this._halfEdges.pcurve = growTypedArray(this._halfEdges.pcurve, newCapacity);
       this._halfEdges.flags = growTypedArray(this._halfEdges.flags, newCapacity);
     }
   }
@@ -896,7 +973,9 @@ export class TopoModel {
       shells: this._shells.liveCount,
       bodies: this._bodies.liveCount,
       curves: this._curves.length,
+      curves2d: this._curves2d.length,
       surfaces: this._surfaces.length,
+      pcurves: this._pcurves.length,
     };
   }
   
@@ -1203,6 +1282,7 @@ export class TopoModel {
     prev: Int32Array;
     twin: Int32Array;
     direction: Int8Array;
+    pcurve: Int32Array;
     flags: Uint8Array;
     count: number;
     liveCount: number;
@@ -1272,11 +1352,27 @@ export class TopoModel {
   }
   
   /**
+   * Get read-only access to 2D curves array
+   * @internal For testing and introspection only
+   */
+  get curves2d(): readonly Curve2D[] {
+    return this._curves2d;
+  }
+  
+  /**
    * Get read-only access to surfaces array
    * @internal For testing and introspection only
    */
   get surfaces(): readonly Surface[] {
     return this._surfaces;
+  }
+  
+  /**
+   * Get read-only access to p-curves array
+   * @internal For testing and introspection only
+   */
+  get pcurves(): readonly PCurve[] {
+    return this._pcurves;
   }
   
   /**

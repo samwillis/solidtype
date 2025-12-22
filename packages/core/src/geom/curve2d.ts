@@ -14,7 +14,7 @@ import { isZero } from '../num/tolerance.js';
 /**
  * Type tag for 2D curve kinds
  */
-export type Curve2DType = 'line' | 'arc';
+export type Curve2DType = 'line' | 'arc' | 'polyline';
 
 /**
  * 2D line segment defined by endpoints
@@ -42,9 +42,41 @@ export interface Arc2D {
 }
 
 /**
+ * 2D polyline
+ * 
+ * Defined by an ordered array of points.
+ * Uses arc-length parameterization: t ∈ [0, 1] maps across the total length.
+ * Caches cumulative lengths for efficient evaluation.
+ */
+export interface Polyline2D {
+  kind: 'polyline';
+  pts: Vec2[];
+  /** Cached cumulative arc lengths at each point (computed lazily) */
+  _cumLengths?: number[];
+}
+
+/**
  * Union type for all 2D curves
  */
-export type Curve2D = Line2D | Arc2D;
+export type Curve2D = Line2D | Arc2D | Polyline2D;
+
+/**
+ * Compute cumulative lengths for a polyline (cached)
+ */
+function getPolylineCumLengths(poly: Polyline2D): number[] {
+  if (poly._cumLengths) return poly._cumLengths;
+  
+  const pts = poly.pts;
+  const cumLengths: number[] = [0];
+  
+  for (let i = 1; i < pts.length; i++) {
+    const segLen = dist2(pts[i - 1], pts[i]);
+    cumLengths.push(cumLengths[i - 1] + segLen);
+  }
+  
+  poly._cumLengths = cumLengths;
+  return cumLengths;
+}
 
 /**
  * Evaluate a 2D curve at parameter t
@@ -52,6 +84,7 @@ export type Curve2D = Line2D | Arc2D;
  * Parameter ranges:
  * - Lines: t ∈ [0, 1] maps linearly from p0 to p1
  * - Arcs: t ∈ [0, 1] maps from startAngle to endAngle (normalized by angle span)
+ * - Polylines: t ∈ [0, 1] uses arc-length parameterization
  * 
  * @param curve The curve to evaluate
  * @param t Parameter value in [0, 1]
@@ -62,13 +95,51 @@ export function evalCurve2D(curve: Curve2D, t: number): Vec2 {
     // Linear interpolation: p0 + t * (p1 - p0)
     const dir = sub2(curve.p1, curve.p0);
     return add2(curve.p0, mul2(dir, t));
-  } else {
+  } else if (curve.kind === 'arc') {
     // Arc: interpolate angle from startAngle to endAngle
     const angleSpan = getArcAngleSpan(curve);
     const angle = curve.startAngle + t * angleSpan;
     return vec2(
       curve.center[0] + curve.radius * Math.cos(angle),
       curve.center[1] + curve.radius * Math.sin(angle)
+    );
+  } else {
+    // Polyline: arc-length parameterization
+    const pts = curve.pts;
+    if (pts.length === 0) return vec2(0, 0);
+    if (pts.length === 1) return vec2(pts[0][0], pts[0][1]);
+    
+    const cumLengths = getPolylineCumLengths(curve);
+    const totalLength = cumLengths[cumLengths.length - 1];
+    
+    if (totalLength < 1e-12) return vec2(pts[0][0], pts[0][1]);
+    
+    const targetLen = t * totalLength;
+    
+    // Binary search to find segment
+    let lo = 0, hi = cumLengths.length - 1;
+    while (lo < hi - 1) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (cumLengths[mid] <= targetLen) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    
+    const segStart = cumLengths[lo];
+    const segEnd = cumLengths[lo + 1];
+    const segLen = segEnd - segStart;
+    
+    if (segLen < 1e-12) return vec2(pts[lo][0], pts[lo][1]);
+    
+    const localT = (targetLen - segStart) / segLen;
+    const p0 = pts[lo];
+    const p1 = pts[lo + 1];
+    
+    return vec2(
+      p0[0] + localT * (p1[0] - p0[0]),
+      p0[1] + localT * (p1[1] - p0[1])
     );
   }
 }
@@ -99,6 +170,7 @@ function getArcAngleSpan(arc: Arc2D): number {
  * 
  * For lines: constant direction vector
  * For arcs: tangent to the circle at that point
+ * For polylines: tangent of the current segment
  * 
  * @param curve The curve
  * @param t Parameter value in [0, 1]
@@ -108,7 +180,7 @@ export function curveTangent2D(curve: Curve2D, t: number): Vec2 {
   if (curve.kind === 'line') {
     const dir = sub2(curve.p1, curve.p0);
     return normalize2(dir);
-  } else {
+  } else if (curve.kind === 'arc') {
     // Arc tangent: perpendicular to radius vector
     const angleSpan = getArcAngleSpan(curve);
     const angle = curve.startAngle + t * angleSpan;
@@ -118,6 +190,33 @@ export function curveTangent2D(curve: Curve2D, t: number): Vec2 {
       -sign * Math.sin(angle),
       sign * Math.cos(angle)
     );
+  } else {
+    // Polyline: find current segment and return its direction
+    const pts = curve.pts;
+    if (pts.length < 2) return vec2(0, 0);
+    
+    const cumLengths = getPolylineCumLengths(curve);
+    const totalLength = cumLengths[cumLengths.length - 1];
+    
+    if (totalLength < 1e-12) return vec2(0, 0);
+    
+    const targetLen = t * totalLength;
+    
+    // Find segment
+    let lo = 0, hi = cumLengths.length - 1;
+    while (lo < hi - 1) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (cumLengths[mid] <= targetLen) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    
+    const p0 = pts[lo];
+    const p1 = pts[lo + 1];
+    const dir = sub2(p1, p0);
+    return normalize2(dir);
   }
 }
 
@@ -130,9 +229,13 @@ export function curveTangent2D(curve: Curve2D, t: number): Vec2 {
 export function curveLength2D(curve: Curve2D): number {
   if (curve.kind === 'line') {
     return dist2(curve.p0, curve.p1);
-  } else {
+  } else if (curve.kind === 'arc') {
     const angleSpan = getArcAngleSpan(curve);
     return curve.radius * angleSpan;
+  } else {
+    // Polyline: sum of segment lengths
+    const cumLengths = getPolylineCumLengths(curve);
+    return cumLengths[cumLengths.length - 1];
   }
 }
 
@@ -165,7 +268,7 @@ export function closestPointOnCurve2D(
       point: evalCurve2D(curve, t),
       t,
     };
-  } else {
+  } else if (curve.kind === 'arc') {
     // Arc: project onto circle, then clamp to arc range
     const toCenter = sub2(point, curve.center);
     const distToCenter = length2(toCenter);
@@ -243,5 +346,47 @@ export function closestPointOnCurve2D(
       point: evalCurve2D(curve, t),
       t,
     };
+  } else {
+    // Polyline: find closest segment and point on it
+    const pts = curve.pts;
+    if (pts.length === 0) return { point: vec2(0, 0), t: 0 };
+    if (pts.length === 1) return { point: vec2(pts[0][0], pts[0][1]), t: 0 };
+    
+    const cumLengths = getPolylineCumLengths(curve);
+    const totalLength = cumLengths[cumLengths.length - 1];
+    
+    let bestDist = Infinity;
+    let bestT = 0;
+    let bestPoint = pts[0];
+    
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i];
+      const p1 = pts[i + 1];
+      const dir = sub2(p1, p0);
+      const toPoint = sub2(point, p0);
+      const dirLenSq = dot2(dir, dir);
+      
+      let localT = 0;
+      if (dirLenSq > 1e-12) {
+        localT = Math.max(0, Math.min(1, dot2(toPoint, dir) / dirLenSq));
+      }
+      
+      const closestPt: Vec2 = vec2(
+        p0[0] + localT * dir[0],
+        p0[1] + localT * dir[1]
+      );
+      const d = dist2(point, closestPt);
+      
+      if (d < bestDist) {
+        bestDist = d;
+        bestPoint = closestPt;
+        // Convert local t to global t (arc-length based)
+        const segLen = cumLengths[i + 1] - cumLengths[i];
+        const arcLenToPoint = cumLengths[i] + localT * segLen;
+        bestT = totalLength > 1e-12 ? arcLenToPoint / totalLength : 0;
+      }
+    }
+    
+    return { point: bestPoint, t: bestT };
   }
 }

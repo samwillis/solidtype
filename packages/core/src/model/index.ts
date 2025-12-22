@@ -26,3 +26,6 @@ export * from './sketchProfile.js';
 export * from './extrude.js';
 export * from './revolve.js';
 export * from './boolean.js';
+
+// P-curve helpers
+export * from './pcurveHelpers.js';

@@ -13,7 +13,7 @@ import { isZero } from '../num/tolerance.js';
 /**
  * Type tag for 3D curve kinds
  */
-export type Curve3DType = 'line' | 'circle';
+export type Curve3DType = 'line' | 'circle' | 'polyline';
 
 /**
  * 3D line segment defined by endpoints
@@ -41,9 +41,41 @@ export interface Circle3D {
 }
 
 /**
+ * 3D polyline
+ * 
+ * Defined by an ordered array of points.
+ * Uses arc-length parameterization: t ∈ [0, 1] maps across the total length.
+ * Caches cumulative lengths for efficient evaluation.
+ */
+export interface Polyline3D {
+  kind: 'polyline';
+  pts: Vec3[];
+  /** Cached cumulative arc lengths at each point (computed lazily) */
+  _cumLengths?: number[];
+}
+
+/**
  * Union type for all 3D curves
  */
-export type Curve3D = Line3D | Circle3D;
+export type Curve3D = Line3D | Circle3D | Polyline3D;
+
+/**
+ * Compute cumulative lengths for a 3D polyline (cached)
+ */
+function getPolyline3DCumLengths(poly: Polyline3D): number[] {
+  if (poly._cumLengths) return poly._cumLengths;
+  
+  const pts = poly.pts;
+  const cumLengths: number[] = [0];
+  
+  for (let i = 1; i < pts.length; i++) {
+    const segLen = dist3(pts[i - 1], pts[i]);
+    cumLengths.push(cumLengths[i - 1] + segLen);
+  }
+  
+  poly._cumLengths = cumLengths;
+  return cumLengths;
+}
 
 /**
  * Evaluate a 3D curve at parameter t
@@ -51,6 +83,7 @@ export type Curve3D = Line3D | Circle3D;
  * Parameter ranges:
  * - Lines: t ∈ [0, 1] maps linearly from p0 to p1
  * - Circles: t ∈ [0, 1] maps from 0 to 2π (one full revolution)
+ * - Polylines: t ∈ [0, 1] uses arc-length parameterization
  * 
  * @param curve The curve to evaluate
  * @param t Parameter value in [0, 1]
@@ -61,7 +94,7 @@ export function evalCurve3D(curve: Curve3D, t: number): Vec3 {
     // Linear interpolation: p0 + t * (p1 - p0)
     const dir = sub3(curve.p1, curve.p0);
     return add3(curve.p0, mul3(dir, t));
-  } else {
+  } else if (curve.kind === 'circle') {
     // Circle: parameterize by angle
     const angle = t * 2 * Math.PI;
     const basis = getCircleBasis(curve);
@@ -72,6 +105,45 @@ export function evalCurve3D(curve: Curve3D, t: number): Vec3 {
       mul3(basis.vDir, sinA)
     );
     return add3(curve.center, mul3(radial, curve.radius));
+  } else {
+    // Polyline: arc-length parameterization
+    const pts = curve.pts;
+    if (pts.length === 0) return vec3(0, 0, 0);
+    if (pts.length === 1) return vec3(pts[0][0], pts[0][1], pts[0][2]);
+    
+    const cumLengths = getPolyline3DCumLengths(curve);
+    const totalLength = cumLengths[cumLengths.length - 1];
+    
+    if (totalLength < 1e-12) return vec3(pts[0][0], pts[0][1], pts[0][2]);
+    
+    const targetLen = t * totalLength;
+    
+    // Binary search to find segment
+    let lo = 0, hi = cumLengths.length - 1;
+    while (lo < hi - 1) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (cumLengths[mid] <= targetLen) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    
+    const segStart = cumLengths[lo];
+    const segEnd = cumLengths[lo + 1];
+    const segLen = segEnd - segStart;
+    
+    if (segLen < 1e-12) return vec3(pts[lo][0], pts[lo][1], pts[lo][2]);
+    
+    const localT = (targetLen - segStart) / segLen;
+    const p0 = pts[lo];
+    const p1 = pts[lo + 1];
+    
+    return vec3(
+      p0[0] + localT * (p1[0] - p0[0]),
+      p0[1] + localT * (p1[1] - p0[1]),
+      p0[2] + localT * (p1[2] - p0[2])
+    );
   }
 }
 
@@ -80,6 +152,7 @@ export function evalCurve3D(curve: Curve3D, t: number): Vec3 {
  * 
  * For lines: constant direction vector
  * For circles: tangent to the circle at that point
+ * For polylines: tangent of the current segment
  * 
  * @param curve The curve
  * @param t Parameter value in [0, 1]
@@ -89,7 +162,7 @@ export function curveTangent3D(curve: Curve3D, t: number): Vec3 {
   if (curve.kind === 'line') {
     const dir = sub3(curve.p1, curve.p0);
     return normalize3(dir);
-  } else {
+  } else if (curve.kind === 'circle') {
     // Circle tangent: perpendicular to radius vector in the plane
     const angle = t * 2 * Math.PI;
     const basis = getCircleBasis(curve);
@@ -100,6 +173,33 @@ export function curveTangent3D(curve: Curve3D, t: number): Vec3 {
       mul3(basis.uDir, -sinA),
       mul3(basis.vDir, cosA)
     ));
+  } else {
+    // Polyline: find current segment and return its direction
+    const pts = curve.pts;
+    if (pts.length < 2) return vec3(0, 0, 0);
+    
+    const cumLengths = getPolyline3DCumLengths(curve);
+    const totalLength = cumLengths[cumLengths.length - 1];
+    
+    if (totalLength < 1e-12) return vec3(0, 0, 0);
+    
+    const targetLen = t * totalLength;
+    
+    // Find segment
+    let lo = 0, hi = cumLengths.length - 1;
+    while (lo < hi - 1) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (cumLengths[mid] <= targetLen) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    
+    const p0 = pts[lo];
+    const p1 = pts[lo + 1];
+    const dir = sub3(p1, p0);
+    return normalize3(dir);
   }
 }
 
@@ -112,8 +212,12 @@ export function curveTangent3D(curve: Curve3D, t: number): Vec3 {
 export function curveLength3D(curve: Curve3D): number {
   if (curve.kind === 'line') {
     return dist3(curve.p0, curve.p1);
-  } else {
+  } else if (curve.kind === 'circle') {
     return 2 * Math.PI * curve.radius;
+  } else {
+    // Polyline: sum of segment lengths
+    const cumLengths = getPolyline3DCumLengths(curve);
+    return cumLengths[cumLengths.length - 1];
   }
 }
 
@@ -146,7 +250,7 @@ export function closestPointOnCurve3D(
       point: evalCurve3D(curve, t),
       t,
     };
-  } else {
+  } else if (curve.kind === 'circle') {
     // Circle: project onto plane, then onto circle
     const toCenter = sub3(point, curve.center);
     
@@ -178,6 +282,49 @@ export function closestPointOnCurve3D(
       point: evalCurve3D(curve, t),
       t,
     };
+  } else {
+    // Polyline: find closest segment and point on it
+    const pts = curve.pts;
+    if (pts.length === 0) return { point: vec3(0, 0, 0), t: 0 };
+    if (pts.length === 1) return { point: vec3(pts[0][0], pts[0][1], pts[0][2]), t: 0 };
+    
+    const cumLengths = getPolyline3DCumLengths(curve);
+    const totalLength = cumLengths[cumLengths.length - 1];
+    
+    let bestDist = Infinity;
+    let bestT = 0;
+    let bestPoint = pts[0];
+    
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i];
+      const p1 = pts[i + 1];
+      const dir = sub3(p1, p0);
+      const toPoint = sub3(point, p0);
+      const dirLenSq = dot3(dir, dir);
+      
+      let localT = 0;
+      if (dirLenSq > 1e-12) {
+        localT = Math.max(0, Math.min(1, dot3(toPoint, dir) / dirLenSq));
+      }
+      
+      const closestPt: Vec3 = vec3(
+        p0[0] + localT * dir[0],
+        p0[1] + localT * dir[1],
+        p0[2] + localT * dir[2]
+      );
+      const d = dist3(point, closestPt);
+      
+      if (d < bestDist) {
+        bestDist = d;
+        bestPoint = closestPt;
+        // Convert local t to global t (arc-length based)
+        const segLen = cumLengths[i + 1] - cumLengths[i];
+        const arcLenToPoint = cumLengths[i] + localT * segLen;
+        bestT = totalLength > 1e-12 ? arcLenToPoint / totalLength : 0;
+      }
+    }
+    
+    return { point: bestPoint, t: bestT };
   }
 }
 
