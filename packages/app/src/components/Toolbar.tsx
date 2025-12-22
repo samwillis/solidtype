@@ -612,20 +612,20 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
               <Tooltip.Root>
                 <Tooltip.Trigger
                   delay={300}
-                  className={`toolbar-button ${!canStartSketch && !sketchPlaneRef ? '' : ''}`}
+                  className={`toolbar-button ${!canStartSketch ? 'disabled' : ''}`}
                   onClick={handleNewSketch}
-                  render={<button aria-label="New Sketch" />}
+                  render={<button aria-label="New Sketch" disabled={!canStartSketch} />}
                 >
                   <SketchIcon />
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Positioner side="bottom" sideOffset={6}>
                     <Tooltip.Popup className="toolbar-tooltip">
-                      {sketchPlaneRef 
+                      {canStartSketch 
                         ? (selectedFaceRef 
                             ? `New Sketch on Face` 
                             : `New Sketch on ${(selectedPlane || '').toUpperCase()}`)
-                        : 'New Sketch (select a plane or face)'}
+                        : 'New Sketch (select a plane or face first)'}
                     </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
