@@ -1504,6 +1504,57 @@ const Viewer: React.FC = () => {
     setEditingDimensionValue('');
   }, [editingDimensionId, editingDimensionValue, updateConstraintValue]);
 
+  // Reset camera to face the sketch plane normal
+  const resetToSketchNormal = useCallback(() => {
+    const camera = cameraRef.current;
+    if (!camera || !sketchMode.sketchId) return;
+    
+    // Get the plane transform from kernel
+    const transform = sketchPlaneTransforms[sketchMode.sketchId];
+    if (!transform) {
+      // Fallback for built-in planes
+      let normal: THREE.Vector3;
+      let up: THREE.Vector3;
+      switch (sketchMode.planeId) {
+        case 'xy':
+          normal = new THREE.Vector3(0, 0, 1);
+          up = new THREE.Vector3(0, 1, 0);
+          break;
+        case 'xz':
+          normal = new THREE.Vector3(0, 1, 0);
+          up = new THREE.Vector3(0, 0, -1);
+          break;
+        case 'yz':
+          normal = new THREE.Vector3(1, 0, 0);
+          up = new THREE.Vector3(0, 1, 0);
+          break;
+        default:
+          return;
+      }
+      
+      const distance = camera.position.distanceTo(targetRef.current);
+      camera.position.copy(targetRef.current).add(normal.multiplyScalar(distance));
+      camera.up.copy(up);
+      camera.lookAt(targetRef.current);
+      needsRenderRef.current = true;
+      return;
+    }
+    
+    // Use the kernel's plane transform
+    const normal = new THREE.Vector3(...transform.normal);
+    const yDir = new THREE.Vector3(...transform.yDir);
+    const origin = new THREE.Vector3(...transform.origin);
+    
+    // Position camera along the plane normal
+    const distance = camera.position.distanceTo(targetRef.current);
+    const newTarget = origin.clone();
+    camera.position.copy(newTarget).add(normal.clone().multiplyScalar(distance));
+    targetRef.current.copy(newTarget);
+    camera.up.copy(yDir);
+    camera.lookAt(targetRef.current);
+    needsRenderRef.current = true;
+  }, [sketchMode.sketchId, sketchMode.planeId, sketchPlaneTransforms]);
+
   // Handle escape to cancel dimension editing
   useEffect(() => {
     if (!editingDimensionId) return;
@@ -2182,7 +2233,7 @@ const Viewer: React.FC = () => {
       {/* Sketch mode overlays */}
       {sketchMode.active && (
         <>
-          {/* Accept/Cancel buttons */}
+          {/* Accept/Cancel/Normal buttons */}
           <div className="sketch-actions-overlay">
             <button 
               className="sketch-action-btn sketch-action-accept"
@@ -2193,6 +2244,18 @@ const Viewer: React.FC = () => {
                 <polyline points="20 6 9 17 4 12" />
               </svg>
               Accept
+            </button>
+            <button 
+              className="sketch-action-btn sketch-action-normal"
+              onClick={resetToSketchNormal}
+              title="View Normal to Sketch Plane"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="12" cy="12" r="3" />
+                <line x1="12" y1="3" x2="12" y2="6" />
+              </svg>
+              Normal
             </button>
             <button 
               className="sketch-action-btn sketch-action-cancel"

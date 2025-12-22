@@ -57,6 +57,15 @@
   background: #27ae60;
 }
 
+.sketch-action-normal {
+  background: #3498db;
+  color: white;
+}
+
+.sketch-action-normal:hover {
+  background: #2980b9;
+}
+
 .sketch-action-cancel {
   background: #e74c3c;
   color: white;
