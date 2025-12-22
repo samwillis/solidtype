@@ -241,24 +241,28 @@ const Viewer: React.FC = () => {
     let xDir: THREE.Vector3;
     let yDir: THREE.Vector3;
 
+    // Coordinate systems must match getPlaneTransform() for rendering
     switch (planeId) {
       case 'xy':
+        // XY plane: normal = +Z, sketch X = world X, sketch Y = world Y
         planeNormal = new THREE.Vector3(0, 0, 1);
         planePoint = new THREE.Vector3(0, 0, 0);
         xDir = new THREE.Vector3(1, 0, 0);
         yDir = new THREE.Vector3(0, 1, 0);
         break;
       case 'xz':
+        // XZ plane: normal = +Y, sketch X = world X, sketch Y = world Z
         planeNormal = new THREE.Vector3(0, 1, 0);
         planePoint = new THREE.Vector3(0, 0, 0);
         xDir = new THREE.Vector3(1, 0, 0);
-        yDir = new THREE.Vector3(0, 0, -1);
+        yDir = new THREE.Vector3(0, 0, 1);
         break;
       case 'yz':
+        // YZ plane: normal = +X, sketch X = world Y, sketch Y = world Z
         planeNormal = new THREE.Vector3(1, 0, 0);
         planePoint = new THREE.Vector3(0, 0, 0);
-        xDir = new THREE.Vector3(0, 0, -1);
-        yDir = new THREE.Vector3(0, 1, 0);
+        xDir = new THREE.Vector3(0, 1, 0);
+        yDir = new THREE.Vector3(0, 0, 1);
         break;
       default:
         return null;
@@ -1598,16 +1602,17 @@ const Viewer: React.FC = () => {
     let previousMousePosition = { x: 0, y: 0 };
 
     const onMouseDown = (e: MouseEvent) => {
-      // Check if in sketch mode - prevent rotation for left click
+      // Check if in sketch mode with an active tool - prevent rotation for left click
       const currentSketchMode = sketchModeRef.current;
-      const isInSketchMode = currentSketchMode.active;
+      const hasActiveTool = currentSketchMode.active && currentSketchMode.activeTool !== 'none';
       
       if (e.button === 0) {
         // Left mouse button
         e.preventDefault();
         
-        // In sketch mode (any tool including select), left click is for sketching/selection, not rotation
-        if (isInSketchMode) {
+        // In sketch mode with a tool active, left click is for sketching/selection, not rotation
+        // When tool is 'none', allow rotation like in normal mode
+        if (hasActiveTool) {
           isDragging = false;
           isRotating = false;
           isPanning = false;
@@ -1950,6 +1955,9 @@ const Viewer: React.FC = () => {
       
       // If we were dragging (rotating view), don't trigger tool action
       if (wasDragging) return;
+      
+      // If no tool is active (tool is 'none'), don't handle sketch clicks
+      if (sketchMode.activeTool === 'none') return;
       
       // Only handle left clicks
       if (e.button !== 0) return;

@@ -32,7 +32,7 @@ export type ConstraintType =
 // Types
 // ============================================================================
 
-export type SketchTool = 'select' | 'line' | 'arc' | 'circle' | 'rectangle';
+export type SketchTool = 'none' | 'select' | 'line' | 'arc' | 'circle' | 'rectangle';
 
 export interface SketchModeState {
   active: boolean;

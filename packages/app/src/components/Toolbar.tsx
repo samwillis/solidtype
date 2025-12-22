@@ -168,11 +168,12 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
   const constraintsDropdownRef = React.useRef<HTMLDivElement>(null);
   const booleanDropdownRef = React.useRef<HTMLDivElement>(null);
   
-  // Toggle tool - clicking an active tool (except select) switches back to select
+  // Toggle tool - clicking an active tool toggles it off
+  // When select is toggled off, user can rotate the view
   const toggleTool = useCallback((tool: 'select' | 'line' | 'arc' | 'circle' | 'rectangle') => {
-    if (mode.activeTool === tool && tool !== 'select') {
-      // Clicking active tool again goes back to select
-      setTool('select');
+    if (mode.activeTool === tool) {
+      // Clicking active tool again toggles it off (allows view rotation)
+      setTool('none');
     } else {
       setTool(tool);
     }
