@@ -65,9 +65,9 @@
 
 .sketch-toolbar-divider {
   width: 1px;
-  height: 20px;
-  background: var(--color-border, rgba(255, 255, 255, 0.2));
-  margin: 0 4px;
+  height: 24px;
+  background: var(--color-border);
+  margin: 0 10px;
 }
 
 /* Dimensions panel */
