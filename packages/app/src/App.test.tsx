@@ -91,7 +91,7 @@ describe('App', () => {
     expect(screen.getByText('Bodies')).toBeInTheDocument();
     expect(screen.getByText('Part1')).toBeInTheDocument();
     // Default features from Yjs document
-    expect(screen.getByText('origin')).toBeInTheDocument();
+    expect(screen.getByText('Origin')).toBeInTheDocument();
     expect(screen.getByText('XY Plane')).toBeInTheDocument();
   });
 

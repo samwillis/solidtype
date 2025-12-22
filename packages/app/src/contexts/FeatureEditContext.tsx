@@ -127,7 +127,8 @@ export function FeatureEditProvider({ children }: FeatureEditProviderProps) {
     // Find first line in sketch to use as default axis
     let defaultAxis = '';
     if (sketch?.type === 'sketch' && sketch.data) {
-      const firstLine = sketch.data.entities.find(e => e.type === 'line');
+      const entities = Object.values(sketch.data.entitiesById);
+      const firstLine = entities.find((e) => e.type === 'line');
       if (firstLine) {
         defaultAxis = firstLine.id;
       }

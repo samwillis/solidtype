@@ -11,7 +11,7 @@ import React, {
 } from 'react';
 import { useDocument } from './DocumentContext';
 import { YjsWorkerSync } from '../worker/YjsWorkerSync';
-import { findFeature, getSketchData, setSketchData } from '../document/featureHelpers';
+import { findFeature, getSketchDataAsArrays, setSketchData } from '../document/featureHelpers';
 import type {
   WorkerToMainMessage,
   TransferableMesh,
@@ -197,9 +197,9 @@ export function KernelProvider({ children }: KernelProviderProps) {
             }));
           }
 
-          const sketchEl = findFeature(doc.features, msg.sketchId);
+          const sketchEl = findFeature(doc.featuresById, msg.sketchId);
           if (sketchEl) {
-            const data = getSketchData(sketchEl);
+            const data = getSketchDataAsArrays(sketchEl);
 
             let changed = false;
             for (const solved of msg.points) {

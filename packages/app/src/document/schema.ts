@@ -1,5 +1,5 @@
 /**
- * V2 Document Model - Zod Schemas
+ * Document Model - Zod Schemas
  *
  * These schemas define the persisted snapshot contract for the Yjs document.
  * Validation is performed on `root.toJSON()`.
@@ -348,7 +348,10 @@ export type BooleanFeature = z.infer<typeof BooleanFeatureSchema>;
 // Feature Union
 // ============================================================================
 
-export const FeatureSchema = z.discriminatedUnion('type', [
+// Note: We can't use discriminatedUnion for plane types because both DatumPlane
+// and UserPlane have type: 'plane'. We use a regular union for planes and
+// build the full feature schema manually.
+export const FeatureSchema = z.union([
   OriginFeatureSchema,
   DatumPlaneFeatureSchema,
   UserPlaneFeatureSchema,

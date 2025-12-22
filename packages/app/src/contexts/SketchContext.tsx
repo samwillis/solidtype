@@ -9,18 +9,22 @@ import React, {
   useCallback,
   useRef,
 } from 'react';
+import * as Y from 'yjs';
 import { useDocument } from './DocumentContext';
 import { useViewer, type ViewPreset } from './ViewerContext';
 import {
-  findFeature,
   addPointToSketch,
   addLineToSketch,
   addArcToSketch,
   addConstraintToSketch,
   getSketchData,
+  getSketchDataAsArrays,
   setSketchData,
+  updatePointPosition,
+  type NewSketchConstraint,
 } from '../document/featureHelpers';
-import type { NewSketchConstraint, SketchData, SketchLine, SketchPoint } from '../types/document';
+import type { SketchData, SketchPoint, SketchLine, DatumPlaneRole } from '../document/schema';
+import { findDatumPlaneByRole } from '../document/createDocument';
 
 // Constraint types that can be applied
 export type ConstraintType = 
@@ -64,8 +68,8 @@ interface SketchContextValue {
   /** Preview line for draft rendering (set by SketchCanvas, rendered by Viewer) */
   previewLine: SketchPreviewLine | null;
   setPreviewLine: (line: SketchPreviewLine | null) => void;
-  /** Start a new sketch on the given plane */
-  startSketch: (planeId: string) => void;
+  /** Start a new sketch on the given plane (role like 'xy' or plane UUID) */
+  startSketch: (planeIdOrRole: string) => void;
   /** Edit an existing sketch */
   editSketch: (sketchId: string, planeId: string) => void;
   finishSketch: () => void;
@@ -140,32 +144,55 @@ export function SketchProvider({ children }: SketchProviderProps) {
   // Preview line for draft rendering (shared with Viewer)
   const [previewLine, setPreviewLine] = useState<SketchPreviewLine | null>(null);
 
-  const startSketch = useCallback((planeId: string) => {
-    // Create new sketch in Yjs
-    const sketchId = addSketch(planeId);
+  /**
+   * Get plane ID from role or UUID
+   */
+  const resolvePlaneId = useCallback((planeIdOrRole: string): string => {
+    // Check if it's a datum plane role
+    if (planeIdOrRole === 'xy' || planeIdOrRole === 'xz' || planeIdOrRole === 'yz') {
+      const planeId = findDatumPlaneByRole(doc, planeIdOrRole as DatumPlaneRole);
+      if (!planeId) {
+        throw new Error(`Datum plane '${planeIdOrRole}' not found`);
+      }
+      return planeId;
+    }
+    // Otherwise assume it's a UUID
+    return planeIdOrRole;
+  }, [doc]);
+
+  /**
+   * Get view preset for a plane
+   */
+  const getViewForPlane = useCallback((planeIdOrRole: string): ViewPreset => {
+    // Check for role-based planes
+    if (planeIdOrRole === 'xy') return 'front';
+    if (planeIdOrRole === 'xz') return 'top';
+    if (planeIdOrRole === 'yz') return 'right';
+    
+    // Check if it's a UUID that matches a datum plane
+    const datumIds = {
+      xy: findDatumPlaneByRole(doc, 'xy'),
+      xz: findDatumPlaneByRole(doc, 'xz'),
+      yz: findDatumPlaneByRole(doc, 'yz'),
+    };
+    
+    if (planeIdOrRole === datumIds.xy) return 'front';
+    if (planeIdOrRole === datumIds.xz) return 'top';
+    if (planeIdOrRole === datumIds.yz) return 'right';
+    
+    // Default for custom planes
+    return 'isometric';
+  }, [doc]);
+
+  const startSketch = useCallback((planeIdOrRole: string) => {
+    // Resolve plane ID
+    const planeId = resolvePlaneId(planeIdOrRole);
+    
+    // Create new sketch in Yjs (using the role string so it creates proper ref)
+    const sketchId = addSketch(planeIdOrRole);
     
     // Rotate camera to face the sketch plane normal
-    // Map plane ID to appropriate view preset
-    // XY plane (Z=0, normal=+Z) → front view (camera at +Z looking at origin)
-    // XZ plane (Y=0, normal=+Y) → top view (camera at +Y looking down)
-    // YZ plane (X=0, normal=+X) → right view (camera at +X looking at origin)
-    let targetView: ViewPreset;
-    switch (planeId) {
-      case 'xy':
-        targetView = 'front';
-        break;
-      case 'xz':
-        targetView = 'top';
-        break;
-      case 'yz':
-        targetView = 'right';
-        break;
-      default:
-        // For face references or custom planes, default to isometric
-        targetView = 'isometric';
-    }
-    
-    // If not already in a standard view, switch to the plane-normal view
+    const targetView = getViewForPlane(planeIdOrRole);
     if (state.currentView !== targetView) {
       actions.setView(targetView);
     }
@@ -178,28 +205,14 @@ export function SketchProvider({ children }: SketchProviderProps) {
       tempPoints: [],
       isNewSketch: true,
     });
-  }, [addSketch, actions, state.currentView]);
+  }, [addSketch, resolvePlaneId, getViewForPlane, actions, state.currentView]);
 
   const editSketch = useCallback((sketchId: string, planeId: string) => {
     // Store current undo stack position so we can revert on cancel
     undoStackPositionRef.current = undoManager.undoStack.length;
     
     // Rotate camera to face the sketch plane
-    let targetView: ViewPreset;
-    switch (planeId) {
-      case 'xy':
-        targetView = 'front';
-        break;
-      case 'xz':
-        targetView = 'top';
-        break;
-      case 'yz':
-        targetView = 'right';
-        break;
-      default:
-        targetView = 'isometric';
-    }
-    
+    const targetView = getViewForPlane(planeId);
     if (state.currentView !== targetView) {
       actions.setView(targetView);
     }
@@ -212,7 +225,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
       tempPoints: [],
       isNewSketch: false,
     });
-  }, [actions, state.currentView, undoManager]);
+  }, [getViewForPlane, actions, state.currentView, undoManager]);
 
   const finishSketch = useCallback(() => {
     setMode({
@@ -260,10 +273,10 @@ export function SketchProvider({ children }: SketchProviderProps) {
     }));
   }, []);
 
-  const getSketchElement = useCallback(() => {
+  const getSketchElement = useCallback((): Y.Map<unknown> | null => {
     if (!mode.sketchId) return null;
-    return findFeature(doc.features, mode.sketchId);
-  }, [doc.features, mode.sketchId]);
+    return doc.featuresById.get(mode.sketchId) ?? null;
+  }, [doc.featuresById, mode.sketchId]);
 
   const addPoint = useCallback((x: number, y: number): string | null => {
     const sketch = getSketchElement();
@@ -300,20 +313,14 @@ export function SketchProvider({ children }: SketchProviderProps) {
   const getSketchPoints = useCallback((): SketchPoint[] => {
     const sketch = getSketchElement();
     if (!sketch) return [];
-    return getSketchData(sketch).points;
+    const { points } = getSketchDataAsArrays(sketch);
+    return points;
   }, [getSketchElement]);
 
-  const updatePointPosition = useCallback((pointId: string, x: number, y: number) => {
+  const handleUpdatePointPosition = useCallback((pointId: string, x: number, y: number) => {
     const sketch = getSketchElement();
     if (!sketch) return;
-    
-    const data = getSketchData(sketch);
-    const point = data.points.find((p) => p.id === pointId);
-    if (point) {
-      point.x = x;
-      point.y = y;
-      setSketchData(sketch, data);
-    }
+    updatePointPosition(sketch, pointId, x, y);
   }, [getSketchElement]);
 
   const findNearbyPoint = useCallback((x: number, y: number, tolerance: number): SketchPoint | null => {
@@ -418,7 +425,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     const sketchEl = getSketchElement();
     if (!sketchEl) return;
     
-    const data = getSketchData(sketchEl);
+    const { points, entities, constraints } = getSketchDataAsArrays(sketchEl);
     const pointsToDelete = new Set(selectedPoints);
     const linesToDelete = new Set(selectedLines);
     const constraintsToDelete = new Set(selectedConstraints);
@@ -426,7 +433,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     // Find lines that will be deleted (either selected or with deleted endpoints)
     const findLinesToDelete = (): Set<string> => {
       const allLinesToDelete = new Set(linesToDelete);
-      for (const entity of data.entities) {
+      for (const entity of entities) {
         if (entity.type === 'line') {
           if (pointsToDelete.has(entity.start) || pointsToDelete.has(entity.end)) {
             allLinesToDelete.add(entity.id);
@@ -443,7 +450,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     const actualLinesToDelete = findLinesToDelete();
     
     // Remove constraints that reference deleted items
-    const filteredConstraints = data.constraints.filter((c) => {
+    const filteredConstraints = constraints.filter((c) => {
       if (constraintsToDelete.has(c.id)) return false;
       
       // Check if constraint references deleted points
@@ -465,7 +472,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     });
     
     // Remove entities (lines/arcs)
-    const filteredEntities = data.entities.filter((e) => !actualLinesToDelete.has(e.id));
+    const filteredEntities = entities.filter((e) => !actualLinesToDelete.has(e.id));
     
     // Find orphaned points (points not referenced by any remaining entity)
     const usedPoints = new Set<string>();
@@ -481,21 +488,18 @@ export function SketchProvider({ children }: SketchProviderProps) {
     }
     
     // Remove selected points and orphaned points
-    const filteredPoints = data.points.filter((p) => {
+    const filteredPoints = points.filter((p) => {
       if (pointsToDelete.has(p.id)) return false;
       // Keep points that are still used by entities
       return usedPoints.has(p.id);
     });
     
     // Update sketch data
-    const newData: SketchData = {
-      ...data,
+    setSketchData(sketchEl, {
       points: filteredPoints,
       entities: filteredEntities,
       constraints: filteredConstraints,
-    };
-    
-    setSketchData(sketchEl, newData);
+    });
     clearSelection();
   }, [getSketchElement, selectedPoints, selectedLines, selectedConstraints, clearSelection]);
 
@@ -503,33 +507,32 @@ export function SketchProvider({ children }: SketchProviderProps) {
   const canApplyConstraint = useCallback((type: ConstraintType): boolean => {
     const sketch = getSketchDataFn();
     if (!sketch) return false;
-    const points = Array.from(selectedPoints);
-    const lines = Array.from(selectedLines);
+    const pointCount = selectedPoints.size;
+    const lineCount = selectedLines.size;
 
     switch (type) {
       case 'horizontal':
       case 'vertical':
-        return points.length === 2 || lines.length === 1;
+        return pointCount === 2 || lineCount === 1;
       case 'coincident':
-        return points.length === 2;
+        return pointCount === 2;
       case 'fixed':
-        return points.length === 1;
+        return pointCount === 1;
       case 'distance':
-        return points.length === 2 || lines.length === 1;
+        return pointCount === 2 || lineCount === 1;
       case 'angle':
-        return lines.length === 2;
+        return lineCount === 2;
       // Advanced constraints (Phase 19)
       case 'parallel':
       case 'perpendicular':
       case 'equalLength':
-        return lines.length === 2;
+        return lineCount === 2;
       case 'tangent':
         // Need 1 line and 1 arc, but we're simplifying to lines.length >= 1
-        // Full implementation would check for arc selection
-        return lines.length === 2;
+        return lineCount === 2;
       case 'symmetric':
         // Need 2 points and 1 line (axis)
-        return points.length === 2 && lines.length === 1;
+        return pointCount === 2 && lineCount === 1;
       default:
         return false;
     }
@@ -540,39 +543,43 @@ export function SketchProvider({ children }: SketchProviderProps) {
     const sketch = getSketchDataFn();
     if (!sketch) return;
     
-    const points = Array.from(selectedPoints);
-    const lines = Array.from(selectedLines);
+    const pointIds = Array.from(selectedPoints);
+    const lineIds = Array.from(selectedLines);
     let constraint: NewSketchConstraint | null = null;
 
     if (type === 'fixed') {
-      if (points.length !== 1) return;
-      constraint = { type: 'fixed', point: points[0] };
+      if (pointIds.length !== 1) return;
+      constraint = { type: 'fixed', point: pointIds[0] };
     } else if (type === 'coincident') {
-      if (points.length !== 2) return;
-      constraint = { type: 'coincident', points: [points[0], points[1]] };
+      if (pointIds.length !== 2) return;
+      constraint = { type: 'coincident', points: [pointIds[0], pointIds[1]] };
     } else if (type === 'horizontal' || type === 'vertical') {
-      if (points.length === 2) {
-        constraint = { type, points: [points[0], points[1]] };
-      } else if (lines.length === 1) {
-        const line = sketch.entities.find((e) => e.type === 'line' && e.id === lines[0]) as SketchLine | undefined;
+      if (pointIds.length === 2) {
+        constraint = { type, points: [pointIds[0], pointIds[1]] };
+      } else if (lineIds.length === 1) {
+        const line = Object.values(sketch.entitiesById).find(
+          (e) => e.type === 'line' && e.id === lineIds[0]
+        ) as SketchLine | undefined;
         if (!line) return;
         constraint = { type, points: [line.start, line.end] };
       }
     } else if (type === 'distance') {
-      if (points.length === 2) {
+      if (pointIds.length === 2) {
         // Calculate current distance
-        const p1 = sketch.points.find((p) => p.id === points[0]);
-        const p2 = sketch.points.find((p) => p.id === points[1]);
+        const p1 = sketch.pointsById[pointIds[0]];
+        const p2 = sketch.pointsById[pointIds[1]];
         if (!p1 || !p2) return;
         const dx = p2.x - p1.x;
         const dy = p2.y - p1.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        constraint = { type: 'distance', points: [points[0], points[1]], value: dist };
-      } else if (lines.length === 1) {
-        const line = sketch.entities.find((e) => e.type === 'line' && e.id === lines[0]) as SketchLine | undefined;
+        constraint = { type: 'distance', points: [pointIds[0], pointIds[1]], value: dist };
+      } else if (lineIds.length === 1) {
+        const line = Object.values(sketch.entitiesById).find(
+          (e) => e.type === 'line' && e.id === lineIds[0]
+        ) as SketchLine | undefined;
         if (!line) return;
-        const p1 = sketch.points.find((p) => p.id === line.start);
-        const p2 = sketch.points.find((p) => p.id === line.end);
+        const p1 = sketch.pointsById[line.start];
+        const p2 = sketch.pointsById[line.end];
         if (!p1 || !p2) return;
         const dx = p2.x - p1.x;
         const dy = p2.y - p1.y;
@@ -580,30 +587,27 @@ export function SketchProvider({ children }: SketchProviderProps) {
         constraint = { type: 'distance', points: [line.start, line.end], value: dist };
       }
     } else if (type === 'angle') {
-      if (lines.length !== 2) return;
-      const line1 = sketch.entities.find((e) => e.type === 'line' && e.id === lines[0]) as SketchLine | undefined;
-      const line2 = sketch.entities.find((e) => e.type === 'line' && e.id === lines[1]) as SketchLine | undefined;
-      if (!line1 || !line2) return;
+      if (lineIds.length !== 2) return;
       // Default to 90 degrees
-      constraint = { type: 'angle', lines: [lines[0], lines[1]], value: 90 };
+      constraint = { type: 'angle', lines: [lineIds[0], lineIds[1]], value: 90 };
     }
     // Advanced constraints (Phase 19)
     else if (type === 'parallel') {
-      if (lines.length !== 2) return;
-      constraint = { type: 'parallel', lines: [lines[0], lines[1]] };
+      if (lineIds.length !== 2) return;
+      constraint = { type: 'parallel', lines: [lineIds[0], lineIds[1]] };
     } else if (type === 'perpendicular') {
-      if (lines.length !== 2) return;
-      constraint = { type: 'perpendicular', lines: [lines[0], lines[1]] };
+      if (lineIds.length !== 2) return;
+      constraint = { type: 'perpendicular', lines: [lineIds[0], lineIds[1]] };
     } else if (type === 'equalLength') {
-      if (lines.length !== 2) return;
-      constraint = { type: 'equalLength', lines: [lines[0], lines[1]] };
+      if (lineIds.length !== 2) return;
+      constraint = { type: 'equalLength', lines: [lineIds[0], lineIds[1]] };
     } else if (type === 'tangent') {
       // Simplified: treat as two-line constraint (full would need line+arc)
-      if (lines.length !== 2) return;
-      constraint = { type: 'tangent', line: lines[0], arc: lines[1], connectionPoint: '' };
+      if (lineIds.length !== 2) return;
+      constraint = { type: 'tangent', line: lineIds[0], arc: lineIds[1], connectionPoint: '' };
     } else if (type === 'symmetric') {
-      if (points.length !== 2 || lines.length !== 1) return;
-      constraint = { type: 'symmetric', points: [points[0], points[1]], axis: lines[0] };
+      if (pointIds.length !== 2 || lineIds.length !== 1) return;
+      constraint = { type: 'symmetric', points: [pointIds[0], pointIds[1]], axis: lineIds[0] };
     }
 
     if (constraint) {
@@ -629,7 +633,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     addTempPoint,
     clearTempPoints,
     getSketchPoints,
-    updatePointPosition,
+    updatePointPosition: handleUpdatePointPosition,
     findNearbyPoint,
     addRectangle,
     addConstraint,

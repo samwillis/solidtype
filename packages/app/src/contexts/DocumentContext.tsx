@@ -6,19 +6,23 @@ import React, { createContext, useContext, useMemo, useEffect, useState, useCall
 import * as Y from 'yjs';
 import { createDocument, type SolidTypeDoc } from '../document/createDocument';
 import {
-  getFeaturesArray,
+  getAllFeatures,
   parseFeature,
   addSketchFeature,
   addExtrudeFeature,
   addRevolveFeature,
   addBooleanFeature,
-  findFeature,
+  deleteFeature,
+  renameFeature,
 } from '../document/featureHelpers';
-import type { Feature, DocumentUnits } from '../types/document';
+import type { Feature } from '../document/schema';
 
 // ============================================================================
 // Context Types
 // ============================================================================
+
+/** Supported unit systems */
+export type DocumentUnits = 'mm' | 'cm' | 'm' | 'in' | 'ft';
 
 interface DocumentContextValue {
   doc: SolidTypeDoc;
@@ -76,9 +80,9 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
   // Create the document once
   const doc = useMemo(() => createDocument(), []);
   
-  // Create undo manager
+  // Create undo manager - track featuresById, featureOrder, and state
   const undoManager = useMemo(() => {
-    return new Y.UndoManager([doc.features, doc.state], {
+    return new Y.UndoManager([doc.featuresById, doc.featureOrder, doc.state], {
       trackedOrigins: new Set([null, 'local']),
     });
   }, [doc]);
@@ -116,14 +120,21 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
   // Sync features from Yjs
   useEffect(() => {
     const updateFeatures = () => {
-      const elements = getFeaturesArray(doc.features);
-      const parsed = elements.map(parseFeature).filter((f): f is Feature => f !== null);
+      const parsed = getAllFeatures(doc);
       setFeatures(parsed);
     };
     
     updateFeatures();
-    doc.features.observeDeep(updateFeatures);
-    return () => doc.features.unobserveDeep(updateFeatures);
+    
+    // Observe both featuresById and featureOrder
+    const handleFeaturesChange = () => updateFeatures();
+    doc.featuresById.observeDeep(handleFeaturesChange);
+    doc.featureOrder.observe(handleFeaturesChange);
+    
+    return () => {
+      doc.featuresById.unobserveDeep(handleFeaturesChange);
+      doc.featureOrder.unobserve(handleFeaturesChange);
+    };
   }, [doc]);
 
   // Track undo/redo state
@@ -190,37 +201,20 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
   }, [doc]);
 
   const getFeatureById = useCallback((id: string): Feature | null => {
-    const element = findFeature(doc.features, id);
-    return element ? parseFeature(element) : null;
+    const featureMap = doc.featuresById.get(id);
+    return featureMap ? parseFeature(featureMap) : null;
   }, [doc]);
 
-  const deleteFeature = useCallback((id: string): boolean => {
-    const elements = getFeaturesArray(doc.features);
-    const index = elements.findIndex(el => el.getAttribute('id') === id);
-    if (index === -1) return false;
-    
-    // Don't allow deleting origin or default planes
-    const element = elements[index];
-    const type = element.getAttribute('type');
-    if (type === 'origin' || type === 'plane') {
-      return false;
-    }
-    
+  const handleDeleteFeature = useCallback((id: string): boolean => {
     // If deleting the gated feature, clear the gate
     if (rebuildGate === id) {
       doc.state.set('rebuildGate', null);
     }
-    
-    doc.features.delete(index, 1);
-    return true;
+    return deleteFeature(doc, id);
   }, [doc, rebuildGate]);
 
-  const renameFeature = useCallback((id: string, name: string): boolean => {
-    const element = findFeature(doc.features, id);
-    if (!element) return false;
-    
-    element.setAttribute('name', name);
-    return true;
+  const handleRenameFeature = useCallback((id: string, name: string): boolean => {
+    return renameFeature(doc, id, name);
   }, [doc]);
 
   const value: DocumentContextValue = {
@@ -240,8 +234,8 @@ export function DocumentProvider({ children }: DocumentProviderProps) {
     addRevolve,
     addBoolean,
     getFeatureById,
-    deleteFeature,
-    renameFeature,
+    deleteFeature: handleDeleteFeature,
+    renameFeature: handleRenameFeature,
   };
 
   return (
