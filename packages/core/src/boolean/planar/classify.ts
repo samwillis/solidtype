@@ -20,6 +20,8 @@ import { pointInPolygon, unprojectFromPlane } from './intersect.js';
  * 
  * Uses the centroid of the piece, offset slightly along the face normal,
  * to perform ray casting against the other body's faces.
+ * 
+ * We test from both sides of the face surface to handle boundary cases.
  */
 export function classifyPiece(
   piece: FacePiece,
@@ -33,20 +35,34 @@ export function classifyPiece(
   // Convert to 3D
   const centroid3D = unprojectFromPlane(centroid2D, piece.surface);
   
-  // Offset slightly along the face normal for testing
+  // Use a more significant offset for testing (0.001 units instead of tiny tolerance)
+  // This helps get clear inside/outside answers
+  const testOffset = Math.max(ctx.tol.length * 1000, 0.001);
   const normal = piece.surface.normal;
-  const testPoint = add3(centroid3D, mul3(normal, ctx.tol.length * 10));
   
-  // Ray cast to classify
-  const isInside = isPointInsideBody(testPoint, otherBody, model, ctx);
+  // Test from the positive normal side
+  const testPointPos = add3(centroid3D, mul3(normal, testOffset));
+  const insideFromPos = isPointInsideBody(testPointPos, otherBody, model, ctx);
   
-  if (isInside) {
+  // Test from the negative normal side
+  const testPointNeg = add3(centroid3D, mul3(normal, -testOffset));
+  const insideFromNeg = isPointInsideBody(testPointNeg, otherBody, model, ctx);
+  
+  // If both tests agree, use that result
+  if (insideFromPos && insideFromNeg) {
     return 'inside';
   }
+  if (!insideFromPos && !insideFromNeg) {
+    return 'outside';
+  }
   
-  // Check if ON (coplanar with another face)
-  // For now, we don't distinguish ON_SAME vs ON_OPPOSITE - that requires
-  // comparing normals of coplanar faces
+  // If they disagree, the face is ON the boundary
+  // For boolean operations, we treat boundary faces based on
+  // which side faces the interior of the other solid
+  // If positive normal side is inside, face points into the solid
+  if (insideFromPos) {
+    return 'inside'; // Normal points into other body
+  }
   
   return 'outside';
 }
