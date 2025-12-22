@@ -1,30 +1,32 @@
 /**
- * Document Model Tests - Phase 01
+ * Document Model Tests
+ *
+ * Tests for the Y.Map/Y.Array-based document model.
+ * See DOCUMENT-MODEL.md for specification.
  */
 
 import { describe, test, expect } from 'vitest';
 import * as Y from 'yjs';
-import { createDocument } from '../document/createDocument';
-import {
-  parseVector,
-  parseVector3,
-  serializeVector,
-  generateId,
-  extractCounters,
-} from '../document/utils';
-import type { IdCounters } from '../types/document';
+import { createDocument, getDatumPlaneIds } from '../document/createDocument';
+import { uuid } from '../document/yjs';
 import {
   findFeature,
   getFeatureIds,
   addSketchFeature,
   addExtrudeFeature,
   addRevolveFeature,
+  addBooleanFeature,
   getSketchData,
+  getSketchDataAsArrays,
   addPointToSketch,
   addLineToSketch,
   addConstraintToSketch,
   parseFeature,
+  deleteFeature,
+  renameFeature,
 } from '../document/featureHelpers';
+import { validateDocument, validateInvariants } from '../document/validate';
+import type { SketchPlaneRef } from '../document/schema';
 
 // ============================================================================
 // Document Creation Tests
@@ -33,45 +35,69 @@ import {
 describe('Document Creation', () => {
   test('createDocument initializes with default features', () => {
     const doc = createDocument();
-    expect(doc.features.length).toBe(4); // origin + 3 planes
+    expect(doc.featureOrder.length).toBe(4); // origin + 3 planes
   });
 
   test('default features have correct structure', () => {
     const doc = createDocument();
-    const features = [];
-    for (let i = 0; i < doc.features.length; i++) {
-      const child = doc.features.get(i);
-      if (child instanceof Y.XmlElement) {
-        features.push(child);
-      }
-    }
+    const featureIds = doc.featureOrder.toArray();
 
-    // Origin
-    expect(features[0].nodeName).toBe('origin');
-    expect(features[0].getAttribute('id')).toBe('origin');
+    // First 4 features should be origin + datum planes
+    expect(featureIds.length).toBeGreaterThanOrEqual(4);
 
-    // XY Plane
-    expect(features[1].nodeName).toBe('plane');
-    expect(features[1].getAttribute('id')).toBe('xy');
-    expect(features[1].getAttribute('normal')).toBe('0,0,1');
+    // Get datum plane IDs
+    const datumIds = getDatumPlaneIds(doc);
+    expect(datumIds.origin).not.toBeNull();
+    expect(datumIds.xy).not.toBeNull();
+    expect(datumIds.xz).not.toBeNull();
+    expect(datumIds.yz).not.toBeNull();
 
-    // XZ Plane
-    expect(features[2].nodeName).toBe('plane');
-    expect(features[2].getAttribute('id')).toBe('xz');
-    expect(features[2].getAttribute('normal')).toBe('0,1,0');
+    // Verify origin
+    const origin = doc.featuresById.get(datumIds.origin!);
+    expect(origin).not.toBeNull();
+    expect(origin?.get('type')).toBe('origin');
 
-    // YZ Plane
-    expect(features[3].nodeName).toBe('plane');
-    expect(features[3].getAttribute('id')).toBe('yz');
-    expect(features[3].getAttribute('normal')).toBe('1,0,0');
+    // Verify XY plane
+    const xyPlane = doc.featuresById.get(datumIds.xy!);
+    expect(xyPlane).not.toBeNull();
+    expect(xyPlane?.get('type')).toBe('plane');
+    expect(xyPlane?.get('role')).toBe('xy');
+    expect(xyPlane?.get('normal')).toEqual([0, 0, 1]);
+
+    // Verify XZ plane
+    const xzPlane = doc.featuresById.get(datumIds.xz!);
+    expect(xzPlane).not.toBeNull();
+    expect(xzPlane?.get('type')).toBe('plane');
+    expect(xzPlane?.get('role')).toBe('xz');
+    expect(xzPlane?.get('normal')).toEqual([0, 1, 0]);
+
+    // Verify YZ plane
+    const yzPlane = doc.featuresById.get(datumIds.yz!);
+    expect(yzPlane).not.toBeNull();
+    expect(yzPlane?.get('type')).toBe('plane');
+    expect(yzPlane?.get('role')).toBe('yz');
+    expect(yzPlane?.get('normal')).toEqual([1, 0, 0]);
   });
 
   test('meta is initialized correctly', () => {
     const doc = createDocument();
     expect(doc.meta.get('name')).toBe('Untitled');
-    expect(doc.meta.get('version')).toBe(1);
+    expect(doc.meta.get('schemaVersion')).toBe(2);
+    expect(doc.meta.get('units')).toBe('mm');
     expect(typeof doc.meta.get('created')).toBe('number');
     expect(typeof doc.meta.get('modified')).toBe('number');
+  });
+
+  test('datum planes are pinned to start of featureOrder', () => {
+    const doc = createDocument();
+    const datumIds = getDatumPlaneIds(doc);
+    const order = doc.featureOrder.toArray();
+
+    // First 4 should be origin, xy, xz, yz
+    expect(order[0]).toBe(datumIds.origin);
+    expect(order[1]).toBe(datumIds.xy);
+    expect(order[2]).toBe(datumIds.xz);
+    expect(order[3]).toBe(datumIds.yz);
   });
 });
 
@@ -82,8 +108,9 @@ describe('Document Creation', () => {
 describe('Rebuild Gate', () => {
   test('setRebuildGate updates state', () => {
     const doc = createDocument();
-    doc.state.set('rebuildGate', 'e1');
-    expect(doc.state.get('rebuildGate')).toBe('e1');
+    const sketchId = addSketchFeature(doc, 'xy');
+    doc.state.set('rebuildGate', sketchId);
+    expect(doc.state.get('rebuildGate')).toBe(sketchId);
   });
 
   test('rebuildGate defaults to null', () => {
@@ -93,7 +120,8 @@ describe('Rebuild Gate', () => {
 
   test('rebuildGate can be cleared', () => {
     const doc = createDocument();
-    doc.state.set('rebuildGate', 'e1');
+    const sketchId = addSketchFeature(doc, 'xy');
+    doc.state.set('rebuildGate', sketchId);
     doc.state.set('rebuildGate', null);
     expect(doc.state.get('rebuildGate')).toBeNull();
   });
@@ -106,79 +134,53 @@ describe('Rebuild Gate', () => {
 describe('Undo/Redo', () => {
   test('UndoManager tracks feature additions', () => {
     const doc = createDocument();
-    const undoManager = new Y.UndoManager(doc.features);
+    const undoManager = new Y.UndoManager([doc.featuresById, doc.featureOrder]);
 
-    const sketch = new Y.XmlElement('sketch');
-    sketch.setAttribute('id', 's1');
-    doc.features.push([sketch]);
-
-    expect(doc.features.length).toBe(5);
+    const sketchId = addSketchFeature(doc, 'xy');
+    expect(doc.featureOrder.length).toBe(5); // 4 defaults + 1 sketch
 
     undoManager.undo();
-    expect(doc.features.length).toBe(4);
+    expect(doc.featureOrder.length).toBe(4);
+    expect(doc.featuresById.get(sketchId)).toBeUndefined();
 
     undoManager.redo();
-    expect(doc.features.length).toBe(5);
+    expect(doc.featureOrder.length).toBe(5);
   });
 
   test('UndoManager tracks attribute changes', () => {
     const doc = createDocument();
-    
-    // Add sketch first
-    const sketch = new Y.XmlElement('sketch');
-    sketch.setAttribute('id', 's1');
-    sketch.setAttribute('plane', 'xy');
-    doc.features.push([sketch]);
+    const sketchId = addSketchFeature(doc, 'xy', 'Original Name');
 
     // Create undo manager after initial setup
-    const undoManager = new Y.UndoManager(doc.features);
+    const undoManager = new Y.UndoManager([doc.featuresById, doc.featureOrder]);
 
     // Change attribute - this change should be tracked
-    sketch.setAttribute('plane', 'xz');
-    expect(sketch.getAttribute('plane')).toBe('xz');
+    const sketch = doc.featuresById.get(sketchId)!;
+    sketch.set('name', 'New Name');
+    expect(sketch.get('name')).toBe('New Name');
 
     undoManager.undo();
-    expect(sketch.getAttribute('plane')).toBe('xy');
+    expect(sketch.get('name')).toBe('Original Name');
   });
 });
 
 // ============================================================================
-// ID Generation Tests
+// UUID Generation Tests
 // ============================================================================
 
-describe('ID Generation', () => {
-  test('generateId increments counter', () => {
-    const counters: IdCounters = {};
-    expect(generateId('sketch', counters)).toBe('s1');
-    expect(generateId('sketch', counters)).toBe('s2');
-    expect(generateId('extrude', counters)).toBe('e1');
+describe('UUID Generation', () => {
+  test('uuid generates valid v4 UUIDs', () => {
+    const id = uuid();
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    expect(id).toMatch(uuidRegex);
   });
 
-  test('extractCounters parses existing IDs', () => {
-    const ids = ['s1', 's5', 'e3', 's2', 'e1'];
-    const counters = extractCounters(ids);
-    expect(counters['s']).toBe(5);
-    expect(counters['e']).toBe(3);
-  });
-});
-
-// ============================================================================
-// Vector Parsing Tests
-// ============================================================================
-
-describe('Vector Parsing', () => {
-  test('parseVector handles comma-separated strings', () => {
-    expect(parseVector('0,0,1')).toEqual([0, 0, 1]);
-    expect(parseVector('1.5,-2.5,3')).toEqual([1.5, -2.5, 3]);
-  });
-
-  test('parseVector3 returns 3-tuple', () => {
-    expect(parseVector3('0,0,1')).toEqual([0, 0, 1]);
-  });
-
-  test('serializeVector produces comma-separated string', () => {
-    expect(serializeVector([0, 0, 1])).toBe('0,0,1');
-    expect(serializeVector([1.5, -2.5, 3])).toBe('1.5,-2.5,3');
+  test('uuid generates unique IDs', () => {
+    const ids = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      ids.add(uuid());
+    }
+    expect(ids.size).toBe(100);
   });
 });
 
@@ -189,28 +191,39 @@ describe('Vector Parsing', () => {
 describe('Feature Helpers', () => {
   test('findFeature finds by ID', () => {
     const doc = createDocument();
-    const feature = findFeature(doc.features, 'xy');
+    const datumIds = getDatumPlaneIds(doc);
+    const feature = findFeature(doc.featuresById, datumIds.xy!);
     expect(feature).not.toBeNull();
-    expect(feature?.getAttribute('name')).toBe('XY Plane');
+    expect(feature?.get('name')).toBe('XY Plane');
   });
 
-  test('getFeatureIds returns all IDs', () => {
+  test('getFeatureIds returns all IDs in order', () => {
     const doc = createDocument();
-    const ids = getFeatureIds(doc.features);
-    expect(ids).toContain('origin');
-    expect(ids).toContain('xy');
-    expect(ids).toContain('xz');
-    expect(ids).toContain('yz');
+    const ids = getFeatureIds(doc.featureOrder);
+    expect(ids.length).toBe(4);
+
+    const datumIds = getDatumPlaneIds(doc);
+    expect(ids).toContain(datumIds.origin);
+    expect(ids).toContain(datumIds.xy);
+    expect(ids).toContain(datumIds.xz);
+    expect(ids).toContain(datumIds.yz);
   });
 
-  test('addSketchFeature creates sketch element', () => {
+  test('addSketchFeature creates sketch with plane reference', () => {
     const doc = createDocument();
     const id = addSketchFeature(doc, 'xy', 'MySketch');
 
-    const sketch = findFeature(doc.features, id);
+    const sketch = doc.featuresById.get(id);
     expect(sketch).not.toBeNull();
-    expect(sketch?.getAttribute('plane')).toBe('xy');
-    expect(sketch?.getAttribute('name')).toBe('MySketch');
+    expect(sketch?.get('type')).toBe('sketch');
+    expect(sketch?.get('name')).toBe('MySketch');
+
+    // Plane should be a SketchPlaneRef object
+    const plane = sketch?.get('plane') as SketchPlaneRef;
+    expect(plane.kind).toBe('planeFeatureId');
+    // The ref should be the UUID of the XY plane
+    const datumIds = getDatumPlaneIds(doc);
+    expect(plane.ref).toBe(datumIds.xy);
   });
 
   test('addExtrudeFeature creates extrude element', () => {
@@ -218,26 +231,59 @@ describe('Feature Helpers', () => {
     const sketchId = addSketchFeature(doc, 'xy');
     const extrudeId = addExtrudeFeature(doc, sketchId, 10, 'add', 'reverse');
 
-    const extrude = findFeature(doc.features, extrudeId);
+    const extrude = doc.featuresById.get(extrudeId);
     expect(extrude).not.toBeNull();
-    expect(extrude?.getAttribute('sketch')).toBe(sketchId);
-    expect(extrude?.getAttribute('distance')).toBe('10');
-    expect(extrude?.getAttribute('op')).toBe('add');
-    expect(extrude?.getAttribute('direction')).toBe('reverse');
+    expect(extrude?.get('type')).toBe('extrude');
+    expect(extrude?.get('sketch')).toBe(sketchId);
+    expect(extrude?.get('distance')).toBe(10);
+    expect(extrude?.get('op')).toBe('add');
+    expect(extrude?.get('direction')).toBe('reverse');
   });
 
   test('addRevolveFeature creates revolve element', () => {
     const doc = createDocument();
     const sketchId = addSketchFeature(doc, 'xy');
-    const axisId = 'ln1';
+    const axisId = uuid(); // Would be a line entity ID
     const revolveId = addRevolveFeature(doc, sketchId, axisId, 90, 'add');
 
-    const revolve = findFeature(doc.features, revolveId);
+    const revolve = doc.featuresById.get(revolveId);
     expect(revolve).not.toBeNull();
-    expect(revolve?.getAttribute('sketch')).toBe(sketchId);
-    expect(revolve?.getAttribute('axis')).toBe(axisId);
-    expect(revolve?.getAttribute('angle')).toBe('90');
-    expect(revolve?.getAttribute('op')).toBe('add');
+    expect(revolve?.get('type')).toBe('revolve');
+    expect(revolve?.get('sketch')).toBe(sketchId);
+    expect(revolve?.get('axis')).toBe(axisId);
+    expect(revolve?.get('angle')).toBe(90);
+    expect(revolve?.get('op')).toBe('add');
+  });
+
+  test('deleteFeature removes feature from map and order', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'xy');
+
+    expect(doc.featuresById.get(sketchId)).not.toBeNull();
+    expect(doc.featureOrder.toArray()).toContain(sketchId);
+
+    const deleted = deleteFeature(doc, sketchId);
+    expect(deleted).toBe(true);
+    expect(doc.featuresById.get(sketchId)).toBeUndefined();
+    expect(doc.featureOrder.toArray()).not.toContain(sketchId);
+  });
+
+  test('deleteFeature prevents deleting datum planes', () => {
+    const doc = createDocument();
+    const datumIds = getDatumPlaneIds(doc);
+
+    const deleted = deleteFeature(doc, datumIds.xy!);
+    expect(deleted).toBe(false);
+    expect(doc.featuresById.get(datumIds.xy!)).not.toBeNull();
+  });
+
+  test('renameFeature updates feature name', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'xy', 'Original');
+
+    const renamed = renameFeature(doc, sketchId, 'Updated');
+    expect(renamed).toBe(true);
+    expect(doc.featuresById.get(sketchId)?.get('name')).toBe('Updated');
   });
 });
 
@@ -246,61 +292,86 @@ describe('Feature Helpers', () => {
 // ============================================================================
 
 describe('Sketch Data', () => {
-  test('getSketchData returns empty arrays for new sketch', () => {
+  test('getSketchData returns empty maps for new sketch', () => {
     const doc = createDocument();
     const id = addSketchFeature(doc, 'xy');
-    const sketch = findFeature(doc.features, id)!;
-    
+    const sketch = doc.featuresById.get(id)!;
+
     const data = getSketchData(sketch);
-    expect(data.points).toEqual([]);
-    expect(data.entities).toEqual([]);
-    expect(data.constraints).toEqual([]);
+    expect(Object.keys(data.pointsById)).toHaveLength(0);
+    expect(Object.keys(data.entitiesById)).toHaveLength(0);
+    expect(Object.keys(data.constraintsById)).toHaveLength(0);
   });
 
-  test('addPointToSketch adds point', () => {
+  test('addPointToSketch adds point with UUID', () => {
     const doc = createDocument();
     const id = addSketchFeature(doc, 'xy');
-    const sketch = findFeature(doc.features, id)!;
-    
+    const sketch = doc.featuresById.get(id)!;
+
     const pointId = addPointToSketch(sketch, 5, 10);
-    
+
+    // Point ID should be a UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    expect(pointId).toMatch(uuidRegex);
+
     const data = getSketchData(sketch);
-    expect(data.points).toHaveLength(1);
-    expect(data.points[0].id).toBe(pointId);
-    expect(data.points[0].x).toBe(5);
-    expect(data.points[0].y).toBe(10);
+    expect(Object.keys(data.pointsById)).toHaveLength(1);
+    expect(data.pointsById[pointId].x).toBe(5);
+    expect(data.pointsById[pointId].y).toBe(10);
   });
 
-  test('addLineToSketch adds line', () => {
+  test('addLineToSketch adds line with UUID', () => {
     const doc = createDocument();
     const id = addSketchFeature(doc, 'xy');
-    const sketch = findFeature(doc.features, id)!;
-    
+    const sketch = doc.featuresById.get(id)!;
+
     const pt1 = addPointToSketch(sketch, 0, 0);
     const pt2 = addPointToSketch(sketch, 10, 0);
     const lineId = addLineToSketch(sketch, pt1, pt2);
-    
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    expect(lineId).toMatch(uuidRegex);
+
     const data = getSketchData(sketch);
-    expect(data.entities).toHaveLength(1);
-    expect(data.entities[0].id).toBe(lineId);
-    expect(data.entities[0].type).toBe('line');
-    expect((data.entities[0] as any).start).toBe(pt1);
-    expect((data.entities[0] as any).end).toBe(pt2);
+    expect(Object.keys(data.entitiesById)).toHaveLength(1);
+    expect(data.entitiesById[lineId].type).toBe('line');
+    expect(data.entitiesById[lineId].start).toBe(pt1);
+    expect(data.entitiesById[lineId].end).toBe(pt2);
   });
 
-  test('addConstraintToSketch adds constraint', () => {
+  test('addConstraintToSketch adds constraint with UUID', () => {
     const doc = createDocument();
     const id = addSketchFeature(doc, 'xy');
-    const sketch = findFeature(doc.features, id)!;
+    const sketch = doc.featuresById.get(id)!;
 
     const p1 = addPointToSketch(sketch, 0, 0);
     const p2 = addPointToSketch(sketch, 10, 5);
-    const cid = addConstraintToSketch(sketch, { type: 'horizontal', points: [p1, p2] });
+    const constraintId = addConstraintToSketch(sketch, {
+      type: 'horizontal',
+      points: [p1, p2],
+    });
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    expect(constraintId).toMatch(uuidRegex);
 
     const data = getSketchData(sketch);
-    expect(data.constraints).toHaveLength(1);
-    expect(data.constraints[0].id).toBe(cid);
-    expect((data.constraints[0] as any).type).toBe('horizontal');
+    expect(Object.keys(data.constraintsById)).toHaveLength(1);
+    expect(data.constraintsById[constraintId].type).toBe('horizontal');
+  });
+
+  test('getSketchDataAsArrays returns arrays', () => {
+    const doc = createDocument();
+    const id = addSketchFeature(doc, 'xy');
+    const sketch = doc.featuresById.get(id)!;
+
+    addPointToSketch(sketch, 0, 0);
+    addPointToSketch(sketch, 10, 0);
+
+    const { points, entities, constraints } = getSketchDataAsArrays(sketch);
+    expect(Array.isArray(points)).toBe(true);
+    expect(points).toHaveLength(2);
+    expect(Array.isArray(entities)).toBe(true);
+    expect(Array.isArray(constraints)).toBe(true);
   });
 });
 
@@ -311,58 +382,69 @@ describe('Sketch Data', () => {
 describe('Feature Parsing', () => {
   test('parseFeature parses plane correctly', () => {
     const doc = createDocument();
-    const element = findFeature(doc.features, 'xy')!;
-    const feature = parseFeature(element);
-    
+    const datumIds = getDatumPlaneIds(doc);
+    const planeMap = doc.featuresById.get(datumIds.xy!)!;
+    const feature = parseFeature(planeMap);
+
     expect(feature).not.toBeNull();
     expect(feature!.type).toBe('plane');
-    expect(feature!.id).toBe('xy');
+    expect(feature!.id).toBe(datumIds.xy);
     expect(feature!.name).toBe('XY Plane');
+    if (feature!.type === 'plane' && 'role' in feature!) {
+      expect(feature!.role).toBe('xy');
+    }
   });
 
   test('parseFeature parses sketch correctly', () => {
     const doc = createDocument();
     const id = addSketchFeature(doc, 'xy', 'TestSketch');
-    const element = findFeature(doc.features, id)!;
-    const feature = parseFeature(element);
-    
+    const sketchMap = doc.featuresById.get(id)!;
+    const feature = parseFeature(sketchMap);
+
     expect(feature).not.toBeNull();
     expect(feature!.type).toBe('sketch');
-    expect((feature as any).plane).toBe('xy');
+    if (feature!.type === 'sketch') {
+      expect(feature.plane.kind).toBe('planeFeatureId');
+    }
   });
 
   test('parseFeature parses extrude correctly', () => {
     const doc = createDocument();
     const sketchId = addSketchFeature(doc, 'xy');
     const extrudeId = addExtrudeFeature(doc, sketchId, 15, 'cut');
-    const element = findFeature(doc.features, extrudeId)!;
-    const feature = parseFeature(element);
-    
+    const extrudeMap = doc.featuresById.get(extrudeId)!;
+    const feature = parseFeature(extrudeMap);
+
     expect(feature).not.toBeNull();
     expect(feature!.type).toBe('extrude');
-    expect((feature as any).sketch).toBe(sketchId);
-    expect((feature as any).distance).toBe(15);
-    expect((feature as any).op).toBe('cut');
+    if (feature!.type === 'extrude') {
+      expect(feature.sketch).toBe(sketchId);
+      expect(feature.distance).toBe(15);
+      expect(feature.op).toBe('cut');
+    }
   });
 
   test('parseFeature parses revolve correctly', () => {
     const doc = createDocument();
     const sketchId = addSketchFeature(doc, 'xy');
-    const revolveId = addRevolveFeature(doc, sketchId, 'ln1', 180, 'cut');
-    const element = findFeature(doc.features, revolveId)!;
-    const feature = parseFeature(element);
+    const axisId = uuid();
+    const revolveId = addRevolveFeature(doc, sketchId, axisId, 180, 'cut');
+    const revolveMap = doc.featuresById.get(revolveId)!;
+    const feature = parseFeature(revolveMap);
 
     expect(feature).not.toBeNull();
     expect(feature!.type).toBe('revolve');
-    expect((feature as any).sketch).toBe(sketchId);
-    expect((feature as any).axis).toBe('ln1');
-    expect((feature as any).angle).toBe(180);
-    expect((feature as any).op).toBe('cut');
+    if (feature!.type === 'revolve') {
+      expect(feature.sketch).toBe(sketchId);
+      expect(feature.axis).toBe(axisId);
+      expect(feature.angle).toBe(180);
+      expect(feature.op).toBe('cut');
+    }
   });
 });
 
 // ============================================================================
-// Phase 14: Extrude Extent Tests
+// Extrude Extent Tests
 // ============================================================================
 
 describe('Extrude Extent Types', () => {
@@ -370,12 +452,14 @@ describe('Extrude Extent Types', () => {
     const doc = createDocument();
     const sketchId = addSketchFeature(doc, 'xy');
     const extrudeId = addExtrudeFeature(doc, sketchId, 10);
-    const element = findFeature(doc.features, extrudeId)!;
-    const feature = parseFeature(element);
+    const extrudeMap = doc.featuresById.get(extrudeId)!;
+    const feature = parseFeature(extrudeMap);
 
     expect(feature).not.toBeNull();
-    expect((feature as any).extent).toBe('blind');
-    expect((feature as any).distance).toBe(10);
+    if (feature!.type === 'extrude') {
+      expect(feature.extent).toBe('blind');
+      expect(feature.distance).toBe(10);
+    }
   });
 
   test('addExtrudeFeature with options object supports throughAll', () => {
@@ -386,12 +470,14 @@ describe('Extrude Extent Types', () => {
       extent: 'throughAll',
       op: 'cut',
     });
-    const element = findFeature(doc.features, extrudeId)!;
-    const feature = parseFeature(element);
+    const extrudeMap = doc.featuresById.get(extrudeId)!;
+    const feature = parseFeature(extrudeMap);
 
     expect(feature).not.toBeNull();
-    expect((feature as any).extent).toBe('throughAll');
-    expect((feature as any).op).toBe('cut');
+    if (feature!.type === 'extrude') {
+      expect(feature.extent).toBe('throughAll');
+      expect(feature.op).toBe('cut');
+    }
   });
 
   test('addExtrudeFeature with options object supports toFace with extentRef', () => {
@@ -400,33 +486,17 @@ describe('Extrude Extent Types', () => {
     const extrudeId = addExtrudeFeature(doc, {
       sketchId,
       extent: 'toFace',
-      extentRef: 'face:e1:top',
+      extentRef: 'face:e1:0',
       op: 'add',
     });
-    const element = findFeature(doc.features, extrudeId)!;
-    const feature = parseFeature(element);
+    const extrudeMap = doc.featuresById.get(extrudeId)!;
+    const feature = parseFeature(extrudeMap);
 
     expect(feature).not.toBeNull();
-    expect((feature as any).extent).toBe('toFace');
-    expect((feature as any).extentRef).toBe('face:e1:top');
-  });
-});
-
-// ============================================================================
-// Phase 15: Sketch on Face Tests
-// ============================================================================
-
-describe('Sketch on Face', () => {
-  test('addSketchFeature accepts face reference for plane', () => {
-    const doc = createDocument();
-    const sketchId = addSketchFeature(doc, 'face:e1:top', 'SketchOnFace');
-    const element = findFeature(doc.features, sketchId)!;
-    const feature = parseFeature(element);
-
-    expect(feature).not.toBeNull();
-    expect(feature!.type).toBe('sketch');
-    expect((feature as any).plane).toBe('face:e1:top');
-    expect(feature!.name).toBe('SketchOnFace');
+    if (feature!.type === 'extrude') {
+      expect(feature.extent).toBe('toFace');
+      expect(feature.extentRef).toBe('face:e1:0');
+    }
   });
 });
 
@@ -445,13 +515,15 @@ describe('Multi-Body Support', () => {
       resultBodyName: 'CustomBody',
       resultBodyColor: '#ff0000',
     });
-    const element = findFeature(doc.features, extrudeId)!;
-    const feature = parseFeature(element);
+    const extrudeMap = doc.featuresById.get(extrudeId)!;
+    const feature = parseFeature(extrudeMap);
 
     expect(feature).not.toBeNull();
-    expect((feature as any).mergeScope).toBe('new');
-    expect((feature as any).resultBodyName).toBe('CustomBody');
-    expect((feature as any).resultBodyColor).toBe('#ff0000');
+    if (feature!.type === 'extrude') {
+      expect(feature.mergeScope).toBe('new');
+      expect(feature.resultBodyName).toBe('CustomBody');
+      expect(feature.resultBodyColor).toBe('#ff0000');
+    }
   });
 
   test('addExtrudeFeature with specific target bodies', () => {
@@ -461,43 +533,126 @@ describe('Multi-Body Support', () => {
       sketchId,
       distance: 10,
       mergeScope: 'specific',
-      targetBodies: ['e1', 'e2'],
+      targetBodies: ['body1', 'body2'],
     });
-    const element = findFeature(doc.features, extrudeId)!;
-    const feature = parseFeature(element);
+    const extrudeMap = doc.featuresById.get(extrudeId)!;
+    const feature = parseFeature(extrudeMap);
 
     expect(feature).not.toBeNull();
-    expect((feature as any).mergeScope).toBe('specific');
-    // parseFeature converts comma-separated string back to array
-    expect((feature as any).targetBodies).toEqual(['e1', 'e2']);
+    if (feature!.type === 'extrude') {
+      expect(feature.mergeScope).toBe('specific');
+      expect(feature.targetBodies).toEqual(['body1', 'body2']);
+    }
   });
 
   test('addRevolveFeature with mergeScope option', () => {
     const doc = createDocument();
     const sketchId = addSketchFeature(doc, 'xy');
+    const axisId = uuid();
     const revolveId = addRevolveFeature(doc, {
       sketchId,
-      axis: 'ln1',
+      axis: axisId,
       angle: 360,
       mergeScope: 'auto',
       resultBodyName: 'RevolveBody',
     });
-    const element = findFeature(doc.features, revolveId)!;
-    const feature = parseFeature(element);
+    const revolveMap = doc.featuresById.get(revolveId)!;
+    const feature = parseFeature(revolveMap);
 
     expect(feature).not.toBeNull();
-    expect((feature as any).mergeScope).toBe('auto');
-    expect((feature as any).resultBodyName).toBe('RevolveBody');
+    if (feature!.type === 'revolve') {
+      expect(feature.mergeScope).toBe('auto');
+      expect(feature.resultBodyName).toBe('RevolveBody');
+    }
+  });
+});
+
+// ============================================================================
+// Sketch on Face Tests
+// ============================================================================
+
+describe('Sketch on Face', () => {
+  test('addSketchFeature accepts face reference for plane', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'face:e1:0', 'SketchOnFace');
+    const sketchMap = doc.featuresById.get(sketchId)!;
+    const feature = parseFeature(sketchMap);
+
+    expect(feature).not.toBeNull();
+    expect(feature!.type).toBe('sketch');
+    if (feature!.type === 'sketch') {
+      expect(feature.plane.kind).toBe('faceRef');
+      expect(feature.plane.ref).toBe('face:e1:0');
+      expect(feature.name).toBe('SketchOnFace');
+    }
+  });
+});
+
+// ============================================================================
+// Boolean Feature Tests
+// ============================================================================
+
+describe('Boolean Features', () => {
+  test('addBooleanFeature creates boolean operation', () => {
+    const doc = createDocument();
+    const boolId = addBooleanFeature(doc, {
+      operation: 'subtract',
+      target: 'body1',
+      tool: 'body2',
+      name: 'MyBoolean',
+    });
+
+    const boolMap = doc.featuresById.get(boolId)!;
+    expect(boolMap.get('type')).toBe('boolean');
+    expect(boolMap.get('operation')).toBe('subtract');
+    expect(boolMap.get('target')).toBe('body1');
+    expect(boolMap.get('tool')).toBe('body2');
+    expect(boolMap.get('name')).toBe('MyBoolean');
+  });
+});
+
+// ============================================================================
+// Validation Tests
+// ============================================================================
+
+describe('Document Validation', () => {
+  test('validateDocument passes for valid new document', () => {
+    const doc = createDocument();
+    const snapshot = doc.root.toJSON();
+    const result = validateDocument(snapshot);
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toHaveLength(0);
   });
 
-  test('addExtrudeFeature defaults to auto merge scope', () => {
+  test('validateInvariants detects missing datum planes', () => {
+    const doc = createDocument();
+    const datumIds = getDatumPlaneIds(doc);
+
+    // Manually break the document by removing a datum plane ID from order
+    // (don't do this in real code!)
+    const xyIndex = doc.featureOrder.toArray().indexOf(datumIds.xy!);
+    doc.featureOrder.delete(xyIndex, 1);
+
+    const snapshot = doc.root.toJSON() as any;
+    // Also remove from featuresById in snapshot
+    delete snapshot.featuresById[datumIds.xy!];
+
+    const result = validateInvariants(snapshot);
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes('XY plane'))).toBe(true);
+  });
+
+  test('validateInvariants detects identity mismatch', () => {
     const doc = createDocument();
     const sketchId = addSketchFeature(doc, 'xy');
-    const extrudeId = addExtrudeFeature(doc, sketchId, 10);
-    const element = findFeature(doc.features, extrudeId)!;
-    
-    // No mergeScope attribute set means it defaults to 'auto' in the worker
-    // getAttribute returns undefined when attribute is not set
-    expect(element.getAttribute('mergeScope')).toBeUndefined();
+
+    // Get snapshot and break identity
+    const snapshot = doc.root.toJSON() as any;
+    snapshot.featuresById[sketchId].id = 'wrong-id';
+
+    const result = validateInvariants(snapshot);
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes('Identity mismatch'))).toBe(true);
   });
 });

@@ -535,40 +535,59 @@ The app is built with **React** and uses a layered architecture:
 
 ### 5.2 Document Model
 
-The document model uses **Yjs** for collaborative editing and undo/redo:
+The document model uses **Yjs** for collaborative editing and undo/redo. The complete specification is in [`DOCUMENT-MODEL.md`](DOCUMENT-MODEL.md).
 
 ```ts
 interface SolidTypeDoc {
   ydoc: Y.Doc;
-  features: Y.XmlFragment;   // Feature tree (sketches, extrudes, revolves, etc.)
-  meta: Y.Map<unknown>;      // Document metadata (name, version, timestamps)
-  state: Y.Map<unknown>;     // Transient state (rebuild gate, active sketch)
-  undoManager: Y.UndoManager;
+  root: Y.Map<unknown>;              // Single root container
+  meta: Y.Map<unknown>;              // Document metadata
+  state: Y.Map<unknown>;             // Transient state (rebuild gate)
+  featuresById: Y.Map<Y.Map>;        // UUID → feature record
+  featureOrder: Y.Array<string>;     // Ordered list of feature UUIDs
 }
 ```
+
+**Key Design Principles:**
+
+* **UUID identifiers** – All features and sketch elements use UUID v4
+* **Y.Map records** – All records are `Y.Map` instances (never plain JS objects)
+* **Single root** – All state lives under `ydoc.getMap('root')`
+* **Zod validation** – Schema defined in [`schema.ts`](packages/app/src/document/schema.ts), validated on load
+* **Deterministic rebuild** – Worker iterates in sorted order for reproducibility
+
+**Schema & Validation:**
+
+The document model is formally defined using **Zod schemas** in `packages/app/src/document/schema.ts`:
+
+* `DocSnapshotSchema` – validates the complete `root.toJSON()` snapshot
+* `FeatureSchema` – discriminated union of all feature types
+* `SketchDataSchema` – validates sketch points, entities, and constraints
+* Runtime invariants are checked via `validateInvariants()` in `validate.ts`
 
 **Feature Types:**
 
-* `origin` – Coordinate origin reference
-* `plane` – Datum planes (XY, XZ, YZ, or custom)
-* `sketch` – 2D sketches with entities and constraints
-* `extrude` – Linear extrusion with extent types and multi-body options
-* `revolve` – Rotational sweep with multi-body options
-* `boolean` – Explicit union/subtract/intersect operations
+| Type | Description |
+|------|-------------|
+| `origin` | Coordinate origin reference (exactly one) |
+| `plane` | Datum planes with `role: 'xy'\|'xz'\|'yz'`, or custom planes |
+| `sketch` | 2D sketches with points, entities, and constraints |
+| `extrude` | Linear extrusion with extent types and multi-body options |
+| `revolve` | Rotational sweep with multi-body options |
+| `boolean` | Explicit union/subtract/intersect operations |
 
-**Sketch Data Structure:**
+**Sketch Data:**
 
-```ts
-interface SketchData {
-  entities: SketchEntity[];     // Points, lines, arcs
-  constraints: SketchConstraint[]; // Geometric and dimensional constraints
-}
+Sketches store geometry in three unordered maps (`pointsById`, `entitiesById`, `constraintsById`), each keyed by UUID. Constraints include:
 
-// Constraint types include:
-// - Geometric: coincident, horizontal, vertical, parallel, perpendicular, 
-//              equalLength, tangent, symmetric
-// - Dimensional: distance, angle (with offsetX/offsetY for label positioning)
-```
+* **Geometric:** coincident, horizontal, vertical, parallel, perpendicular, equalLength, tangent, symmetric, fixed
+* **Dimensional:** distance, angle (with `offsetX`/`offsetY` for label positioning)
+
+**Invariants:**
+
+* Origin + datum planes are pinned to the start of `featureOrder`
+* All feature/sketch element IDs must match their map keys
+* Reference integrity is enforced (sketch refs, plane refs, constraint refs)
 
 ### 5.3 React Contexts
 

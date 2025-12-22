@@ -606,7 +606,10 @@ const FeatureTree: React.FC = () => {
     // If double-clicking a sketch, edit it instead of renaming
     const feature = features.find(f => f.id === id);
     if (feature?.type === 'sketch' && 'plane' in feature) {
-      editSketch(id, feature.plane);
+      // plane is now a SketchPlaneRef object - extract the ref for datum planes
+      const planeRef = feature.plane;
+      const planeId = planeRef.kind === 'planeFeatureId' ? planeRef.ref : planeRef.ref;
+      editSketch(id, planeId);
       return;
     }
     
@@ -655,7 +658,10 @@ const FeatureTree: React.FC = () => {
         ),
         onClick: () => {
           if (feature && feature.type === 'sketch' && 'plane' in feature) {
-            editSketch(feature.id, feature.plane);
+            // plane is now a SketchPlaneRef object
+            const planeRef = feature.plane;
+            const planeId = planeRef.kind === 'planeFeatureId' ? planeRef.ref : planeRef.ref;
+            editSketch(feature.id, planeId);
           }
         },
       });

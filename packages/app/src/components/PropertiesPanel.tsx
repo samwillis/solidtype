@@ -438,16 +438,16 @@ function SketchProperties({ feature, onUpdate }: FeaturePropertiesProps) {
       
       <PropertyGroup title="Parameters">
         <PropertyRow label="Plane">
-          <span className="readonly-value">{sketch.plane}</span>
+          <span className="readonly-value">{sketch.plane.kind === 'planeFeatureId' ? 'Datum Plane' : sketch.plane.kind === 'faceRef' ? 'Face' : 'Custom'}</span>
         </PropertyRow>
         <PropertyRow label="Points">
-          <span className="readonly-value">{sketch.data?.points.length ?? 0}</span>
+          <span className="readonly-value">{sketch.data ? Object.keys(sketch.data.pointsById).length : 0}</span>
         </PropertyRow>
         <PropertyRow label="Entities">
-          <span className="readonly-value">{sketch.data?.entities.length ?? 0}</span>
+          <span className="readonly-value">{sketch.data ? Object.keys(sketch.data.entitiesById).length : 0}</span>
         </PropertyRow>
         <PropertyRow label="Constraints">
-          <span className="readonly-value">{sketch.data?.constraints.length ?? 0}</span>
+          <span className="readonly-value">{sketch.data ? Object.keys(sketch.data.constraintsById).length : 0}</span>
         </PropertyRow>
       </PropertyGroup>
     </>
@@ -1112,7 +1112,7 @@ const PropertiesPanel: React.FC = () => {
     if (editMode.type !== 'revolve') return [];
     const sketch = getFeatureById(editMode.sketchId);
     if (!sketch || sketch.type !== 'sketch' || !sketch.data) return [];
-    return sketch.data.entities.filter((e): e is SketchLine => e.type === 'line');
+    return Object.values(sketch.data.entitiesById).filter((e): e is SketchLine => e.type === 'line');
   }, [editMode, getFeatureById]);
   
   // Get the selected feature
@@ -1126,17 +1126,13 @@ const PropertiesPanel: React.FC = () => {
     if (!effectiveFeature) return;
     
     // Update the feature in Yjs
-    const features = doc.features;
-    for (const child of features.toArray()) {
-      if (child instanceof Object && 'getAttribute' in child) {
-        const element = child as any;
-        if (element.getAttribute('id') === effectiveFeature.id) {
-          for (const [key, value] of Object.entries(updates)) {
-            element.setAttribute(key, String(value));
-          }
-          break;
+    const featureMap = doc.featuresById.get(effectiveFeature.id);
+    if (featureMap) {
+      doc.ydoc.transact(() => {
+        for (const [key, value] of Object.entries(updates)) {
+          featureMap.set(key, value);
         }
-      }
+      });
     }
   }, [effectiveFeature, doc]);
 

@@ -4,4 +4,6 @@
 
 export * from './createDocument';
 export * from './featureHelpers';
-export * from './utils';
+export * from './schema';
+export * from './yjs';
+export * from './validate';

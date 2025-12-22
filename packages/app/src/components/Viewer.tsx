@@ -11,8 +11,17 @@ import { useSelection } from '../contexts/SelectionContext';
 import { useSketch } from '../contexts/SketchContext';
 import { useDocument } from '../contexts/DocumentContext';
 import { useRaycast } from '../hooks/useRaycast';
-import { findFeature, getSketchData, setSketchData, getFeaturesArray, parseFeature } from '../document/featureHelpers';
-import type { SketchData, SketchLine, SketchConstraint, PlaneFeature, OriginFeature, SketchFeature } from '../types/document';
+import {
+  findFeature,
+  getSketchDataAsArrays,
+  setSketchData,
+  getFeaturesArray,
+  parseFeature,
+  type SketchDataArrays,
+} from '../document/featureHelpers';
+import type { SketchLine, SketchConstraint, PlaneFeature, OriginFeature, SketchFeature } from '../types/document';
+// Use array-based SketchData for compatibility with existing code
+type SketchData = SketchDataArrays;
 import { ToolbarButton, ToolbarSeparator, FloatingToolbar } from './ToolbarComponents';
 import { NormalViewIcon, CheckIcon, CloseIcon } from './Icons';
 import './ToolbarComponents.css';
@@ -304,13 +313,13 @@ const Viewer: React.FC = () => {
     };
   }, []);
 
-  // Get current sketch data
+  // Get current sketch data (array format for compatibility)
   const getSketch = useCallback((): SketchData | null => {
     if (!sketchMode.sketchId) return null;
-    const sketch = findFeature(doc.features, sketchMode.sketchId);
+    const sketch = findFeature(doc.featuresById, sketchMode.sketchId);
     if (!sketch) return null;
-    return getSketchData(sketch);
-  }, [doc.features, sketchMode.sketchId]);
+    return getSketchDataAsArrays(sketch);
+  }, [doc.featuresById, sketchMode.sketchId]);
 
   // Clear tool state when entering/exiting sketch mode or changing sketchId
   useEffect(() => {
@@ -369,9 +378,9 @@ const Viewer: React.FC = () => {
   // Constraint value update
   const updateConstraintValue = useCallback((constraintId: string, value: number) => {
     if (!sketchMode.sketchId) return;
-    const sketchEl = findFeature(doc.features, sketchMode.sketchId);
+    const sketchEl = findFeature(doc.featuresById, sketchMode.sketchId);
     if (!sketchEl) return;
-    const data = getSketchData(sketchEl);
+    const data = getSketchDataAsArrays(sketchEl);
     const c = data.constraints.find((cc) => cc.id === constraintId);
     if (!c) return;
 
@@ -386,14 +395,14 @@ const Viewer: React.FC = () => {
     doc.ydoc.transact(() => {
       setSketchData(sketchEl, data);
     });
-  }, [doc.features, doc.ydoc, sketchMode.sketchId]);
+  }, [doc.featuresById, doc.ydoc, sketchMode.sketchId]);
 
   // Update constraint offset (for draggable dimensions)
   const updateConstraintOffset = useCallback((constraintId: string, offsetX: number, offsetY: number) => {
     if (!sketchMode.sketchId) return;
-    const sketchEl = findFeature(doc.features, sketchMode.sketchId);
+    const sketchEl = findFeature(doc.featuresById, sketchMode.sketchId);
     if (!sketchEl) return;
-    const data = getSketchData(sketchEl);
+    const data = getSketchDataAsArrays(sketchEl);
     const c = data.constraints.find((cc) => cc.id === constraintId);
     if (!c) return;
 
@@ -407,14 +416,14 @@ const Viewer: React.FC = () => {
     doc.ydoc.transact(() => {
       setSketchData(sketchEl, data);
     });
-  }, [doc.features, doc.ydoc, sketchMode.sketchId]);
+  }, [doc.featuresById, doc.ydoc, sketchMode.sketchId]);
 
   // Delete constraint
   const deleteConstraint = useCallback((constraintId: string) => {
     if (!sketchMode.sketchId) return;
-    const sketchEl = findFeature(doc.features, sketchMode.sketchId);
+    const sketchEl = findFeature(doc.featuresById, sketchMode.sketchId);
     if (!sketchEl) return;
-    const data = getSketchData(sketchEl);
+    const data = getSketchDataAsArrays(sketchEl);
     const next: SketchData = {
       ...data,
       constraints: data.constraints.filter((c) => c.id !== constraintId),
@@ -422,7 +431,7 @@ const Viewer: React.FC = () => {
     doc.ydoc.transact(() => {
       setSketchData(sketchEl, next);
     });
-  }, [doc.features, doc.ydoc, sketchMode.sketchId]);
+  }, [doc.featuresById, doc.ydoc, sketchMode.sketchId]);
 
   // Register refs with context
   useEffect(() => {
@@ -526,7 +535,7 @@ const Viewer: React.FC = () => {
     }
 
     // Get all plane features
-    const featureElements = getFeaturesArray(doc.features);
+    const featureElements = getFeaturesArray(doc);
     for (const element of featureElements) {
       const feature = parseFeature(element);
       if (!feature || feature.type !== 'plane') continue;
@@ -666,7 +675,7 @@ const Viewer: React.FC = () => {
     }
 
     needsRenderRef.current = true;
-  }, [doc.features, features, sceneReady, selectedFeatureId, hoveredFeatureId]);
+  }, [doc.featuresById, features, sceneReady, selectedFeatureId, hoveredFeatureId]);
 
   // Render origin
   useEffect(() => {
@@ -688,7 +697,7 @@ const Viewer: React.FC = () => {
     }
 
     // Find origin feature
-    const featureElements = getFeaturesArray(doc.features);
+    const featureElements = getFeaturesArray(doc);
     for (const element of featureElements) {
       const feature = parseFeature(element);
       if (!feature || feature.type !== 'origin') continue;
@@ -755,7 +764,7 @@ const Viewer: React.FC = () => {
     }
 
     needsRenderRef.current = true;
-  }, [doc.features, features, sceneReady, selectedFeatureId, hoveredFeatureId]);
+  }, [doc.featuresById, features, sceneReady, selectedFeatureId, hoveredFeatureId]);
 
   // Update 3D sketch visualization
   useEffect(() => {
@@ -945,9 +954,9 @@ const Viewer: React.FC = () => {
 
     // Render active sketch being edited (blue)
     if (sketchMode.active && sketchMode.sketchId && sketchMode.planeId) {
-      const sketchElement = findFeature(doc.features, sketchMode.sketchId);
+      const sketchElement = findFeature(doc.featuresById, sketchMode.sketchId);
       if (sketchElement) {
-        const sketchData = getSketchData(sketchElement);
+        const sketchData = getSketchDataAsArrays(sketchElement);
         console.log('[Viewer] Rendering active sketch:', sketchMode.sketchId, 'points:', sketchData.points.length);
         renderSketch(sketchData, sketchMode.planeId, 0x00aaff, 1.5, sketchMode.sketchId!); // Blue, larger points
       }
@@ -990,7 +999,7 @@ const Viewer: React.FC = () => {
     }
 
     // Render visible (non-active) sketches in grey
-    const featureElements = getFeaturesArray(doc.features);
+    const featureElements = getFeaturesArray(doc);
     for (const element of featureElements) {
       const feature = parseFeature(element);
       if (!feature || feature.type !== 'sketch') continue;
@@ -1005,14 +1014,21 @@ const Viewer: React.FC = () => {
       const isHovered = hoveredFeatureId === sketchFeature.id;
       if (!sketchFeature.visible && !isSelected && !isHovered) continue;
       
-      const sketchData = sketchFeature.data;
-      if (!sketchData || (sketchData.points.length === 0 && sketchData.entities.length === 0)) continue;
+      // Convert data format to arrays
+      const sketchData: SketchData = {
+        points: Object.values(sketchFeature.data.pointsById),
+        entities: Object.values(sketchFeature.data.entitiesById),
+        constraints: Object.values(sketchFeature.data.constraintsById),
+      };
+      if (sketchData.points.length === 0 && sketchData.entities.length === 0) continue;
       
-      renderSketch(sketchData, sketchFeature.plane, 0x888888, 1.0, sketchFeature.id); // Grey, smaller points
+      // Get plane ID from SketchPlaneRef
+      const planeId = sketchFeature.plane.ref;
+      renderSketch(sketchData, planeId, 0x888888, 1.0, sketchFeature.id); // Grey, smaller points
     }
 
     needsRenderRef.current = true;
-  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, doc.features, features, sceneReady, selectedFeatureId, hoveredFeatureId, previewLine, sketchPlaneTransforms]);
+  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, doc.featuresById, features, sceneReady, selectedFeatureId, hoveredFeatureId, previewLine, sketchPlaneTransforms]);
 
   // Render selection highlights and constraint annotations (only when editing sketch)
   useEffect(() => {
