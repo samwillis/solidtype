@@ -2237,15 +2237,6 @@ const Viewer: React.FC = () => {
           <div className="sketch-toolbar">
             <button 
               className="sketch-toolbar-btn"
-              onClick={finishSketch}
-              title="Accept Sketch (Ctrl+Enter)"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </button>
-            <button 
-              className="sketch-toolbar-btn"
               onClick={resetToSketchNormal}
               title="View Normal to Sketch Plane"
             >
@@ -2253,6 +2244,16 @@ const Viewer: React.FC = () => {
                 <path d="M4 6l8 4 8-4" />
                 <path d="M4 6v8l8 4 8-4V6" />
                 <circle cx="12" cy="10" r="2" />
+              </svg>
+            </button>
+            <div className="sketch-toolbar-divider" />
+            <button 
+              className="sketch-toolbar-btn"
+              onClick={finishSketch}
+              title="Accept Sketch (Ctrl+Enter)"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="20 6 9 17 4 12" />
               </svg>
             </button>
             <button 

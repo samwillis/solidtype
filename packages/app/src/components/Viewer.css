@@ -63,6 +63,13 @@
   flex-shrink: 0;
 }
 
+.sketch-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border, rgba(255, 255, 255, 0.2));
+  margin: 0 4px;
+}
+
 /* Dimensions panel */
 .sketch-dimensions-panel {
   position: absolute;
