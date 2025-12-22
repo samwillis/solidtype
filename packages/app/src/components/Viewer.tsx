@@ -2233,40 +2233,37 @@ const Viewer: React.FC = () => {
       {/* Sketch mode overlays */}
       {sketchMode.active && (
         <>
-          {/* Accept/Cancel/Normal buttons */}
-          <div className="sketch-actions-overlay">
+          {/* Sketch toolbar */}
+          <div className="sketch-toolbar">
             <button 
-              className="sketch-action-btn sketch-action-accept"
+              className="sketch-toolbar-btn"
               onClick={finishSketch}
-              title="Accept Sketch (Enter)"
+              title="Accept Sketch (Ctrl+Enter)"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
-              Accept
             </button>
             <button 
-              className="sketch-action-btn sketch-action-normal"
+              className="sketch-toolbar-btn"
               onClick={resetToSketchNormal}
               title="View Normal to Sketch Plane"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="12" cy="12" r="3" />
-                <line x1="12" y1="3" x2="12" y2="6" />
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M4 6l8 4 8-4" />
+                <path d="M4 6v8l8 4 8-4V6" />
+                <circle cx="12" cy="10" r="2" />
               </svg>
-              Normal
             </button>
             <button 
-              className="sketch-action-btn sketch-action-cancel"
+              className="sketch-toolbar-btn"
               onClick={cancelSketch}
-              title="Cancel Sketch (Escape)"
+              title="Cancel Sketch"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
-              Cancel
             </button>
           </div>
 

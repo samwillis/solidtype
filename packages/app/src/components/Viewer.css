@@ -11,72 +11,56 @@
   height: 100%;
 }
 
-/* Sketch actions overlay (accept/cancel) */
-.sketch-actions-overlay {
+/* Sketch toolbar (matches main toolbar style) */
+.sketch-toolbar {
   position: absolute;
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--color-overlay-bg, rgba(37, 37, 38, 0.85));
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--color-bg-secondary, rgba(37, 37, 38, 0.95));
   backdrop-filter: blur(8px);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   pointer-events: auto;
   z-index: 10;
 }
 
-/* Light theme - sketch actions overlay */
-[data-theme="light"] .sketch-actions-overlay {
-  background: rgba(255, 255, 255, 0.9);
+/* Light theme - sketch toolbar */
+[data-theme="light"] .sketch-toolbar {
+  background: rgba(255, 255, 255, 0.95);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.sketch-action-btn {
+.sketch-toolbar-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
+  border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  color: var(--color-icon, #aaa);
+  transition: background-color 0.1s ease, color 0.1s ease;
 }
 
-.sketch-action-accept {
-  background: #2ecc71;
-  color: white;
+.sketch-toolbar-btn:hover {
+  background: var(--color-bg-hover, rgba(255, 255, 255, 0.1));
+  color: var(--color-icon-hover, #fff);
 }
 
-.sketch-action-accept:hover {
-  background: #27ae60;
+.sketch-toolbar-btn:active {
+  background: var(--color-bg-active, rgba(255, 255, 255, 0.15));
 }
 
-.sketch-action-normal {
-  background: #3498db;
-  color: white;
-}
-
-.sketch-action-normal:hover {
-  background: #2980b9;
-}
-
-.sketch-action-cancel {
-  background: #e74c3c;
-  color: white;
-}
-
-.sketch-action-cancel:hover {
-  background: #c0392b;
-}
-
-.sketch-action-btn:active {
-  opacity: 0.9;
+.sketch-toolbar-btn svg {
+  flex-shrink: 0;
 }
 
 /* Dimensions panel */
