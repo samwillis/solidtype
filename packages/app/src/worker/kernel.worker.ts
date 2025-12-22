@@ -43,12 +43,12 @@ import type {
 } from './types';
 import {
   getRoot,
-  getMeta,
+  getMeta as _getMeta,
   getState,
   getFeaturesById,
   getFeatureOrder,
   mapToObject,
-  getSortedKeys,
+  getSortedKeys as _getSortedKeys,
 } from '../document/yjs';
 import type { SketchPlaneRef, DatumPlaneRole } from '../document/schema';
 
@@ -233,6 +233,7 @@ function buildDatumPlaneCache(featuresById: Y.Map<Y.Map<unknown>>): void {
     xz: findDatumPlaneByRole(featuresById, 'xz'),
     yz: findDatumPlaneByRole(featuresById, 'yz'),
   };
+  void datumPlaneCache; // suppress unused read warning - cache for future use
 }
 
 /**
@@ -329,7 +330,7 @@ function getSketchPlane(
 // Feature Interpretation
 // ============================================================================
 
-function getSketchFeatureById(
+function _getSketchFeatureById(
   featuresById: Y.Map<Y.Map<unknown>>,
   sketchId: string
 ): Y.Map<unknown> | null {
@@ -337,6 +338,7 @@ function getSketchFeatureById(
   if (!feature || feature.get('type') !== 'sketch') return null;
   return feature;
 }
+void _getSketchFeatureById; // suppress unused warning
 
 interface SketchData {
   pointsById: Record<string, { 
@@ -400,7 +402,8 @@ interface SketchInfo {
 }
 
 // Map of sketch IDs to their parsed data
-const sketchMap = new Map<string, SketchInfo>();
+const _sketchMap = new Map<string, SketchInfo>();
+void _sketchMap; // suppress unused warning
 
 /**
  * Calculate extrude distance based on extent type (Phase 14)
@@ -825,7 +828,7 @@ function interpretExtrude(
   session: SolidSession,
   featureMap: Y.Map<unknown>,
   featureId: string,
-  featuresById: Y.Map<Y.Map<unknown>>
+  _featuresById: Y.Map<Y.Map<unknown>>
 ): FeatureInterpretResult {
   const sketchId = featureMap.get('sketch') as string;
   const op = (featureMap.get('op') as string) || 'add';
@@ -993,7 +996,7 @@ function interpretRevolve(
   session: SolidSession,
   featureMap: Y.Map<unknown>,
   featureId: string,
-  featuresById: Y.Map<Y.Map<unknown>>
+  _featuresById: Y.Map<Y.Map<unknown>>
 ): FeatureInterpretResult {
   const sketchId = featureMap.get('sketch') as string;
   const axisId = (featureMap.get('axis') as string) || '';
@@ -1422,13 +1425,13 @@ function performPreviewExtrude(
   const sketch = session.createSketch(sketchInfo.plane);
   const pointIdMap = new Map<string, any>();
 
-  for (const [pid, point] of Object.entries(sketchInfo.data.pointsById)) {
+  for (const [, point] of Object.entries(sketchInfo.data.pointsById)) {
     const p = point as any;
     const kernelPid = sketch.addPoint(p.x, p.y, { fixed: p.fixed });
     pointIdMap.set(p.id, kernelPid);
   }
 
-  for (const [eid, entity] of Object.entries(sketchInfo.data.entitiesById)) {
+  for (const [, entity] of Object.entries(sketchInfo.data.entitiesById)) {
     const e = entity as any;
     if (e.type === 'line' && e.start && e.end) {
       const startId = pointIdMap.get(e.start);
@@ -1494,13 +1497,13 @@ function performPreviewRevolve(
   const pointIdMap = new Map<string, any>();
   const entityIdMap = new Map<string, any>();
 
-  for (const [pid, point] of Object.entries(sketchInfo.data.pointsById)) {
+  for (const [, point] of Object.entries(sketchInfo.data.pointsById)) {
     const p = point as any;
     const kernelPid = sketch.addPoint(p.x, p.y, { fixed: p.fixed });
     pointIdMap.set(p.id, kernelPid);
   }
 
-  for (const [eid, entity] of Object.entries(sketchInfo.data.entitiesById)) {
+  for (const [, entity] of Object.entries(sketchInfo.data.entitiesById)) {
     const e = entity as any;
     if (e.type === 'line' && e.start && e.end) {
       const startId = pointIdMap.get(e.start);

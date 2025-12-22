@@ -51,10 +51,10 @@ It’s explicitly **not** just a toy or teaching kernel: the design is aimed at 
 
   * Runs in **Node** and **browser**.
   * First-class support for running in a **Web Worker** to avoid blocking the UI.
-* Viewer:
+* App:
 
-  * A **three.js**-based WebGL viewer as the first “consumer” of the kernel.
-  * Code-driven models (TypeScript scripts) visualised as shaded meshes.
+  * A **three.js**-based React app with full CAD UI as the first “consumer” of the kernel.
+  * Feature-based parametric modeling with visual mesh output.
   * Optional STL export.
 
 ### Out of scope (for now)
@@ -86,12 +86,6 @@ SolidType uses a **small number of packages**, each roughly mapping to a concept
      * `sketch` – sketch graph + constraints + numeric solver.
      * `naming` – persistent naming, evolution graph, fingerprints.
      * `mesh` – tessellation to triangle meshes.
-
-2. `@solidtype/viewer` – demo / visualization:
-
-   * Vite app using three.js.
-   * Code-driven demos and simple parameterised models.
-   * Later: interactive sketch UI and inspector.
 
 Everything is ESM-only, with **Vitest** for tests, **tsdown** for library builds, and **pnpm** for monorepo management.
 
@@ -331,20 +325,14 @@ The typical front-end integration:
 * UI sends modeling / parameter-change / sketch-edit commands.
 * Worker responds with updated meshes and metadata.
 
-### 8.2 Viewer
+### 8.2 App
 
-The first consumer is `@solidtype/viewer`:
+The first consumer is `@solidtype/app`:
 
-* Vite + three.js app.
-* For v1:
-
-  * Code-driven scripts construct models using the OO façade.
-  * Viewer shows shaded meshes (triangle buffer geometry).
-  * Simple param sliders to rebuild models and test naming / rebuild stability.
-* Later:
-
-  * Sketch canvas (2D overlay) driven by the same sketch model and solver.
-  * Interactive selection returning `PersistentRef`s.
+* Vite + React + three.js app.
+* Feature-based parametric modeling with full CAD UI.
+* Sketch canvas (2D overlay) driven by the same sketch model and solver.
+* Interactive selection returning `PersistentRef`s.
 
 ---
 
@@ -366,7 +354,7 @@ SolidType is built with **TDD as default**:
 
 * Visual/manual checks:
 
-  * Example models rendered in the viewer.
+  * Example models rendered in the app.
   * Scripts that rebuild models with parameter sweeps to test persistent naming stability.
 
 Property-based testing is used **sparingly**: correctness is primarily driven by precise, curated unit tests that double as documentation for expected behaviour.

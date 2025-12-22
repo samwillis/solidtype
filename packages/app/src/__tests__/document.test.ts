@@ -404,7 +404,7 @@ describe('Feature Parsing', () => {
     expect(feature).not.toBeNull();
     expect(feature!.type).toBe('sketch');
     if (feature!.type === 'sketch') {
-      expect(feature.plane.kind).toBe('planeFeatureId');
+      expect(feature!.plane.kind).toBe('planeFeatureId');
     }
   });
 
@@ -418,9 +418,9 @@ describe('Feature Parsing', () => {
     expect(feature).not.toBeNull();
     expect(feature!.type).toBe('extrude');
     if (feature!.type === 'extrude') {
-      expect(feature.sketch).toBe(sketchId);
-      expect(feature.distance).toBe(15);
-      expect(feature.op).toBe('cut');
+      expect(feature!.sketch).toBe(sketchId);
+      expect(feature!.distance).toBe(15);
+      expect(feature!.op).toBe('cut');
     }
   });
 
@@ -435,10 +435,10 @@ describe('Feature Parsing', () => {
     expect(feature).not.toBeNull();
     expect(feature!.type).toBe('revolve');
     if (feature!.type === 'revolve') {
-      expect(feature.sketch).toBe(sketchId);
-      expect(feature.axis).toBe(axisId);
-      expect(feature.angle).toBe(180);
-      expect(feature.op).toBe('cut');
+      expect(feature!.sketch).toBe(sketchId);
+      expect(feature!.axis).toBe(axisId);
+      expect(feature!.angle).toBe(180);
+      expect(feature!.op).toBe('cut');
     }
   });
 });
@@ -457,8 +457,8 @@ describe('Extrude Extent Types', () => {
 
     expect(feature).not.toBeNull();
     if (feature!.type === 'extrude') {
-      expect(feature.extent).toBe('blind');
-      expect(feature.distance).toBe(10);
+      expect(feature!.extent).toBe('blind');
+      expect(feature!.distance).toBe(10);
     }
   });
 
@@ -475,8 +475,8 @@ describe('Extrude Extent Types', () => {
 
     expect(feature).not.toBeNull();
     if (feature!.type === 'extrude') {
-      expect(feature.extent).toBe('throughAll');
-      expect(feature.op).toBe('cut');
+      expect(feature!.extent).toBe('throughAll');
+      expect(feature!.op).toBe('cut');
     }
   });
 
@@ -494,8 +494,8 @@ describe('Extrude Extent Types', () => {
 
     expect(feature).not.toBeNull();
     if (feature!.type === 'extrude') {
-      expect(feature.extent).toBe('toFace');
-      expect(feature.extentRef).toBe('face:e1:0');
+      expect(feature!.extent).toBe('toFace');
+      expect(feature!.extentRef).toBe('face:e1:0');
     }
   });
 });
@@ -520,9 +520,9 @@ describe('Multi-Body Support', () => {
 
     expect(feature).not.toBeNull();
     if (feature!.type === 'extrude') {
-      expect(feature.mergeScope).toBe('new');
-      expect(feature.resultBodyName).toBe('CustomBody');
-      expect(feature.resultBodyColor).toBe('#ff0000');
+      expect(feature!.mergeScope).toBe('new');
+      expect(feature!.resultBodyName).toBe('CustomBody');
+      expect(feature!.resultBodyColor).toBe('#ff0000');
     }
   });
 
@@ -540,8 +540,8 @@ describe('Multi-Body Support', () => {
 
     expect(feature).not.toBeNull();
     if (feature!.type === 'extrude') {
-      expect(feature.mergeScope).toBe('specific');
-      expect(feature.targetBodies).toEqual(['body1', 'body2']);
+      expect(feature!.mergeScope).toBe('specific');
+      expect(feature!.targetBodies).toEqual(['body1', 'body2']);
     }
   });
 
@@ -561,8 +561,8 @@ describe('Multi-Body Support', () => {
 
     expect(feature).not.toBeNull();
     if (feature!.type === 'revolve') {
-      expect(feature.mergeScope).toBe('auto');
-      expect(feature.resultBodyName).toBe('RevolveBody');
+      expect(feature!.mergeScope).toBe('auto');
+      expect(feature!.resultBodyName).toBe('RevolveBody');
     }
   });
 });
@@ -581,9 +581,9 @@ describe('Sketch on Face', () => {
     expect(feature).not.toBeNull();
     expect(feature!.type).toBe('sketch');
     if (feature!.type === 'sketch') {
-      expect(feature.plane.kind).toBe('faceRef');
-      expect(feature.plane.ref).toBe('face:e1:0');
-      expect(feature.name).toBe('SketchOnFace');
+      expect(feature!.plane.kind).toBe('faceRef');
+      expect(feature!.plane.ref).toBe('face:e1:0');
+      expect(feature!.name).toBe('SketchOnFace');
     }
   });
 });

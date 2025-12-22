@@ -21,7 +21,6 @@ SolidType is a pnpm monorepo with a **small number of packages**:
 
 * `@solidtype/core` – the CAD kernel with an object-oriented API.
 * `@solidtype/app` – the main React application with full CAD UI.
-* `@solidtype/viewer` – WebGL/three.js demo app and playground.
 
 Everything is ESM-only. `@solidtype/core` has no DOM/browser dependencies and is designed to run in **Node** or in a **Web Worker**.
 
@@ -47,7 +46,7 @@ Inside `@solidtype/core` we have logical submodules that use data-oriented desig
 * `export` – file format exporters (STL).
 * `api` – object-oriented wrappers that delegate to the internal modules.
 
-The `@solidtype/app` and `@solidtype/viewer` use the OO API from core to provide real-time modeling and visual debugging.
+The `@solidtype/app` uses the OO API from core to provide real-time modeling and visual debugging.
 
 ---
 
@@ -732,42 +731,7 @@ type WorkerResponse =
 
 ---
 
-## 6. `@solidtype/viewer` – Demo Viewer
-
-**Responsibility**
-
-* Provide a lightweight **WebGL/three.js**-based viewer.
-* Serve as a test bed and demo for the kernel.
-* Demonstrate how to run the kernel in a **Web Worker**.
-
-**Viewer**
-
-* Vite + TS + three.js app.
-* Uses `@solidtype/core`'s OO API for modeling operations.
-* Code-driven examples:
-
-  * "Create a sketch on XY, draw rectangle, extrude, boolean union with another box."
-* Visual checks:
-
-  * Animated parameter changes (sliders) to test persistent naming and rebuild stability.
-  * Simple debug overlays (normals, wireframe).
-
-**Workers**
-
-* A worker hosts a `SolidSession` instance.
-* UI sends commands:
-
-  * `buildDemoModel`, `updateParam`, `solveSketch`, `getMesh`.
-* Worker returns:
-
-  * Mesh data (positions/normals/indices).
-  * Diagnostics/errors for modeling and validation.
-
-This avoids blocking the UI on heavy operations (booleans, solving).
-
----
-
-## 7. Testing & Quality
+## 6. Testing & Quality
 
 **TDD-first**:
 
@@ -786,9 +750,9 @@ This avoids blocking the UI on heavy operations (booleans, solving).
 
   * e.g. random small boxes for boolean classification, random simple sketches.
 
-**Viewer/manual tests**:
+**Manual tests**:
 
-* Example models in `@solidtype/viewer` serve as visual regression checks.
+* Example models in `@solidtype/app` serve as visual regression checks.
 * Scripts that sweep parameters and verify:
 
   * No crashes.
@@ -796,7 +760,7 @@ This avoids blocking the UI on heavy operations (booleans, solving).
 
 ---
 
-## 8. Future Extensions & Open Hooks
+## 7. Future Extensions & Open Hooks
 
 The architecture is designed to support future work without major rewrites:
 

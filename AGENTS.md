@@ -34,7 +34,7 @@ If you are unsure how to implement something:
 You are working in a pnpm monorepo with:
 
 - `@solidtype/core` (CAD kernel with OO API),
-- `@solidtype/viewer` (demo app).
+- `@solidtype/app` (full CAD application).
 
 ### Core rules
 
@@ -45,11 +45,11 @@ You are working in a pnpm monorepo with:
   - Exposes an **object-oriented API** (`SolidSession`, `Body`, `Face`, `Edge`, `Sketch`) as the primary interface.
   - Internal modules use data-oriented style (struct-of-arrays, handles) for performance.
 
-- `@solidtype/viewer`:
-  - May use `three.js`, Vite, etc.
+- `@solidtype/app`:
+  - May use `three.js`, Vite, React, etc.
   - Uses the OO API from `@solidtype/core` for modeling operations.
 
-If you find yourself wanting to put core geometry or topology logic into `viewer`, stop and move it into `@solidtype/core`.
+If you find yourself wanting to put core geometry or topology logic into `app`, stop and move it into `@solidtype/core`.
 
 ---
 
