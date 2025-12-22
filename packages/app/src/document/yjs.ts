@@ -1,7 +1,7 @@
 /**
  * Yjs utilities and helpers for the document model
  *
- * See YJS-DOC-MODEL-PLAN.md for full specification.
+ * See DOCUMENT-MODEL.md for full specification.
  */
 
 import * as Y from 'yjs';

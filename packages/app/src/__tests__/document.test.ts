@@ -2,7 +2,7 @@
  * Document Model Tests
  *
  * Tests for the Y.Map/Y.Array-based document model.
- * See YJS-DOC-MODEL-PLAN.md for specification.
+ * See DOCUMENT-MODEL.md for specification.
  */
 
 import { describe, test, expect } from 'vitest';

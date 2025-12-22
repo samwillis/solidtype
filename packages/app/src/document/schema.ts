@@ -4,7 +4,7 @@
  * These schemas define the persisted snapshot contract for the Yjs document.
  * Validation is performed on `root.toJSON()`.
  *
- * See YJS-DOC-MODEL-PLAN.md for full specification.
+ * See DOCUMENT-MODEL.md for full specification.
  */
 
 import { z } from 'zod/v4';

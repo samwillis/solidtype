@@ -2,7 +2,7 @@
  * Kernel Web Worker
  * 
  * Runs the CAD kernel in a separate thread and syncs with the Yjs document.
- * Uses Y.Map/Y.Array model (no XML). See YJS-DOC-MODEL-PLAN.md.
+ * Uses Y.Map/Y.Array model (no XML). See DOCUMENT-MODEL.md.
  */
 
 /// <reference lib="webworker" />
@@ -172,9 +172,12 @@ function setupYjsSync(port: MessagePort): void {
     }
   };
 
-  // Signal ready
+  // Signal ready and trigger initial rebuild
   console.log('[Worker] Yjs sync setup complete, signaling ready');
   self.postMessage({ type: 'ready' } as WorkerToMainMessage);
+
+  // Trigger an initial rebuild now that we have data
+  scheduleRebuild();
 }
 
 // ============================================================================

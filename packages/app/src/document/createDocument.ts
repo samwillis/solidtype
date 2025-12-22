@@ -2,7 +2,7 @@
  * Document creation and initialization
  *
  * Uses Y.Map and Y.Array for the persisted model (no XML).
- * See YJS-DOC-MODEL-PLAN.md for specification.
+ * See DOCUMENT-MODEL.md for specification.
  */
 
 import * as Y from 'yjs';

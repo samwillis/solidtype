@@ -2,7 +2,7 @@
  * Runtime Invariant Validation
  *
  * Validates the document snapshot against runtime invariants.
- * See YJS-DOC-MODEL-PLAN.md section 6 for specification.
+ * See DOCUMENT-MODEL.md section 5 for specification.
  */
 
 import { DocSnapshotSchema, type DocSnapshot } from './schema';

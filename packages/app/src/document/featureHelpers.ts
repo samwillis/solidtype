@@ -1,7 +1,7 @@
 /**
  * Helper functions for working with features in the Yjs document
  *
- * Uses Y.Map-based model (no XML). See YJS-DOC-MODEL-PLAN.md.
+ * Uses Y.Map-based model (no XML). See DOCUMENT-MODEL.md.
  */
 
 import * as Y from 'yjs';
