@@ -13,6 +13,9 @@ import { useDocument } from '../contexts/DocumentContext';
 import { useRaycast } from '../hooks/useRaycast';
 import { findFeature, getSketchData, setSketchData, getFeaturesArray, parseFeature } from '../document/featureHelpers';
 import type { SketchData, SketchLine, SketchConstraint, PlaneFeature, OriginFeature, SketchFeature } from '../types/document';
+import { ToolbarButton, ToolbarSeparator, FloatingToolbar } from './ToolbarComponents';
+import { NormalViewIcon, CheckIcon, CloseIcon } from './Icons';
+import './ToolbarComponents.css';
 import './Viewer.css';
 
 // Point merge tolerance in sketch units (mm)
@@ -2234,39 +2237,27 @@ const Viewer: React.FC = () => {
       {sketchMode.active && (
         <>
           {/* Sketch toolbar */}
-          <div className="sketch-toolbar">
-            <button 
-              className="sketch-toolbar-btn"
+          <FloatingToolbar position="bottom">
+            <ToolbarButton
+              icon={<NormalViewIcon />}
+              label="Normal to Sketch"
+              tooltip="View Normal to Sketch Plane"
               onClick={resetToSketchNormal}
-              title="View Normal to Sketch Plane"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M4 6l8 4 8-4" />
-                <path d="M4 6v8l8 4 8-4V6" />
-                <circle cx="12" cy="10" r="2" />
-              </svg>
-            </button>
-            <div className="sketch-toolbar-divider" />
-            <button 
-              className="sketch-toolbar-btn"
+            />
+            <ToolbarSeparator />
+            <ToolbarButton
+              icon={<CheckIcon />}
+              label="Accept"
+              tooltip="Accept Sketch (Ctrl+Enter)"
               onClick={finishSketch}
-              title="Accept Sketch (Ctrl+Enter)"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </button>
-            <button 
-              className="sketch-toolbar-btn"
+            />
+            <ToolbarButton
+              icon={<CloseIcon />}
+              label="Cancel"
+              tooltip="Cancel Sketch"
               onClick={cancelSketch}
-              title="Cancel Sketch"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
+            />
+          </FloatingToolbar>
 
           {/* Dimensions panel */}
           {dimensionConstraints.length > 0 && (

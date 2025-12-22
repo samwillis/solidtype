@@ -11,65 +11,6 @@
   height: 100%;
 }
 
-/* Sketch toolbar (matches main toolbar style) */
-.sketch-toolbar {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 4px;
-  padding: 6px 8px;
-  background: var(--color-bg-secondary, rgba(37, 37, 38, 0.95));
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  pointer-events: auto;
-  z-index: 10;
-}
-
-/* Light theme - sketch toolbar */
-[data-theme="light"] .sketch-toolbar {
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.sketch-toolbar-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  color: var(--color-icon, #aaa);
-  transition: background-color 0.1s ease, color 0.1s ease;
-}
-
-.sketch-toolbar-btn:hover {
-  background: var(--color-bg-hover, rgba(255, 255, 255, 0.1));
-  color: var(--color-icon-hover, #fff);
-}
-
-.sketch-toolbar-btn:active {
-  background: var(--color-bg-active, rgba(255, 255, 255, 0.15));
-}
-
-.sketch-toolbar-btn svg {
-  flex-shrink: 0;
-}
-
-.sketch-toolbar-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--color-border);
-  margin: 0 10px;
-}
-
 /* Dimensions panel */
 .sketch-dimensions-panel {
   position: absolute;
