@@ -481,7 +481,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
                 expandedNodes={expandedNodes}
                 selectedId={selectedId}
                 rebuildGate={rebuildGate}
-                showGateAfter={true}
+                showGateAfter={node.type === 'part'}
                 editingId={editingId}
                 isDraggingGate={isDraggingGate}
                 onToggleExpand={onToggleExpand}
@@ -496,19 +496,21 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
                 getContextMenuItems={getContextMenuItems}
               />
           ))}
-          {/* Show gate at end if no gate is set, otherwise show drop zone */}
-          {rebuildGate === null ? (
-            <RebuildGateBar
-              afterFeatureId={null}
-              onDragStart={onGateDragStart}
-              onDragEnd={onGateDragEnd}
-            />
-          ) : (
-            <RebuildGateDropZone
-              afterFeatureId={null}
-              onDrop={onGateDrop}
-              isActive={isDraggingGate}
-            />
+          {/* Show gate at end if no gate is set, otherwise show drop zone - only for part node */}
+          {node.type === 'part' && (
+            rebuildGate === null ? (
+              <RebuildGateBar
+                afterFeatureId={null}
+                onDragStart={onGateDragStart}
+                onDragEnd={onGateDragEnd}
+              />
+            ) : (
+              <RebuildGateDropZone
+                afterFeatureId={null}
+                onDrop={onGateDrop}
+                isActive={isDraggingGate}
+              />
+            )
           )}
         </ul>
       )}
