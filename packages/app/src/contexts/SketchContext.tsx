@@ -86,11 +86,17 @@ interface SketchContextValue {
   // Selection state for constraints
   selectedPoints: Set<string>;
   selectedLines: Set<string>;
+  selectedConstraints: Set<string>;
   setSelectedPoints: React.Dispatch<React.SetStateAction<Set<string>>>;
   setSelectedLines: React.Dispatch<React.SetStateAction<Set<string>>>;
+  setSelectedConstraints: React.Dispatch<React.SetStateAction<Set<string>>>;
   togglePointSelection: (pointId: string) => void;
   toggleLineSelection: (lineId: string) => void;
+  toggleConstraintSelection: (constraintId: string) => void;
   clearSelection: () => void;
+  
+  // Deletion helpers
+  deleteSelectedItems: () => void;
   
   // Constraint helpers
   canApplyConstraint: (type: ConstraintType) => boolean;
@@ -350,6 +356,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
   // Selection state for constraints
   const [selectedPoints, setSelectedPoints] = useState<Set<string>>(() => new Set());
   const [selectedLines, setSelectedLines] = useState<Set<string>>(() => new Set());
+  const [selectedConstraints, setSelectedConstraints] = useState<Set<string>>(() => new Set());
 
   const togglePointSelection = useCallback((pointId: string) => {
     setSelectedPoints((prev) => {
@@ -362,6 +369,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
       return next;
     });
     setSelectedLines(new Set());
+    setSelectedConstraints(new Set());
   }, []);
 
   const toggleLineSelection = useCallback((lineId: string) => {
@@ -375,11 +383,27 @@ export function SketchProvider({ children }: SketchProviderProps) {
       return next;
     });
     setSelectedPoints(new Set());
+    setSelectedConstraints(new Set());
+  }, []);
+
+  const toggleConstraintSelection = useCallback((constraintId: string) => {
+    setSelectedConstraints((prev) => {
+      const next = new Set(prev);
+      if (next.has(constraintId)) {
+        next.delete(constraintId);
+      } else {
+        next.add(constraintId);
+      }
+      return next;
+    });
+    setSelectedPoints(new Set());
+    setSelectedLines(new Set());
   }, []);
 
   const clearSelection = useCallback(() => {
     setSelectedPoints(new Set());
     setSelectedLines(new Set());
+    setSelectedConstraints(new Set());
   }, []);
 
   // Get current sketch data
@@ -388,6 +412,92 @@ export function SketchProvider({ children }: SketchProviderProps) {
     if (!sketch) return null;
     return getSketchData(sketch);
   }, [getSketchElement]);
+
+  // Delete selected points, lines, and constraints
+  const deleteSelectedItems = useCallback(() => {
+    const sketchEl = getSketchElement();
+    if (!sketchEl) return;
+    
+    const data = getSketchData(sketchEl);
+    const pointsToDelete = new Set(selectedPoints);
+    const linesToDelete = new Set(selectedLines);
+    const constraintsToDelete = new Set(selectedConstraints);
+    
+    // Find lines that will be deleted (either selected or with deleted endpoints)
+    const findLinesToDelete = (): Set<string> => {
+      const allLinesToDelete = new Set(linesToDelete);
+      for (const entity of data.entities) {
+        if (entity.type === 'line') {
+          if (pointsToDelete.has(entity.start) || pointsToDelete.has(entity.end)) {
+            allLinesToDelete.add(entity.id);
+          }
+        } else if (entity.type === 'arc') {
+          if (pointsToDelete.has(entity.start) || pointsToDelete.has(entity.end) || pointsToDelete.has(entity.center)) {
+            allLinesToDelete.add(entity.id);
+          }
+        }
+      }
+      return allLinesToDelete;
+    };
+    
+    const actualLinesToDelete = findLinesToDelete();
+    
+    // Remove constraints that reference deleted items
+    const filteredConstraints = data.constraints.filter((c) => {
+      if (constraintsToDelete.has(c.id)) return false;
+      
+      // Check if constraint references deleted points
+      if (c.type === 'fixed' && pointsToDelete.has(c.point)) return false;
+      if (c.type === 'coincident' || c.type === 'horizontal' || c.type === 'vertical' || c.type === 'distance' || c.type === 'symmetric') {
+        if (c.points?.some((p) => pointsToDelete.has(p))) return false;
+      }
+      if (c.type === 'angle' || c.type === 'parallel' || c.type === 'perpendicular' || c.type === 'equalLength') {
+        if (c.lines?.some((l) => actualLinesToDelete.has(l))) return false;
+      }
+      if (c.type === 'tangent') {
+        if (actualLinesToDelete.has(c.line) || actualLinesToDelete.has(c.arc)) return false;
+      }
+      if (c.type === 'symmetric') {
+        if (actualLinesToDelete.has(c.axis)) return false;
+      }
+      
+      return true;
+    });
+    
+    // Remove entities (lines/arcs)
+    const filteredEntities = data.entities.filter((e) => !actualLinesToDelete.has(e.id));
+    
+    // Find orphaned points (points not referenced by any remaining entity)
+    const usedPoints = new Set<string>();
+    for (const entity of filteredEntities) {
+      if (entity.type === 'line') {
+        usedPoints.add(entity.start);
+        usedPoints.add(entity.end);
+      } else if (entity.type === 'arc') {
+        usedPoints.add(entity.start);
+        usedPoints.add(entity.end);
+        usedPoints.add(entity.center);
+      }
+    }
+    
+    // Remove selected points and orphaned points
+    const filteredPoints = data.points.filter((p) => {
+      if (pointsToDelete.has(p.id)) return false;
+      // Keep points that are still used by entities
+      return usedPoints.has(p.id);
+    });
+    
+    // Update sketch data
+    const newData: SketchData = {
+      ...data,
+      points: filteredPoints,
+      entities: filteredEntities,
+      constraints: filteredConstraints,
+    };
+    
+    setSketchData(sketchEl, newData);
+    clearSelection();
+  }, [getSketchElement, selectedPoints, selectedLines, selectedConstraints, clearSelection]);
 
   // Check if a constraint can be applied with current selection
   const canApplyConstraint = useCallback((type: ConstraintType): boolean => {
@@ -526,11 +636,16 @@ export function SketchProvider({ children }: SketchProviderProps) {
     // Selection state
     selectedPoints,
     selectedLines,
+    selectedConstraints,
     setSelectedPoints,
     setSelectedLines,
+    setSelectedConstraints,
     togglePointSelection,
     toggleLineSelection,
+    toggleConstraintSelection,
     clearSelection,
+    // Deletion helpers
+    deleteSelectedItems,
     // Constraint helpers
     canApplyConstraint,
     applyConstraint,

@@ -20,13 +20,19 @@
   display: flex;
   gap: 8px;
   padding: 8px 12px;
-  background: rgba(37, 37, 38, 0.85);
+  background: var(--color-overlay-bg, rgba(37, 37, 38, 0.85));
   backdrop-filter: blur(8px);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
   pointer-events: auto;
   z-index: 10;
+}
+
+/* Light theme - sketch actions overlay */
+[data-theme="light"] .sketch-actions-overlay {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .sketch-action-btn {
@@ -69,7 +75,7 @@
   position: absolute;
   top: 12px;
   right: 12px;
-  background: rgba(37, 37, 38, 0.9);
+  background: var(--color-overlay-bg, rgba(37, 37, 38, 0.9));
   backdrop-filter: blur(8px);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -77,6 +83,12 @@
   min-width: 180px;
   pointer-events: auto;
   z-index: 10;
+}
+
+/* Light theme - dimensions panel */
+[data-theme="light"] .sketch-dimensions-panel {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .sketch-dimensions-title {

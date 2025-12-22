@@ -125,9 +125,12 @@ const Viewer: React.FC = () => {
     cancelSketch,
     selectedPoints,
     selectedLines,
+    selectedConstraints,
     togglePointSelection,
     toggleLineSelection,
+    toggleConstraintSelection,
     clearSelection: clearSketchSelection,
+    deleteSelectedItems,
   } = useSketch();
   const { doc, features, units } = useDocument();
 
@@ -150,6 +153,12 @@ const Viewer: React.FC = () => {
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingViewRef = useRef(false);
   const DRAG_THRESHOLD = 5;
+  
+  // Ref to track sketch mode for use in mouse handlers (to prevent rotation during sketch)
+  const sketchModeRef = useRef(sketchMode);
+  useEffect(() => {
+    sketchModeRef.current = sketchMode;
+  }, [sketchMode]);
   
   // Raycast hook for 3D selection
   const { raycast, getFaceId } = useRaycast({
@@ -286,6 +295,15 @@ const Viewer: React.FC = () => {
     return getSketchData(sketch);
   }, [doc.features, sketchMode.sketchId]);
 
+  // Clear tool state when entering/exiting sketch mode or changing sketchId
+  useEffect(() => {
+    // Reset all draft state when sketch mode changes
+    setTempStartPoint(null);
+    setArcStartPoint(null);
+    setArcEndPoint(null);
+    setCircleCenterPoint(null);
+  }, [sketchMode.active, sketchMode.sketchId]);
+  
   // Update preview line based on current tool state
   useEffect(() => {
     if (!sketchMode.active) {
@@ -303,20 +321,33 @@ const Viewer: React.FC = () => {
     }
   }, [sketchMode.active, sketchMode.activeTool, tempStartPoint, sketchPos, setPreviewLine]);
 
-  // Handle escape to cancel current sketch operation
+  // Handle escape to cancel current draft operation and clear selection
+  // Handle backspace/delete to delete selected items
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && sketchMode.active) {
+      if (!sketchMode.active) return;
+      
+      if (e.key === 'Escape') {
+        // Clear any in-progress draft operations
         setTempStartPoint(null);
         setArcStartPoint(null);
         setArcEndPoint(null);
         setCircleCenterPoint(null);
+        // Also clear sketch selection
+        clearSketchSelection();
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        // Delete selected items (points, lines, constraints)
+        const hasSelection = selectedPoints.size > 0 || selectedLines.size > 0 || selectedConstraints.size > 0;
+        if (hasSelection) {
+          e.preventDefault();
+          deleteSelectedItems();
+        }
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [sketchMode.active]);
+  }, [sketchMode.active, clearSketchSelection, selectedPoints, selectedLines, selectedConstraints, deleteSelectedItems]);
 
   // Constraint value update
   const updateConstraintValue = useCallback((constraintId: string, value: number) => {
@@ -1155,6 +1186,24 @@ const Viewer: React.FC = () => {
         labelDiv.dataset.constraintType = 'distance';
         labelDiv.dataset.storedOffsetX = String(storedOffsetX);
         labelDiv.dataset.storedOffsetY = String(storedOffsetY);
+        // Add click handler for selection
+        labelDiv.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleConstraintSelection(c.id);
+        });
+        // Add double-click handler directly to the label
+        labelDiv.addEventListener('dblclick', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setEditingDimensionId(c.id);
+          setEditingDimensionValue(String(c.value));
+        });
+        // Highlight if selected
+        if (selectedConstraints.has(c.id)) {
+          labelDiv.style.outline = '2px solid #ff6600';
+          labelDiv.style.outlineOffset = '2px';
+        }
         const labelObject = new CSS2DObject(labelDiv);
         labelObject.position.copy(labelPos);
         labelsGroup.add(labelObject);
@@ -1217,6 +1266,24 @@ const Viewer: React.FC = () => {
         labelDiv.dataset.constraintType = 'angle';
         labelDiv.dataset.storedOffsetX = String(storedOffsetX);
         labelDiv.dataset.storedOffsetY = String(storedOffsetY);
+        // Add click handler for selection
+        labelDiv.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleConstraintSelection(c.id);
+        });
+        // Add double-click handler directly to the label
+        labelDiv.addEventListener('dblclick', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setEditingDimensionId(c.id);
+          setEditingDimensionValue(String(c.value));
+        });
+        // Highlight if selected
+        if (selectedConstraints.has(c.id)) {
+          labelDiv.style.outline = '2px solid #ff6600';
+          labelDiv.style.outlineOffset = '2px';
+        }
         const labelObject = new CSS2DObject(labelDiv);
         labelObject.position.copy(labelPos);
         labelsGroup.add(labelObject);
@@ -1259,6 +1326,8 @@ const Viewer: React.FC = () => {
         const labelDiv = document.createElement('div');
         labelDiv.className = 'constraint-label';
         labelDiv.textContent = label;
+        labelDiv.dataset.constraintId = c.id;
+        const isSelected = selectedConstraints.has(c.id);
         labelDiv.style.cssText = `
           background: rgba(0, 120, 212, 0.9);
           color: white;
@@ -1266,8 +1335,15 @@ const Viewer: React.FC = () => {
           border-radius: 3px;
           font-size: 11px;
           font-weight: 600;
-          pointer-events: none;
+          cursor: pointer;
+          ${isSelected ? 'outline: 2px solid #ff6600; outline-offset: 2px;' : ''}
         `;
+        // Add click handler for selection
+        labelDiv.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleConstraintSelection(c.id);
+        });
         const labelObject = new CSS2DObject(labelDiv);
         labelObject.position.copy(labelPos);
         labelsGroup.add(labelObject);
@@ -1275,7 +1351,7 @@ const Viewer: React.FC = () => {
     }
 
     needsRenderRef.current = true;
-  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, selectedPoints, selectedLines, getSketch, sceneReady, draggingDimensionId, dragCurrentOffset]);
+  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, selectedPoints, selectedLines, selectedConstraints, toggleConstraintSelection, getSketch, sceneReady, draggingDimensionId, dragCurrentOffset]);
 
   // Handle dimension label dragging for repositioning
   useEffect(() => {
@@ -1522,19 +1598,30 @@ const Viewer: React.FC = () => {
     let previousMousePosition = { x: 0, y: 0 };
 
     const onMouseDown = (e: MouseEvent) => {
+      // Check if in sketch mode - prevent rotation for left click
+      const currentSketchMode = sketchModeRef.current;
+      const isInSketchMode = currentSketchMode.active;
+      
       if (e.button === 0) {
         // Left mouse button
         e.preventDefault();
-        isDragging = true;
-        if (e.shiftKey) {
+        
+        // In sketch mode (any tool including select), left click is for sketching/selection, not rotation
+        if (isInSketchMode) {
+          isDragging = false;
+          isRotating = false;
+          isPanning = false;
+        } else if (e.shiftKey) {
+          isDragging = true;
           isPanning = true;
           isRotating = false;
         } else {
+          isDragging = true;
           isRotating = true;
           isPanning = false;
         }
       } else if (e.button === 1) {
-        // Middle mouse - also rotate
+        // Middle mouse - also rotate (allowed even in sketch mode)
         e.preventDefault();
         isDragging = true;
         if (e.ctrlKey || e.metaKey || e.shiftKey) {
@@ -1545,7 +1632,7 @@ const Viewer: React.FC = () => {
           isPanning = false;
         }
       } else if (e.button === 2) {
-        // Right mouse for panning
+        // Right mouse for panning (allowed even in sketch mode)
         e.preventDefault();
         isDragging = true;
         isPanning = true;
@@ -1854,6 +1941,9 @@ const Viewer: React.FC = () => {
     };
     
     const handleMouseUp = (e: MouseEvent) => {
+      // Only handle if mouseDown started inside this container
+      if (!mouseDownPosRef.current) return;
+      
       const wasDragging = isDraggingViewRef.current;
       mouseDownPosRef.current = null;
       isDraggingViewRef.current = false;

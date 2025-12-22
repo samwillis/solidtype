@@ -167,6 +167,16 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
   const [isExporting, setIsExporting] = useState(false);
   const constraintsDropdownRef = React.useRef<HTMLDivElement>(null);
   const booleanDropdownRef = React.useRef<HTMLDivElement>(null);
+  
+  // Toggle tool - clicking an active tool (except select) switches back to select
+  const toggleTool = useCallback((tool: 'select' | 'line' | 'arc' | 'circle' | 'rectangle') => {
+    if (mode.activeTool === tool && tool !== 'select') {
+      // Clicking active tool again goes back to select
+      setTool('select');
+    } else {
+      setTool(tool);
+    }
+  }, [mode.activeTool, setTool]);
 
   // Check if we can export (have bodies to export)
   const canExport = bodies.length > 0 && !isExporting;
@@ -279,14 +289,16 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
         return;
       }
       
-      // Escape to cancel sketch or clear selection
+      // Escape behavior:
+      // - In sketch mode: clear selection and end draft line, NOT cancel sketch
+      // - Outside sketch mode: clear all selections
       if (e.key === 'Escape') {
+        e.preventDefault();
         if (mode.active) {
-          e.preventDefault();
-          cancelSketch();
+          // In sketch mode - just clear selection, don't cancel
+          clearSketchSelection();
         } else {
           // Clear selection from feature tree and 3D view
-          e.preventDefault();
           selectFeature(null);
           clearSelection();
           clearSketchSelection();
@@ -300,9 +312,9 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
   }, [mode.active, finishSketch, cancelSketch, selectFeature, clearSelection, clearSketchSelection]);
 
   const handleNewSketch = () => {
-    // Use selected plane/face if available, otherwise use XY plane
-    const planeRef = sketchPlaneRef || 'xy';
-    startSketch(planeRef);
+    // Plane must be selected (button should be disabled otherwise)
+    if (!sketchPlaneRef) return;
+    startSketch(sketchPlaneRef);
   };
 
   const handleAddRectangle = () => {
@@ -310,8 +322,8 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     addRectangle(0, 0, 4, 3);
   };
 
-  // Check if sketch button should be enabled (plane, face, or first sketch)
-  const canStartSketch = sketchPlaneRef !== null || sketches.length === 0;
+  // Check if sketch button should be enabled (only when plane or face is selected)
+  const canStartSketch = sketchPlaneRef !== null;
 
   // Check if extrude/revolve can be used (also disabled when already editing a feature)
   const canExtrude = !isEditing && (selectedSketch !== null || sketches.length === 1);
@@ -425,7 +437,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
               <Tooltip.Trigger
                 delay={300}
                 className={`toolbar-button ${mode.activeTool === 'select' ? 'active' : ''}`}
-                onClick={() => setTool('select')}
+                onClick={() => toggleTool('select')}
                 render={<button aria-label="Select" />}
               >
                 <SelectIcon />
@@ -440,7 +452,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
               <Tooltip.Trigger
                 delay={300}
                 className={`toolbar-button ${mode.activeTool === 'line' ? 'active' : ''}`}
-                onClick={() => setTool('line')}
+                onClick={() => toggleTool('line')}
                 render={<button aria-label="Line" />}
               >
                 <LineIcon />
@@ -455,7 +467,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
               <Tooltip.Trigger
                 delay={300}
                 className={`toolbar-button ${mode.activeTool === 'arc' ? 'active' : ''}`}
-                onClick={() => setTool('arc')}
+                onClick={() => toggleTool('arc')}
                 render={<button aria-label="Arc" />}
               >
                 <ArcIcon />
@@ -470,7 +482,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
               <Tooltip.Trigger
                 delay={300}
                 className={`toolbar-button ${mode.activeTool === 'circle' ? 'active' : ''}`}
-                onClick={() => setTool('circle')}
+                onClick={() => toggleTool('circle')}
                 render={<button aria-label="Circle" />}
               >
                 <CircleIcon />
