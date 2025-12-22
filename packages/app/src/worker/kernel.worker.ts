@@ -117,23 +117,24 @@ function resetBodyColorIndex(): void {
 // Yjs Sync Setup
 // ============================================================================
 
-function setupYjsSync(port: MessagePort): void {
-  syncPort = port;
-  doc = new Y.Doc();
+let observersSetUp = false;
 
-  port.onmessage = (event) => {
-    const { type, data } = event.data;
-
-    if (type === 'yjs-init' || type === 'yjs-update') {
-      Y.applyUpdate(doc!, new Uint8Array(data), 'main');
-    }
-  };
-
-  // Get root and observe feature changes
+function setupObservers(): void {
+  if (observersSetUp || !doc) return;
+  
   const root = getRoot(doc);
-  const featuresById = getFeaturesById(root);
-  const featureOrder = getFeatureOrder(root);
-  const state = getState(root);
+  const featuresById = root.get('featuresById') as Y.Map<Y.Map<unknown>> | undefined;
+  const featureOrder = root.get('featureOrder') as Y.Array<string> | undefined;
+  const state = root.get('state') as Y.Map<unknown> | undefined;
+  
+  // Only set up observers once all required fields exist
+  if (!featuresById || !featureOrder || !state) {
+    console.log('[Worker] Document structure not ready yet, waiting for sync...');
+    return;
+  }
+  
+  observersSetUp = true;
+  console.log('[Worker] Setting up Yjs observers');
 
   // Observe feature changes
   featuresById.observeDeep(() => {
@@ -148,6 +149,28 @@ function setupYjsSync(port: MessagePort): void {
   state.observe(() => {
     scheduleRebuild();
   });
+  
+  // Trigger initial rebuild
+  scheduleRebuild();
+}
+
+function setupYjsSync(port: MessagePort): void {
+  syncPort = port;
+  doc = new Y.Doc();
+  observersSetUp = false;
+
+  port.onmessage = (event) => {
+    const { type, data } = event.data;
+
+    if (type === 'yjs-init' || type === 'yjs-update') {
+      Y.applyUpdate(doc!, new Uint8Array(data), 'main');
+      
+      // Try to set up observers after each update (will only succeed once structure exists)
+      if (!observersSetUp) {
+        setupObservers();
+      }
+    }
+  };
 
   // Signal ready
   console.log('[Worker] Yjs sync setup complete, signaling ready');
