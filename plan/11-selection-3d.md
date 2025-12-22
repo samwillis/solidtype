@@ -1,6 +1,6 @@
 # Phase 11: 3D Selection
 
-**Status: IMPLEMENTED**
+**Status: ✅ IMPLEMENTED**
 
 ## Prerequisites
 
@@ -9,11 +9,23 @@
 ## Implementation Notes
 
 The following components have been implemented:
-- `SelectionContext.tsx` - Enhanced with 3D face/edge selection support
-- `useRaycast.ts` hook - Provides raycasting for 3D selection in the viewer
-- `Viewer.tsx` - Updated with click/hover handlers for face selection
-- Multi-selection support with Ctrl/Cmd key
-- Hover highlighting state management
+- `SelectionContext.tsx` - Full face/edge selection with:
+  - `SelectedFace` and `SelectedEdge` types with persistent references
+  - `selectFace()` and `selectEdge()` with multi-select support
+  - `HoverState` for 3D highlighting
+  - `SelectionMode` for operation-specific selection (e.g., `selectFace` mode)
+  - Callbacks for selection completion (`onFaceSelected`)
+- `useRaycast.ts` hook - Raycasting implementation with:
+  - NDC coordinate conversion
+  - Mesh intersection via Three.js Raycaster
+  - `getFaceId()` using faceMap for triangle→face mapping
+- `Viewer.tsx` - Click/hover handlers (lines ~1340-1395):
+  - Click to select face with raycast
+  - Ctrl/Cmd+click for multi-select
+  - Mouse move for hover highlighting
+  - Click empty space to clear selection
+- Face selection highlights rendered in 3D view
+- Selected feature syncs with feature tree and properties panel
 
 ## Goals
 

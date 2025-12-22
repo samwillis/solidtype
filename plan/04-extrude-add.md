@@ -1,5 +1,7 @@
 # Phase 04: Extrude Add
 
+**Status: ✅ IMPLEMENTED**
+
 ## Prerequisites
 
 - Phase 03: Sketch with Straight Lines
@@ -15,15 +17,21 @@
 
 ## User Workflow
 
+> **Note: Updated from original plan** - We now use the Properties Panel instead of a dialog for feature creation, providing a more integrated experience.
+
 1. User has a closed sketch (e.g., rectangle)
-2. User clicks "Extrude" in toolbar (or right-click sketch → Extrude)
-3. Extrude dialog appears with:
+2. User selects the sketch in the feature tree
+3. User clicks "Extrude" in toolbar
+4. **Properties panel enters edit mode** with:
+   - Live preview in 3D view
+   - Operation selector (Add/Cut)
+   - Direction selector (Normal/Reverse)
    - Distance input (default: 10mm)
-   - Direction preview arrow
-4. User adjusts distance
-5. User clicks "OK"
-6. 3D body appears in viewer
-7. Extrude feature appears in feature tree under the sketch
+   - Zod validation via Tanstack Form
+5. User adjusts parameters (live preview updates)
+6. User clicks "Accept" (or presses Cmd/Ctrl+Enter)
+7. 3D body appears in viewer
+8. Extrude feature appears in feature tree
 
 ---
 
@@ -64,10 +72,65 @@ export interface ExtrudeFeature extends FeatureBase {
 
 ## App UI Work
 
-### Extrude Dialog
+> **Implementation Update**: We replaced modal dialogs with Properties Panel editing for better UX.
+
+### Feature Edit Context
 
 ```typescript
-// packages/app/src/components/dialogs/ExtrudeDialog.tsx
+// packages/app/src/contexts/FeatureEditContext.tsx
+
+// Centralized state management for feature creation
+export function FeatureEditProvider({ children }) {
+  const [editMode, setEditMode] = useState<FeatureEditMode>({ type: 'none' });
+  
+  const startExtrudeEdit = (sketchId: string) => {
+    // Initialize with defaults, show in properties panel
+    setEditMode({
+      type: 'extrude',
+      sketchId,
+      data: { op: 'add', direction: 'normal', distance: 10 },
+    });
+    // Trigger live preview
+    previewExtrude({ sketchId, distance: 10, ... });
+  };
+  
+  const acceptEdit = () => {
+    // Create the actual feature
+    addExtrude(editMode.sketchId, editMode.data);
+    setEditMode({ type: 'none' });
+  };
+}
+```
+
+### Properties Panel Edit Form (replaces dialog)
+
+```typescript
+// packages/app/src/components/PropertiesPanel.tsx - ExtrudeEditForm
+
+function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }) {
+  const form = useForm({
+    defaultValues: data,
+    validators: {
+      onChange: ({ value }) => extrudeFormSchema.safeParse(value),
+    },
+  });
+  
+  return (
+    <form onSubmit={form.handleSubmit}>
+      <form.Field name="op">...</form.Field>
+      <form.Field name="direction">...</form.Field>
+      <form.Field name="distance">...</form.Field>
+      <button type="button" onClick={onCancel}>Cancel</button>
+      <button type="submit" disabled={!form.state.canSubmit}>Accept</button>
+    </form>
+  );
+}
+```
+
+### Original Dialog Approach (DEPRECATED)
+
+```typescript
+// packages/app/src/components/dialogs/ExtrudeDialog.tsx (REMOVED)
 
 interface ExtrudeDialogProps {
   sketchId: string;

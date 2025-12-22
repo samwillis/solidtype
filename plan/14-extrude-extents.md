@@ -1,6 +1,6 @@
 # Phase 14: Extrude Extents
 
-**Status: IMPLEMENTED**
+**Status: ✅ IMPLEMENTED**
 
 ## Prerequisites
 
@@ -9,17 +9,25 @@
 
 ## Implementation Notes
 
-Extent types are now supported in the document model and worker:
-- `document.ts` - Extended `ExtrudeFeature` with `extent`, `extentRef` fields
-- `featureHelpers.ts` - Updated `addExtrudeFeature` to accept options object with extent parameters
-- `kernel.worker.ts` - Added `calculateExtrudeDistance()` to compute distance based on extent type
-- `PropertiesPanel.tsx` - Extent type selector in extrude properties
+### What's Done:
+- `document.ts` - `ExtrudeExtent` type and `extent`, `extentRef` fields on `ExtrudeFeature`
+- `featureHelpers.ts` - `addExtrudeFeature()` accepts options with extent parameters
+- `PropertiesPanel.tsx` - Extent type dropdown (blind, toFace, throughAll) with `FaceSelector` component
+- `kernel.worker.ts` - `calculateExtrudeDistance()` function with proper face distance calculation
 
-Supported extent types:
-- `blind` - Fixed distance (default)
-- `throughAll` - Extends through entire model (uses large distance)
-- `toFace` - Extends to selected face (stores `extentRef`)
-- `toVertex` - Extends to vertex height (stores `extentRef`)
+### Extent Type Status:
+| Type | Status | Notes |
+|------|--------|-------|
+| `blind` | ✅ Working | Fixed distance extrusion |
+| `throughAll` | ✅ Working | Uses large distance (1000 units) |
+| `toFace` | ✅ Working | Calculates distance to face centroid along extrude direction |
+| `toVertex` | ❌ Stub | Falls back to base distance; needs vertex selection UI |
+
+### Key Implementation Details:
+1. **FaceSelector component** - UI for entering face selection mode, stores `face:featureId:faceIndex` reference
+2. **Distance calculation** - Uses dot product of (faceCentroid - planeOrigin) · planeNormal
+3. **Selection mode** - Uses `SelectionContext.setSelectionMode('selectFace')` and callback pattern
+4. **CSS styling** - `.face-selector` with prompt and cancel states
 
 ## Goals
 

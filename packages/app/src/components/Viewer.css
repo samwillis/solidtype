@@ -11,65 +11,12 @@
   height: 100%;
 }
 
-/* Sketch actions overlay (accept/cancel) */
-.sketch-actions-overlay {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 8px;
-  padding: 8px 12px;
-  background: rgba(37, 37, 38, 0.85);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-  pointer-events: auto;
-  z-index: 10;
-}
-
-.sketch-action-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-
-.sketch-action-accept {
-  background: #2ecc71;
-  color: white;
-}
-
-.sketch-action-accept:hover {
-  background: #27ae60;
-}
-
-.sketch-action-cancel {
-  background: #e74c3c;
-  color: white;
-}
-
-.sketch-action-cancel:hover {
-  background: #c0392b;
-}
-
-.sketch-action-btn:active {
-  opacity: 0.9;
-}
-
 /* Dimensions panel */
 .sketch-dimensions-panel {
   position: absolute;
   top: 12px;
   right: 12px;
-  background: rgba(37, 37, 38, 0.9);
+  background: var(--color-overlay-bg, rgba(37, 37, 38, 0.9));
   backdrop-filter: blur(8px);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -77,6 +24,12 @@
   min-width: 180px;
   pointer-events: auto;
   z-index: 10;
+}
+
+/* Light theme - dimensions panel */
+[data-theme="light"] .sketch-dimensions-panel {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .sketch-dimensions-title {
@@ -143,4 +96,91 @@
 .sketch-dimension-delete:hover {
   background: rgba(231, 76, 60, 0.2);
   color: #e74c3c;
+}
+
+/* Inline dimension edit overlay */
+.dimension-edit-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.dimension-edit-popup {
+  background: var(--color-bg-secondary, #2d2d2d);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  min-width: 160px;
+}
+
+.dimension-edit-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--color-bg, #1e1e1e);
+  border: 2px solid var(--color-primary, #0078d4);
+  border-radius: 6px;
+  color: var(--color-text, white);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.dimension-edit-input:focus {
+  outline: none;
+  border-color: #2ecc71;
+}
+
+.dimension-edit-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.dimension-edit-ok,
+.dimension-edit-cancel {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.dimension-edit-ok {
+  background: #2ecc71;
+  color: white;
+}
+
+.dimension-edit-ok:hover {
+  background: #27ae60;
+}
+
+.dimension-edit-cancel {
+  background: #95a5a6;
+  color: white;
+}
+
+.dimension-edit-cancel:hover {
+  background: #7f8c8d;
+}
+
+/* Light theme overrides */
+[data-theme="light"] .dimension-edit-popup {
+  background: white;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .dimension-edit-input {
+  background: #f5f5f5;
+  color: #333;
 }

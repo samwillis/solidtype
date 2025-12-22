@@ -186,7 +186,7 @@ Selection in 3D view is foundational to geometry references:
 | 09-10 | Curved Geometry | Arcs in sketches, curved profiles |
 | 11-13 | 3D Interaction | Selection, rebuild gate, properties |
 | 14-16 | Geometry References | Extrude extents, sketch-on-face, external refs |
-| 17-18 | Boolean & Export | Explicit booleans, STEP export |
+| 17-18 | Boolean & Export | Explicit booleans, STL export |
 | 19 | Advanced Constraints | Parallel, perpendicular, tangent |
 | 20-22 | Advanced Modeling | Fillet, chamfer, sweep, loft, patterns |
 | 23-26 | AI Integration | Context assembly, tools, diff/apply, chat UI |

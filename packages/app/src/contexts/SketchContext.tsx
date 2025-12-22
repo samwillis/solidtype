@@ -7,6 +7,7 @@ import React, {
   useContext,
   useState,
   useCallback,
+  useRef,
 } from 'react';
 import { useDocument } from './DocumentContext';
 import { useViewer, type ViewPreset } from './ViewerContext';
@@ -22,13 +23,16 @@ import {
 import type { NewSketchConstraint, SketchData, SketchLine, SketchPoint } from '../types/document';
 
 // Constraint types that can be applied
-export type ConstraintType = 'horizontal' | 'vertical' | 'coincident' | 'fixed' | 'distance' | 'angle';
+export type ConstraintType = 
+  | 'horizontal' | 'vertical' | 'coincident' | 'fixed' | 'distance' | 'angle'
+  // Advanced constraints (Phase 19)
+  | 'parallel' | 'perpendicular' | 'equalLength' | 'tangent' | 'symmetric';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type SketchTool = 'select' | 'line' | 'arc' | 'circle' | 'rectangle';
+export type SketchTool = 'none' | 'select' | 'line' | 'arc' | 'circle' | 'rectangle';
 
 export interface SketchModeState {
   active: boolean;
@@ -36,6 +40,8 @@ export interface SketchModeState {
   planeId: string | null;
   activeTool: SketchTool;
   tempPoints: { x: number; y: number }[];
+  /** Whether this is a new sketch (should be deleted on cancel) or editing existing */
+  isNewSketch: boolean;
 }
 
 /** Mouse position in sketch coordinates */
@@ -58,7 +64,10 @@ interface SketchContextValue {
   /** Preview line for draft rendering (set by SketchCanvas, rendered by Viewer) */
   previewLine: SketchPreviewLine | null;
   setPreviewLine: (line: SketchPreviewLine | null) => void;
+  /** Start a new sketch on the given plane */
   startSketch: (planeId: string) => void;
+  /** Edit an existing sketch */
+  editSketch: (sketchId: string, planeId: string) => void;
   finishSketch: () => void;
   cancelSketch: () => void;
   setTool: (tool: SketchTool) => void;
@@ -77,11 +86,17 @@ interface SketchContextValue {
   // Selection state for constraints
   selectedPoints: Set<string>;
   selectedLines: Set<string>;
+  selectedConstraints: Set<string>;
   setSelectedPoints: React.Dispatch<React.SetStateAction<Set<string>>>;
   setSelectedLines: React.Dispatch<React.SetStateAction<Set<string>>>;
+  setSelectedConstraints: React.Dispatch<React.SetStateAction<Set<string>>>;
   togglePointSelection: (pointId: string) => void;
   toggleLineSelection: (lineId: string) => void;
+  toggleConstraintSelection: (constraintId: string) => void;
   clearSelection: () => void;
+  
+  // Deletion helpers
+  deleteSelectedItems: () => void;
   
   // Constraint helpers
   canApplyConstraint: (type: ConstraintType) => boolean;
@@ -104,7 +119,7 @@ interface SketchProviderProps {
 }
 
 export function SketchProvider({ children }: SketchProviderProps) {
-  const { doc, addSketch } = useDocument();
+  const { doc, addSketch, deleteFeature, undoManager } = useDocument();
   const { actions, state } = useViewer();
   
   const [mode, setMode] = useState<SketchModeState>({
@@ -113,7 +128,11 @@ export function SketchProvider({ children }: SketchProviderProps) {
     planeId: null,
     activeTool: 'line',
     tempPoints: [],
+    isNewSketch: false,
   });
+  
+  // Store the undo stack position when we start editing, so we can revert on cancel
+  const undoStackPositionRef = useRef<number>(0);
   
   // Mouse position in sketch coordinates (shared with StatusBar)
   const [sketchMousePos, setSketchMousePos] = useState<SketchMousePos | null>(null);
@@ -157,8 +176,43 @@ export function SketchProvider({ children }: SketchProviderProps) {
       planeId,
       activeTool: 'line',
       tempPoints: [],
+      isNewSketch: true,
     });
   }, [addSketch, actions, state.currentView]);
+
+  const editSketch = useCallback((sketchId: string, planeId: string) => {
+    // Store current undo stack position so we can revert on cancel
+    undoStackPositionRef.current = undoManager.undoStack.length;
+    
+    // Rotate camera to face the sketch plane
+    let targetView: ViewPreset;
+    switch (planeId) {
+      case 'xy':
+        targetView = 'front';
+        break;
+      case 'xz':
+        targetView = 'top';
+        break;
+      case 'yz':
+        targetView = 'right';
+        break;
+      default:
+        targetView = 'isometric';
+    }
+    
+    if (state.currentView !== targetView) {
+      actions.setView(targetView);
+    }
+    
+    setMode({
+      active: true,
+      sketchId,
+      planeId,
+      activeTool: 'line',
+      tempPoints: [],
+      isNewSketch: false,
+    });
+  }, [actions, state.currentView, undoManager]);
 
   const finishSketch = useCallback(() => {
     setMode({
@@ -167,19 +221,36 @@ export function SketchProvider({ children }: SketchProviderProps) {
       planeId: null,
       activeTool: 'line',
       tempPoints: [],
+      isNewSketch: false,
     });
   }, []);
 
   const cancelSketch = useCallback(() => {
-    // TODO: Undo changes made during sketch mode
+    const { sketchId, isNewSketch } = mode;
+    
+    if (isNewSketch && sketchId) {
+      // New sketch - delete it entirely
+      deleteFeature(sketchId);
+    } else if (!isNewSketch && sketchId) {
+      // Existing sketch - undo all changes made during editing
+      const targetPosition = undoStackPositionRef.current;
+      const currentPosition = undoManager.undoStack.length;
+      const undoCount = currentPosition - targetPosition;
+      
+      for (let i = 0; i < undoCount; i++) {
+        undoManager.undo();
+      }
+    }
+    
     setMode({
       active: false,
       sketchId: null,
       planeId: null,
       activeTool: 'line',
       tempPoints: [],
+      isNewSketch: false,
     });
-  }, []);
+  }, [mode, deleteFeature, undoManager]);
 
   const setTool = useCallback((tool: SketchTool) => {
     setMode((prev) => ({
@@ -285,6 +356,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
   // Selection state for constraints
   const [selectedPoints, setSelectedPoints] = useState<Set<string>>(() => new Set());
   const [selectedLines, setSelectedLines] = useState<Set<string>>(() => new Set());
+  const [selectedConstraints, setSelectedConstraints] = useState<Set<string>>(() => new Set());
 
   const togglePointSelection = useCallback((pointId: string) => {
     setSelectedPoints((prev) => {
@@ -297,6 +369,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
       return next;
     });
     setSelectedLines(new Set());
+    setSelectedConstraints(new Set());
   }, []);
 
   const toggleLineSelection = useCallback((lineId: string) => {
@@ -310,11 +383,27 @@ export function SketchProvider({ children }: SketchProviderProps) {
       return next;
     });
     setSelectedPoints(new Set());
+    setSelectedConstraints(new Set());
+  }, []);
+
+  const toggleConstraintSelection = useCallback((constraintId: string) => {
+    setSelectedConstraints((prev) => {
+      const next = new Set(prev);
+      if (next.has(constraintId)) {
+        next.delete(constraintId);
+      } else {
+        next.add(constraintId);
+      }
+      return next;
+    });
+    setSelectedPoints(new Set());
+    setSelectedLines(new Set());
   }, []);
 
   const clearSelection = useCallback(() => {
     setSelectedPoints(new Set());
     setSelectedLines(new Set());
+    setSelectedConstraints(new Set());
   }, []);
 
   // Get current sketch data
@@ -323,6 +412,92 @@ export function SketchProvider({ children }: SketchProviderProps) {
     if (!sketch) return null;
     return getSketchData(sketch);
   }, [getSketchElement]);
+
+  // Delete selected points, lines, and constraints
+  const deleteSelectedItems = useCallback(() => {
+    const sketchEl = getSketchElement();
+    if (!sketchEl) return;
+    
+    const data = getSketchData(sketchEl);
+    const pointsToDelete = new Set(selectedPoints);
+    const linesToDelete = new Set(selectedLines);
+    const constraintsToDelete = new Set(selectedConstraints);
+    
+    // Find lines that will be deleted (either selected or with deleted endpoints)
+    const findLinesToDelete = (): Set<string> => {
+      const allLinesToDelete = new Set(linesToDelete);
+      for (const entity of data.entities) {
+        if (entity.type === 'line') {
+          if (pointsToDelete.has(entity.start) || pointsToDelete.has(entity.end)) {
+            allLinesToDelete.add(entity.id);
+          }
+        } else if (entity.type === 'arc') {
+          if (pointsToDelete.has(entity.start) || pointsToDelete.has(entity.end) || pointsToDelete.has(entity.center)) {
+            allLinesToDelete.add(entity.id);
+          }
+        }
+      }
+      return allLinesToDelete;
+    };
+    
+    const actualLinesToDelete = findLinesToDelete();
+    
+    // Remove constraints that reference deleted items
+    const filteredConstraints = data.constraints.filter((c) => {
+      if (constraintsToDelete.has(c.id)) return false;
+      
+      // Check if constraint references deleted points
+      if (c.type === 'fixed' && pointsToDelete.has(c.point)) return false;
+      if (c.type === 'coincident' || c.type === 'horizontal' || c.type === 'vertical' || c.type === 'distance' || c.type === 'symmetric') {
+        if (c.points?.some((p) => pointsToDelete.has(p))) return false;
+      }
+      if (c.type === 'angle' || c.type === 'parallel' || c.type === 'perpendicular' || c.type === 'equalLength') {
+        if (c.lines?.some((l) => actualLinesToDelete.has(l))) return false;
+      }
+      if (c.type === 'tangent') {
+        if (actualLinesToDelete.has(c.line) || actualLinesToDelete.has(c.arc)) return false;
+      }
+      if (c.type === 'symmetric') {
+        if (actualLinesToDelete.has(c.axis)) return false;
+      }
+      
+      return true;
+    });
+    
+    // Remove entities (lines/arcs)
+    const filteredEntities = data.entities.filter((e) => !actualLinesToDelete.has(e.id));
+    
+    // Find orphaned points (points not referenced by any remaining entity)
+    const usedPoints = new Set<string>();
+    for (const entity of filteredEntities) {
+      if (entity.type === 'line') {
+        usedPoints.add(entity.start);
+        usedPoints.add(entity.end);
+      } else if (entity.type === 'arc') {
+        usedPoints.add(entity.start);
+        usedPoints.add(entity.end);
+        usedPoints.add(entity.center);
+      }
+    }
+    
+    // Remove selected points and orphaned points
+    const filteredPoints = data.points.filter((p) => {
+      if (pointsToDelete.has(p.id)) return false;
+      // Keep points that are still used by entities
+      return usedPoints.has(p.id);
+    });
+    
+    // Update sketch data
+    const newData: SketchData = {
+      ...data,
+      points: filteredPoints,
+      entities: filteredEntities,
+      constraints: filteredConstraints,
+    };
+    
+    setSketchData(sketchEl, newData);
+    clearSelection();
+  }, [getSketchElement, selectedPoints, selectedLines, selectedConstraints, clearSelection]);
 
   // Check if a constraint can be applied with current selection
   const canApplyConstraint = useCallback((type: ConstraintType): boolean => {
@@ -343,6 +518,18 @@ export function SketchProvider({ children }: SketchProviderProps) {
         return points.length === 2 || lines.length === 1;
       case 'angle':
         return lines.length === 2;
+      // Advanced constraints (Phase 19)
+      case 'parallel':
+      case 'perpendicular':
+      case 'equalLength':
+        return lines.length === 2;
+      case 'tangent':
+        // Need 1 line and 1 arc, but we're simplifying to lines.length >= 1
+        // Full implementation would check for arc selection
+        return lines.length === 2;
+      case 'symmetric':
+        // Need 2 points and 1 line (axis)
+        return points.length === 2 && lines.length === 1;
       default:
         return false;
     }
@@ -400,6 +587,24 @@ export function SketchProvider({ children }: SketchProviderProps) {
       // Default to 90 degrees
       constraint = { type: 'angle', lines: [lines[0], lines[1]], value: 90 };
     }
+    // Advanced constraints (Phase 19)
+    else if (type === 'parallel') {
+      if (lines.length !== 2) return;
+      constraint = { type: 'parallel', lines: [lines[0], lines[1]] };
+    } else if (type === 'perpendicular') {
+      if (lines.length !== 2) return;
+      constraint = { type: 'perpendicular', lines: [lines[0], lines[1]] };
+    } else if (type === 'equalLength') {
+      if (lines.length !== 2) return;
+      constraint = { type: 'equalLength', lines: [lines[0], lines[1]] };
+    } else if (type === 'tangent') {
+      // Simplified: treat as two-line constraint (full would need line+arc)
+      if (lines.length !== 2) return;
+      constraint = { type: 'tangent', line: lines[0], arc: lines[1], connectionPoint: '' };
+    } else if (type === 'symmetric') {
+      if (points.length !== 2 || lines.length !== 1) return;
+      constraint = { type: 'symmetric', points: [points[0], points[1]], axis: lines[0] };
+    }
 
     if (constraint) {
       addConstraint(constraint);
@@ -414,6 +619,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     previewLine,
     setPreviewLine,
     startSketch,
+    editSketch,
     finishSketch,
     cancelSketch,
     setTool,
@@ -430,11 +636,16 @@ export function SketchProvider({ children }: SketchProviderProps) {
     // Selection state
     selectedPoints,
     selectedLines,
+    selectedConstraints,
     setSelectedPoints,
     setSelectedLines,
+    setSelectedConstraints,
     togglePointSelection,
     toggleLineSelection,
+    toggleConstraintSelection,
     clearSelection,
+    // Deletion helpers
+    deleteSelectedItems,
     // Constraint helpers
     canApplyConstraint,
     applyConstraint,

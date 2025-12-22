@@ -13,6 +13,9 @@ import { useDocument } from '../contexts/DocumentContext';
 import { useRaycast } from '../hooks/useRaycast';
 import { findFeature, getSketchData, setSketchData, getFeaturesArray, parseFeature } from '../document/featureHelpers';
 import type { SketchData, SketchLine, SketchConstraint, PlaneFeature, OriginFeature, SketchFeature } from '../types/document';
+import { ToolbarButton, ToolbarSeparator, FloatingToolbar } from './ToolbarComponents';
+import { NormalViewIcon, CheckIcon, CloseIcon } from './Icons';
+import './ToolbarComponents.css';
 import './Viewer.css';
 
 // Point merge tolerance in sketch units (mm)
@@ -109,7 +112,7 @@ const Viewer: React.FC = () => {
 
   const { theme } = useTheme();
   const { registerRefs, cameraStateRef } = useViewer();
-  const { meshes, bodies } = useKernel();
+  const { meshes, bodies, sketchPlaneTransforms } = useKernel();
   const { selectFace, setHover, clearSelection: clearFaceSelection, selectedFeatureId, hoveredFeatureId } = useSelection();
   const { 
     mode: sketchMode, 
@@ -125,9 +128,12 @@ const Viewer: React.FC = () => {
     cancelSketch,
     selectedPoints,
     selectedLines,
+    selectedConstraints,
     togglePointSelection,
     toggleLineSelection,
+    toggleConstraintSelection,
     clearSelection: clearSketchSelection,
+    deleteSelectedItems,
   } = useSketch();
   const { doc, features, units } = useDocument();
 
@@ -138,10 +144,24 @@ const Viewer: React.FC = () => {
   const [circleCenterPoint, setCircleCenterPoint] = useState<{ x: number; y: number; id?: string } | null>(null);
   const [sketchPos, setSketchPos] = useState<{ x: number; y: number } | null>(null);
   
+  // Inline dimension editing state
+  const [editingDimensionId, setEditingDimensionId] = useState<string | null>(null);
+  const [editingDimensionValue, setEditingDimensionValue] = useState<string>('');
+  
+  // Dimension dragging state
+  const [draggingDimensionId, setDraggingDimensionId] = useState<string | null>(null);
+  const [dragCurrentOffset, setDragCurrentOffset] = useState<{ x: number; y: number } | null>(null);
+  
   // Track mouse for sketch interactions
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingViewRef = useRef(false);
   const DRAG_THRESHOLD = 5;
+  
+  // Ref to track sketch mode for use in mouse handlers (to prevent rotation during sketch)
+  const sketchModeRef = useRef(sketchMode);
+  useEffect(() => {
+    sketchModeRef.current = sketchMode;
+  }, [sketchMode]);
   
   // Raycast hook for 3D selection
   const { raycast, getFaceId } = useRaycast({
@@ -204,6 +224,7 @@ const Viewer: React.FC = () => {
   }, []);
 
   // Convert screen coordinates to sketch coordinates via ray-plane intersection
+  // Uses plane transform from kernel for accurate coordinate conversion on any plane
   const screenToSketch = useCallback((screenX: number, screenY: number, planeId: string): { x: number; y: number } | null => {
     const camera = cameraRef.current;
     const container = containerRef.current;
@@ -218,33 +239,46 @@ const Viewer: React.FC = () => {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
 
-    // Define sketch plane based on planeId
+    // Try to get plane transform from kernel (works for any plane/face)
+    const sketchId = sketchMode.sketchId;
+    const kernelTransform = sketchId ? sketchPlaneTransforms[sketchId] : null;
+    
     let planeNormal: THREE.Vector3;
     let planePoint: THREE.Vector3;
     let xDir: THREE.Vector3;
     let yDir: THREE.Vector3;
-
-    switch (planeId) {
-      case 'xy':
-        planeNormal = new THREE.Vector3(0, 0, 1);
-        planePoint = new THREE.Vector3(0, 0, 0);
-        xDir = new THREE.Vector3(1, 0, 0);
-        yDir = new THREE.Vector3(0, 1, 0);
-        break;
-      case 'xz':
-        planeNormal = new THREE.Vector3(0, 1, 0);
-        planePoint = new THREE.Vector3(0, 0, 0);
-        xDir = new THREE.Vector3(1, 0, 0);
-        yDir = new THREE.Vector3(0, 0, -1);
-        break;
-      case 'yz':
-        planeNormal = new THREE.Vector3(1, 0, 0);
-        planePoint = new THREE.Vector3(0, 0, 0);
-        xDir = new THREE.Vector3(0, 0, -1);
-        yDir = new THREE.Vector3(0, 1, 0);
-        break;
-      default:
-        return null;
+    
+    if (kernelTransform) {
+      // Use the accurate plane transform from the kernel
+      planePoint = new THREE.Vector3(...kernelTransform.origin);
+      xDir = new THREE.Vector3(...kernelTransform.xDir);
+      yDir = new THREE.Vector3(...kernelTransform.yDir);
+      planeNormal = new THREE.Vector3(...kernelTransform.normal);
+    } else {
+      // Fallback for built-in planes before kernel responds
+      switch (planeId) {
+        case 'xy':
+          planeNormal = new THREE.Vector3(0, 0, 1);
+          planePoint = new THREE.Vector3(0, 0, 0);
+          xDir = new THREE.Vector3(1, 0, 0);
+          yDir = new THREE.Vector3(0, 1, 0);
+          break;
+        case 'xz':
+          planeNormal = new THREE.Vector3(0, 1, 0);
+          planePoint = new THREE.Vector3(0, 0, 0);
+          xDir = new THREE.Vector3(1, 0, 0);
+          yDir = new THREE.Vector3(0, 0, 1);
+          break;
+        case 'yz':
+          planeNormal = new THREE.Vector3(1, 0, 0);
+          planePoint = new THREE.Vector3(0, 0, 0);
+          xDir = new THREE.Vector3(0, 1, 0);
+          yDir = new THREE.Vector3(0, 0, 1);
+          break;
+        default:
+          // For face references or unknown planes, we need the kernel transform
+          return null;
+      }
     }
 
     // Intersect ray with plane
@@ -260,7 +294,7 @@ const Viewer: React.FC = () => {
     const sketchY = offset.dot(yDir);
 
     return { x: sketchX, y: sketchY };
-  }, []);
+  }, [sketchMode.sketchId, sketchPlaneTransforms]);
 
   // Snap to grid helper
   const snapToGrid = useCallback((x: number, y: number): { x: number; y: number } => {
@@ -278,6 +312,15 @@ const Viewer: React.FC = () => {
     return getSketchData(sketch);
   }, [doc.features, sketchMode.sketchId]);
 
+  // Clear tool state when entering/exiting sketch mode or changing sketchId
+  useEffect(() => {
+    // Reset all draft state when sketch mode changes
+    setTempStartPoint(null);
+    setArcStartPoint(null);
+    setArcEndPoint(null);
+    setCircleCenterPoint(null);
+  }, [sketchMode.active, sketchMode.sketchId]);
+  
   // Update preview line based on current tool state
   useEffect(() => {
     if (!sketchMode.active) {
@@ -295,20 +338,33 @@ const Viewer: React.FC = () => {
     }
   }, [sketchMode.active, sketchMode.activeTool, tempStartPoint, sketchPos, setPreviewLine]);
 
-  // Handle escape to cancel current sketch operation
+  // Handle escape to cancel current draft operation and clear selection
+  // Handle backspace/delete to delete selected items
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && sketchMode.active) {
+      if (!sketchMode.active) return;
+      
+      if (e.key === 'Escape') {
+        // Clear any in-progress draft operations
         setTempStartPoint(null);
         setArcStartPoint(null);
         setArcEndPoint(null);
         setCircleCenterPoint(null);
+        // Also clear sketch selection
+        clearSketchSelection();
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        // Delete selected items (points, lines, constraints)
+        const hasSelection = selectedPoints.size > 0 || selectedLines.size > 0 || selectedConstraints.size > 0;
+        if (hasSelection) {
+          e.preventDefault();
+          deleteSelectedItems();
+        }
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [sketchMode.active]);
+  }, [sketchMode.active, clearSketchSelection, selectedPoints, selectedLines, selectedConstraints, deleteSelectedItems]);
 
   // Constraint value update
   const updateConstraintValue = useCallback((constraintId: string, value: number) => {
@@ -323,6 +379,27 @@ const Viewer: React.FC = () => {
       c.value = value;
     } else if (c.type === 'angle') {
       c.value = value;
+    } else {
+      return;
+    }
+
+    doc.ydoc.transact(() => {
+      setSketchData(sketchEl, data);
+    });
+  }, [doc.features, doc.ydoc, sketchMode.sketchId]);
+
+  // Update constraint offset (for draggable dimensions)
+  const updateConstraintOffset = useCallback((constraintId: string, offsetX: number, offsetY: number) => {
+    if (!sketchMode.sketchId) return;
+    const sketchEl = findFeature(doc.features, sketchMode.sketchId);
+    if (!sketchEl) return;
+    const data = getSketchData(sketchEl);
+    const c = data.constraints.find((cc) => cc.id === constraintId);
+    if (!c) return;
+
+    if (c.type === 'distance' || c.type === 'angle') {
+      c.offsetX = offsetX;
+      c.offsetY = offsetY;
     } else {
       return;
     }
@@ -407,8 +484,13 @@ const Viewer: React.FC = () => {
 
       const isPreview = bodyId.startsWith('__preview');
       const isCutPreview = bodyId.includes('cut');
+      
+      // Get body color from bodies list if available
+      const bodyInfo = bodies.find(b => b.featureId === bodyId);
+      const bodyColor = parseHexColor(bodyInfo?.color, 0x0078d4);
+      
       const material = new THREE.MeshStandardMaterial({
-        color: isPreview ? (isCutPreview ? 0xff4444 : 0x44aaff) : 0x0078d4,
+        color: isPreview ? (isCutPreview ? 0xff4444 : 0x44aaff) : bodyColor,
         side: THREE.DoubleSide,
         transparent: isPreview,
         opacity: isPreview ? 0.45 : 1,
@@ -422,7 +504,7 @@ const Viewer: React.FC = () => {
 
 
     needsRenderRef.current = true;
-  }, [meshes, sceneReady]);
+  }, [meshes, bodies, sceneReady]);
 
   // Render datum planes
   useEffect(() => {
@@ -703,8 +785,19 @@ const Viewer: React.FC = () => {
       renderer.getSize(rendererSize);
     }
 
-    // Helper to get plane transformation
-    const getPlaneTransform = (planeId: string) => {
+    // Helper to get plane transformation - uses kernel transform when available
+    const getPlaneTransform = (planeId: string, sketchId?: string) => {
+      // Try to use kernel transform for accurate plane coordinates
+      if (sketchId && sketchPlaneTransforms[sketchId]) {
+        const t = sketchPlaneTransforms[sketchId];
+        return {
+          origin: new THREE.Vector3(...t.origin),
+          xDir: new THREE.Vector3(...t.xDir),
+          yDir: new THREE.Vector3(...t.yDir),
+        };
+      }
+      
+      // Fallback for built-in planes
       switch (planeId) {
         case 'xy':
           return {
@@ -738,9 +831,10 @@ const Viewer: React.FC = () => {
       sketchData: SketchData,
       planeId: string,
       color: number,
-      pointSize: number
+      pointSize: number,
+      sketchId?: string
     ) => {
-      const { origin, xDir, yDir } = getPlaneTransform(planeId);
+      const { origin, xDir, yDir } = getPlaneTransform(planeId, sketchId);
 
       const toWorld = (x: number, y: number): THREE.Vector3 => {
         return new THREE.Vector3(
@@ -855,12 +949,12 @@ const Viewer: React.FC = () => {
       if (sketchElement) {
         const sketchData = getSketchData(sketchElement);
         console.log('[Viewer] Rendering active sketch:', sketchMode.sketchId, 'points:', sketchData.points.length);
-        renderSketch(sketchData, sketchMode.planeId, 0x00aaff, 1.5); // Blue, larger points
+        renderSketch(sketchData, sketchMode.planeId, 0x00aaff, 1.5, sketchMode.sketchId!); // Blue, larger points
       }
       
       // Render preview line (green dashed) for line tool
       if (previewLine && sketchMode.planeId) {
-        const { origin, xDir, yDir } = getPlaneTransform(sketchMode.planeId);
+        const { origin, xDir, yDir } = getPlaneTransform(sketchMode.planeId, sketchMode.sketchId!);
         
         const toWorld = (x: number, y: number): THREE.Vector3 => {
           return new THREE.Vector3(
@@ -914,11 +1008,11 @@ const Viewer: React.FC = () => {
       const sketchData = sketchFeature.data;
       if (!sketchData || (sketchData.points.length === 0 && sketchData.entities.length === 0)) continue;
       
-      renderSketch(sketchData, sketchFeature.plane, 0x888888, 1.0); // Grey, smaller points
+      renderSketch(sketchData, sketchFeature.plane, 0x888888, 1.0, sketchFeature.id); // Grey, smaller points
     }
 
     needsRenderRef.current = true;
-  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, doc.features, features, sceneReady, selectedFeatureId, hoveredFeatureId, previewLine]);
+  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, doc.features, features, sceneReady, selectedFeatureId, hoveredFeatureId, previewLine, sketchPlaneTransforms]);
 
   // Render selection highlights and constraint annotations (only when editing sketch)
   useEffect(() => {
@@ -959,9 +1053,20 @@ const Viewer: React.FC = () => {
       renderer.getSize(rendererSize);
     }
 
-    // Get plane transformation
-    const getPlaneTransform = (planeId: string) => {
-      switch (planeId) {
+    // Get plane transformation - uses kernel transform when available
+    const getPlaneTransformForSketch = () => {
+      // Try to use kernel transform for accurate plane coordinates
+      if (sketchMode.sketchId && sketchPlaneTransforms[sketchMode.sketchId]) {
+        const t = sketchPlaneTransforms[sketchMode.sketchId];
+        return {
+          origin: new THREE.Vector3(...t.origin),
+          xDir: new THREE.Vector3(...t.xDir),
+          yDir: new THREE.Vector3(...t.yDir),
+        };
+      }
+      
+      // Fallback for built-in planes
+      switch (sketchMode.planeId) {
         case 'xy':
           return { origin: new THREE.Vector3(0, 0, 0), xDir: new THREE.Vector3(1, 0, 0), yDir: new THREE.Vector3(0, 1, 0) };
         case 'xz':
@@ -973,7 +1078,7 @@ const Viewer: React.FC = () => {
       }
     };
 
-    const { origin, xDir, yDir } = getPlaneTransform(sketchMode.planeId);
+    const { origin, xDir, yDir } = getPlaneTransformForSketch();
     const toWorld = (x: number, y: number): THREE.Vector3 => {
       return new THREE.Vector3(
         origin.x + x * xDir.x + y * yDir.x,
@@ -1042,9 +1147,192 @@ const Viewer: React.FC = () => {
       selectionGroup.add(ring);
     }
 
-    // Draw constraint annotations (H, V, C, F labels) - only when editing
+    // Draw dimension annotations (distance and angle) - SolidWorks style
     for (const c of sketch.constraints) {
-      // Skip dimension constraints (shown in panel)
+      if (c.type === 'distance') {
+        // Distance constraint: draw dimension line with arrows and value
+        const [ptIdA, ptIdB] = c.points ?? [];
+        const pA = sketch.points.find((p) => p.id === ptIdA);
+        const pB = sketch.points.find((p) => p.id === ptIdB);
+        if (!pA || !pB) continue;
+
+        const midX = (pA.x + pB.x) / 2;
+        const midY = (pA.y + pB.y) / 2;
+        // Offset the dimension line perpendicular to the constraint
+        const dx = pB.x - pA.x;
+        const dy = pB.y - pA.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const perpX = len > 0 ? -dy / len : 0;
+        const perpY = len > 0 ? dx / len : 1;
+        
+        // Use stored offset or default to 15
+        const storedOffsetX = c.offsetX ?? 0;
+        const storedOffsetY = c.offsetY ?? 15;
+        // If being dragged, use current drag offset
+        const effectiveOffsetX = (draggingDimensionId === c.id && dragCurrentOffset) ? dragCurrentOffset.x : storedOffsetX;
+        const effectiveOffsetY = (draggingDimensionId === c.id && dragCurrentOffset) ? dragCurrentOffset.y : storedOffsetY;
+        
+        const labelX = midX + perpX * effectiveOffsetY + (dx / len || 0) * effectiveOffsetX;
+        const labelY = midY + perpY * effectiveOffsetY + (dy / len || 0) * effectiveOffsetX;
+        const offset = effectiveOffsetY; // for extension lines
+
+        // Draw extension lines
+        const extA = toWorld(pA.x + perpX * offset * 0.7, pA.y + perpY * offset * 0.7);
+        const extB = toWorld(pB.x + perpX * offset * 0.7, pB.y + perpY * offset * 0.7);
+        const dimA = toWorld(pA.x + perpX * offset, pA.y + perpY * offset);
+        const dimB = toWorld(pB.x + perpX * offset, pB.y + perpY * offset);
+        const worldA = toWorld(pA.x, pA.y);
+        const worldB = toWorld(pB.x, pB.y);
+
+        // Extension lines (from point to dimension line)
+        const extGeom1 = new LineGeometry();
+        extGeom1.setPositions([worldA.x, worldA.y, worldA.z, extA.x, extA.y, extA.z]);
+        const extMat1 = new LineMaterial({ color: 0x00aa00, linewidth: 1, resolution: rendererSize ?? new THREE.Vector2(1, 1) });
+        const extLine1 = new Line2(extGeom1, extMat1);
+        extLine1.computeLineDistances();
+        selectionGroup.add(extLine1);
+
+        const extGeom2 = new LineGeometry();
+        extGeom2.setPositions([worldB.x, worldB.y, worldB.z, extB.x, extB.y, extB.z]);
+        const extMat2 = new LineMaterial({ color: 0x00aa00, linewidth: 1, resolution: rendererSize ?? new THREE.Vector2(1, 1) });
+        const extLine2 = new Line2(extGeom2, extMat2);
+        extLine2.computeLineDistances();
+        selectionGroup.add(extLine2);
+
+        // Dimension line (between extension lines)
+        const dimGeom = new LineGeometry();
+        dimGeom.setPositions([dimA.x, dimA.y, dimA.z, dimB.x, dimB.y, dimB.z]);
+        const dimMat = new LineMaterial({ color: 0x00aa00, linewidth: 2, resolution: rendererSize ?? new THREE.Vector2(1, 1) });
+        const dimLine = new Line2(dimGeom, dimMat);
+        dimLine.computeLineDistances();
+        selectionGroup.add(dimLine);
+
+        // Create dimension label (editable on double-click, draggable)
+        const labelPos = toWorld(labelX, labelY);
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'dimension-label draggable-dimension';
+        labelDiv.textContent = `${c.value.toFixed(1)}`;
+        labelDiv.style.cssText = `
+          background: rgba(0, 170, 0, 0.95);
+          color: white;
+          padding: 3px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: move;
+          user-select: none;
+        `;
+        labelDiv.dataset.constraintId = c.id;
+        labelDiv.dataset.constraintType = 'distance';
+        labelDiv.dataset.storedOffsetX = String(storedOffsetX);
+        labelDiv.dataset.storedOffsetY = String(storedOffsetY);
+        // Add click handler for selection
+        labelDiv.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleConstraintSelection(c.id);
+        });
+        // Add double-click handler directly to the label
+        labelDiv.addEventListener('dblclick', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setEditingDimensionId(c.id);
+          setEditingDimensionValue(String(c.value));
+        });
+        // Highlight if selected
+        if (selectedConstraints.has(c.id)) {
+          labelDiv.style.outline = '2px solid #ff6600';
+          labelDiv.style.outlineOffset = '2px';
+        }
+        const labelObject = new CSS2DObject(labelDiv);
+        labelObject.position.copy(labelPos);
+        labelsGroup.add(labelObject);
+      } else if (c.type === 'angle') {
+        // Angle constraint: draw arc between lines with angle value
+        const [lineId1, lineId2] = c.lines ?? [];
+        const line1 = sketch.entities.find((e) => e.type === 'line' && e.id === lineId1) as SketchLine | undefined;
+        const line2 = sketch.entities.find((e) => e.type === 'line' && e.id === lineId2) as SketchLine | undefined;
+        if (!line1 || !line2) continue;
+
+        // Find intersection point of the two lines
+        const l1p1 = sketch.points.find((p) => p.id === line1.start);
+        const l1p2 = sketch.points.find((p) => p.id === line1.end);
+        const l2p1 = sketch.points.find((p) => p.id === line2.start);
+        const l2p2 = sketch.points.find((p) => p.id === line2.end);
+        if (!l1p1 || !l1p2 || !l2p1 || !l2p2) continue;
+
+        // Find common point (intersection)
+        let centerPt: { x: number; y: number } | null = null;
+        if (l1p1.id === l2p1.id || l1p1.id === l2p2.id) centerPt = { x: l1p1.x, y: l1p1.y };
+        else if (l1p2.id === l2p1.id || l1p2.id === l2p2.id) centerPt = { x: l1p2.x, y: l1p2.y };
+        else centerPt = { x: (l1p1.x + l1p2.x + l2p1.x + l2p2.x) / 4, y: (l1p1.y + l1p2.y + l2p1.y + l2p2.y) / 4 };
+
+        // Place label near the center with user offset
+        const baseOffset = 25;
+        const dir1x = (l1p2.x - l1p1.x);
+        const dir1y = (l1p2.y - l1p1.y);
+        const dir2x = (l2p2.x - l2p1.x);
+        const dir2y = (l2p2.y - l2p1.y);
+        const avgDirX = (dir1x + dir2x) / 2;
+        const avgDirY = (dir1y + dir2y) / 2;
+        const avgLen = Math.sqrt(avgDirX * avgDirX + avgDirY * avgDirY) || 1;
+        
+        // Use stored offset or default
+        const storedOffsetX = c.offsetX ?? 0;
+        const storedOffsetY = c.offsetY ?? baseOffset;
+        // If being dragged, use current drag offset
+        const effectiveOffsetX = (draggingDimensionId === c.id && dragCurrentOffset) ? dragCurrentOffset.x : storedOffsetX;
+        const effectiveOffsetY = (draggingDimensionId === c.id && dragCurrentOffset) ? dragCurrentOffset.y : storedOffsetY;
+        
+        const labelX = centerPt.x + (avgDirX / avgLen) * effectiveOffsetY + effectiveOffsetX;
+        const labelY = centerPt.y + (avgDirY / avgLen) * effectiveOffsetY;
+
+        // Create angle label (draggable)
+        const labelPos = toWorld(labelX, labelY);
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'dimension-label angle-label draggable-dimension';
+        labelDiv.textContent = `${c.value.toFixed(1)}°`;
+        labelDiv.style.cssText = `
+          background: rgba(170, 85, 0, 0.95);
+          color: white;
+          padding: 3px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: move;
+          user-select: none;
+        `;
+        labelDiv.dataset.constraintId = c.id;
+        labelDiv.dataset.constraintType = 'angle';
+        labelDiv.dataset.storedOffsetX = String(storedOffsetX);
+        labelDiv.dataset.storedOffsetY = String(storedOffsetY);
+        // Add click handler for selection
+        labelDiv.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleConstraintSelection(c.id);
+        });
+        // Add double-click handler directly to the label
+        labelDiv.addEventListener('dblclick', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setEditingDimensionId(c.id);
+          setEditingDimensionValue(String(c.value));
+        });
+        // Highlight if selected
+        if (selectedConstraints.has(c.id)) {
+          labelDiv.style.outline = '2px solid #ff6600';
+          labelDiv.style.outlineOffset = '2px';
+        }
+        const labelObject = new CSS2DObject(labelDiv);
+        labelObject.position.copy(labelPos);
+        labelsGroup.add(labelObject);
+      }
+    }
+
+    // Draw constraint annotations (H, V, C, F, etc. labels) - only when editing
+    for (const c of sketch.constraints) {
+      // Skip dimension constraints (already drawn above)
       if (c.type === 'distance' || c.type === 'angle') continue;
 
       const label = c.type === 'horizontal' ? 'H' 
@@ -1078,6 +1366,8 @@ const Viewer: React.FC = () => {
         const labelDiv = document.createElement('div');
         labelDiv.className = 'constraint-label';
         labelDiv.textContent = label;
+        labelDiv.dataset.constraintId = c.id;
+        const isSelected = selectedConstraints.has(c.id);
         labelDiv.style.cssText = `
           background: rgba(0, 120, 212, 0.9);
           color: white;
@@ -1085,8 +1375,15 @@ const Viewer: React.FC = () => {
           border-radius: 3px;
           font-size: 11px;
           font-weight: 600;
-          pointer-events: none;
+          cursor: pointer;
+          ${isSelected ? 'outline: 2px solid #ff6600; outline-offset: 2px;' : ''}
         `;
+        // Add click handler for selection
+        labelDiv.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleConstraintSelection(c.id);
+        });
         const labelObject = new CSS2DObject(labelDiv);
         labelObject.position.copy(labelPos);
         labelsGroup.add(labelObject);
@@ -1094,7 +1391,193 @@ const Viewer: React.FC = () => {
     }
 
     needsRenderRef.current = true;
-  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, selectedPoints, selectedLines, getSketch, sceneReady]);
+  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, selectedPoints, selectedLines, selectedConstraints, toggleConstraintSelection, getSketch, sceneReady, draggingDimensionId, dragCurrentOffset, sketchPlaneTransforms]);
+
+  // Handle dimension label dragging for repositioning
+  useEffect(() => {
+    if (!sketchMode.active) return;
+
+    let isDragging = false;
+    let currentDragId: string | null = null;
+    let startX = 0;
+    let startY = 0;
+    let initialOffsetX = 0;
+    let initialOffsetY = 0;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('draggable-dimension') && e.button === 0) {
+        // Start drag on left mouse button
+        const constraintId = target.dataset.constraintId;
+        if (constraintId) {
+          isDragging = true;
+          currentDragId = constraintId;
+          startX = e.clientX;
+          startY = e.clientY;
+          initialOffsetX = parseFloat(target.dataset.storedOffsetX ?? '0');
+          initialOffsetY = parseFloat(target.dataset.storedOffsetY ?? '15');
+          setDraggingDimensionId(constraintId);
+          setDragCurrentOffset({ x: initialOffsetX, y: initialOffsetY });
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !currentDragId) return;
+      
+      // Calculate offset delta (scaled to sketch units - approximate)
+      const deltaX = (e.clientX - startX) * 0.5; // Rough scaling factor
+      const deltaY = -(e.clientY - startY) * 0.5; // Invert Y for sketch coords
+      
+      setDragCurrentOffset({
+        x: initialOffsetX + deltaX,
+        y: initialOffsetY + deltaY,
+      });
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!isDragging || !currentDragId) return;
+      
+      // Calculate final offset
+      const deltaX = (e.clientX - startX) * 0.5;
+      const deltaY = -(e.clientY - startY) * 0.5;
+      const finalOffsetX = initialOffsetX + deltaX;
+      const finalOffsetY = initialOffsetY + deltaY;
+      
+      // Save to document
+      updateConstraintOffset(currentDragId, finalOffsetX, finalOffsetY);
+      
+      // Reset drag state
+      isDragging = false;
+      currentDragId = null;
+      setDraggingDimensionId(null);
+      setDragCurrentOffset(null);
+    };
+
+    document.addEventListener('mousedown', handleMouseDown, true);
+    document.addEventListener('mousemove', handleMouseMove, true);
+    document.addEventListener('mouseup', handleMouseUp, true);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown, true);
+      document.removeEventListener('mousemove', handleMouseMove, true);
+      document.removeEventListener('mouseup', handleMouseUp, true);
+    };
+  }, [sketchMode.active, updateConstraintOffset]);
+
+  // Handle double-click on dimension labels for inline editing
+  useEffect(() => {
+    if (!sketchMode.active) return;
+
+    const handleDimensionDoubleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('dimension-label')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const constraintId = target.dataset.constraintId;
+        if (constraintId) {
+          const sketch = getSketch();
+          if (sketch) {
+            const constraint = sketch.constraints.find((c) => c.id === constraintId);
+            if (constraint && (constraint.type === 'distance' || constraint.type === 'angle')) {
+              setEditingDimensionId(constraintId);
+              setEditingDimensionValue(String(constraint.value));
+            }
+          }
+        }
+      }
+    };
+
+    document.addEventListener('dblclick', handleDimensionDoubleClick, true);
+    return () => {
+      document.removeEventListener('dblclick', handleDimensionDoubleClick, true);
+    };
+  }, [sketchMode.active, getSketch]);
+
+  // Handle inline dimension edit submission
+  const handleDimensionEditSubmit = useCallback(() => {
+    if (!editingDimensionId) return;
+    const value = parseFloat(editingDimensionValue);
+    if (!isNaN(value) && value > 0) {
+      updateConstraintValue(editingDimensionId, value);
+    }
+    setEditingDimensionId(null);
+    setEditingDimensionValue('');
+  }, [editingDimensionId, editingDimensionValue, updateConstraintValue]);
+
+  // Reset camera to face the sketch plane normal
+  const resetToSketchNormal = useCallback(() => {
+    const camera = cameraRef.current;
+    if (!camera || !sketchMode.sketchId) return;
+    
+    // Get the plane transform from kernel
+    const transform = sketchPlaneTransforms[sketchMode.sketchId];
+    if (!transform) {
+      // Fallback for built-in planes
+      let normal: THREE.Vector3;
+      let up: THREE.Vector3;
+      switch (sketchMode.planeId) {
+        case 'xy':
+          normal = new THREE.Vector3(0, 0, 1);
+          up = new THREE.Vector3(0, 1, 0);
+          break;
+        case 'xz':
+          normal = new THREE.Vector3(0, 1, 0);
+          up = new THREE.Vector3(0, 0, -1);
+          break;
+        case 'yz':
+          normal = new THREE.Vector3(1, 0, 0);
+          up = new THREE.Vector3(0, 1, 0);
+          break;
+        default:
+          return;
+      }
+      
+      const distance = camera.position.distanceTo(targetRef.current);
+      camera.position.copy(targetRef.current).add(normal.multiplyScalar(distance));
+      camera.up.copy(up);
+      camera.lookAt(targetRef.current);
+      needsRenderRef.current = true;
+      return;
+    }
+    
+    // Use the kernel's plane transform
+    const normal = new THREE.Vector3(...transform.normal);
+    const yDir = new THREE.Vector3(...transform.yDir);
+    const origin = new THREE.Vector3(...transform.origin);
+    
+    // Position camera along the plane normal
+    const distance = camera.position.distanceTo(targetRef.current);
+    const newTarget = origin.clone();
+    camera.position.copy(newTarget).add(normal.clone().multiplyScalar(distance));
+    targetRef.current.copy(newTarget);
+    camera.up.copy(yDir);
+    camera.lookAt(targetRef.current);
+    needsRenderRef.current = true;
+  }, [sketchMode.sketchId, sketchMode.planeId, sketchPlaneTransforms]);
+
+  // Handle escape to cancel dimension editing
+  useEffect(() => {
+    if (!editingDimensionId) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleDimensionEditSubmit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setEditingDimensionId(null);
+        setEditingDimensionValue('');
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [editingDimensionId, handleDimensionEditSubmit]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -1206,19 +1689,31 @@ const Viewer: React.FC = () => {
     let previousMousePosition = { x: 0, y: 0 };
 
     const onMouseDown = (e: MouseEvent) => {
+      // Check if in sketch mode with an active tool - prevent rotation for left click
+      const currentSketchMode = sketchModeRef.current;
+      const hasActiveTool = currentSketchMode.active && currentSketchMode.activeTool !== 'none';
+      
       if (e.button === 0) {
         // Left mouse button
         e.preventDefault();
-        isDragging = true;
-        if (e.shiftKey) {
+        
+        // In sketch mode with a tool active, left click is for sketching/selection, not rotation
+        // When tool is 'none', allow rotation like in normal mode
+        if (hasActiveTool) {
+          isDragging = false;
+          isRotating = false;
+          isPanning = false;
+        } else if (e.shiftKey) {
+          isDragging = true;
           isPanning = true;
           isRotating = false;
         } else {
+          isDragging = true;
           isRotating = true;
           isPanning = false;
         }
       } else if (e.button === 1) {
-        // Middle mouse - also rotate
+        // Middle mouse - also rotate (allowed even in sketch mode)
         e.preventDefault();
         isDragging = true;
         if (e.ctrlKey || e.metaKey || e.shiftKey) {
@@ -1229,7 +1724,7 @@ const Viewer: React.FC = () => {
           isPanning = false;
         }
       } else if (e.button === 2) {
-        // Right mouse for panning
+        // Right mouse for panning (allowed even in sketch mode)
         e.preventDefault();
         isDragging = true;
         isPanning = true;
@@ -1538,12 +2033,18 @@ const Viewer: React.FC = () => {
     };
     
     const handleMouseUp = (e: MouseEvent) => {
+      // Only handle if mouseDown started inside this container
+      if (!mouseDownPosRef.current) return;
+      
       const wasDragging = isDraggingViewRef.current;
       mouseDownPosRef.current = null;
       isDraggingViewRef.current = false;
       
       // If we were dragging (rotating view), don't trigger tool action
       if (wasDragging) return;
+      
+      // If no tool is active (tool is 'none'), don't handle sketch clicks
+      if (sketchMode.activeTool === 'none') return;
       
       // Only handle left clicks
       if (e.button !== 0) return;
@@ -1735,30 +2236,28 @@ const Viewer: React.FC = () => {
       {/* Sketch mode overlays */}
       {sketchMode.active && (
         <>
-          {/* Accept/Cancel buttons */}
-          <div className="sketch-actions-overlay">
-            <button 
-              className="sketch-action-btn sketch-action-accept"
+          {/* Sketch toolbar */}
+          <FloatingToolbar position="bottom">
+            <ToolbarButton
+              icon={<NormalViewIcon />}
+              label="Normal to Sketch"
+              tooltip="View Normal to Sketch Plane"
+              onClick={resetToSketchNormal}
+            />
+            <ToolbarSeparator />
+            <ToolbarButton
+              icon={<CheckIcon />}
+              label="Accept"
+              tooltip="Accept Sketch (Ctrl+Enter)"
               onClick={finishSketch}
-              title="Accept Sketch (Enter)"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              Accept
-            </button>
-            <button 
-              className="sketch-action-btn sketch-action-cancel"
+            />
+            <ToolbarButton
+              icon={<CloseIcon />}
+              label="Cancel"
+              tooltip="Cancel Sketch"
               onClick={cancelSketch}
-              title="Cancel Sketch (Escape)"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-              Cancel
-            </button>
-          </div>
+            />
+          </FloatingToolbar>
 
           {/* Dimensions panel */}
           {dimensionConstraints.length > 0 && (
@@ -1792,6 +2291,31 @@ const Viewer: React.FC = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* Inline dimension edit overlay */}
+      {editingDimensionId && (
+        <div className="dimension-edit-overlay" onClick={() => { setEditingDimensionId(null); setEditingDimensionValue(''); }}>
+          <div className="dimension-edit-popup" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="number"
+              className="dimension-edit-input"
+              value={editingDimensionValue}
+              onChange={(e) => setEditingDimensionValue(e.target.value)}
+              autoFocus
+              step="0.1"
+              min="0"
+            />
+            <div className="dimension-edit-buttons">
+              <button className="dimension-edit-ok" onClick={handleDimensionEditSubmit}>
+                ✓
+              </button>
+              <button className="dimension-edit-cancel" onClick={() => { setEditingDimensionId(null); setEditingDimensionValue(''); }}>
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

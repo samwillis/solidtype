@@ -52,7 +52,15 @@ export interface SketchPoint {
   x: number;
   y: number;
   fixed?: boolean;
-  attachedTo?: string; // For Phase 16
+  /** External attachment reference (Phase 16)
+   * - Edge: "edge:{featureId}:{edgeIndex}"
+   * - Vertex: "vertex:{featureId}:{vertexIndex}"
+   */
+  attachedTo?: string;
+  /** Parameter on edge (0-1) for edge attachments */
+  param?: number;
+  /** True if attachment reference is broken (e.g., edge was deleted) */
+  attachmentBroken?: boolean;
 }
 
 export interface SketchLine {
@@ -78,8 +86,14 @@ export type SketchConstraint =
   | { id: string; type: 'vertical'; points: [string, string] }
   | { id: string; type: 'coincident'; points: [string, string] }
   | { id: string; type: 'fixed'; point: string }
-  | { id: string; type: 'distance'; points: [string, string]; value: number }
-  | { id: string; type: 'angle'; lines: [string, string]; value: number };
+  | { id: string; type: 'distance'; points: [string, string]; value: number; offsetX?: number; offsetY?: number }
+  | { id: string; type: 'angle'; lines: [string, string]; value: number; offsetX?: number; offsetY?: number }
+  // Advanced constraints (Phase 19)
+  | { id: string; type: 'parallel'; lines: [string, string] }
+  | { id: string; type: 'perpendicular'; lines: [string, string] }
+  | { id: string; type: 'equalLength'; lines: [string, string] }
+  | { id: string; type: 'tangent'; line: string; arc: string; connectionPoint: string }
+  | { id: string; type: 'symmetric'; points: [string, string]; axis: string };
 
 /**
  * A sketch constraint payload for creation (no `id` yet).
@@ -113,6 +127,14 @@ export interface SketchFeature extends FeatureBase {
 // Modeling Features
 // ============================================================================
 
+/** 
+ * Merge scope for add operations - SolidWorks-like multi-body support
+ * - 'auto': Merge with any body the new geometry interacts with
+ * - 'new': Create a new separate body
+ * - 'specific': Merge with specifically selected bodies
+ */
+export type MergeScope = 'auto' | 'new' | 'specific';
+
 /** Extent type for extrude operations (Phase 14) */
 export type ExtrudeExtent = 'blind' | 'toFace' | 'toVertex' | 'throughAll';
 
@@ -128,6 +150,15 @@ export interface ExtrudeFeature extends FeatureBase {
   distance?: number;
   /** Persistent reference to target face or vertex for 'toFace' or 'toVertex' extent */
   extentRef?: string;
+  
+  /** Merge scope for 'add' operations (default: 'auto') */
+  mergeScope?: MergeScope;
+  /** Body IDs to merge with when mergeScope is 'specific' */
+  targetBodies?: string[];
+  /** Name for the resulting body (used when creating new body or first extrude) */
+  resultBodyName?: string;
+  /** Color for the resulting body (hex string like "#ff0000") */
+  resultBodyColor?: string;
 }
 
 export interface RevolveFeature extends FeatureBase {
@@ -137,6 +168,28 @@ export interface RevolveFeature extends FeatureBase {
   axis: string;
   angle: number;
   op: 'add' | 'cut';
+  
+  /** Merge scope for 'add' operations (default: 'auto') */
+  mergeScope?: MergeScope;
+  /** Body IDs to merge with when mergeScope is 'specific' */
+  targetBodies?: string[];
+  /** Name for the resulting body (used when creating new body or first revolve) */
+  resultBodyName?: string;
+  /** Color for the resulting body (hex string like "#ff0000") */
+  resultBodyColor?: string;
+}
+
+/** Boolean operation type (Phase 17) */
+export type BooleanOperation = 'union' | 'subtract' | 'intersect';
+
+export interface BooleanFeature extends FeatureBase {
+  type: 'boolean';
+  /** Boolean operation type */
+  operation: BooleanOperation;
+  /** Feature ID of the target body (the one that gets modified) */
+  target: string;
+  /** Feature ID of the tool body (consumed in the operation) */
+  tool: string;
 }
 
 // ============================================================================
@@ -148,7 +201,8 @@ export type Feature =
   | PlaneFeature
   | SketchFeature
   | ExtrudeFeature
-  | RevolveFeature;
+  | RevolveFeature
+  | BooleanFeature;
 
 export type FeatureType = Feature['type'];
 
@@ -200,4 +254,8 @@ export interface BodyInfo {
   id: string;
   featureId: string;
   faceCount: number;
+  /** Display name for the body */
+  name?: string;
+  /** Display color for the body (hex string like "#ff0000") */
+  color?: string;
 }

@@ -1,9 +1,33 @@
 # Phase 16: Sketch to Geometry Constraints
 
+**Status: ⚠️ PARTIALLY IMPLEMENTED**
+
 ## Prerequisites
 
 - Phase 15: Sketch on Face
 - Phase 08: Dimension Constraints
+
+## Implementation Notes
+
+### What's Done:
+- `document.ts` - SketchPoint now has `attachedTo`, `param`, and `attachmentBroken` fields
+- `kernel.worker.ts` - `resolveAttachment()` function to resolve edge/vertex references to world coordinates
+- `kernel.worker.ts` - `projectToSketchPlane()` function for projecting world points to sketch 2D
+- `kernel.worker.ts` - `interpretSketch()` updated to resolve attachments when adding points
+- Attachment formats: `edge:featureId:edgeIndex` and `vertex:featureId:vertexIndex`
+- Attached points are automatically treated as fixed constraints
+
+### What's NOT Done:
+- Snap detection UI during point dragging
+- Visual feedback for snap targets (edge/vertex indicators)
+- Context menu for "Attach to Edge" / "Detach"
+- Broken attachment visual indicator
+
+### Future Work:
+1. Add snap detection when dragging points near edges/vertices
+2. Visual overlay showing available snap targets
+3. Context menu actions for manual attachment
+4. Broken attachment warning in properties panel
 
 ## Goals
 

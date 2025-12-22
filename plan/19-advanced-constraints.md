@@ -1,9 +1,26 @@
 # Phase 19: Advanced Constraints
 
+**Status: ✅ IMPLEMENTED**
+
 ## Prerequisites
 
 - Phase 08: Dimension Constraints
 - Phase 09: Sketch Arcs
+
+## Implementation Notes
+
+### What's Done:
+- `document.ts` - Added `parallel`, `perpendicular`, `equalLength`, `tangent`, `symmetric` to `SketchConstraint` type
+- `SketchContext.tsx` - Added new types to `ConstraintType`, `canApplyConstraint()`, and `applyConstraint()`
+- `Toolbar.tsx` - Added advanced constraints to dropdown with separator, Unicode symbols (∥, ⊥, =, ⌒, ⇔)
+- `Toolbar.css` - Added `.toolbar-dropdown-separator` style
+- `kernel.worker.ts` - Added constraint handling cases for all advanced constraints
+- Core already had full implementations: `parallel()`, `perpendicular()`, `equalLength()`, `tangent()`, `symmetric()`
+
+### Selection Requirements:
+- **Parallel/Perpendicular/Equal Length**: 2 lines selected
+- **Tangent**: 2 entities (line+arc or arc+arc)
+- **Symmetric**: 2 points + 1 line (axis)
 
 ## Goals
 

@@ -429,3 +429,75 @@ describe('Sketch on Face', () => {
     expect(feature!.name).toBe('SketchOnFace');
   });
 });
+
+// ============================================================================
+// Multi-Body Support Tests
+// ============================================================================
+
+describe('Multi-Body Support', () => {
+  test('addExtrudeFeature with mergeScope option', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'xy');
+    const extrudeId = addExtrudeFeature(doc, {
+      sketchId,
+      distance: 10,
+      mergeScope: 'new',
+      resultBodyName: 'CustomBody',
+      resultBodyColor: '#ff0000',
+    });
+    const element = findFeature(doc.features, extrudeId)!;
+    const feature = parseFeature(element);
+
+    expect(feature).not.toBeNull();
+    expect((feature as any).mergeScope).toBe('new');
+    expect((feature as any).resultBodyName).toBe('CustomBody');
+    expect((feature as any).resultBodyColor).toBe('#ff0000');
+  });
+
+  test('addExtrudeFeature with specific target bodies', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'xy');
+    const extrudeId = addExtrudeFeature(doc, {
+      sketchId,
+      distance: 10,
+      mergeScope: 'specific',
+      targetBodies: ['e1', 'e2'],
+    });
+    const element = findFeature(doc.features, extrudeId)!;
+    const feature = parseFeature(element);
+
+    expect(feature).not.toBeNull();
+    expect((feature as any).mergeScope).toBe('specific');
+    // parseFeature converts comma-separated string back to array
+    expect((feature as any).targetBodies).toEqual(['e1', 'e2']);
+  });
+
+  test('addRevolveFeature with mergeScope option', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'xy');
+    const revolveId = addRevolveFeature(doc, {
+      sketchId,
+      axis: 'ln1',
+      angle: 360,
+      mergeScope: 'auto',
+      resultBodyName: 'RevolveBody',
+    });
+    const element = findFeature(doc.features, revolveId)!;
+    const feature = parseFeature(element);
+
+    expect(feature).not.toBeNull();
+    expect((feature as any).mergeScope).toBe('auto');
+    expect((feature as any).resultBodyName).toBe('RevolveBody');
+  });
+
+  test('addExtrudeFeature defaults to auto merge scope', () => {
+    const doc = createDocument();
+    const sketchId = addSketchFeature(doc, 'xy');
+    const extrudeId = addExtrudeFeature(doc, sketchId, 10);
+    const element = findFeature(doc.features, extrudeId)!;
+    
+    // No mergeScope attribute set means it defaults to 'auto' in the worker
+    // getAttribute returns undefined when attribute is not set
+    expect(element.getAttribute('mergeScope')).toBeUndefined();
+  });
+});

@@ -1,0 +1,128 @@
+/**
+ * Shared toolbar component styles
+ * Used by both main toolbar and floating toolbars (e.g., sketch toolbar)
+ */
+
+/* ============================================================================
+   Toolbar Button
+   ============================================================================ */
+
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-icon);
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.toolbar-button:hover:not(.disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-icon-hover);
+}
+
+.toolbar-button:active:not(.disabled) {
+  background: var(--color-bg-active);
+}
+
+.toolbar-button.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.toolbar-button.active {
+  background: var(--color-bg-hover);
+  color: var(--color-accent);
+  opacity: 0.85;
+}
+
+.toolbar-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ============================================================================
+   Toolbar Separator
+   ============================================================================ */
+
+.toolbar-separator {
+  width: 1px;
+  height: 24px;
+  background: var(--color-border);
+  margin: 0 10px;
+}
+
+/* ============================================================================
+   Toolbar Group
+   ============================================================================ */
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ============================================================================
+   Toolbar Tooltip
+   ============================================================================ */
+
+.toolbar-tooltip {
+  background: var(--color-bg-light);
+  color: var(--color-text);
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
+  z-index: 1000;
+}
+
+[data-theme="dark"] .toolbar-tooltip {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* ============================================================================
+   Floating Toolbar
+   ============================================================================ */
+
+.floating-toolbar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  user-select: none;
+  pointer-events: auto;
+}
+
+.floating-toolbar-bottom {
+  bottom: 16px;
+}
+
+.floating-toolbar-top {
+  top: 16px;
+}
+
+[data-theme="dark"] .floating-toolbar {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Ensure separator aligns properly inside floating toolbar */
+.floating-toolbar .toolbar-separator {
+  align-self: center;
+}

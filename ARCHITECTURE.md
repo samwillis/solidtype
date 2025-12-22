@@ -20,6 +20,7 @@ This document explains how the kernel is structured, how data flows, and where m
 SolidType is a pnpm monorepo with a **small number of packages**:
 
 * `@solidtype/core` – the CAD kernel with an object-oriented API.
+* `@solidtype/app` – the main React application with full CAD UI.
 * `@solidtype/viewer` – WebGL/three.js demo app and playground.
 
 Everything is ESM-only. `@solidtype/core` has no DOM/browser dependencies and is designed to run in **Node** or in a **Web Worker**.
@@ -42,10 +43,11 @@ Inside `@solidtype/core` we have logical submodules that use data-oriented desig
 * `model` – modeling operators (primitives, extrude, revolve, booleans).
 * `naming` – persistent naming & evolution graph.
 * `sketch` – 2D sketch entities + constraint system + solver.
-* `mesh` – tessellation (BREP → triangle meshes).
+* `mesh` – tessellation (BREP → triangle meshes) and STL export.
+* `export` – file format exporters (STL).
 * `api` – object-oriented wrappers that delegate to the internal modules.
 
-The `@solidtype/viewer` uses the OO API from core to provide a real-time playground and visual debugging.
+The `@solidtype/app` and `@solidtype/viewer` use the OO API from core to provide real-time modeling and visual debugging.
 
 ---
 
@@ -83,8 +85,8 @@ The `@solidtype/viewer` uses the OO API from core to provide a real-time playgro
 
 **References / inspiration**
 
-* CGAL’s “exact predicates / inexact constructions” kernels set the pattern: use doubles for constructions, but invest in robust predicates.
-* J.R. Shewchuk’s work on adaptive precision floating-point predicates.
+* CGAL's "exact predicates / inexact constructions" kernels set the pattern: use doubles for constructions, but invest in robust predicates.
+* J.R. Shewchuk's work on adaptive precision floating-point predicates.
 
 ---
 
@@ -213,11 +215,11 @@ This design provides:
   * Remove edges/faces below size thresholds.
   * Reorient shells if needed.
 
-SolidType aims for the **“moderate but explicit”** healing strategy found in industrial kernels: try small repairs but prefer clear failure over silent corruption.
+SolidType aims for the **"moderate but explicit"** healing strategy found in industrial kernels: try small repairs but prefer clear failure over silent corruption.
 
 ---
 
-### 3.4 `mesh` – Tessellation
+### 3.4 `mesh` – Tessellation & Export
 
 **Responsibility**
 
@@ -253,6 +255,15 @@ interface Mesh {
 }
 ```
 
+**STL Export**
+
+The `export/stl.ts` module provides STL file generation:
+
+```ts
+function writeStlBinary(mesh: Mesh): ArrayBuffer;
+function writeStlAscii(mesh: Mesh, name?: string): string;
+```
+
 ---
 
 ### 3.5 `model` – Modeling Operators
@@ -262,7 +273,7 @@ interface Mesh {
 * Implement modeling operations on top of `geom` + `topo`:
 
   * Primitives (boxes, cylinders for tests).
-  * Sketch-based extrude (add/cut).
+  * Sketch-based extrude (add/cut) with extent types.
   * Sketch-based revolve (add/cut).
   * Solid–solid booleans (union, subtract, intersect).
 
@@ -271,7 +282,8 @@ interface Mesh {
 * Planes:
 
   * Fundamentals: global XY, YZ, ZX.
-  * Later: offsets from faces, custom datum planes.
+  * Offsets from faces, custom datum planes.
+  * Face-derived planes (sketch on face).
 * Sketch profiles:
 
   * Closed 2D loops (lines + arcs) on a plane.
@@ -286,6 +298,7 @@ Operations:
   * Build top & bottom caps from profile.
   * Sweep edges to form side faces.
   * Build a new body (for `add`) or tool body (for `cut`).
+  * Extent types: `blind`, `throughAll`, `toFace`, `toVertex`.
 * `revolve(profile, axis, angle, op)`:
 
   * Revolve edges around axis to create analytic surfaces of revolution.
@@ -297,13 +310,17 @@ Both operations allocate a `FeatureId` and register named subshapes with `naming
 
 SolidType goes directly for BREP booleans (no mesh booleans):
 
-* Intersect candidate faces (planar-only first, more later).
+* Intersect candidate faces (planar-only currently).
 * Build intersection curves/edges.
 * Classify faces by inside/outside tests using predicates.
 * Assemble result bodies by trimming and stitching.
 * Run validation + limited healing.
 
 Booleans are explicitly staged: start with **simple cases (e.g. convex boxes)**, then generalise.
+
+**Current limitations:**
+* Boolean operations currently only support planar faces.
+* Curved face support (cylinders, cones from revolves) is planned.
 
 ---
 
@@ -318,9 +335,9 @@ Booleans are explicitly staged: start with **simple cases (e.g. convex boxes)**,
 
 The design is influenced by:
 
-* **Kripac’s mechanism** for persistently naming topological entities.
-* **OpenCascade’s OCAF** topological naming and shape evolution.
-* **FreeCAD’s topological naming improvements** (realthunder), which use graph-based and geometry-aware matching rather than pure positional indices.
+* **Kripac's mechanism** for persistently naming topological entities.
+* **OpenCascade's OCAF** topological naming and shape evolution.
+* **FreeCAD's topological naming improvements** (realthunder), which use graph-based and geometry-aware matching rather than pure positional indices.
 * Surveyed research recommending **hybrid topology+geometry** approaches.
 
 **Core abstractions**
@@ -416,10 +433,8 @@ class SketchModel {
   * `SketchArc` (start, end, centre).
 * Constraints:
 
-  * `coincident`, `horizontal`, `vertical`, `parallel`, `perpendicular`,
-  * `equalLength`, `fixed`,
-  * `distance`, `angle`,
-  * `tangent` (line–arc, arc–arc).
+  * Geometric: `coincident`, `horizontal`, `vertical`, `parallel`, `perpendicular`, `equalLength`, `fixed`, `tangent`, `symmetric`.
+  * Dimensional: `distance`, `angle`.
 * Attachments:
 
   * A point can hold an `externalRef: PersistentRef` linking it to a model edge/vertex.
@@ -487,11 +502,222 @@ The OO layer:
 
 ---
 
-## 5. `@solidtype/viewer` – Viewer & Worker Integration
+## 5. `@solidtype/app` – Full CAD Application
 
 **Responsibility**
 
-* Provide a **WebGL/three.js**-based viewer.
+* Provide a complete, production-ready CAD application.
+* Implement feature-based parametric modeling workflow.
+* Offer a SolidWorks-like user experience with sketching, features, and multi-body support.
+
+### 5.1 Application Architecture
+
+The app is built with **React** and uses a layered architecture:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     React Components                         │
+│  (Toolbar, FeatureTree, PropertiesPanel, Viewer, etc.)      │
+├─────────────────────────────────────────────────────────────┤
+│                     React Contexts                           │
+│  (Document, Kernel, Selection, Sketch, FeatureEdit)         │
+├─────────────────────────────────────────────────────────────┤
+│                   Document Model (Yjs)                       │
+│  (Features, Sketches, Constraints, Undo/Redo)               │
+├─────────────────────────────────────────────────────────────┤
+│                     Web Worker                               │
+│  (Kernel execution, mesh generation, rebuild)               │
+├─────────────────────────────────────────────────────────────┤
+│                   @solidtype/core                            │
+│  (BREP kernel, solver, boolean operations)                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 5.2 Document Model
+
+The document model uses **Yjs** for collaborative editing and undo/redo:
+
+```ts
+interface SolidTypeDoc {
+  ydoc: Y.Doc;
+  features: Y.XmlFragment;   // Feature tree (sketches, extrudes, revolves, etc.)
+  meta: Y.Map<unknown>;      // Document metadata (name, version, timestamps)
+  state: Y.Map<unknown>;     // Transient state (rebuild gate, active sketch)
+  undoManager: Y.UndoManager;
+}
+```
+
+**Feature Types:**
+
+* `origin` – Coordinate origin reference
+* `plane` – Datum planes (XY, XZ, YZ, or custom)
+* `sketch` – 2D sketches with entities and constraints
+* `extrude` – Linear extrusion with extent types and multi-body options
+* `revolve` – Rotational sweep with multi-body options
+* `boolean` – Explicit union/subtract/intersect operations
+
+**Sketch Data Structure:**
+
+```ts
+interface SketchData {
+  entities: SketchEntity[];     // Points, lines, arcs
+  constraints: SketchConstraint[]; // Geometric and dimensional constraints
+}
+
+// Constraint types include:
+// - Geometric: coincident, horizontal, vertical, parallel, perpendicular, 
+//              equalLength, tangent, symmetric
+// - Dimensional: distance, angle (with offsetX/offsetY for label positioning)
+```
+
+### 5.3 React Contexts
+
+The app uses React Context for global state management:
+
+| Context | Responsibility |
+|---------|----------------|
+| `DocumentContext` | Yjs document, features, undo/redo, feature helpers |
+| `KernelContext` | Worker communication, meshes, bodies, rebuild status |
+| `SelectionContext` | Selected features, faces, edges; selection mode |
+| `SketchContext` | Active sketch, sketch mode, constraint application |
+| `FeatureEditContext` | Feature creation/editing mode, form state |
+| `ViewerContext` | Three.js scene, camera, renderer references |
+| `ThemeContext` | Light/dark theme switching |
+
+### 5.4 Component Structure
+
+**Main Layout:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Toolbar                               │
+├──────────────┬──────────────────────────┬───────────────────┤
+│  FeatureTree │        Viewer            │ PropertiesPanel   │
+│  (left panel)│   (3D viewport with      │ (right panel)     │
+│              │    ViewCube, grid,       │                   │
+│              │    sketch overlay)       │                   │
+├──────────────┴──────────────────────────┴───────────────────┤
+│                       StatusBar                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Components:**
+
+* `Toolbar` – Mode-aware toolbar with feature creation, sketch tools, and constraints
+* `FeatureTree` – Hierarchical feature list with rename, suppress, delete actions
+* `PropertiesPanel` – Zod-validated forms for feature editing via Tanstack Form
+* `Viewer` – Three.js scene with:
+  * 3D mesh rendering with per-body colors
+  * CSS2D dimension annotations (draggable, editable)
+  * Sketch entity visualization
+  * Raycasting for 3D selection
+* `ViewCube` – Interactive orientation widget
+* `StatusBar` – Rebuild status, selection info, coordinate display
+
+### 5.5 Properties Panel & Feature Editing
+
+The properties panel uses **Zod schemas** for validation and **Tanstack Form** for state management:
+
+```ts
+// Example schema (featureSchemas.ts)
+export const extrudeFormSchema = z.object({
+  name: z.string().min(1),
+  sketch: z.string().min(1),
+  op: z.enum(['add', 'cut']),
+  direction: z.enum(['normal', 'reverse']),
+  extent: z.enum(['blind', 'toFace', 'toVertex', 'throughAll']),
+  distance: z.number().min(0.1),
+  // Multi-body options
+  mergeScope: z.enum(['auto', 'new', 'specific']).optional(),
+  targetBodies: z.array(z.string()).optional(),
+  resultBodyName: z.string().optional(),
+  resultBodyColor: z.string().optional(),
+});
+```
+
+**Feature Creation Workflow:**
+
+1. User clicks feature button (Extrude, Revolve) in toolbar
+2. `FeatureEditContext` enters edit mode with default form data
+3. Properties panel shows validated form with live preview
+4. On Accept: feature is added to document, rebuild triggers
+5. On Cancel: edit mode exits, no changes
+
+### 5.6 Multi-Body Support
+
+The app implements SolidWorks-like multi-body part design:
+
+**Merge Scope Options:**
+
+* `auto` – Automatically union with any overlapping body
+* `new` – Always create a separate body
+* `specific` – Union with user-selected bodies
+
+**Body Properties:**
+
+* **Name** – User-assignable body name (e.g., "Main Housing")
+* **Color** – Per-body color displayed in 3D view
+
+**Implementation:**
+
+```ts
+// Worker maintains body registry
+interface BodyEntry {
+  body: Body;
+  name: string;
+  color: string;
+  sourceFeatureId: string;
+}
+
+const bodyMap = new Map<string, BodyEntry>();
+```
+
+### 5.7 Sketch Mode
+
+Sketch mode provides a specialized editing environment:
+
+* **Entry:** Double-click sketch in tree, or create new sketch on plane/face
+* **Tools:** Point, Line, Rectangle, Circle, Arc tools
+* **Constraints:** Coincident, horizontal, vertical, parallel, perpendicular, distance, angle, tangent, symmetric, equal length
+* **Dimension Annotations:**
+  * Visual display with extension lines
+  * Draggable labels with persisted positions (`offsetX`, `offsetY`)
+  * Double-click for inline value editing
+* **Exit:** Ctrl+Enter to accept, Escape to cancel
+
+### 5.8 Worker Integration
+
+The kernel runs in a **Web Worker** for non-blocking UI:
+
+```ts
+// Message types (worker/types.ts)
+type WorkerMessage =
+  | { type: 'init'; payload: { docState: Uint8Array } }
+  | { type: 'sync'; payload: { update: Uint8Array } }
+  | { type: 'rebuild' }
+  | { type: 'export-stl'; payload: { binary: boolean } };
+
+type WorkerResponse =
+  | { type: 'mesh'; payload: { bodyId, positions, normals, indices, color? } }
+  | { type: 'bodies'; payload: BodyInfo[] }
+  | { type: 'rebuild-complete' }
+  | { type: 'stl-data'; payload: { data: ArrayBuffer | string } }
+  | { type: 'error'; payload: { message: string } };
+```
+
+**Synchronization:**
+
+* `YjsWorkerSync` handles Yjs document sync between main thread and worker
+* Document changes trigger automatic rebuild
+* Meshes and body info are sent back to main thread for rendering
+
+---
+
+## 6. `@solidtype/viewer` – Demo Viewer
+
+**Responsibility**
+
+* Provide a lightweight **WebGL/three.js**-based viewer.
 * Serve as a test bed and demo for the kernel.
 * Demonstrate how to run the kernel in a **Web Worker**.
 
@@ -501,7 +727,7 @@ The OO layer:
 * Uses `@solidtype/core`'s OO API for modeling operations.
 * Code-driven examples:
 
-  * “Create a sketch on XY, draw rectangle, extrude, boolean union with another box.”
+  * "Create a sketch on XY, draw rectangle, extrude, boolean union with another box."
 * Visual checks:
 
   * Animated parameter changes (sliders) to test persistent naming and rebuild stability.
@@ -522,7 +748,7 @@ This avoids blocking the UI on heavy operations (booleans, solving).
 
 ---
 
-## 6. Testing & Quality
+## 7. Testing & Quality
 
 **TDD-first**:
 
@@ -533,6 +759,7 @@ This avoids blocking the UI on heavy operations (booleans, solving).
   * `model` tested on canonical examples (e.g. extrude a rectangle, boolean two boxes).
   * `naming` tested on simple edit scenarios where identity must persist.
   * `sketch` tested on small constrained sketches with known solutions.
+  * `app` tested for document model operations and feature helpers.
 
 **Property-based tests (selective)**:
 
@@ -550,7 +777,7 @@ This avoids blocking the UI on heavy operations (booleans, solving).
 
 ---
 
-## 7. Future Extensions & Open Hooks
+## 8. Future Extensions & Open Hooks
 
 The architecture is designed to support future work without major rewrites:
 
@@ -560,6 +787,7 @@ The architecture is designed to support future work without major rewrites:
 * **Modeling**:
 
   * Sweeps, lofts, shell, fillet, chamfer operations in `model`.
+  * Curved face boolean support.
 * **Naming**:
 
   * Alternative `NamingStrategy` implementations for research and comparison.
@@ -568,9 +796,12 @@ The architecture is designed to support future work without major rewrites:
   * Introduce exact/interval arithmetic for selected predicates.
 * **Persistence**:
 
-  * CRDT-backed model format for collaborative editing.
+  * CRDT-backed model format for collaborative editing (partially implemented with Yjs).
 * **High-level API**:
 
   * A JSX-style composition layer on top of `@solidtype/core` for declarative models.
+* **AI Integration**:
 
-SolidType’s core constraint is: **keep the internal data-oriented modules clean, explicit, and well-tested**, so the OO API and future research can safely build on them.
+  * AI-assisted modeling via chat interface and tool calling.
+
+SolidType's core constraint is: **keep the internal data-oriented modules clean, explicit, and well-tested**, so the OO API and future research can safely build on them.

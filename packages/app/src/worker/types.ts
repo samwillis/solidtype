@@ -41,13 +41,20 @@ export interface ClearPreviewMessage {
   type: 'clear-preview';
 }
 
+export interface ExportStlMessage {
+  type: 'export-stl';
+  binary?: boolean;
+  name?: string;
+}
+
 export type MainToWorkerMessage =
   | InitSyncMessage
   | YjsInitMessage
   | YjsUpdateMessage
   | PreviewExtrudeMessage
   | PreviewRevolveMessage
-  | ClearPreviewMessage;
+  | ClearPreviewMessage
+  | ExportStlMessage;
 
 // ============================================================================
 // Message Types: Worker → Main Thread
@@ -72,6 +79,20 @@ export interface MeshMessage {
   type: 'mesh';
   bodyId: string;
   mesh: TransferableMesh;
+  /** Body color (hex string like "#6699cc") */
+  color?: string;
+}
+
+/** Plane transform for converting between sketch 2D and world 3D coordinates */
+export interface PlaneTransform {
+  /** Origin point of the plane in world coordinates */
+  origin: [number, number, number];
+  /** X direction of the sketch coordinate system in world coordinates (unit vector) */
+  xDir: [number, number, number];
+  /** Y direction of the sketch coordinate system in world coordinates (unit vector) */
+  yDir: [number, number, number];
+  /** Normal direction of the plane in world coordinates (unit vector) */
+  normal: [number, number, number];
 }
 
 export interface SketchSolvedMessage {
@@ -79,6 +100,8 @@ export interface SketchSolvedMessage {
   sketchId: string;
   points: Array<{ id: string; x: number; y: number }>;
   status: string;
+  /** Plane transform for this sketch */
+  planeTransform?: PlaneTransform;
   dof?: {
     totalDOF: number;
     constrainedDOF: number;
@@ -98,6 +121,14 @@ export interface ErrorMessage {
   message: string;
 }
 
+export interface StlExportedMessage {
+  type: 'stl-exported';
+  /** Binary STL data (if binary format) */
+  buffer?: ArrayBuffer;
+  /** ASCII STL content (if ASCII format) */
+  content?: string;
+}
+
 export type WorkerToMainMessage =
   | ReadyMessage
   | RebuildStartMessage
@@ -105,7 +136,8 @@ export type WorkerToMainMessage =
   | MeshMessage
   | SketchSolvedMessage
   | PreviewErrorMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | StlExportedMessage;
 
 // ============================================================================
 // Shared Types
@@ -123,6 +155,10 @@ export interface BodyInfo {
   id: string;
   featureId: string;
   faceCount: number;
+  /** Display name for the body */
+  name?: string;
+  /** Display color for the body (hex string like "#6699cc") */
+  color?: string;
 }
 
 export interface TransferableMesh {

@@ -6,6 +6,11 @@
   user-select: none;
 }
 
+.feature-tree.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .feature-tree-content {
   flex: 1;
   overflow: auto;

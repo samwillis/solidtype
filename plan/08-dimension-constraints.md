@@ -1,8 +1,33 @@
 # Phase 08: Dimension Constraints
 
+**Status: ✅ IMPLEMENTED (Enhanced)**
+
 ## Prerequisites
 
 - Phase 07: Basic Constraints
+
+## Implementation Notes
+
+### What's Done:
+- Distance constraints (2 points or 1 line) with visual annotations
+- Angle constraints (2 lines) with visual annotations
+- **Visual dimension annotations** on sketch in 3D view (SolidWorks-style):
+  - Distance: Green extension lines + dimension line with value label
+  - Angle: Orange arc label with angle value
+- **Double-click inline editing**: Click dimension label → popup input → Enter to accept
+- **Drag-to-reposition**: Drag dimension labels to organize/stack them
+  - Position offset stored per constraint (`offsetX`, `offsetY`)
+  - Real-time visual feedback during drag
+  - Position persisted to Yjs document
+- Dimensions also editable in side panel overlay
+- Delete button on each dimension in panel
+
+### Visual Style:
+- Distance dimensions: Green (`#00aa00`) with extension lines
+- Angle dimensions: Orange (`#aa5500`) arc indicator
+- Labels are CSS2DObjects (always face camera)
+- Cursor changes to `move` on dimension labels
+- Popup editor centered on screen with overlay
 
 ## Goals
 
