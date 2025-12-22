@@ -66,6 +66,21 @@ export function planarBoolean(
   const ctx = model.ctx;
   const { operation } = options;
   
+  // Handle degenerate case: same body for both operands
+  if (bodyA === bodyB) {
+    switch (operation) {
+      case 'union':
+        // A ∪ A = A
+        return { success: true, body: bodyA };
+      case 'intersect':
+        // A ∩ A = A
+        return { success: true, body: bodyA };
+      case 'subtract':
+        // A \ A = ∅
+        return { success: false, error: 'Subtracting a body from itself results in an empty body' };
+    }
+  }
+  
   // Collect faces from both bodies
   const facesA = collectBodyFaces(model, bodyA);
   const facesB = collectBodyFaces(model, bodyB);
@@ -111,7 +126,7 @@ export function planarBoolean(
   // Add intersection segments
   for (const polyA of polygonsA) {
     for (const polyB of polygonsB) {
-      const intersection = computeFaceIntersection(polyA, polyB, ctx);
+      const intersection = computeFaceIntersection(polyA, polyB, ctx, operation);
       if (intersection) {
         const segsA = imprintDataA.get(polyA.faceId)!;
         segsA.push(...intersection.segmentsA);

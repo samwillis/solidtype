@@ -93,6 +93,8 @@ export function unprojectFromPlane(uv: Vec2, plane: PlaneSurface): Vec3 {
  * 
  * Uses a simpler approach: find all edge crossings, sort by parameter,
  * then use odd-even rule to determine inside intervals.
+ * 
+ * Returns empty if the line lies on a polygon edge (degenerate case).
  */
 export function clipLineToPolygon(
   linePoint: Vec2,
@@ -106,10 +108,34 @@ export function clipLineToPolygon(
   const dirLen = Math.sqrt(lineDir[0] ** 2 + lineDir[1] ** 2);
   if (dirLen < 1e-12) return [];
   
+  // First, check if the line lies ON any polygon edge (degenerate case)
+  // If so, return empty - this intersection doesn't create a proper face split
+  const n = polygon.length;
+  for (let i = 0; i < n; i++) {
+    const p1 = polygon[i];
+    const p2 = polygon[(i + 1) % n];
+    
+    const edgeDir: Vec2 = [p2[0] - p1[0], p2[1] - p1[1]];
+    const edgeLen = Math.sqrt(edgeDir[0] ** 2 + edgeDir[1] ** 2);
+    if (edgeLen < 1e-12) continue;
+    
+    // Check if line is parallel to this edge
+    const cross = lineDir[0] * edgeDir[1] - lineDir[1] * edgeDir[0];
+    if (Math.abs(cross) < 1e-10 * edgeLen) {
+      // Parallel - check if linePoint is on the edge line
+      const toP1: Vec2 = [p1[0] - linePoint[0], p1[1] - linePoint[1]];
+      const distToLine = Math.abs(toP1[0] * edgeDir[1] - toP1[1] * edgeDir[0]) / edgeLen;
+      if (distToLine < 1e-10) {
+        // Line lies ON this edge - degenerate case
+        // Return empty to skip this intersection
+        return [];
+      }
+    }
+  }
+  
   // Collect intersection parameters with polygon edges
   const crossings: number[] = [];
   
-  const n = polygon.length;
   for (let i = 0; i < n; i++) {
     const p1 = polygon[i];
     const p2 = polygon[(i + 1) % n];
@@ -216,11 +242,16 @@ export function pointInPolygon(point: Vec2, polygon: Vec2[]): boolean {
 /**
  * Compute intersection segments between two planar faces.
  * Returns segments in the 2D coordinate system of each face.
+ * 
+ * @param operation Optional boolean operation type. Affects coplanar face handling:
+ *   - 'union': Skip imprinting for same-normal coplanar faces
+ *   - 'subtract'/'intersect': Always imprint for proper hole creation
  */
 export function computeFaceIntersection(
   faceA: FacePolygon2D,
   faceB: FacePolygon2D,
-  ctx: NumericContext
+  ctx: NumericContext,
+  operation?: 'union' | 'subtract' | 'intersect'
 ): { segmentsA: Segment2D[]; segmentsB: Segment2D[] } | null {
   // Intersect the two planes
   const intersection = intersectPlanes(faceA.surface, faceB.surface, ctx);
@@ -230,7 +261,7 @@ export function computeFaceIntersection(
     const dist = dot3(sub3(faceB.surface.origin, faceA.surface.origin), faceA.surface.normal);
     if (Math.abs(dist) < ctx.tol.length) {
       // Coplanar faces - handle specially (overlap detection)
-      return handleCoplanarFaces(faceA, faceB, ctx);
+      return handleCoplanarFaces(faceA, faceB, ctx, operation);
     }
     return null;
   }
@@ -368,51 +399,64 @@ export function computeFaceIntersection(
 
 /**
  * Handle coplanar face intersection (polygon overlap)
+ * 
+ * For coplanar faces:
+ * - SAME normal + UNION: Skip imprinting (faces are part of same exterior surface)
+ * - SAME normal + SUBTRACT/INTERSECT: Imprint for hole creation
+ * - OPPOSITE normal: Always imprint for proper splitting
  */
 function handleCoplanarFaces(
   faceA: FacePolygon2D,
   faceB: FacePolygon2D,
-  _ctx: NumericContext
-): { segmentsA: Segment2D[]; segmentsB: Segment2D[] } {
-  // For coplanar faces, we need to compute polygon intersection
+  _ctx: NumericContext,
+  operation?: 'union' | 'subtract' | 'intersect'
+): { segmentsA: Segment2D[]; segmentsB: Segment2D[] } | null {
+  const dotNormals = dot3(faceA.surface.normal, faceB.surface.normal);
+  
+  if (dotNormals > 0.9 && operation === 'union') {
+    // Same normal direction + UNION
+    // Both faces are part of the same exterior surface
+    // Don't imprint; classification will handle keeping the correct faces
+    return null;
+  }
+  
+  if (Math.abs(dotNormals) < 0.9) {
+    // Normals neither aligned nor opposite - shouldn't happen for truly coplanar faces
+    return null;
+  }
+  
+  // For opposite normals (dotNormals < -0.9) or same normals with subtract/intersect,
+  // add intersection segments
+  const segmentsA: Segment2D[] = [];
+  const segmentsB: Segment2D[] = [];
+  
   // Transform B's polygon to A's coordinate system
   const bInA: Vec2[] = faceB.outer.map(p => {
     const p3d = unprojectFromPlane(p, faceB.surface);
     return projectToPlane2D(p3d, faceA.surface);
   });
   
-  // For now, return the edges of B that are inside A (and vice versa) as "intersection" segments
-  // A full implementation would compute the intersection polygon edges
-  
-  const segmentsA: Segment2D[] = [];
-  const segmentsB: Segment2D[] = [];
-  
-  // Add edges of B (in A's space) that might intersect A
+  // Add edges of B that are inside A
   for (let i = 0; i < bInA.length; i++) {
     const p1 = bInA[i];
     const p2 = bInA[(i + 1) % bInA.length];
     
-    // Check if this edge intersects any edge of A's polygon
-    for (let j = 0; j < faceA.outer.length; j++) {
-      const a1 = faceA.outer[j];
-      const a2 = faceA.outer[(j + 1) % faceA.outer.length];
-      
-      const hit = segmentIntersection(p1, p2, a1, a2);
-      if (hit) {
-        // Record intersection point as a degenerate segment (will be handled in imprint)
-        segmentsA.push({
-          a: hit,
-          b: hit,
-          sourceBody: 1,
-          sourceFace: faceB.faceId,
-          sourceHalfEdge: null,
-          isIntersection: true
-        });
-      }
+    const p1Inside = pointInPolygon(p1, faceA.outer);
+    const p2Inside = pointInPolygon(p2, faceA.outer);
+    
+    if (p1Inside || p2Inside) {
+      segmentsA.push({
+        a: p1,
+        b: p2,
+        sourceBody: 1,
+        sourceFace: faceB.faceId,
+        sourceHalfEdge: null,
+        isIntersection: true
+      });
     }
   }
   
-  // Similarly for A's edges in B's space
+  // Similarly for A in B's space
   const aInB: Vec2[] = faceA.outer.map(p => {
     const p3d = unprojectFromPlane(p, faceA.surface);
     return projectToPlane2D(p3d, faceB.surface);
@@ -422,48 +466,21 @@ function handleCoplanarFaces(
     const p1 = aInB[i];
     const p2 = aInB[(i + 1) % aInB.length];
     
-    for (let j = 0; j < faceB.outer.length; j++) {
-      const b1 = faceB.outer[j];
-      const b2 = faceB.outer[(j + 1) % faceB.outer.length];
-      
-      const hit = segmentIntersection(p1, p2, b1, b2);
-      if (hit) {
-        segmentsB.push({
-          a: hit,
-          b: hit,
-          sourceBody: 0,
-          sourceFace: faceA.faceId,
-          sourceHalfEdge: null,
-          isIntersection: true
-        });
-      }
+    const p1Inside = pointInPolygon(p1, faceB.outer);
+    const p2Inside = pointInPolygon(p2, faceB.outer);
+    
+    if (p1Inside || p2Inside) {
+      segmentsB.push({
+        a: p1,
+        b: p2,
+        sourceBody: 0,
+        sourceFace: faceA.faceId,
+        sourceHalfEdge: null,
+        isIntersection: true
+      });
     }
   }
   
   return { segmentsA, segmentsB };
 }
 
-/**
- * Simple 2D segment intersection
- */
-function segmentIntersection(
-  a1: Vec2, a2: Vec2,
-  b1: Vec2, b2: Vec2
-): Vec2 | null {
-  const dx1 = a2[0] - a1[0];
-  const dy1 = a2[1] - a1[1];
-  const dx2 = b2[0] - b1[0];
-  const dy2 = b2[1] - b1[1];
-  
-  const denom = dx1 * dy2 - dy1 * dx2;
-  if (Math.abs(denom) < 1e-12) return null;
-  
-  const t = ((b1[0] - a1[0]) * dy2 - (b1[1] - a1[1]) * dx2) / denom;
-  const u = ((b1[0] - a1[0]) * dy1 - (b1[1] - a1[1]) * dx1) / denom;
-  
-  if (t < -1e-10 || t > 1 + 1e-10 || u < -1e-10 || u > 1 + 1e-10) {
-    return null;
-  }
-  
-  return [a1[0] + t * dx1, a1[1] + t * dy1];
-}

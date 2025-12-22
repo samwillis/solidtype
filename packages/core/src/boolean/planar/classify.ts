@@ -18,11 +18,12 @@ import { pointInPolygon, unprojectFromPlane } from './intersect.js';
 /**
  * Classify a face piece relative to another body.
  * 
- * Uses a test point on the face material, offset slightly along the face normal,
+ * Uses test points on the face material, offset slightly along the face normal,
  * to perform ray casting against the other body's faces.
  * 
- * For faces with holes, we need to find a point that's on the face material,
- * not inside a hole.
+ * For boundary cases (where tests disagree), we check if there's a coplanar
+ * face of the other body with the same normal (on_same) or opposite normal
+ * (on_opposite). If not, we classify based on which side has the material.
  */
 export function classifyPiece(
   piece: FacePiece,
@@ -30,21 +31,17 @@ export function classifyPiece(
   model: TopoModel,
   ctx: NumericContext
 ): PieceClassification {
-  // Find a test point on the face material (not in any hole)
-  const testPoint2D = findPointOnFaceMaterial(piece);
-  
-  // Convert to 3D
-  const testPoint3D = unprojectFromPlane(testPoint2D, piece.surface);
-  
-  // Use a more significant offset for testing
   const testOffset = Math.max(ctx.tol.length * 1000, 0.001);
   const normal = piece.surface.normal;
   
-  // Test from the positive normal side
+  // Get a test point on the face material
+  const testPoint2D = findPointOnFaceMaterial(piece);
+  const testPoint3D = unprojectFromPlane(testPoint2D, piece.surface);
+  
+  // Test from both sides
   const testPointPos = add3(testPoint3D, mul3(normal, testOffset));
   const insideFromPos = isPointInsideBody(testPointPos, otherBody, model, ctx);
   
-  // Test from the negative normal side
   const testPointNeg = add3(testPoint3D, mul3(normal, -testOffset));
   const insideFromNeg = isPointInsideBody(testPointNeg, otherBody, model, ctx);
   
@@ -56,14 +53,88 @@ export function classifyPiece(
     return 'outside';
   }
   
-  // If they disagree, the face is ON the boundary
-  // For boolean operations, we treat boundary faces based on
-  // which side faces the interior of the other solid
-  if (insideFromPos) {
-    return 'inside'; // Normal points into other body
+  // Tests disagree - the piece is on the boundary
+  // Check if there's a coplanar face of the other body at this location
+  const coplanarResult = findCoplanarFace(testPoint3D, normal, otherBody, model, ctx);
+  
+  if (coplanarResult.found) {
+    if (coplanarResult.sameNormal) {
+      // Coplanar face with same normal - this is a shared exterior surface
+      // For UNION: keep (both bodies share this surface)
+      // For SUBTRACT: this is where the tool touches the target
+      return 'on_same';
+    } else {
+      // Coplanar face with opposite normal - back-to-back faces
+      return 'on_opposite';
+    }
+  }
+  
+  // No coplanar face found - classify based on material side
+  // insideFromNeg = true means the material (opposite of normal) is inside
+  if (insideFromNeg) {
+    return 'inside';
   }
   
   return 'outside';
+}
+
+/**
+ * Check if there's a coplanar face of the body at the given location
+ */
+function findCoplanarFace(
+  point: Vec3,
+  normal: Vec3,
+  bodyId: BodyId,
+  model: TopoModel,
+  ctx: NumericContext
+): { found: boolean; sameNormal: boolean } {
+  const shells = model.getBodyShells(bodyId);
+  
+  for (const shellId of shells) {
+    const faces = model.getShellFaces(shellId);
+    
+    for (const faceId of faces) {
+      const surfaceIdx = model.getFaceSurfaceIndex(faceId);
+      const surface = model.getSurface(surfaceIdx);
+      
+      if (surface.kind !== 'plane') continue;
+      
+      const plane = surface as PlaneSurface;
+      
+      // Check if point is on this plane
+      const dist = dot3(sub3(point, plane.origin), plane.normal);
+      if (Math.abs(dist) > ctx.tol.length * 10) continue;
+      
+      // Point is on this plane - check if it's inside the face polygon
+      const loops = model.getFaceLoops(faceId);
+      if (loops.length === 0) continue;
+      
+      // Project point to face's 2D space
+      const v = sub3(point, plane.origin);
+      const u2d = dot3(v, plane.xDir);
+      const v2d = dot3(v, plane.yDir);
+      
+      // Get face polygon
+      const polygon: Vec2[] = [];
+      for (const he of model.iterateLoopHalfEdges(loops[0])) {
+        const vertex = model.getHalfEdgeStartVertex(he);
+        const pos = model.getVertexPosition(vertex);
+        const pv = sub3(pos, plane.origin);
+        polygon.push([dot3(pv, plane.xDir), dot3(pv, plane.yDir)]);
+      }
+      
+      if (pointInPolygon([u2d, v2d], polygon)) {
+        // Point is inside this face's polygon
+        const dotNormals = dot3(normal, plane.normal);
+        return {
+          found: true,
+          sameNormal: dotNormals > 0.9
+        };
+      }
+    }
+  }
+  
+  return { found: false, sameNormal: false };
 }
 
 /**

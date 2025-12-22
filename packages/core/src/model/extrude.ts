@@ -152,10 +152,10 @@ export function extrude(
     
     const isOuterLoop = loop.isOuter;
     
-    const bottomFace = createBottomFace(model, shell, profile, vertexData, edgeData, isOuterLoop);
+    const bottomFace = createBottomFace(model, shell, profile, vertexData, edgeData, isOuterLoop, direction, startOffset);
     bottomCapFaces.push(bottomFace);
     
-    const topFace = createTopFace(model, shell, profile, vertexData, edgeData, direction, isOuterLoop);
+    const topFace = createTopFace(model, shell, profile, vertexData, edgeData, direction, isOuterLoop, endOffset);
     topCapFaces.push(topFace);
     
     const loopSideFaces = createSideFaces(
@@ -353,13 +353,17 @@ function createBottomFace(
   profile: SketchProfile,
   vertexData: ExtrudeVertexData,
   edgeData: ExtrudeEdgeData,
-  isOuterLoop: boolean
+  isOuterLoop: boolean,
+  direction: Vec3,
+  startOffset: number
 ): FaceId {
   const n = vertexData.bottomVertices.length;
   
   const plane = profile.plane.surface;
   const bottomNormal: Vec3 = [-plane.normal[0], -plane.normal[1], -plane.normal[2]];
-  const bottomOrigin = planeToWorld(profile.plane, 0, 0);
+  // Surface origin must be on the actual bottom cap plane
+  const baseOrigin = planeToWorld(profile.plane, 0, 0);
+  const bottomOrigin = add3(baseOrigin, mul3(direction, startOffset));
   const surface = model.addSurface(createPlaneSurface(bottomOrigin, bottomNormal, plane.xDir));
   
   const halfEdges: HalfEdgeId[] = [];
@@ -392,12 +396,15 @@ function createTopFace(
   vertexData: ExtrudeVertexData,
   edgeData: ExtrudeEdgeData,
   direction: Vec3,
-  isOuterLoop: boolean
+  isOuterLoop: boolean,
+  endOffset: number
 ): FaceId {
   const n = vertexData.topVertices.length;
   
   const plane = profile.plane.surface;
-  const topOrigin = planeToWorld(profile.plane, 0, 0);
+  // Surface origin must be on the actual top cap plane, not the sketch plane
+  const baseOrigin = planeToWorld(profile.plane, 0, 0);
+  const topOrigin = add3(baseOrigin, mul3(direction, endOffset));
   const surface = model.addSurface(createPlaneSurface(topOrigin, direction, plane.xDir));
   
   const halfEdges: HalfEdgeId[] = [];

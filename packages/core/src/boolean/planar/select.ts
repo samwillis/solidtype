@@ -26,10 +26,10 @@ export function selectPieces(
   
   switch (operation) {
     case 'union':
-      // Keep pieces from A that are OUTSIDE B
+      // Keep pieces from A that are OUTSIDE B or on a shared boundary (on_same)
       fromA = piecesA.filter(p => p.classification === 'outside' || p.classification === 'on_same');
-      // Keep pieces from B that are OUTSIDE A
-      fromB = piecesB.filter(p => p.classification === 'outside' || p.classification === 'on_same');
+      // Keep pieces from B that are OUTSIDE A only (on_same would duplicate A's pieces)
+      fromB = piecesB.filter(p => p.classification === 'outside');
       break;
       
     case 'intersect':
@@ -40,9 +40,10 @@ export function selectPieces(
       break;
       
     case 'subtract':
-      // Keep pieces from A that are OUTSIDE B
-      fromA = piecesA.filter(p => p.classification === 'outside');
-      // Keep pieces from B that are INSIDE A (but flip them)
+      // Keep pieces from A that are OUTSIDE B or on boundary (on_same means touching, not inside)
+      fromA = piecesA.filter(p => p.classification === 'outside' || p.classification === 'on_same');
+      // Keep pieces from B that are INSIDE A (but flip them to form the hole interior)
+      // Note: on_same pieces from B should NOT be kept (they're on the same surface as A)
       fromB = piecesB.filter(p => p.classification === 'inside');
       flipB = true;
       break;
