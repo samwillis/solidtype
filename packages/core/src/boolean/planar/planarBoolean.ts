@@ -266,7 +266,11 @@ function imprintFaceAndExtractPieces(
   // Build DCEL and extract faces
   const dcel = buildDCEL(segments, tolerance);
   
-  const pieces: FacePiece[] = [];
+  // Collect all bounded face polygons with their areas
+  // IMPORTANT: Only keep faces with POSITIVE area (CCW orientation).
+  // The DCEL creates both CW and CCW versions of each face (inner and outer windings).
+  // We only want the CCW (positive area) ones to avoid duplicates.
+  const faceData: { polygon: Vec2[]; area: number; centroid: Vec2 }[] = [];
   
   for (const face of dcel.faces) {
     if (face.isUnbounded) continue;
@@ -276,20 +280,19 @@ function imprintFaceAndExtractPieces(
     if (facePolygon.length < 3) continue;
     
     const area = polygonSignedArea(facePolygon);
-    if (Math.abs(area) < tolerance * tolerance) continue;
     
-    pieces.push({
-      polygon: area > 0 ? facePolygon : facePolygon.slice().reverse(),
-      holes: [],
-      classification: 'outside',
-      sourceFace: polygon.faceId,
-      sourceBody,
-      surface: polygon.surface
-    });
+    // Skip degenerate and CW (negative area) faces
+    // CW faces are the "other side" of CCW faces - we don't want duplicates
+    if (area < tolerance * tolerance) continue;
+    
+    // Compute centroid for containment testing
+    const centroid = computePolygonCentroid2D(facePolygon);
+    
+    faceData.push({ polygon: facePolygon, area, centroid });
   }
   
-  // If no pieces extracted, return original
-  if (pieces.length === 0) {
+  // If no faces extracted, return original
+  if (faceData.length === 0) {
     return [{
       polygon: polygon.outer,
       holes: polygon.holes,
@@ -300,7 +303,93 @@ function imprintFaceAndExtractPieces(
     }];
   }
   
+  // Sort by area descending (larger faces first)
+  faceData.sort((a, b) => b.area - a.area);
+  
+  // Identify containment relationships
+  // A smaller face is a hole in a larger face if its centroid is inside the larger face
+  const pieces: FacePiece[] = [];
+  const usedAsHole = new Set<number>();
+  
+  for (let i = 0; i < faceData.length; i++) {
+    if (usedAsHole.has(i)) continue;
+    
+    const outer = faceData[i];
+    const holes: Vec2[][] = [];
+    
+    // Check if any smaller face is contained inside this one
+    for (let j = i + 1; j < faceData.length; j++) {
+      if (usedAsHole.has(j)) continue;
+      
+      const inner = faceData[j];
+      
+      // Check if inner's centroid is inside outer's polygon
+      if (pointInPolygon2D(inner.centroid, outer.polygon)) {
+        // This is a hole - reverse winding for hole representation
+        holes.push(inner.polygon.slice().reverse());
+        usedAsHole.add(j);
+      }
+    }
+    
+    pieces.push({
+      polygon: outer.polygon,
+      holes,
+      classification: 'outside',
+      sourceFace: polygon.faceId,
+      sourceBody,
+      surface: polygon.surface
+    });
+  }
+  
   return pieces;
+}
+
+/**
+ * Simple polygon centroid computation
+ */
+function computePolygonCentroid2D(polygon: Vec2[]): Vec2 {
+  if (polygon.length === 0) return [0, 0];
+  
+  let cx = 0, cy = 0, area = 0;
+  const n = polygon.length;
+  
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const cross = polygon[i][0] * polygon[j][1] - polygon[j][0] * polygon[i][1];
+    area += cross;
+    cx += (polygon[i][0] + polygon[j][0]) * cross;
+    cy += (polygon[i][1] + polygon[j][1]) * cross;
+  }
+  
+  area /= 2;
+  if (Math.abs(area) < 1e-12) {
+    // Degenerate - use simple average
+    let sumX = 0, sumY = 0;
+    for (const p of polygon) { sumX += p[0]; sumY += p[1]; }
+    return [sumX / n, sumY / n];
+  }
+  
+  return [cx / (6 * area), cy / (6 * area)];
+}
+
+/**
+ * Point-in-polygon test (2D)
+ */
+function pointInPolygon2D(point: Vec2, polygon: Vec2[]): boolean {
+  const n = polygon.length;
+  let inside = false;
+  
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygon[i][0], yi = polygon[i][1];
+    const xj = polygon[j][0], yj = polygon[j][1];
+    
+    if (((yi > point[1]) !== (yj > point[1])) &&
+        (point[0] < (xj - xi) * (point[1] - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  
+  return inside;
 }
 
 /**

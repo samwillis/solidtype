@@ -90,6 +90,9 @@ export function unprojectFromPlane(uv: Vec2, plane: PlaneSurface): Vec3 {
 /**
  * Clip a line (given by direction and point) against a polygon.
  * Returns the segment(s) of the line that lie inside the polygon.
+ * 
+ * Uses a simpler approach: find all edge crossings, sort by parameter,
+ * then use odd-even rule to determine inside intervals.
  */
 export function clipLineToPolygon(
   linePoint: Vec2,
@@ -99,8 +102,12 @@ export function clipLineToPolygon(
 ): { tStart: number; tEnd: number }[] {
   if (polygon.length < 3) return [];
   
+  // Normalize line direction for consistent parameterization
+  const dirLen = Math.sqrt(lineDir[0] ** 2 + lineDir[1] ** 2);
+  if (dirLen < 1e-12) return [];
+  
   // Collect intersection parameters with polygon edges
-  const hits: { t: number; entering: boolean }[] = [];
+  const crossings: number[] = [];
   
   const n = polygon.length;
   for (let i = 0; i < n; i++) {
@@ -108,14 +115,12 @@ export function clipLineToPolygon(
     const p2 = polygon[(i + 1) % n];
     
     const edgeDir: Vec2 = [p2[0] - p1[0], p2[1] - p1[1]];
-    const edgeNormal: Vec2 = [-edgeDir[1], edgeDir[0]]; // Outward normal (assuming CCW)
     
-    // Parameterize: linePoint + t * lineDir = p1 + s * edgeDir
-    // Cross product to find t
+    // Solve: linePoint + t * lineDir = p1 + s * edgeDir
     const denom = lineDir[0] * edgeDir[1] - lineDir[1] * edgeDir[0];
     
     if (Math.abs(denom) < 1e-12) {
-      // Line parallel to edge
+      // Line parallel to edge - skip
       continue;
     }
     
@@ -123,43 +128,64 @@ export function clipLineToPolygon(
     const t = (diff[0] * edgeDir[1] - diff[1] * edgeDir[0]) / denom;
     const s = (diff[0] * lineDir[1] - diff[1] * lineDir[0]) / denom;
     
-    // Check if intersection is within edge bounds
-    if (s < -1e-10 || s > 1 + 1e-10) continue;
-    
-    // Determine if entering or leaving based on normal · lineDir
-    const dotNormal = edgeNormal[0] * lineDir[0] + edgeNormal[1] * lineDir[1];
-    const entering = dotNormal < 0;
-    
-    hits.push({ t, entering });
+    // Check if intersection is within edge bounds (exclusive of endpoints to avoid double counting)
+    if (s > 1e-10 && s < 1 - 1e-10) {
+      crossings.push(t);
+    } else if (Math.abs(s) < 1e-10) {
+      // Intersection at p1 - count only if entering/leaving through this vertex
+      // For simplicity, include it
+      crossings.push(t);
+    }
   }
   
-  if (hits.length === 0) {
-    // Check if line is entirely inside or outside
-    // Test a point on the line
+  if (crossings.length === 0) {
+    // No edge crossings - check if line is entirely inside or outside
     if (pointInPolygon(linePoint, polygon)) {
-      // Line passes through polygon but we found no edges? 
-      // This means line is contained - return large range (will be clipped later)
+      // Line is entirely inside polygon - return a large interval
       return [{ tStart: -1e10, tEnd: 1e10 }];
     }
     return [];
   }
   
-  // Sort hits by parameter
-  hits.sort((a, b) => a.t - b.t);
+  // Sort crossings by parameter
+  crossings.sort((a, b) => a - b);
   
-  // Build intervals where we're inside
-  const segments: { tStart: number; tEnd: number }[] = [];
-  let inside = false;
-  let currentStart = 0;
-  
-  for (const hit of hits) {
-    if (hit.entering && !inside) {
-      inside = true;
-      currentStart = hit.t;
-    } else if (!hit.entering && inside) {
-      inside = false;
-      segments.push({ tStart: currentStart, tEnd: hit.t });
+  // Remove duplicates (within tolerance)
+  const uniqueCrossings: number[] = [crossings[0]];
+  for (let i = 1; i < crossings.length; i++) {
+    if (Math.abs(crossings[i] - uniqueCrossings[uniqueCrossings.length - 1]) > 1e-10) {
+      uniqueCrossings.push(crossings[i]);
     }
+  }
+  
+  // Use odd-even rule: between each pair of crossings, test if inside
+  const segments: { tStart: number; tEnd: number }[] = [];
+  
+  // Test before first crossing
+  const testBefore: Vec2 = [
+    linePoint[0] + (uniqueCrossings[0] - 1) * lineDir[0],
+    linePoint[1] + (uniqueCrossings[0] - 1) * lineDir[1]
+  ];
+  let inside = pointInPolygon(testBefore, polygon);
+  
+  if (inside) {
+    // Line starts inside - interval from -infinity to first crossing
+    // (will be clipped later by 3D overlap)
+    segments.push({ tStart: -1e10, tEnd: uniqueCrossings[0] });
+  }
+  
+  // Process each interval between crossings
+  for (let i = 0; i < uniqueCrossings.length - 1; i++) {
+    inside = !inside; // Toggle at each crossing
+    if (inside) {
+      segments.push({ tStart: uniqueCrossings[i], tEnd: uniqueCrossings[i + 1] });
+    }
+  }
+  
+  // Test after last crossing
+  inside = !inside;
+  if (inside) {
+    segments.push({ tStart: uniqueCrossings[uniqueCrossings.length - 1], tEnd: 1e10 });
   }
   
   return segments;

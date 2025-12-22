@@ -18,10 +18,11 @@ import { pointInPolygon, unprojectFromPlane } from './intersect.js';
 /**
  * Classify a face piece relative to another body.
  * 
- * Uses the centroid of the piece, offset slightly along the face normal,
+ * Uses a test point on the face material, offset slightly along the face normal,
  * to perform ray casting against the other body's faces.
  * 
- * We test from both sides of the face surface to handle boundary cases.
+ * For faces with holes, we need to find a point that's on the face material,
+ * not inside a hole.
  */
 export function classifyPiece(
   piece: FacePiece,
@@ -29,23 +30,22 @@ export function classifyPiece(
   model: TopoModel,
   ctx: NumericContext
 ): PieceClassification {
-  // Compute centroid of the piece in 2D
-  const centroid2D = computePolygonCentroid(piece.polygon);
+  // Find a test point on the face material (not in any hole)
+  const testPoint2D = findPointOnFaceMaterial(piece);
   
   // Convert to 3D
-  const centroid3D = unprojectFromPlane(centroid2D, piece.surface);
+  const testPoint3D = unprojectFromPlane(testPoint2D, piece.surface);
   
-  // Use a more significant offset for testing (0.001 units instead of tiny tolerance)
-  // This helps get clear inside/outside answers
+  // Use a more significant offset for testing
   const testOffset = Math.max(ctx.tol.length * 1000, 0.001);
   const normal = piece.surface.normal;
   
   // Test from the positive normal side
-  const testPointPos = add3(centroid3D, mul3(normal, testOffset));
+  const testPointPos = add3(testPoint3D, mul3(normal, testOffset));
   const insideFromPos = isPointInsideBody(testPointPos, otherBody, model, ctx);
   
   // Test from the negative normal side
-  const testPointNeg = add3(centroid3D, mul3(normal, -testOffset));
+  const testPointNeg = add3(testPoint3D, mul3(normal, -testOffset));
   const insideFromNeg = isPointInsideBody(testPointNeg, otherBody, model, ctx);
   
   // If both tests agree, use that result
@@ -59,12 +59,96 @@ export function classifyPiece(
   // If they disagree, the face is ON the boundary
   // For boolean operations, we treat boundary faces based on
   // which side faces the interior of the other solid
-  // If positive normal side is inside, face points into the solid
   if (insideFromPos) {
     return 'inside'; // Normal points into other body
   }
   
   return 'outside';
+}
+
+/**
+ * Find a point that's on the face material, avoiding any holes.
+ * 
+ * For faces without holes, just return the centroid.
+ * For faces with holes, find a point on the outer boundary that's not in any hole.
+ */
+function findPointOnFaceMaterial(piece: FacePiece): Vec2 {
+  const centroid = computePolygonCentroid(piece.polygon);
+  
+  // If no holes, centroid is fine
+  if (piece.holes.length === 0) {
+    return centroid;
+  }
+  
+  // Check if centroid is inside any hole
+  let centroidInHole = false;
+  for (const hole of piece.holes) {
+    if (pointInPolygon2D(centroid, hole)) {
+      centroidInHole = true;
+      break;
+    }
+  }
+  
+  if (!centroidInHole) {
+    return centroid;
+  }
+  
+  // Centroid is in a hole - find a point on the outer boundary that's not in a hole
+  // Try points along the first edge of the outer boundary
+  const n = piece.polygon.length;
+  for (let i = 0; i < n; i++) {
+    const p0 = piece.polygon[i];
+    const p1 = piece.polygon[(i + 1) % n];
+    
+    // Try midpoint of edge
+    const mid: Vec2 = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2];
+    
+    // Move slightly inward (toward centroid)
+    const towardCenter: Vec2 = [centroid[0] - mid[0], centroid[1] - mid[1]];
+    const len = Math.sqrt(towardCenter[0] ** 2 + towardCenter[1] ** 2);
+    if (len > 1e-10) {
+      const offset = 0.001;
+      const testPt: Vec2 = [mid[0] + towardCenter[0] / len * offset, mid[1] + towardCenter[1] / len * offset];
+      
+      // Check if this point is inside the outer polygon and not in any hole
+      if (pointInPolygon2D(testPt, piece.polygon)) {
+        let inHole = false;
+        for (const hole of piece.holes) {
+          if (pointInPolygon2D(testPt, hole)) {
+            inHole = true;
+            break;
+          }
+        }
+        if (!inHole) {
+          return testPt;
+        }
+      }
+    }
+  }
+  
+  // Fallback: try vertices of outer polygon
+  // They should definitely be on the face material (on the boundary at least)
+  return piece.polygon[0];
+}
+
+/**
+ * Point-in-polygon test for Vec2
+ */
+function pointInPolygon2D(point: Vec2, polygon: Vec2[]): boolean {
+  const n = polygon.length;
+  let inside = false;
+  
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygon[i][0], yi = polygon[i][1];
+    const xj = polygon[j][0], yj = polygon[j][1];
+    
+    if (((yi > point[1]) !== (yj > point[1])) &&
+        (point[0] < (xj - xi) * (point[1] - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  
+  return inside;
 }
 
 /**
