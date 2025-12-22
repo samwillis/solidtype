@@ -109,7 +109,7 @@ const Viewer: React.FC = () => {
 
   const { theme } = useTheme();
   const { registerRefs, cameraStateRef } = useViewer();
-  const { meshes, bodies } = useKernel();
+  const { meshes, bodies, sketchPlaneTransforms } = useKernel();
   const { selectFace, setHover, clearSelection: clearFaceSelection, selectedFeatureId, hoveredFeatureId } = useSelection();
   const { 
     mode: sketchMode, 
@@ -221,6 +221,7 @@ const Viewer: React.FC = () => {
   }, []);
 
   // Convert screen coordinates to sketch coordinates via ray-plane intersection
+  // Uses plane transform from kernel for accurate coordinate conversion on any plane
   const screenToSketch = useCallback((screenX: number, screenY: number, planeId: string): { x: number; y: number } | null => {
     const camera = cameraRef.current;
     const container = containerRef.current;
@@ -235,37 +236,46 @@ const Viewer: React.FC = () => {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
 
-    // Define sketch plane based on planeId
+    // Try to get plane transform from kernel (works for any plane/face)
+    const sketchId = sketchMode.sketchId;
+    const kernelTransform = sketchId ? sketchPlaneTransforms[sketchId] : null;
+    
     let planeNormal: THREE.Vector3;
     let planePoint: THREE.Vector3;
     let xDir: THREE.Vector3;
     let yDir: THREE.Vector3;
-
-    // Coordinate systems must match getPlaneTransform() for rendering
-    switch (planeId) {
-      case 'xy':
-        // XY plane: normal = +Z, sketch X = world X, sketch Y = world Y
-        planeNormal = new THREE.Vector3(0, 0, 1);
-        planePoint = new THREE.Vector3(0, 0, 0);
-        xDir = new THREE.Vector3(1, 0, 0);
-        yDir = new THREE.Vector3(0, 1, 0);
-        break;
-      case 'xz':
-        // XZ plane: normal = +Y, sketch X = world X, sketch Y = world Z
-        planeNormal = new THREE.Vector3(0, 1, 0);
-        planePoint = new THREE.Vector3(0, 0, 0);
-        xDir = new THREE.Vector3(1, 0, 0);
-        yDir = new THREE.Vector3(0, 0, 1);
-        break;
-      case 'yz':
-        // YZ plane: normal = +X, sketch X = world Y, sketch Y = world Z
-        planeNormal = new THREE.Vector3(1, 0, 0);
-        planePoint = new THREE.Vector3(0, 0, 0);
-        xDir = new THREE.Vector3(0, 1, 0);
-        yDir = new THREE.Vector3(0, 0, 1);
-        break;
-      default:
-        return null;
+    
+    if (kernelTransform) {
+      // Use the accurate plane transform from the kernel
+      planePoint = new THREE.Vector3(...kernelTransform.origin);
+      xDir = new THREE.Vector3(...kernelTransform.xDir);
+      yDir = new THREE.Vector3(...kernelTransform.yDir);
+      planeNormal = new THREE.Vector3(...kernelTransform.normal);
+    } else {
+      // Fallback for built-in planes before kernel responds
+      switch (planeId) {
+        case 'xy':
+          planeNormal = new THREE.Vector3(0, 0, 1);
+          planePoint = new THREE.Vector3(0, 0, 0);
+          xDir = new THREE.Vector3(1, 0, 0);
+          yDir = new THREE.Vector3(0, 1, 0);
+          break;
+        case 'xz':
+          planeNormal = new THREE.Vector3(0, 1, 0);
+          planePoint = new THREE.Vector3(0, 0, 0);
+          xDir = new THREE.Vector3(1, 0, 0);
+          yDir = new THREE.Vector3(0, 0, 1);
+          break;
+        case 'yz':
+          planeNormal = new THREE.Vector3(1, 0, 0);
+          planePoint = new THREE.Vector3(0, 0, 0);
+          xDir = new THREE.Vector3(0, 1, 0);
+          yDir = new THREE.Vector3(0, 0, 1);
+          break;
+        default:
+          // For face references or unknown planes, we need the kernel transform
+          return null;
+      }
     }
 
     // Intersect ray with plane
@@ -281,7 +291,7 @@ const Viewer: React.FC = () => {
     const sketchY = offset.dot(yDir);
 
     return { x: sketchX, y: sketchY };
-  }, []);
+  }, [sketchMode.sketchId, sketchPlaneTransforms]);
 
   // Snap to grid helper
   const snapToGrid = useCallback((x: number, y: number): { x: number; y: number } => {
@@ -772,8 +782,19 @@ const Viewer: React.FC = () => {
       renderer.getSize(rendererSize);
     }
 
-    // Helper to get plane transformation
-    const getPlaneTransform = (planeId: string) => {
+    // Helper to get plane transformation - uses kernel transform when available
+    const getPlaneTransform = (planeId: string, sketchId?: string) => {
+      // Try to use kernel transform for accurate plane coordinates
+      if (sketchId && sketchPlaneTransforms[sketchId]) {
+        const t = sketchPlaneTransforms[sketchId];
+        return {
+          origin: new THREE.Vector3(...t.origin),
+          xDir: new THREE.Vector3(...t.xDir),
+          yDir: new THREE.Vector3(...t.yDir),
+        };
+      }
+      
+      // Fallback for built-in planes
       switch (planeId) {
         case 'xy':
           return {
@@ -807,9 +828,10 @@ const Viewer: React.FC = () => {
       sketchData: SketchData,
       planeId: string,
       color: number,
-      pointSize: number
+      pointSize: number,
+      sketchId?: string
     ) => {
-      const { origin, xDir, yDir } = getPlaneTransform(planeId);
+      const { origin, xDir, yDir } = getPlaneTransform(planeId, sketchId);
 
       const toWorld = (x: number, y: number): THREE.Vector3 => {
         return new THREE.Vector3(
@@ -924,12 +946,12 @@ const Viewer: React.FC = () => {
       if (sketchElement) {
         const sketchData = getSketchData(sketchElement);
         console.log('[Viewer] Rendering active sketch:', sketchMode.sketchId, 'points:', sketchData.points.length);
-        renderSketch(sketchData, sketchMode.planeId, 0x00aaff, 1.5); // Blue, larger points
+        renderSketch(sketchData, sketchMode.planeId, 0x00aaff, 1.5, sketchMode.sketchId!); // Blue, larger points
       }
       
       // Render preview line (green dashed) for line tool
       if (previewLine && sketchMode.planeId) {
-        const { origin, xDir, yDir } = getPlaneTransform(sketchMode.planeId);
+        const { origin, xDir, yDir } = getPlaneTransform(sketchMode.planeId, sketchMode.sketchId!);
         
         const toWorld = (x: number, y: number): THREE.Vector3 => {
           return new THREE.Vector3(
@@ -983,11 +1005,11 @@ const Viewer: React.FC = () => {
       const sketchData = sketchFeature.data;
       if (!sketchData || (sketchData.points.length === 0 && sketchData.entities.length === 0)) continue;
       
-      renderSketch(sketchData, sketchFeature.plane, 0x888888, 1.0); // Grey, smaller points
+      renderSketch(sketchData, sketchFeature.plane, 0x888888, 1.0, sketchFeature.id); // Grey, smaller points
     }
 
     needsRenderRef.current = true;
-  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, doc.features, features, sceneReady, selectedFeatureId, hoveredFeatureId, previewLine]);
+  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, doc.features, features, sceneReady, selectedFeatureId, hoveredFeatureId, previewLine, sketchPlaneTransforms]);
 
   // Render selection highlights and constraint annotations (only when editing sketch)
   useEffect(() => {
@@ -1028,9 +1050,20 @@ const Viewer: React.FC = () => {
       renderer.getSize(rendererSize);
     }
 
-    // Get plane transformation
-    const getPlaneTransform = (planeId: string) => {
-      switch (planeId) {
+    // Get plane transformation - uses kernel transform when available
+    const getPlaneTransformForSketch = () => {
+      // Try to use kernel transform for accurate plane coordinates
+      if (sketchMode.sketchId && sketchPlaneTransforms[sketchMode.sketchId]) {
+        const t = sketchPlaneTransforms[sketchMode.sketchId];
+        return {
+          origin: new THREE.Vector3(...t.origin),
+          xDir: new THREE.Vector3(...t.xDir),
+          yDir: new THREE.Vector3(...t.yDir),
+        };
+      }
+      
+      // Fallback for built-in planes
+      switch (sketchMode.planeId) {
         case 'xy':
           return { origin: new THREE.Vector3(0, 0, 0), xDir: new THREE.Vector3(1, 0, 0), yDir: new THREE.Vector3(0, 1, 0) };
         case 'xz':
@@ -1042,7 +1075,7 @@ const Viewer: React.FC = () => {
       }
     };
 
-    const { origin, xDir, yDir } = getPlaneTransform(sketchMode.planeId);
+    const { origin, xDir, yDir } = getPlaneTransformForSketch();
     const toWorld = (x: number, y: number): THREE.Vector3 => {
       return new THREE.Vector3(
         origin.x + x * xDir.x + y * yDir.x,
@@ -1355,7 +1388,7 @@ const Viewer: React.FC = () => {
     }
 
     needsRenderRef.current = true;
-  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, selectedPoints, selectedLines, selectedConstraints, toggleConstraintSelection, getSketch, sceneReady, draggingDimensionId, dragCurrentOffset]);
+  }, [sketchMode.active, sketchMode.sketchId, sketchMode.planeId, selectedPoints, selectedLines, selectedConstraints, toggleConstraintSelection, getSketch, sceneReady, draggingDimensionId, dragCurrentOffset, sketchPlaneTransforms]);
 
   // Handle dimension label dragging for repositioning
   useEffect(() => {

@@ -83,11 +83,25 @@ export interface MeshMessage {
   color?: string;
 }
 
+/** Plane transform for converting between sketch 2D and world 3D coordinates */
+export interface PlaneTransform {
+  /** Origin point of the plane in world coordinates */
+  origin: [number, number, number];
+  /** X direction of the sketch coordinate system in world coordinates (unit vector) */
+  xDir: [number, number, number];
+  /** Y direction of the sketch coordinate system in world coordinates (unit vector) */
+  yDir: [number, number, number];
+  /** Normal direction of the plane in world coordinates (unit vector) */
+  normal: [number, number, number];
+}
+
 export interface SketchSolvedMessage {
   type: 'sketch-solved';
   sketchId: string;
   points: Array<{ id: string; x: number; y: number }>;
   status: string;
+  /** Plane transform for this sketch */
+  planeTransform?: PlaneTransform;
   dof?: {
     totalDOF: number;
     constrainedDOF: number;

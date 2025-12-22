@@ -18,6 +18,7 @@ import type {
   BuildError,
   BodyInfo,
   FeatureStatus,
+  PlaneTransform,
 } from '../worker/types';
 
 // ============================================================================
@@ -69,6 +70,8 @@ interface KernelContextValue {
       };
     }
   >;
+  /** Plane transforms for sketches (from kernel) */
+  sketchPlaneTransforms: Record<string, PlaneTransform>;
   /** Export model to STL format (Phase 18) */
   exportStl: (options?: { binary?: boolean; name?: string }) => Promise<ArrayBuffer | string>;
 }
@@ -123,6 +126,9 @@ export function KernelProvider({ children }: KernelProviderProps) {
         };
       }
     >
+  >({});
+  const [sketchPlaneTransforms, setSketchPlaneTransforms] = useState<
+    Record<string, PlaneTransform>
   >({});
 
   useEffect(() => {
@@ -182,6 +188,14 @@ export function KernelProvider({ children }: KernelProviderProps) {
             ...prev,
             [msg.sketchId]: { status: msg.status, dof: msg.dof },
           }));
+          
+          // Store the plane transform for this sketch
+          if (msg.planeTransform) {
+            setSketchPlaneTransforms((prev) => ({
+              ...prev,
+              [msg.sketchId]: msg.planeTransform!,
+            }));
+          }
 
           const sketchEl = findFeature(doc.features, msg.sketchId);
           if (sketchEl) {
@@ -319,6 +333,7 @@ export function KernelProvider({ children }: KernelProviderProps) {
     clearPreview,
     previewError,
     sketchSolveInfo,
+    sketchPlaneTransforms,
     exportStl,
   };
 

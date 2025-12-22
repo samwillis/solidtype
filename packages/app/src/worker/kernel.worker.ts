@@ -703,11 +703,19 @@ function interpretSketch(
 
   // Always notify the main thread of solve status/DOF.
   // Only include points when the solver actually moved them to avoid churn.
+  // Include plane transform so main thread can do coordinate conversion
+  const { origin, xDir, yDir, normal } = plane.surface;
   self.postMessage({
     type: 'sketch-solved',
     sketchId: id,
     points: maxDelta > 1e-9 ? data.points.map((p) => ({ id: p.id, x: p.x, y: p.y })) : [],
     status: solveResult.status,
+    planeTransform: {
+      origin: origin as [number, number, number],
+      xDir: xDir as [number, number, number],
+      yDir: yDir as [number, number, number],
+      normal: normal as [number, number, number],
+    },
     dof,
   } as WorkerToMainMessage);
 
