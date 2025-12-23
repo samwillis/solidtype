@@ -309,4 +309,144 @@ describe('Object-Oriented API', () => {
       expect(result.body).toBeInstanceOf(Body);
     });
   });
+
+  describe('sketch-based boolean operations (app-like flow)', () => {
+    it('should union two sketch-based extrusions', () => {
+      const session = new SolidSession();
+      const plane = session.getXYPlane();
+      
+      // First extrusion: 4x4x2 box at origin
+      const sketch1 = session.createSketch(plane);
+      sketch1.addRectangle(-2, -2, 4, 4);
+      const result1 = session.extrudeSketch(sketch1, {
+        operation: 'add',
+        distance: 2,
+      });
+      expect(result1.success).toBe(true);
+      expect(result1.body).toBeDefined();
+      
+      // Second extrusion: 2x2x4 at corner
+      const sketch2 = session.createSketch(plane);
+      sketch2.addRectangle(0, 0, 2, 2);
+      const result2 = session.extrudeSketch(sketch2, {
+        operation: 'add',
+        distance: 4,
+      });
+      expect(result2.success).toBe(true);
+      expect(result2.body).toBeDefined();
+      
+      // Union the two bodies
+      const unionResult = session.union(result1.body!, result2.body!);
+      expect(unionResult.success).toBe(true);
+      expect(unionResult.body).toBeDefined();
+      
+      // L-shaped union should have multiple faces
+      const faces = unionResult.body!.getFaces();
+      expect(faces.length).toBeGreaterThanOrEqual(10);
+      
+      // Tessellate and verify valid mesh
+      const mesh = unionResult.body!.tessellate();
+      expect(mesh.positions.length).toBeGreaterThan(0);
+      expect(mesh.normals.length).toBeGreaterThan(0);
+      expect(mesh.indices.length).toBeGreaterThan(0);
+    });
+
+    it('should subtract sketch-based extrusion (through cut)', () => {
+      const session = new SolidSession();
+      const plane = session.getXYPlane();
+      
+      // Base: 4x4x2 box
+      const sketch1 = session.createSketch(plane);
+      sketch1.addRectangle(-2, -2, 4, 4);
+      const result1 = session.extrudeSketch(sketch1, {
+        operation: 'add',
+        distance: 2,
+      });
+      expect(result1.success).toBe(true);
+      
+      // Tool: 2x2x4 through the center
+      const sketch2 = session.createSketch(plane);
+      sketch2.addRectangle(-1, -1, 2, 2);
+      const result2 = session.extrudeSketch(sketch2, {
+        operation: 'add',
+        distance: 4,
+      });
+      expect(result2.success).toBe(true);
+      
+      // Subtract
+      const subResult = session.subtract(result1.body!, result2.body!);
+      expect(subResult.success).toBe(true);
+      expect(subResult.body).toBeDefined();
+      
+      // Through-cut should have 10-14 faces
+      const faces = subResult.body!.getFaces();
+      expect(faces.length).toBeGreaterThanOrEqual(10);
+      expect(faces.length).toBeLessThanOrEqual(14);
+      
+      // Tessellate and verify
+      const mesh = subResult.body!.tessellate();
+      expect(mesh.positions.length).toBeGreaterThan(0);
+      
+      // Verify no NaN values
+      for (let i = 0; i < mesh.positions.length; i++) {
+        expect(Number.isFinite(mesh.positions[i])).toBe(true);
+      }
+    });
+
+    it('should handle sequential sketch-based operations', () => {
+      const session = new SolidSession();
+      const plane = session.getXYPlane();
+      
+      // First extrusion
+      const sketch1 = session.createSketch(plane);
+      sketch1.addRectangle(-3, -3, 6, 6);
+      const result1 = session.extrudeSketch(sketch1, {
+        operation: 'add',
+        distance: 2,
+      });
+      expect(result1.success).toBe(true);
+      
+      // Second extrusion (to union)
+      const sketch2 = session.createSketch(plane);
+      sketch2.addRectangle(1, 1, 2, 2);
+      const result2 = session.extrudeSketch(sketch2, {
+        operation: 'add',
+        distance: 4,
+      });
+      expect(result2.success).toBe(true);
+      
+      // Union
+      const unionResult = session.union(result1.body!, result2.body!);
+      expect(unionResult.success).toBe(true);
+      
+      // Third extrusion (to subtract)
+      const sketch3 = session.createSketch(plane);
+      sketch3.addRectangle(-1, -1, 1, 1);
+      const result3 = session.extrudeSketch(sketch3, {
+        operation: 'add',
+        distance: 4,
+      });
+      expect(result3.success).toBe(true);
+      
+      // Subtract from the union result
+      const subResult = session.subtract(unionResult.body!, result3.body!);
+      expect(subResult.success).toBe(true);
+      expect(subResult.body).toBeDefined();
+      
+      // Verify faces exist
+      const faces = subResult.body!.getFaces();
+      expect(faces.length).toBeGreaterThan(6);
+      
+      // Tessellate and verify valid mesh
+      const mesh = subResult.body!.tessellate();
+      expect(mesh.positions.length).toBeGreaterThan(0);
+      expect(mesh.indices.length).toBeGreaterThan(0);
+      
+      // Check all indices are valid
+      const vertexCount = mesh.positions.length / 3;
+      for (let i = 0; i < mesh.indices.length; i++) {
+        expect(mesh.indices[i]).toBeLessThan(vertexCount);
+      }
+    });
+  });
 });

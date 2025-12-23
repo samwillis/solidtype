@@ -899,9 +899,14 @@ function interpretExtrude(
 
   // Handle cut operation
   if (op === 'cut') {
+    console.log('[Worker] Extrude CUT operation');
+    console.log(`[Worker] Tool body has ${result.body.getFaces().length} faces`);
     for (const [existingId, entry] of bodyMap) {
+      console.log(`[Worker] Subtracting from body ${existingId}, faces before: ${entry.body.getFaces().length}`);
       const boolResult = session.subtract(entry.body, result.body);
+      console.log(`[Worker] Subtract result: success=${boolResult.success}, error=${boolResult.error || 'none'}`);
       if (boolResult.success && boolResult.body) {
+        console.log(`[Worker] After subtract: ${boolResult.body.getFaces().length} faces`);
         bodyMap.set(existingId, { ...entry, body: boolResult.body });
       }
     }
@@ -959,13 +964,18 @@ function interpretExtrude(
   }
 
   // mergeScope === 'auto'
+  console.log('[Worker] Extrude ADD with auto merge');
+  console.log(`[Worker] New extrusion has ${result.body.getFaces().length} faces`);
   let mergedBody = result.body;
   let mergedIntoId: string | null = null;
   let mergedEntry: BodyEntry | null = null;
 
   for (const [existingId, entry] of bodyMap) {
+    console.log(`[Worker] Union with body ${existingId}, faces: ${entry.body.getFaces().length}`);
     const unionResult = session.union(entry.body, mergedBody);
+    console.log(`[Worker] Union result: success=${unionResult.success}, error=${unionResult.error || 'none'}`);
     if (unionResult.success && unionResult.body) {
+      console.log(`[Worker] After union: ${unionResult.body.getFaces().length} faces`);
       mergedBody = unionResult.body;
       if (!mergedIntoId) {
         mergedIntoId = existingId;
@@ -975,6 +985,7 @@ function interpretExtrude(
   }
 
   if (mergedIntoId && mergedEntry) {
+    console.log(`[Worker] Merged into ${mergedIntoId}, final faces: ${mergedBody.getFaces().length}`);
     bodyMap.set(mergedIntoId, { ...mergedEntry, body: mergedBody });
     return {
       body: null,
@@ -1380,11 +1391,31 @@ function performRebuild(): void {
 
 function sendMesh(featureId: string, body: Body, color?: string): void {
   try {
+    // Debug: Log body info before tessellation
+    const faces = body.getFaces();
+    console.log(`[Worker] sendMesh for ${featureId}: ${faces.length} faces`);
+    
     const mesh = body.tessellate();
 
     const positions = new Float32Array(mesh.positions);
     const normals = new Float32Array(mesh.normals);
     const indices = new Uint32Array(mesh.indices);
+    
+    // Debug: Log mesh stats
+    console.log(`[Worker] Mesh stats: ${positions.length / 3} vertices, ${indices.length / 3} triangles`);
+    
+    // Debug: Check for NaN/Infinity in positions
+    let hasInvalidPositions = false;
+    for (let i = 0; i < positions.length; i++) {
+      if (!Number.isFinite(positions[i])) {
+        hasInvalidPositions = true;
+        console.error(`[Worker] Invalid position at index ${i}: ${positions[i]}`);
+        break;
+      }
+    }
+    if (!hasInvalidPositions) {
+      console.log('[Worker] All positions are valid');
+    }
 
     const transferableMesh: TransferableMesh = {
       positions,
