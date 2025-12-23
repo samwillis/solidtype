@@ -400,33 +400,28 @@ export function computeFaceIntersection(
 /**
  * Handle coplanar face intersection (polygon overlap)
  * 
+ * For coplanar faces with partial overlap, we need to add intersection segments
+ * so that each face gets subdivided into overlapping and non-overlapping regions.
+ * This allows proper classification of each region.
+ * 
  * For coplanar faces:
- * - SAME normal + UNION: Skip imprinting (faces are part of same exterior surface)
- * - SAME normal + SUBTRACT/INTERSECT: Imprint for hole creation
- * - OPPOSITE normal: Always imprint for proper splitting
+ * - If polygons don't overlap at all: return null (no intersection)
+ * - If polygons partially overlap: add boundary segments for subdivision
+ * - If polygons exactly coincide: return null (no subdivision needed)
  */
 function handleCoplanarFaces(
   faceA: FacePolygon2D,
   faceB: FacePolygon2D,
   _ctx: NumericContext,
-  operation?: 'union' | 'subtract' | 'intersect'
+  _operation?: 'union' | 'subtract' | 'intersect'
 ): { segmentsA: Segment2D[]; segmentsB: Segment2D[] } | null {
   const dotNormals = dot3(faceA.surface.normal, faceB.surface.normal);
-  
-  if (dotNormals > 0.9 && operation === 'union') {
-    // Same normal direction + UNION
-    // Both faces are part of the same exterior surface
-    // Don't imprint; classification will handle keeping the correct faces
-    return null;
-  }
   
   if (Math.abs(dotNormals) < 0.9) {
     // Normals neither aligned nor opposite - shouldn't happen for truly coplanar faces
     return null;
   }
   
-  // For opposite normals (dotNormals < -0.9) or same normals with subtract/intersect,
-  // add intersection segments
   const segmentsA: Segment2D[] = [];
   const segmentsB: Segment2D[] = [];
   
@@ -436,7 +431,57 @@ function handleCoplanarFaces(
     return projectToPlane2D(p3d, faceA.surface);
   });
   
-  // Add edges of B that are inside A
+  // Check if there's any overlap between the polygons
+  // A vertex of B inside A, or a vertex of A inside B, or edges intersecting
+  let hasOverlap = false;
+  
+  // Check if any B vertex is strictly inside A
+  for (const p of bInA) {
+    if (pointInPolygon(p, faceA.outer)) {
+      hasOverlap = true;
+      break;
+    }
+  }
+  
+  // Check if any A vertex is strictly inside B (in B's coordinate system)
+  if (!hasOverlap) {
+    const aInB: Vec2[] = faceA.outer.map(p => {
+      const p3d = unprojectFromPlane(p, faceA.surface);
+      return projectToPlane2D(p3d, faceB.surface);
+    });
+    for (const p of aInB) {
+      if (pointInPolygon(p, faceB.outer)) {
+        hasOverlap = true;
+        break;
+      }
+    }
+  }
+  
+  // Check for edge-edge intersections if no vertex containment found
+  if (!hasOverlap) {
+    // Check if any edge of B crosses any edge of A
+    outer: for (let i = 0; i < bInA.length; i++) {
+      const b1 = bInA[i];
+      const b2 = bInA[(i + 1) % bInA.length];
+      
+      for (let j = 0; j < faceA.outer.length; j++) {
+        const a1 = faceA.outer[j];
+        const a2 = faceA.outer[(j + 1) % faceA.outer.length];
+        
+        if (edgesIntersect(a1, a2, b1, b2)) {
+          hasOverlap = true;
+          break outer;
+        }
+      }
+    }
+  }
+  
+  if (!hasOverlap) {
+    // No overlap at all - no intersection
+    return null;
+  }
+  
+  // There is overlap - add edges of B that are inside or cross A's boundary
   for (let i = 0; i < bInA.length; i++) {
     const p1 = bInA[i];
     const p2 = bInA[(i + 1) % bInA.length];
@@ -444,7 +489,8 @@ function handleCoplanarFaces(
     const p1Inside = pointInPolygon(p1, faceA.outer);
     const p2Inside = pointInPolygon(p2, faceA.outer);
     
-    if (p1Inside || p2Inside) {
+    // Add if either endpoint is inside, or if edge crosses A's boundary
+    if (p1Inside || p2Inside || edgesCrossBoundary(p1, p2, faceA.outer)) {
       segmentsA.push({
         a: p1,
         b: p2,
@@ -469,7 +515,7 @@ function handleCoplanarFaces(
     const p1Inside = pointInPolygon(p1, faceB.outer);
     const p2Inside = pointInPolygon(p2, faceB.outer);
     
-    if (p1Inside || p2Inside) {
+    if (p1Inside || p2Inside || edgesCrossBoundary(p1, p2, faceB.outer)) {
       segmentsB.push({
         a: p1,
         b: p2,
@@ -481,6 +527,49 @@ function handleCoplanarFaces(
     }
   }
   
+  // If no segments were added (e.g., exact coincidence), return null
+  if (segmentsA.length === 0 && segmentsB.length === 0) {
+    return null;
+  }
+  
   return { segmentsA, segmentsB };
+}
+
+/**
+ * Check if two line segments intersect (not just touch at endpoints)
+ */
+function edgesIntersect(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2): boolean {
+  const d1 = cross2D(a1, a2, b1);
+  const d2 = cross2D(a1, a2, b2);
+  const d3 = cross2D(b1, b2, a1);
+  const d4 = cross2D(b1, b2, a2);
+  
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+      ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Cross product for 2D orientation test
+ */
+function cross2D(o: Vec2, a: Vec2, b: Vec2): number {
+  return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+}
+
+/**
+ * Check if an edge crosses a polygon's boundary
+ */
+function edgesCrossBoundary(p1: Vec2, p2: Vec2, polygon: Vec2[]): boolean {
+  for (let i = 0; i < polygon.length; i++) {
+    const a1 = polygon[i];
+    const a2 = polygon[(i + 1) % polygon.length];
+    if (edgesIntersect(a1, a2, p1, p2)) {
+      return true;
+    }
+  }
+  return false;
 }
 

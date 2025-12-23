@@ -7,7 +7,7 @@
 
 import type { Vec2 } from '../../num/vec2.js';
 import type { Vec3 } from '../../num/vec3.js';
-import { vec3, add3, mul3, sub3, dot3 } from '../../num/vec3.js';
+import { vec3, add3, mul3, sub3, dot3, normalize3 } from '../../num/vec3.js';
 import type { NumericContext } from '../../num/tolerance.js';
 import type { TopoModel } from '../../topo/TopoModel.js';
 import type { BodyId, FaceId } from '../../topo/handles.js';
@@ -279,8 +279,9 @@ function isPointInsideBody(
   model: TopoModel,
   ctx: NumericContext
 ): boolean {
-  // Cast ray along +X axis
-  const rayDir: Vec3 = vec3(1, 0, 0);
+  // Cast ray along a slightly off-axis direction to avoid hitting face edges/corners exactly.
+  // Using irrational-ish numbers to minimize the chance of hitting exact boundaries.
+  const rayDir: Vec3 = normalize3(vec3(1, 0.00017, 0.00013));
   let intersectionCount = 0;
   
   const shells = model.getBodyShells(bodyId);
