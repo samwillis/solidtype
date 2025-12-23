@@ -15,7 +15,7 @@ import { TopoModel } from '../topo/TopoModel.js';
 import type { FaceId, LoopId } from '../topo/handles.js';
 import type { Mesh, TessellationOptions } from './types.js';
 import { createMesh, DEFAULT_TESSELLATION_OPTIONS } from './types.js';
-import { triangulatePolygon } from './triangulate.js';
+import { triangulatePolygon, triangulatePolygonWithHoles } from './triangulate.js';
 
 /**
  * Project a 3D point onto a plane's 2D coordinate system
@@ -68,14 +68,35 @@ function tessellatePlanarFace(
   }
   
   const outerLoop = loops[0];
-  const vertices3D = getLoopVertices(model, outerLoop);
+  const outerVertices3D = getLoopVertices(model, outerLoop);
   
-  if (vertices3D.length < 3) {
+  if (outerVertices3D.length < 3) {
     return createMesh([], [], []);
   }
   
-  const vertices2D: Vec2[] = vertices3D.map(v => projectToPlane(v, surface));
-  const triangleIndices = triangulatePolygon(vertices2D);
+  const outerVertices2D: Vec2[] = outerVertices3D.map(v => projectToPlane(v, surface));
+  
+  // Collect all vertices (outer + holes) for position/normal buffers
+  const allVertices3D: Vec3[] = [...outerVertices3D];
+  
+  // Collect hole vertices
+  const holes2D: Vec2[][] = [];
+  for (let i = 1; i < loops.length; i++) {
+    const holeVertices3D = getLoopVertices(model, loops[i]);
+    if (holeVertices3D.length < 3) continue;
+    
+    const holeVertices2D = holeVertices3D.map(v => projectToPlane(v, surface));
+    holes2D.push(holeVertices2D);
+    allVertices3D.push(...holeVertices3D);
+  }
+  
+  // Triangulate with holes if any
+  let triangleIndices: number[];
+  if (holes2D.length > 0) {
+    triangleIndices = triangulatePolygonWithHoles(outerVertices2D, holes2D);
+  } else {
+    triangleIndices = triangulatePolygon(outerVertices2D);
+  }
   
   if (triangleIndices.length === 0) {
     return createMesh([], [], []);
@@ -89,7 +110,7 @@ function tessellatePlanarFace(
     normal = [-normal[0], -normal[1], -normal[2]];
   }
   
-  for (const v of vertices3D) {
+  for (const v of allVertices3D) {
     positions.push(v[0], v[1], v[2]);
     normals.push(normal[0], normal[1], normal[2]);
   }
