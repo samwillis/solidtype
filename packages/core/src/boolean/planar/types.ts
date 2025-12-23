@@ -79,6 +79,14 @@ export interface FacePiece {
 export type BoolOp = 'union' | 'subtract' | 'intersect';
 
 /**
+ * 3D axis-aligned bounding box
+ */
+export interface BoundingBox3D {
+  min: Vec3;
+  max: Vec3;
+}
+
+/**
  * Result of the selection phase
  */
 export interface SelectedPieces {

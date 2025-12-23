@@ -965,9 +965,18 @@ function interpretExtrude(
       } else {
         lastError = boolResult.error;
         console.error(`[Worker] Boolean subtract failed: ${boolResult.error}`);
+        
+        // Check if failure is due to non-planar faces
+        if (boolResult.error?.includes('planar')) {
+          console.error(`[Worker] NOTE: Boolean failed because bodies contain non-planar faces (arcs, circles, or curved surfaces). Curved booleans are not yet implemented.`);
+        }
       }
     }
     if (!anySuccess && bodyMap.size > 0 && lastError) {
+      // Include hint about non-planar faces if applicable
+      if (lastError.includes('planar')) {
+        throw new Error(`Cut operation failed: ${lastError}. Sketches with arcs/circles create non-planar faces which are not yet supported.`);
+      }
       throw new Error(`Cut operation failed: ${lastError}`);
     }
     return { body: null, bodyEntryId: null };
@@ -1046,6 +1055,11 @@ function interpretExtrude(
       // Log warning but continue - bodies will remain separate
       console.warn(`[Worker] Union failed (bodies will remain separate): ${unionResult.error}`);
       mergeWarnings.push(`Union with existing body failed: ${unionResult.error}`);
+      
+      // Check if failure is due to non-planar faces
+      if (unionResult.error.includes('planar')) {
+        console.error(`[Worker] NOTE: Boolean failed because bodies contain non-planar faces (arcs, circles, or curved surfaces). Curved booleans are not yet implemented.`);
+      }
     }
   }
 

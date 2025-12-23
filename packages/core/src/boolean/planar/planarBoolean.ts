@@ -173,7 +173,8 @@ export function planarBoolean(
   classifyAllPieces(allPiecesB, bodyA, model, ctx);
   
   // Select pieces based on operation
-  const selected = selectPieces(allPiecesA, allPiecesB, operation);
+  // Pass bounding boxes to filter pieces that extend beyond the other body
+  const selected = selectPieces(allPiecesA, allPiecesB, operation, aabbA, aabbB);
   
   // Regularize (remove slivers)
   selected.fromA = regularize(selected.fromA);
@@ -297,6 +298,10 @@ function imprintFaceAndExtractPieces(
   // We only want the CCW (positive area) ones to avoid duplicates.
   const faceData: { polygon: Vec2[]; area: number; centroid: Vec2 }[] = [];
   
+  // Compute bounding box of original face for validation
+  const originalBounds = computePolygonBounds(polygon.outer);
+  const boundsPadding = tolerance * 10;
+  
   for (const face of dcel.faces) {
     if (face.isUnbounded) continue;
     if (face.outerComponent === -1) continue;
@@ -309,6 +314,18 @@ function imprintFaceAndExtractPieces(
     // Skip degenerate and CW (negative area) faces
     // CW faces are the "other side" of CCW faces - we don't want duplicates
     if (area < tolerance * tolerance) continue;
+    
+    // Validate: extracted piece should be within original face bounds
+    // (with some tolerance for numerical precision)
+    const pieceBounds = computePolygonBounds(facePolygon);
+    if (pieceBounds.minX < originalBounds.minX - boundsPadding ||
+        pieceBounds.maxX > originalBounds.maxX + boundsPadding ||
+        pieceBounds.minY < originalBounds.minY - boundsPadding ||
+        pieceBounds.maxY > originalBounds.maxY + boundsPadding) {
+      // This piece extends beyond the original face - skip it
+      // This can happen when the DCEL includes segments from intersecting faces
+      continue;
+    }
     
     // Compute centroid for containment testing
     const centroid = computePolygonCentroid2D(facePolygon);
@@ -395,6 +412,29 @@ function computePolygonCentroid2D(polygon: Vec2[]): Vec2 {
   }
   
   return [cx / (6 * area), cy / (6 * area)];
+}
+
+/**
+ * Compute bounding box of a 2D polygon
+ */
+function computePolygonBounds(polygon: Vec2[]): { minX: number; maxX: number; minY: number; maxY: number } {
+  if (polygon.length === 0) {
+    return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  }
+  
+  let minX = polygon[0][0];
+  let maxX = polygon[0][0];
+  let minY = polygon[0][1];
+  let maxY = polygon[0][1];
+  
+  for (let i = 1; i < polygon.length; i++) {
+    minX = Math.min(minX, polygon[i][0]);
+    maxX = Math.max(maxX, polygon[i][0]);
+    minY = Math.min(minY, polygon[i][1]);
+    maxY = Math.max(maxY, polygon[i][1]);
+  }
+  
+  return { minX, maxX, minY, maxY };
 }
 
 /**

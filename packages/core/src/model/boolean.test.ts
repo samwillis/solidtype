@@ -445,6 +445,70 @@ describe('boolean operations', () => {
         }
       }
     });
+
+    it('corner notch cut - tool extends diagonally beyond body', () => {
+      // Base: 4x4x4 box
+      const boxA = createBox(model, { center: vec3(0, 0, 2), width: 4, depth: 4, height: 4 });
+      
+      // Tool: 3x3x6 box offset to corner, extending beyond in Z
+      // This tests the case where the tool extends beyond in multiple directions
+      const boxB = createBox(model, { center: vec3(1.5, 1.5, 2), width: 3, depth: 3, height: 6 });
+      
+      const result = subtract(model, boxA, boxB);
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+      
+      if (result.body) {
+        const shells = model.getBodyShells(result.body);
+        const faces = model.getShellFaces(shells[0]);
+        
+        console.log(`Corner notch: ${faces.length} faces`);
+        
+        // Check no vertex extends beyond original body bounds
+        for (const faceId of faces) {
+          const loops = model.getFaceLoops(faceId);
+          if (loops.length === 0) continue;
+          
+          for (const he of model.iterateLoopHalfEdges(loops[0])) {
+            const vertex = model.getHalfEdgeStartVertex(he);
+            const pos = model.getVertexPosition(vertex);
+            
+            // All vertices should be within original body bounds
+            expect(pos[0]).toBeGreaterThanOrEqual(-2.01);
+            expect(pos[0]).toBeLessThanOrEqual(2.01);
+            expect(pos[1]).toBeGreaterThanOrEqual(-2.01);
+            expect(pos[1]).toBeLessThanOrEqual(2.01);
+            expect(pos[2]).toBeGreaterThanOrEqual(-0.01);
+            expect(pos[2]).toBeLessThanOrEqual(4.01);
+          }
+        }
+        
+        // Verify no triangular faces (all faces should have at least 4 vertices for this box-based cut)
+        // Note: Faces can have holes, so we check outer loop
+        let triangularFaces = 0;
+        for (const faceId of faces) {
+          const loops = model.getFaceLoops(faceId);
+          if (loops.length === 0) continue;
+          
+          let vertexCount = 0;
+          for (const _he of model.iterateLoopHalfEdges(loops[0])) {
+            vertexCount++;
+          }
+          
+          if (vertexCount === 3) {
+            triangularFaces++;
+            const surfaceIdx = model.getFaceSurfaceIndex(faceId);
+            const surface = model.getSurface(surfaceIdx);
+            if (surface.kind === 'plane') {
+              console.log(`Warning: Triangular face found with normal [${surface.normal.map(n => n.toFixed(2)).join(', ')}]`);
+            }
+          }
+        }
+        
+        // For a box-box subtraction, we shouldn't have triangular faces
+        expect(triangularFaces).toBe(0);
+      }
+    });
   });
 
   describe('non-axis-aligned planar faces', () => {
