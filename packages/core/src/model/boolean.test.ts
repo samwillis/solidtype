@@ -395,6 +395,56 @@ describe('boolean operations', () => {
         }
       }
     });
+
+    it('horizontal slot cut from side of body', () => {
+      // Base: 4x4x4 box at origin (width=X, depth=Y, height=Z)
+      // This creates a box from (-2,-2,0) to (2,2,4)
+      const boxA = createBox(model, { center: vec3(0, 0, 2), width: 4, depth: 4, height: 4 });
+      
+      // Tool: 2x8x2 slot coming from the +X side, extending beyond the body
+      // Positioned so it cuts through the middle of boxA from the side
+      // Y extends from -4 to +4 (beyond body's -2 to +2)
+      // Z from 1 to 3 (within body's 0 to 4)
+      const boxB = createBox(model, { center: vec3(1, 0, 2), width: 2, depth: 8, height: 2 });
+      
+      const result = subtract(model, boxA, boxB);
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+      
+      if (result.body) {
+        const shells = model.getBodyShells(result.body);
+        const faces = model.getShellFaces(shells[0]);
+        
+        console.log(`Horizontal slot: ${faces.length} faces`);
+        
+        // Should have multiple faces due to the slot
+        expect(faces.length).toBeGreaterThanOrEqual(10);
+        
+        // Check that no vertex extends beyond the original body's bounds
+        // plus a small tolerance for the slot interior
+        for (const faceId of faces) {
+          const loops = model.getFaceLoops(faceId);
+          if (loops.length === 0) continue;
+          
+          for (const he of model.iterateLoopHalfEdges(loops[0])) {
+            const vertex = model.getHalfEdgeStartVertex(he);
+            const pos = model.getVertexPosition(vertex);
+            
+            // X should be within [-2, 2]
+            expect(pos[0]).toBeGreaterThanOrEqual(-2.01);
+            expect(pos[0]).toBeLessThanOrEqual(2.01);
+            
+            // Y should be within [-2, 2] (slot extends beyond but result shouldn't)
+            expect(pos[1]).toBeGreaterThanOrEqual(-2.01);
+            expect(pos[1]).toBeLessThanOrEqual(2.01);
+            
+            // Z should be within [0, 4]
+            expect(pos[2]).toBeGreaterThanOrEqual(-0.01);
+            expect(pos[2]).toBeLessThanOrEqual(4.01);
+          }
+        }
+      }
+    });
   });
 
   describe('non-axis-aligned planar faces', () => {

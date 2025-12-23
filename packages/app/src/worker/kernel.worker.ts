@@ -936,7 +936,7 @@ function interpretExtrude(
       if (boolResult.success && boolResult.body) {
         console.log(`[Worker] After subtract: ${boolResult.body.getFaces().length} faces`);
         
-        // Debug: Log result body face info
+        // Debug: Log result body face info with vertices
         const resultFaces = boolResult.body.getFaces();
         for (let i = 0; i < resultFaces.length; i++) {
           const face = resultFaces[i];
@@ -944,7 +944,19 @@ function interpretExtrude(
           const surface = model.getSurface(surfaceIdx);
           if (surface.kind === 'plane') {
             const loops = model.getFaceLoops(face.id);
-            console.log(`[Worker] Result face ${i}: normal=[${surface.normal.map(n => n.toFixed(3)).join(', ')}], loops=${loops.length}`);
+            const normalStr = `[${surface.normal.map(n => n.toFixed(2)).join(', ')}]`;
+            
+            // Get vertex positions for debugging
+            let vertexCount = 0;
+            let minZ = Infinity, maxZ = -Infinity;
+            for (const he of model.iterateLoopHalfEdges(loops[0])) {
+              const pos = model.getVertexPosition(model.getHalfEdgeStartVertex(he));
+              minZ = Math.min(minZ, pos[2]);
+              maxZ = Math.max(maxZ, pos[2]);
+              vertexCount++;
+            }
+            
+            console.log(`[Worker] Result face ${i}: normal=${normalStr}, loops=${loops.length}${loops.length > 1 ? ' HAS_HOLE' : ''}, verts=${vertexCount}, z=[${minZ.toFixed(2)},${maxZ.toFixed(2)}]`);
           }
         }
         

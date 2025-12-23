@@ -73,6 +73,11 @@ export function stitchPieces(
   
   // Add faces from A
   for (const piece of selected.fromA) {
+    // Validate polygon has at least 3 vertices
+    if (piece.polygon.length < 3) {
+      console.warn(`[Boolean] Skipping degenerate A piece with ${piece.polygon.length} vertices`);
+      continue;
+    }
     const faceId = addPieceAsFace(model, piece, shell, false, getOrCreateVertex);
     faces.push(faceId);
     facesFromA.push({ newFace: faceId, sourceFace: piece.sourceFace });
@@ -80,6 +85,11 @@ export function stitchPieces(
   
   // Add faces from B (possibly flipped)
   for (const piece of selected.fromB) {
+    // Validate polygon has at least 3 vertices
+    if (piece.polygon.length < 3) {
+      console.warn(`[Boolean] Skipping degenerate B piece with ${piece.polygon.length} vertices`);
+      continue;
+    }
     const faceId = addPieceAsFace(model, piece, shell, selected.flipB, getOrCreateVertex);
     faces.push(faceId);
     facesFromB.push({ newFace: faceId, sourceFace: piece.sourceFace });
