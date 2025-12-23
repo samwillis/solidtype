@@ -176,4 +176,187 @@ describe('boolean operations', () => {
       }
     });
   });
+
+  describe('extrude-like scenarios (user-reported cases)', () => {
+    // These tests match the user's reported scenarios:
+    // - First extrude creates a base box
+    // - Second extrude adds/cuts from the base
+    
+    it('union of overlapping boxes creates L-shaped solid', () => {
+      // Simulating: First extrude 4x4x2 at origin, second 2x2x4 at corner
+      const boxA = createBox(model, { center: vec3(0, 0, 1), width: 4, height: 4, depth: 2 });
+      const boxB = createBox(model, { center: vec3(1, 1, 2), width: 2, height: 2, depth: 4 });
+      
+      const result = union(model, boxA, boxB);
+      
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+      
+      if (result.body) {
+        const shells = model.getBodyShells(result.body);
+        const faces = model.getShellFaces(shells[0]);
+        
+        // L-shaped union should have ~13 faces:
+        // - 1 bottom (z=0)
+        // - 1 top at z=2 (full 4x4)
+        // - 1 top at z=4 (small 2x2)
+        // - ~10 side faces
+        expect(faces.length).toBeGreaterThanOrEqual(10);
+        expect(faces.length).toBeLessThanOrEqual(18);
+      }
+    });
+
+    it('subtract creates through-hole with correct face count', () => {
+      // Simulating: 4x4x2 box with 2x2x4 tool going completely through
+      const boxA = createBox(model, { center: vec3(0, 0, 1), width: 4, height: 4, depth: 2 });
+      const boxB = createBox(model, { center: vec3(0, 0, 2), width: 2, height: 2, depth: 4 });
+      
+      const result = subtract(model, boxA, boxB);
+      
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+      
+      if (result.body) {
+        const shells = model.getBodyShells(result.body);
+        const faces = model.getShellFaces(shells[0]);
+        
+        // Through-hole implementation approach:
+        // Option A: 2 holed faces + 4 outer walls + 4 inner walls = 10 faces
+        // Option B: Top/bottom as separate pieces (frame-like shapes) + walls = 11+ faces
+        // Current implementation uses approach B (splitting faces rather than multi-loop holes)
+        expect(faces.length).toBeGreaterThanOrEqual(10);
+        expect(faces.length).toBeLessThanOrEqual(14);
+        
+        // Verify all faces have valid loops
+        for (const faceId of faces) {
+          const loops = model.getFaceLoops(faceId);
+          expect(loops.length).toBeGreaterThanOrEqual(1);
+        }
+      }
+    });
+
+    it('subtract creates blind pocket when tool does not go through', () => {
+      // 4x4x4 box with 2x2x2 pocket from top
+      const boxA = createBox(model, { center: vec3(0, 0, 2), width: 4, height: 4, depth: 4 });
+      const boxB = createBox(model, { center: vec3(0, 0, 3), width: 2, height: 2, depth: 2 }); // only goes 2 deep
+      
+      const result = subtract(model, boxA, boxB);
+      
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+      
+      if (result.body) {
+        const shells = model.getBodyShells(result.body);
+        const faces = model.getShellFaces(shells[0]);
+        
+        // Blind pocket should have:
+        // - 1 top face with hole
+        // - 4 outer side walls
+        // - 1 bottom (unchanged)
+        // - 4 inner pocket walls
+        // - 1 pocket bottom
+        expect(faces.length).toBe(11);
+      }
+    });
+
+    it('union of two boxes sharing a face produces valid merged body', () => {
+      // Two boxes touching at x=2
+      const boxA = createBox(model, { center: vec3(1, 0, 0), width: 2, height: 2, depth: 2 });
+      const boxB = createBox(model, { center: vec3(3, 0, 0), width: 2, height: 2, depth: 2 });
+      
+      const result = union(model, boxA, boxB);
+      
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+      
+      if (result.body) {
+        const shells = model.getBodyShells(result.body);
+        const faces = model.getShellFaces(shells[0]);
+        
+        // The internal shared faces are not removed in current implementation
+        // (that would require face stitching/merging which is a healing step)
+        // For now, we expect the boolean to produce a valid body
+        // 6 faces (ideal) to 10 faces (with internal faces kept)
+        expect(faces.length).toBeGreaterThanOrEqual(6);
+        expect(faces.length).toBeLessThanOrEqual(10);
+        
+        // Verify all faces have valid loops
+        for (const faceId of faces) {
+          const loops = model.getFaceLoops(faceId);
+          expect(loops.length).toBeGreaterThanOrEqual(1);
+        }
+      }
+    });
+
+    it('sequential unions maintain correct topology', () => {
+      // First box
+      const boxA = createBox(model, { center: vec3(0, 0, 1), width: 4, height: 4, depth: 2 });
+      
+      // Second box overlapping corner
+      const boxB = createBox(model, { center: vec3(1, 1, 2), width: 2, height: 2, depth: 4 });
+      
+      const result1 = union(model, boxA, boxB);
+      expect(result1.success).toBe(true);
+      expect(result1.body).toBeDefined();
+      
+      // Third box on opposite corner
+      const boxC = createBox(model, { center: vec3(-1, -1, 2), width: 2, height: 2, depth: 4 });
+      
+      const result2 = union(model, result1.body!, boxC);
+      expect(result2.success).toBe(true);
+      expect(result2.body).toBeDefined();
+      
+      if (result2.body) {
+        const shells = model.getBodyShells(result2.body);
+        const faces = model.getShellFaces(shells[0]);
+        
+        // Should have a complex shape with many faces
+        expect(faces.length).toBeGreaterThanOrEqual(15);
+      }
+    });
+
+    it('sequential subtract operations preserve holes', () => {
+      // Base box
+      const boxA = createBox(model, { center: vec3(0, 0, 1), width: 6, height: 6, depth: 2 });
+      
+      // First cut
+      const boxB = createBox(model, { center: vec3(1, 1, 1), width: 1, height: 1, depth: 4 });
+      
+      const result1 = subtract(model, boxA, boxB);
+      expect(result1.success).toBe(true);
+      expect(result1.body).toBeDefined();
+      
+      // Second cut on opposite side
+      const boxC = createBox(model, { center: vec3(-1, -1, 1), width: 1, height: 1, depth: 4 });
+      
+      const result2 = subtract(model, result1.body!, boxC);
+      expect(result2.success).toBe(true);
+      expect(result2.body).toBeDefined();
+      
+      if (result2.body) {
+        const shells = model.getBodyShells(result2.body);
+        const faces = model.getShellFaces(shells[0]);
+        
+        // Should have more faces due to two holes
+        // 4 outer walls + 2 faces with 2 holes each + 8 inner walls = 14+ faces
+        expect(faces.length).toBeGreaterThanOrEqual(14);
+        
+        // Count faces with holes - should be 2 (top and bottom)
+        let facesWithHoles = 0;
+        for (const faceId of faces) {
+          const loops = model.getFaceLoops(faceId);
+          if (loops.length > 1) facesWithHoles++;
+        }
+        expect(facesWithHoles).toBe(2);
+        
+        // Each holed face should have 3 loops (outer + 2 holes)
+        for (const faceId of faces) {
+          const loops = model.getFaceLoops(faceId);
+          if (loops.length > 1) {
+            expect(loops.length).toBe(3);
+          }
+        }
+      }
+    });
+  });
 });
