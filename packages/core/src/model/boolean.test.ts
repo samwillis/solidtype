@@ -358,5 +358,42 @@ describe('boolean operations', () => {
         }
       }
     });
+
+    it('through-cut removes tool faces outside target body', () => {
+      // Base: 4x4x2 box
+      const boxA = createBox(model, { center: vec3(0, 0, 1), width: 4, height: 4, depth: 2 });
+      
+      // Tool: 2x2x6 going completely through and extending past both ends
+      const boxB = createBox(model, { center: vec3(0, 0, 1), width: 2, height: 2, depth: 6 });
+      
+      const result = subtract(model, boxA, boxB);
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+      
+      if (result.body) {
+        const shells = model.getBodyShells(result.body);
+        const faces = model.getShellFaces(shells[0]);
+        
+        // The result should NOT have the top and bottom faces of the tool that extend
+        // past the base body. Only the interior walls should be present.
+        // Expected: 4 outer walls + 4 inner walls + top/bottom with holes = ~10-12 faces
+        expect(faces.length).toBeGreaterThanOrEqual(10);
+        expect(faces.length).toBeLessThanOrEqual(14);
+        
+        // Check no faces extend beyond z=0 to z=2 range (original base body)
+        for (const faceId of faces) {
+          const loops = model.getFaceLoops(faceId);
+          if (loops.length === 0) continue;
+          
+          for (const he of model.iterateLoopHalfEdges(loops[0])) {
+            const vertex = model.getHalfEdgeStartVertex(he);
+            const pos = model.getVertexPosition(vertex);
+            // All vertices should be within z=[0,2] (with small tolerance)
+            expect(pos[2]).toBeGreaterThanOrEqual(-0.01);
+            expect(pos[2]).toBeLessThanOrEqual(2.01);
+          }
+        }
+      }
+    });
   });
 });
