@@ -901,6 +901,8 @@ function interpretExtrude(
   if (op === 'cut') {
     console.log('[Worker] Extrude CUT operation');
     console.log(`[Worker] Tool body has ${result.body.getFaces().length} faces`);
+    let anySuccess = false;
+    let lastError: string | undefined;
     for (const [existingId, entry] of bodyMap) {
       console.log(`[Worker] Subtracting from body ${existingId}, faces before: ${entry.body.getFaces().length}`);
       const boolResult = session.subtract(entry.body, result.body);
@@ -908,7 +910,14 @@ function interpretExtrude(
       if (boolResult.success && boolResult.body) {
         console.log(`[Worker] After subtract: ${boolResult.body.getFaces().length} faces`);
         bodyMap.set(existingId, { ...entry, body: boolResult.body });
+        anySuccess = true;
+      } else {
+        lastError = boolResult.error;
+        console.error(`[Worker] Boolean subtract failed: ${boolResult.error}`);
       }
+    }
+    if (!anySuccess && bodyMap.size > 0 && lastError) {
+      throw new Error(`Cut operation failed: ${lastError}`);
     }
     return { body: null, bodyEntryId: null };
   }
@@ -969,6 +978,7 @@ function interpretExtrude(
   let mergedBody = result.body;
   let mergedIntoId: string | null = null;
   let mergedEntry: BodyEntry | null = null;
+  let mergeWarnings: string[] = [];
 
   for (const [existingId, entry] of bodyMap) {
     console.log(`[Worker] Union with body ${existingId}, faces: ${entry.body.getFaces().length}`);
@@ -981,6 +991,10 @@ function interpretExtrude(
         mergedIntoId = existingId;
         mergedEntry = entry;
       }
+    } else if (unionResult.error) {
+      // Log warning but continue - bodies will remain separate
+      console.warn(`[Worker] Union failed (bodies will remain separate): ${unionResult.error}`);
+      mergeWarnings.push(`Union with existing body failed: ${unionResult.error}`);
     }
   }
 
@@ -995,6 +1009,10 @@ function interpretExtrude(
     };
   }
 
+  // No successful merge - return as separate body
+  if (mergeWarnings.length > 0) {
+    console.warn(`[Worker] Creating separate body due to merge failures: ${mergeWarnings.join('; ')}`);
+  }
   return {
     body: result.body,
     bodyEntryId: featureId,

@@ -360,11 +360,11 @@ describe('boolean operations', () => {
     });
 
     it('through-cut removes tool faces outside target body', () => {
-      // Base: 4x4x2 box
-      const boxA = createBox(model, { center: vec3(0, 0, 1), width: 4, height: 4, depth: 2 });
+      // Base: 4x4x2 box at z=[0,2] (height is Z dimension)
+      const boxA = createBox(model, { center: vec3(0, 0, 1), width: 4, depth: 4, height: 2 });
       
-      // Tool: 2x2x6 going completely through and extending past both ends
-      const boxB = createBox(model, { center: vec3(0, 0, 1), width: 2, height: 2, depth: 6 });
+      // Tool: 2x2x6 going completely through and extending past both ends (z=[-2,4])
+      const boxB = createBox(model, { center: vec3(0, 0, 1), width: 2, depth: 2, height: 6 });
       
       const result = subtract(model, boxA, boxB);
       expect(result.success).toBe(true);
