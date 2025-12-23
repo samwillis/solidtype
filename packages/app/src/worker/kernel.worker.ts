@@ -901,14 +901,53 @@ function interpretExtrude(
   if (op === 'cut') {
     console.log('[Worker] Extrude CUT operation');
     console.log(`[Worker] Tool body has ${result.body.getFaces().length} faces`);
+    
+    // Debug: Log tool body face info
+    const toolFaces = result.body.getFaces();
+    const model = session.getModel();
+    for (let i = 0; i < toolFaces.length; i++) {
+      const face = toolFaces[i];
+      const surfaceIdx = model.getFaceSurfaceIndex(face.id);
+      const surface = model.getSurface(surfaceIdx);
+      if (surface.kind === 'plane') {
+        console.log(`[Worker] Tool face ${i}: normal=[${surface.normal.map(n => n.toFixed(3)).join(', ')}], origin=[${surface.origin.map(o => o.toFixed(2)).join(', ')}]`);
+      }
+    }
+    
     let anySuccess = false;
     let lastError: string | undefined;
     for (const [existingId, entry] of bodyMap) {
       console.log(`[Worker] Subtracting from body ${existingId}, faces before: ${entry.body.getFaces().length}`);
+      
+      // Debug: Log target body face info
+      const targetFaces = entry.body.getFaces();
+      for (let i = 0; i < targetFaces.length; i++) {
+        const face = targetFaces[i];
+        const surfaceIdx = model.getFaceSurfaceIndex(face.id);
+        const surface = model.getSurface(surfaceIdx);
+        if (surface.kind === 'plane') {
+          const loops = model.getFaceLoops(face.id);
+          console.log(`[Worker] Target face ${i}: normal=[${surface.normal.map(n => n.toFixed(3)).join(', ')}], origin=[${surface.origin.map(o => o.toFixed(2)).join(', ')}], loops=${loops.length}`);
+        }
+      }
+      
       const boolResult = session.subtract(entry.body, result.body);
       console.log(`[Worker] Subtract result: success=${boolResult.success}, error=${boolResult.error || 'none'}`);
       if (boolResult.success && boolResult.body) {
         console.log(`[Worker] After subtract: ${boolResult.body.getFaces().length} faces`);
+        
+        // Debug: Log result body face info
+        const resultFaces = boolResult.body.getFaces();
+        for (let i = 0; i < resultFaces.length; i++) {
+          const face = resultFaces[i];
+          const surfaceIdx = model.getFaceSurfaceIndex(face.id);
+          const surface = model.getSurface(surfaceIdx);
+          if (surface.kind === 'plane') {
+            const loops = model.getFaceLoops(face.id);
+            console.log(`[Worker] Result face ${i}: normal=[${surface.normal.map(n => n.toFixed(3)).join(', ')}], loops=${loops.length}`);
+          }
+        }
+        
         bodyMap.set(existingId, { ...entry, body: boolResult.body });
         anySuccess = true;
       } else {
@@ -1411,7 +1450,22 @@ function sendMesh(featureId: string, body: Body, color?: string): void {
   try {
     // Debug: Log body info before tessellation
     const faces = body.getFaces();
+    const model = session?.getModel();
     console.log(`[Worker] sendMesh for ${featureId}: ${faces.length} faces`);
+    
+    // Log face details including loops (holes)
+    if (model) {
+      for (let i = 0; i < faces.length; i++) {
+        const face = faces[i];
+        const loops = model.getFaceLoops(face.id);
+        const surfaceIdx = model.getFaceSurfaceIndex(face.id);
+        const surface = model.getSurface(surfaceIdx);
+        if (surface.kind === 'plane') {
+          const normalStr = `[${surface.normal.map(n => n.toFixed(2)).join(', ')}]`;
+          console.log(`[Worker]   Face ${i}: normal=${normalStr}, loops=${loops.length}${loops.length > 1 ? ' (has holes)' : ''}`);
+        }
+      }
+    }
     
     const mesh = body.tessellate();
 
