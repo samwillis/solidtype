@@ -113,13 +113,23 @@ export function planarBoolean(
   const imprintDataA = new Map<FaceId, Segment2D[]>();
   const imprintDataB = new Map<FaceId, Segment2D[]>();
   
-  // Initialize with boundary segments
+  // Initialize with boundary segments (outer + holes)
   for (const poly of polygonsA) {
     const boundarySegs = facePolygonToSegments(poly.outer, poly.faceId, 0);
+    // Also add hole boundaries - they must be preserved in the DCEL
+    for (const hole of poly.holes) {
+      const holeSegs = facePolygonToSegments(hole, poly.faceId, 0);
+      boundarySegs.push(...holeSegs);
+    }
     imprintDataA.set(poly.faceId, boundarySegs);
   }
   for (const poly of polygonsB) {
     const boundarySegs = facePolygonToSegments(poly.outer, poly.faceId, 1);
+    // Also add hole boundaries
+    for (const hole of poly.holes) {
+      const holeSegs = facePolygonToSegments(hole, poly.faceId, 1);
+      boundarySegs.push(...holeSegs);
+    }
     imprintDataB.set(poly.faceId, boundarySegs);
   }
   
