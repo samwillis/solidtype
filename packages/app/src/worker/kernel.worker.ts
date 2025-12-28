@@ -1476,21 +1476,38 @@ function sendMesh(featureId: string, body: Body, color?: string): void {
   try {
     // Debug: Log body info before tessellation
     const faces = body.getFaces();
-    const model = session?.getModel();
+    const model = (body as any).session?.getModel?.();
     console.log(`[Worker] sendMesh for ${featureId}: ${faces.length} faces`);
     
     // Log face details including loops (holes)
+    let missingSurface = false;
     if (model) {
       for (let i = 0; i < faces.length; i++) {
         const face = faces[i];
         const loops = model.getFaceLoops(face.id);
         const surfaceIdx = model.getFaceSurfaceIndex(face.id);
+        if (surfaceIdx === -1) {
+          console.warn(`[Worker]   Face ${i}: missing surface index`);
+          missingSurface = true;
+          continue;
+        }
         const surface = model.getSurface(surfaceIdx);
+        if (!surface) {
+          console.warn(`[Worker]   Face ${i}: surface ${surfaceIdx} not found`);
+          missingSurface = true;
+          continue;
+        }
         if (surface.kind === 'plane') {
           const normalStr = `[${surface.normal.map(n => n.toFixed(2)).join(', ')}]`;
           console.log(`[Worker]   Face ${i}: normal=${normalStr}, loops=${loops.length}${loops.length > 1 ? ' (has holes)' : ''}`);
+        } else {
+          console.log(`[Worker]   Face ${i}: non-planar surface kind=${surface.kind}, loops=${loops.length}`);
         }
       }
+    }
+    if (missingSurface) {
+      console.warn(`[Worker] Skipping tessellation for ${featureId} due to missing surface data`);
+      return;
     }
     
     const mesh = body.tessellate();

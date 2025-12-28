@@ -94,7 +94,7 @@ export function buildDCEL(segments: Segment2D[], tolerance: number = 1e-8): DCEL
   setNextPrevPointers(vertices, halfEdges);
   
   // Step 7: Extract faces
-  const faces = extractFaces(halfEdges);
+  const faces = extractFaces(halfEdges, vertices);
   
   return { vertices, halfEdges, faces };
 }
@@ -365,7 +365,7 @@ function setNextPrevPointers(vertices: Vertex[], halfEdges: HalfEdge[]): void {
 /**
  * Extract faces by walking half-edge cycles
  */
-function extractFaces(halfEdges: HalfEdge[]): Face[] {
+function extractFaces(halfEdges: HalfEdge[], vertices: Vertex[]): Face[] {
   const faces: Face[] = [];
   const visited = new Set<number>();
   
@@ -391,13 +391,15 @@ function extractFaces(halfEdges: HalfEdge[]): Face[] {
     if (cycle.length < 3) continue;
     
     // Compute signed area to determine if outer or hole
-    const area = computeCycleSignedArea(cycle, halfEdges);
+    const area = computeCycleSignedArea(cycle, halfEdges, vertices);
     
     const face: Face = {
       id: faces.length,
       outerComponent: cycle[0],
       innerComponents: [],
-      isUnbounded: area < 0 // Negative area = CW = unbounded/hole
+      // Orientation from the traversal is not reliable for unbounded detection here;
+      // downstream filtering (bounds checks) will prune any unbounded face.
+      isUnbounded: false
     };
     
     // Assign face to all half-edges in cycle
@@ -416,10 +418,22 @@ function extractFaces(halfEdges: HalfEdge[]): Face[] {
  * Note: This is a simplified version that always returns positive (bounded)
  * The actual face classification is done in extractFaces based on polygon area.
  */
-function computeCycleSignedArea(_cycle: number[], _halfEdges: HalfEdge[]): number {
-  // We need vertex positions - but we only have half-edge origins
-  // For now, return positive and let the caller handle face classification via polygon area
-  return 1; // Assume positive (bounded) for now
+function computeCycleSignedArea(
+  cycle: number[],
+  halfEdges: HalfEdge[],
+  vertices: Vertex[]
+): number {
+  let area = 0;
+  
+  for (let i = 0; i < cycle.length; i++) {
+    const heIdx = cycle[i];
+    const nextIdx = cycle[(i + 1) % cycle.length];
+    const p = vertices[halfEdges[heIdx].origin].pos;
+    const q = vertices[halfEdges[nextIdx].origin].pos;
+    area += p[0] * q[1] - q[0] * p[1];
+  }
+  
+  return area / 2;
 }
 
 /**

@@ -71,6 +71,29 @@ export function stitchPieces(
     return vid;
   }
   
+  // Deduplicate identical coplanar pieces (exact matches, orientation-sensitive)
+  const faceKeyMap = new Map<string, true>();
+  const tol = ctx.tol.length;
+  const snap = (v: number) => Math.round(v / tol) * tol;
+  const normalizeLoop = (loop: Vec2[]): string => {
+    const forward = loop.map(p => `${snap(p[0])},${snap(p[1])}`).join(';');
+    const reverse = loop.slice().reverse().map(p => `${snap(p[0])},${snap(p[1])}`).join(';');
+    return forward < reverse ? forward : reverse;
+  };
+  const pieceKey = (piece: FacePiece): string => {
+    const surf = piece.surface;
+    const surfKey = `${snap(surf.origin[0])},${snap(surf.origin[1])},${snap(surf.origin[2])}|${snap(surf.normal[0])},${snap(surf.normal[1])},${snap(surf.normal[2])}`;
+    const outer = normalizeLoop(piece.polygon);
+    const holes = piece.holes.map(normalizeLoop).sort().join('|');
+    return `${surfKey}|${outer}|${holes}`;
+  };
+  const seen = (piece: FacePiece): boolean => {
+    const k = pieceKey(piece);
+    if (faceKeyMap.has(k)) return true;
+    faceKeyMap.set(k, true);
+    return false;
+  };
+
   // Add faces from A
   for (const piece of selected.fromA) {
     // Validate polygon has at least 3 vertices
@@ -78,6 +101,7 @@ export function stitchPieces(
       console.warn(`[Boolean] Skipping degenerate A piece with ${piece.polygon.length} vertices`);
       continue;
     }
+    if (seen(piece)) continue;
     const faceId = addPieceAsFace(model, piece, shell, false, getOrCreateVertex);
     faces.push(faceId);
     facesFromA.push({ newFace: faceId, sourceFace: piece.sourceFace });
@@ -90,6 +114,7 @@ export function stitchPieces(
       console.warn(`[Boolean] Skipping degenerate B piece with ${piece.polygon.length} vertices`);
       continue;
     }
+    if (seen(piece)) continue;
     const faceId = addPieceAsFace(model, piece, shell, selected.flipB, getOrCreateVertex);
     faces.push(faceId);
     facesFromB.push({ newFace: faceId, sourceFace: piece.sourceFace });
@@ -241,7 +266,7 @@ function setupTwinsByPosition(model: TopoModel, ctx: NumericContext): void {
   }
   
   // For each edge key, if there are multiple half-edges from different edges,
-  // set up twins between them
+  // set up twins between them.
   for (const [_key, entries] of edgeMap) {
     // Collect all half-edges across all entries
     const allHalfEdges: HalfEdgeId[] = [];

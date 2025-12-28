@@ -14,6 +14,7 @@ import type { BodyId, FaceId } from '../../topo/handles.js';
 import type { PlaneSurface } from '../../geom/surface.js';
 import type { FacePiece, PieceClassification } from './types.js';
 import { pointInPolygon, unprojectFromPlane } from './intersect.js';
+import { isPointOnSegment2D } from '../../num/predicates.js';
 
 /**
  * Classify a face piece relative to another body.
@@ -34,48 +35,44 @@ export function classifyPiece(
   const testOffset = Math.max(ctx.tol.length * 1000, 0.001);
   const normal = piece.surface.normal;
   
-  // Get a test point on the face material
-  const testPoint2D = findPointOnFaceMaterial(piece);
-  const testPoint3D = unprojectFromPlane(testPoint2D, piece.surface);
-  
-  // Test from both sides
-  const testPointPos = add3(testPoint3D, mul3(normal, testOffset));
-  const insideFromPos = isPointInsideBody(testPointPos, otherBody, model, ctx);
-  
-  const testPointNeg = add3(testPoint3D, mul3(normal, -testOffset));
-  const insideFromNeg = isPointInsideBody(testPointNeg, otherBody, model, ctx);
-  
-  // If both tests agree, use that result
-  if (insideFromPos && insideFromNeg) {
-    return 'inside';
-  }
-  if (!insideFromPos && !insideFromNeg) {
-    return 'outside';
+  // Sample multiple points (centroid + vertices) with offset tests.
+  const samplePoints3D: Vec3[] = [];
+  const centroid2D = computePolygonCentroid(piece.polygon);
+  samplePoints3D.push(unprojectFromPlane(centroid2D, piece.surface));
+  for (const v of piece.polygon) {
+    samplePoints3D.push(unprojectFromPlane(v, piece.surface));
   }
   
-  // Tests disagree - the piece is on the boundary
-  // Check if there's a coplanar face of the other body at this location
-  const coplanarResult = findCoplanarFace(testPoint3D, normal, otherBody, model, ctx);
+  let insideHits = 0;
+  let outsideHits = 0;
+  let boundaryHits = 0;
   
-  if (coplanarResult.found) {
-    if (coplanarResult.sameNormal) {
-      // Coplanar face with same normal - this is a shared exterior surface
-      // For UNION: keep (both bodies share this surface)
-      // For SUBTRACT: this is where the tool touches the target
-      return 'on_same';
+  for (const pt of samplePoints3D) {
+    const pos = add3(pt, mul3(normal, testOffset));
+    const neg = add3(pt, mul3(normal, -testOffset));
+    const inPos = isPointInsideBody(pos, otherBody, model, ctx);
+    const inNeg = isPointInsideBody(neg, otherBody, model, ctx);
+    
+    if (inPos && inNeg) {
+      insideHits++;
+    } else if (!inPos && !inNeg) {
+      outsideHits++;
     } else {
-      // Coplanar face with opposite normal - back-to-back faces
-      return 'on_opposite';
+      boundaryHits++;
     }
   }
   
-  // No coplanar face found - classify based on material side
-  // insideFromNeg = true means the material (opposite of normal) is inside
-  if (insideFromNeg) {
+  if (insideHits > 0 && outsideHits === 0) {
     return 'inside';
   }
+  if (outsideHits > 0 && insideHits === 0 && boundaryHits === 0) {
+    return 'outside';
+  }
+  // Boundary/mixed -> treat as shared boundary
+  return 'on_same';
   
-  return 'outside';
+  // Fallback (should not reach here)
+  return 'on_same';
 }
 
 /**
@@ -310,7 +307,7 @@ function isPointInsideBody(
       const hitPoint = add3(point, mul3(rayDir, t));
       
       // Check if hit point is inside face polygon
-      if (pointInFace(hitPoint, faceId, model, plane)) {
+      if (pointInFace(hitPoint, faceId, model, plane, ctx)) {
         intersectionCount++;
       }
     }
@@ -327,7 +324,8 @@ function pointInFace(
   point: Vec3,
   faceId: FaceId,
   model: TopoModel,
-  plane: PlaneSurface
+  plane: PlaneSurface,
+  ctx: NumericContext
 ): boolean {
   // Project point to 2D
   const v = sub3(point, plane.origin);
@@ -348,8 +346,19 @@ function pointInFace(
     polygon.push([dot3(pv, plane.xDir), dot3(pv, plane.yDir)]);
   }
   
-  // Point-in-polygon test
+  // Point-in-polygon test with boundary tolerance
   let inside = pointInPolygon([u2d, v2d], polygon);
+  if (!inside) {
+    // Check if on boundary within tolerance
+    for (let i = 0; i < polygon.length; i++) {
+      const a = polygon[i];
+      const b = polygon[(i + 1) % polygon.length];
+      if (isPointOnSegment2D([u2d, v2d], a, b, { tol: { length: ctx.tol.length, angle: ctx.tol.angle } } as any)) {
+        inside = true;
+        break;
+      }
+    }
+  }
   
   // Check holes (inner loops) - if point is in a hole, it's outside the face
   for (let i = 1; i < loops.length; i++) {

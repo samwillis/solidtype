@@ -10,6 +10,7 @@ import type { Vec3 } from '../../num/vec3.js';
 import { dot3, cross3, sub3, add3, mul3, normalize3, length3 } from '../../num/vec3.js';
 import type { NumericContext } from '../../num/tolerance.js';
 import { isZero } from '../../num/tolerance.js';
+import { segSegHit } from '../../num/predicates.js';
 import type { PlaneSurface } from '../../geom/surface.js';
 import type { Segment2D, FacePolygon2D } from './types.js';
 
@@ -107,9 +108,12 @@ export function clipLineToPolygon(
   // Normalize line direction for consistent parameterization
   const dirLen = Math.sqrt(lineDir[0] ** 2 + lineDir[1] ** 2);
   if (dirLen < 1e-12) return [];
+  lineDir = [lineDir[0] / dirLen, lineDir[1] / dirLen];
+  
+  // Collect segments where the line lies exactly on a polygon edge (collinear overlap)
+  const collinearIntervals: { tStart: number; tEnd: number }[] = [];
   
   // First, check if the line lies ON any polygon edge (degenerate case)
-  // If so, return empty - this intersection doesn't create a proper face split
   const n = polygon.length;
   for (let i = 0; i < n; i++) {
     const p1 = polygon[i];
@@ -126,11 +130,32 @@ export function clipLineToPolygon(
       const toP1: Vec2 = [p1[0] - linePoint[0], p1[1] - linePoint[1]];
       const distToLine = Math.abs(toP1[0] * edgeDir[1] - toP1[1] * edgeDir[0]) / edgeLen;
       if (distToLine < 1e-10) {
-        // Line lies ON this edge - degenerate case
-        // Return empty to skip this intersection
-        return [];
+        // Line lies ON this edge - record the overlapping interval along the line
+        const t1 = ((p1[0] - linePoint[0]) * lineDir[0] + (p1[1] - linePoint[1]) * lineDir[1]);
+        const t2 = ((p2[0] - linePoint[0]) * lineDir[0] + (p2[1] - linePoint[1]) * lineDir[1]);
+        const tMin = Math.min(t1, t2);
+        const tMax = Math.max(t1, t2);
+        collinearIntervals.push({ tStart: tMin, tEnd: tMax });
       }
     }
+  }
+  
+  if (collinearIntervals.length > 0) {
+    // Merge overlapping intervals to avoid tiny duplicates
+    collinearIntervals.sort((a, b) => a.tStart - b.tStart);
+    const merged: { tStart: number; tEnd: number }[] = [];
+    let current = { ...collinearIntervals[0] };
+    for (let i = 1; i < collinearIntervals.length; i++) {
+      const next = collinearIntervals[i];
+      if (next.tStart <= current.tEnd + 1e-12) {
+        current.tEnd = Math.max(current.tEnd, next.tEnd);
+      } else {
+        merged.push(current);
+        current = { ...next };
+      }
+    }
+    merged.push(current);
+    return merged;
   }
   
   // Collect intersection parameters with polygon edges
@@ -491,9 +516,28 @@ function handleCoplanarFaces(
     
     // Add if either endpoint is inside, or if edge crosses A's boundary
     if (p1Inside || p2Inside || edgesCrossBoundary(p1, p2, faceA.outer)) {
+      const clippedSegments = clipSegmentToPolygon(p1, p2, faceA.outer);
+      for (const [a, b] of clippedSegments) {
+        segmentsA.push({
+          a,
+          b,
+          sourceBody: 1,
+          sourceFace: faceB.faceId,
+          sourceHalfEdge: null,
+          isIntersection: true
+        });
+      }
+    }
+  }
+  // Add full overlap polygon edges (intersection of B with A) to ensure closed cycles
+  const overlapBA = clipPolygonToPolygon(bInA, faceA.outer);
+  if (overlapBA.length >= 3) {
+    for (let i = 0; i < overlapBA.length; i++) {
+      const a = overlapBA[i];
+      const b = overlapBA[(i + 1) % overlapBA.length];
       segmentsA.push({
-        a: p1,
-        b: p2,
+        a,
+        b,
         sourceBody: 1,
         sourceFace: faceB.faceId,
         sourceHalfEdge: null,
@@ -516,9 +560,27 @@ function handleCoplanarFaces(
     const p2Inside = pointInPolygon(p2, faceB.outer);
     
     if (p1Inside || p2Inside || edgesCrossBoundary(p1, p2, faceB.outer)) {
+      const clippedSegments = clipSegmentToPolygon(p1, p2, faceB.outer);
+      for (const [a, b] of clippedSegments) {
+        segmentsB.push({
+          a,
+          b,
+          sourceBody: 0,
+          sourceFace: faceA.faceId,
+          sourceHalfEdge: null,
+          isIntersection: true
+        });
+      }
+    }
+  }
+  const overlapAB = clipPolygonToPolygon(aInB, faceB.outer);
+  if (overlapAB.length >= 3) {
+    for (let i = 0; i < overlapAB.length; i++) {
+      const a = overlapAB[i];
+      const b = overlapAB[(i + 1) % overlapAB.length];
       segmentsB.push({
-        a: p1,
-        b: p2,
+        a,
+        b,
         sourceBody: 0,
         sourceFace: faceA.faceId,
         sourceHalfEdge: null,
@@ -573,3 +635,114 @@ function edgesCrossBoundary(p1: Vec2, p2: Vec2, polygon: Vec2[]): boolean {
   return false;
 }
 
+/**
+ * Clip a segment to a (possibly concave) polygon.
+ * Returns zero, one, or multiple sub-segments that lie inside or on the boundary.
+ */
+function clipSegmentToPolygon(p1: Vec2, p2: Vec2, polygon: Vec2[]): [Vec2, Vec2][] {
+  const ts: number[] = [0, 1];
+  
+  // Collect intersection parameters along the segment
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    const hit = segSegHit(p1, p2, a, b);
+    if (hit.kind === 'point') {
+      ts.push(hit.t1);
+    } else if (hit.kind === 'overlap') {
+      ts.push(hit.t1Start, hit.t1End);
+    }
+  }
+  
+  // Sort and deduplicate parameters
+  ts.sort((a, b) => a - b);
+  const unique: number[] = [];
+  for (const t of ts) {
+    if (unique.length === 0 || Math.abs(t - unique[unique.length - 1]) > 1e-10) {
+      unique.push(Math.min(1, Math.max(0, t)));
+    }
+  }
+  
+  const lerp = (t: number): Vec2 => [p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t];
+  const segments: [Vec2, Vec2][] = [];
+  
+  for (let i = 0; i < unique.length - 1; i++) {
+    const t0 = unique[i];
+    const t1 = unique[i + 1];
+    if (t1 - t0 < 1e-10) continue;
+    const midT = (t0 + t1) / 2;
+    const midPoint = lerp(midT);
+    if (pointInPolygonWithBoundary(midPoint, polygon)) {
+      segments.push([lerp(t0), lerp(t1)]);
+    }
+  }
+  
+  return segments;
+}
+
+/**
+ * Point-in-polygon with boundary inclusion.
+ */
+function pointInPolygonWithBoundary(point: Vec2, polygon: Vec2[]): boolean {
+  if (pointInPolygon(point, polygon)) return true;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len2 = dx * dx + dy * dy;
+    if (len2 === 0) continue;
+    const t = ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / len2;
+    const tClamped = Math.max(0, Math.min(1, t));
+    const px = a[0] + tClamped * dx;
+    const py = a[1] + tClamped * dy;
+    const dist2 = (point[0] - px) ** 2 + (point[1] - py) ** 2;
+    if (dist2 < 1e-12) return true;
+  }
+  return false;
+}
+
+/**
+ * Clip a polygon against another polygon (convex clipper assumed).
+ * Returns the intersection polygon in the same coordinate system.
+ */
+function clipPolygonToPolygon(subject: Vec2[], clip: Vec2[]): Vec2[] {
+  let output = subject.slice();
+  for (let i = 0; i < clip.length; i++) {
+    const a = clip[i];
+    const b = clip[(i + 1) % clip.length];
+    const input = output.slice();
+    output = [];
+    for (let j = 0; j < input.length; j++) {
+      const p = input[j];
+      const q = input[(j + 1) % input.length];
+      const pInside = isLeft(a, b, p) >= -1e-12;
+      const qInside = isLeft(a, b, q) >= -1e-12;
+      if (pInside && qInside) {
+        output.push(q);
+      } else if (pInside && !qInside) {
+        output.push(lineIntersect(a, b, p, q));
+      } else if (!pInside && qInside) {
+        output.push(lineIntersect(a, b, p, q));
+        output.push(q);
+      }
+    }
+    if (output.length === 0) break;
+  }
+  return output;
+}
+
+function isLeft(a: Vec2, b: Vec2, p: Vec2): number {
+  return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+}
+
+function lineIntersect(a: Vec2, b: Vec2, p: Vec2, q: Vec2): Vec2 {
+  const s1x = b[0] - a[0];
+  const s1y = b[1] - a[1];
+  const s2x = q[0] - p[0];
+  const s2y = q[1] - p[1];
+  const denom = (-s2x * s1y + s1x * s2y);
+  if (Math.abs(denom) < 1e-12) return q;
+  const s = (-s1y * (a[0] - p[0]) + s1x * (a[1] - p[1])) / denom;
+  return [p[0] + (s * s2x), p[1] + (s * s2y)];
+}

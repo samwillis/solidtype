@@ -174,7 +174,7 @@ export function planarBoolean(
   
   // Select pieces based on operation
   // Pass bounding boxes to filter pieces that extend beyond the other body
-  const selected = selectPieces(allPiecesA, allPiecesB, operation, aabbA, aabbB);
+  const selected = selectPieces(allPiecesA, allPiecesB, operation, aabbA, aabbB, ctx);
   
   // Regularize (remove slivers)
   selected.fromA = regularize(selected.fromA);
@@ -268,7 +268,7 @@ function facesToPolygons(model: TopoModel, faces: FaceId[]): FacePolygon2D[] {
 /**
  * Imprint a face and extract the resulting pieces
  */
-function imprintFaceAndExtractPieces(
+export function imprintFaceAndExtractPieces(
   segments: Segment2D[],
   polygon: FacePolygon2D,
   sourceBody: 0 | 1,
@@ -293,9 +293,6 @@ function imprintFaceAndExtractPieces(
   const dcel = buildDCEL(segments, tolerance);
   
   // Collect all bounded face polygons with their areas
-  // IMPORTANT: Only keep faces with POSITIVE area (CCW orientation).
-  // The DCEL creates both CW and CCW versions of each face (inner and outer windings).
-  // We only want the CCW (positive area) ones to avoid duplicates.
   const faceData: { polygon: Vec2[]; area: number; centroid: Vec2 }[] = [];
   
   // Compute bounding box of original face for validation
@@ -306,14 +303,12 @@ function imprintFaceAndExtractPieces(
     if (face.isUnbounded) continue;
     if (face.outerComponent === -1) continue;
     
-    const facePolygon = getCyclePolygon(dcel, face.outerComponent);
+    let facePolygon = getCyclePolygon(dcel, face.outerComponent);
+    facePolygon = sanitizePolygon(facePolygon, tolerance);
     if (facePolygon.length < 3) continue;
     
     const area = polygonSignedArea(facePolygon);
-    
-    // Skip degenerate and CW (negative area) faces
-    // CW faces are the "other side" of CCW faces - we don't want duplicates
-    if (area < tolerance * tolerance) continue;
+    if (Math.abs(area) < tolerance * tolerance) continue;
     
     // Validate: extracted piece should be within original face bounds
     // (with some tolerance for numerical precision)
@@ -333,11 +328,25 @@ function imprintFaceAndExtractPieces(
     faceData.push({ polygon: facePolygon, area, centroid });
   }
   
-  // If no faces extracted, return original
+  const intersectionHoles = extractIntersectionPolygons(segments, tolerance);
+  const orientedIntersectionHoles = (() => {
+    if (intersectionHoles.length === 0) return [];
+    const holeMap = new Map<string, Vec2[]>();
+    for (const hole of intersectionHoles) {
+      const oriented = polygonSignedArea(hole) < 0 ? hole.slice().reverse() : hole;
+      const key = oriented.map(p => `${p[0].toFixed(6)},${p[1].toFixed(6)}`).join('|');
+      if (!holeMap.has(key)) {
+        holeMap.set(key, oriented);
+      }
+    }
+    return Array.from(holeMap.values());
+  })();
+  
+  // If no faces extracted, return original (preserving any intersection-derived holes)
   if (faceData.length === 0) {
     return [{
       polygon: polygon.outer,
-      holes: polygon.holes,
+      holes: orientedIntersectionHoles.length > 0 ? orientedIntersectionHoles : polygon.holes,
       classification: 'outside',
       sourceFace: polygon.faceId,
       sourceBody,
@@ -345,43 +354,81 @@ function imprintFaceAndExtractPieces(
     }];
   }
   
-  // Sort by area descending (larger faces first)
-  faceData.sort((a, b) => b.area - a.area);
+  // Sort by absolute area descending (larger faces first)
+  faceData.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
   
-  // Identify containment relationships
-  // A smaller face is a hole in a larger face if its centroid is inside the larger face
-  const pieces: FacePiece[] = [];
-  const usedAsHole = new Set<number>();
+  // Robust containment-based hole assignment for all extracted faces
+  const facesInOriginal = faceData
+    .map((fd, idx) => ({ ...fd, idx, absArea: Math.abs(fd.area) }))
+    .filter(fd => pointInPolygonWithBoundary(fd.centroid, polygon.outer, tolerance));
   
-  for (let i = 0; i < faceData.length; i++) {
-    if (usedAsHole.has(i)) continue;
-    
-    const outer = faceData[i];
-    const holes: Vec2[][] = [];
-    
-    // Check if any smaller face is contained inside this one
-    for (let j = i + 1; j < faceData.length; j++) {
-      if (usedAsHole.has(j)) continue;
-      
-      const inner = faceData[j];
-      
-      // Check if inner's centroid is inside outer's polygon
-      if (pointInPolygon2D(inner.centroid, outer.polygon)) {
-        // This is a hole - reverse winding for hole representation
-        holes.push(inner.polygon.slice().reverse());
-        usedAsHole.add(j);
+  interface Node { idx: number; poly: Vec2[]; area: number; signedArea: number; centroid: Vec2; parent: number | null; children: number[]; }
+  const nodes: Node[] = facesInOriginal.map(fd => ({
+    idx: fd.idx,
+    poly: fd.polygon,
+    area: fd.absArea,
+    signedArea: fd.area,
+    centroid: fd.centroid,
+    parent: null,
+    children: []
+  }));
+  
+  const strictContainsPoly = (outer: Vec2[], inner: Vec2[]): boolean => {
+    const allInside = inner.every(pt => pointInPolygonWithBoundary(pt, outer, tolerance));
+    if (!allInside) return false;
+    // Ensure polygons are not identical (outer must have some point outside inner)
+    const outerHasOutside = outer.some(pt => !pointInPolygonWithBoundary(pt, inner, tolerance));
+    return outerHasOutside;
+  };
+  
+  // Parent = smallest-area polygon that contains this polygon
+  for (let i = 0; i < nodes.length; i++) {
+    let best: number | null = null;
+    let bestArea = Infinity;
+    for (let j = 0; j < nodes.length; j++) {
+      if (i === j) continue;
+      if (!strictContainsPoly(nodes[j].poly, nodes[i].poly)) continue;
+      if (nodes[j].area < bestArea) {
+        best = j;
+        bestArea = nodes[j].area;
       }
     }
-    
-    pieces.push({
-      polygon: outer.polygon,
-      holes,
-      classification: 'outside',
-      sourceFace: polygon.faceId,
-      sourceBody,
-      surface: polygon.surface
-    });
+    nodes[i].parent = best;
+    if (best !== null) nodes[best].children.push(i);
   }
+  
+  const depthCache = new Map<number, number>();
+  const depthOf = (i: number): number => {
+    if (depthCache.has(i)) return depthCache.get(i)!;
+    const p = nodes[i].parent;
+    const d = p === null ? 0 : depthOf(p) + 1;
+    depthCache.set(i, d);
+    return d;
+  };
+  
+  const pieces: FacePiece[] = [];
+  nodes.forEach((node, localIdx) => {
+    const depth = depthOf(localIdx);
+    if (depth % 2 === 0) {
+      const holes: Vec2[][] = [];
+      for (const child of node.children) {
+        if (depthOf(child) === depth + 1) {
+          const childNode = nodes[child];
+          const orientedHole = childNode.signedArea < 0 ? childNode.poly.slice().reverse() : childNode.poly;
+          holes.push(orientedHole);
+        }
+      }
+      const orientedPoly = node.signedArea < 0 ? node.poly.slice().reverse() : node.poly;
+      pieces.push({
+        polygon: orientedPoly,
+        holes,
+        classification: 'outside',
+        sourceFace: polygon.faceId,
+        sourceBody,
+        surface: polygon.surface
+      });
+    }
+  });
   
   return pieces;
 }
@@ -412,6 +459,59 @@ function computePolygonCentroid2D(polygon: Vec2[]): Vec2 {
   }
   
   return [cx / (6 * area), cy / (6 * area)];
+}
+
+/**
+ * Remove consecutive duplicate or collinear points to simplify polygons.
+ */
+function sanitizePolygon(poly: Vec2[], tol: number): Vec2[] {
+  const dedup: Vec2[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i];
+    const prev = dedup[dedup.length - 1];
+    if (!prev || (Math.abs(p[0] - prev[0]) > tol || Math.abs(p[1] - prev[1]) > tol)) {
+      dedup.push([p[0], p[1]]);
+    }
+  }
+  // Close if needed
+  if (dedup.length > 1) {
+    const first = dedup[0];
+    const last = dedup[dedup.length - 1];
+    if (Math.abs(first[0] - last[0]) < tol && Math.abs(first[1] - last[1]) < tol) {
+      dedup.pop();
+    }
+  }
+  // Remove collinear points
+  const cleaned: Vec2[] = [];
+  for (let i = 0; i < dedup.length; i++) {
+    const a = dedup[(i - 1 + dedup.length) % dedup.length];
+    const b = dedup[i];
+    const c = dedup[(i + 1) % dedup.length];
+    const cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+    if (Math.abs(cross) > tol * tol) {
+      cleaned.push(b);
+    }
+  }
+  return cleaned;
+}
+
+/**
+ * Build polygons that come purely from intersection segments (coplanar overlaps).
+ */
+function extractIntersectionPolygons(segments: Segment2D[], tolerance: number): Vec2[][] {
+  const interSegments = segments.filter(s => s.isIntersection);
+  if (interSegments.length === 0) return [];
+  const dcel = buildDCEL(interSegments, tolerance);
+  const polys: Vec2[][] = [];
+  for (const face of dcel.faces) {
+    if (face.outerComponent === -1) continue;
+    const poly = sanitizePolygon(getCyclePolygon(dcel, face.outerComponent), tolerance);
+    if (poly.length < 3) continue;
+    const area = polygonSignedArea(poly);
+    if (Math.abs(area) < tolerance * tolerance) continue;
+    polys.push(poly);
+  }
+  return polys;
 }
 
 /**
@@ -455,6 +555,29 @@ function pointInPolygon2D(point: Vec2, polygon: Vec2[]): boolean {
   }
   
   return inside;
+}
+
+/**
+ * Point-in-polygon that treats boundary as inside (with tolerance).
+ */
+function pointInPolygonWithBoundary(point: Vec2, polygon: Vec2[], tol: number): boolean {
+  if (pointInPolygon2D(point, polygon)) return true;
+  // Check boundary distance
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len2 = dx * dx + dy * dy;
+    if (len2 === 0) continue;
+    const t = ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / len2;
+    const tClamped = Math.max(0, Math.min(1, t));
+    const px = a[0] + tClamped * dx;
+    const py = a[1] + tClamped * dy;
+    const dist2 = (point[0] - px) ** 2 + (point[1] - py) ** 2;
+    if (dist2 <= tol * tol) return true;
+  }
+  return false;
 }
 
 /**
