@@ -192,8 +192,17 @@ export function clipLineToPolygon(
   if (crossings.length === 0) {
     // No edge crossings - check if line is entirely inside or outside
     if (pointInPolygon(linePoint, polygon)) {
-      // Line is entirely inside polygon - return a large interval
-      return [{ tStart: -1e10, tEnd: 1e10 }];
+      // Line is entirely inside polygon - compute extent along line direction
+      // by finding the polygon's bounds projected onto the line
+      let tMin = Infinity;
+      let tMax = -Infinity;
+      for (const p of polygon) {
+        const t = ((p[0] - linePoint[0]) * lineDir[0] + (p[1] - linePoint[1]) * lineDir[1]);
+        tMin = Math.min(tMin, t);
+        tMax = Math.max(tMax, t);
+      }
+      // Extend slightly beyond polygon bounds to ensure full coverage
+      return [{ tStart: tMin - 1, tEnd: tMax + 1 }];
     }
     return [];
   }
@@ -209,6 +218,15 @@ export function clipLineToPolygon(
     }
   }
   
+  // Compute polygon extent along line direction for bounding "infinite" intervals
+  let tMin = Infinity;
+  let tMax = -Infinity;
+  for (const p of polygon) {
+    const t = ((p[0] - linePoint[0]) * lineDir[0] + (p[1] - linePoint[1]) * lineDir[1]);
+    tMin = Math.min(tMin, t);
+    tMax = Math.max(tMax, t);
+  }
+  
   // Use odd-even rule: between each pair of crossings, test if inside
   const segments: { tStart: number; tEnd: number }[] = [];
   
@@ -220,9 +238,8 @@ export function clipLineToPolygon(
   let inside = pointInPolygon(testBefore, polygon);
   
   if (inside) {
-    // Line starts inside - interval from -infinity to first crossing
-    // (will be clipped later by 3D overlap)
-    segments.push({ tStart: -1e10, tEnd: uniqueCrossings[0] });
+    // Line starts inside - interval from polygon extent to first crossing
+    segments.push({ tStart: tMin - 1, tEnd: uniqueCrossings[0] });
   }
   
   // Process each interval between crossings
@@ -236,7 +253,7 @@ export function clipLineToPolygon(
   // Test after last crossing
   inside = !inside;
   if (inside) {
-    segments.push({ tStart: uniqueCrossings[uniqueCrossings.length - 1], tEnd: 1e10 });
+    segments.push({ tStart: uniqueCrossings[uniqueCrossings.length - 1], tEnd: tMax + 1 });
   }
   
   return segments;
@@ -503,6 +520,27 @@ function handleCoplanarFaces(
   
   if (!hasOverlap) {
     // No overlap at all - no intersection
+    return null;
+  }
+  
+  // Check if polygons are exactly coincident (same vertices up to ordering/tolerance)
+  // If so, return null - no subdivision needed
+  const tolerance = 1e-6;
+  const vertexSet = new Set<string>();
+  for (const v of faceA.outer) {
+    const key = `${Math.round(v[0] / tolerance) * tolerance},${Math.round(v[1] / tolerance) * tolerance}`;
+    vertexSet.add(key);
+  }
+  let allBInA = true;
+  for (const v of bInA) {
+    const key = `${Math.round(v[0] / tolerance) * tolerance},${Math.round(v[1] / tolerance) * tolerance}`;
+    if (!vertexSet.has(key)) {
+      allBInA = false;
+      break;
+    }
+  }
+  if (allBInA && bInA.length === faceA.outer.length) {
+    // Polygons are exactly coincident - no subdivision needed
     return null;
   }
   

@@ -275,7 +275,8 @@ export function imprintFaceAndExtractPieces(
   tolerance: number
 ): FacePiece[] {
   // Check if we have any intersection segments
-  const hasIntersections = segments.some(s => s.isIntersection);
+  const intersectionSegs = segments.filter(s => s.isIntersection);
+  const hasIntersections = intersectionSegs.length > 0;
   
   if (!hasIntersections) {
     // No imprinting needed - return the original face as a single piece
@@ -325,7 +326,7 @@ export function imprintFaceAndExtractPieces(
     // Compute centroid for containment testing
     const centroid = computePolygonCentroid2D(facePolygon);
     
-    faceData.push({ polygon: facePolygon, area, centroid });
+    faceData.push({ polygon: facePolygon, area, centroid, isOriginal: false });
   }
   
   const intersectionHoles = extractIntersectionPolygons(segments, tolerance);
@@ -344,9 +345,19 @@ export function imprintFaceAndExtractPieces(
   
   // If no faces extracted, return original (preserving any intersection-derived holes)
   if (faceData.length === 0) {
+    // Merge existing holes with new intersection holes
+    const allHoles = [...polygon.holes];
+    for (const newHole of orientedIntersectionHoles) {
+      // Check if this hole overlaps with existing holes
+      const newCentroid = computePolygonCentroid2D(newHole);
+      const isInExistingHole = polygon.holes.some(h => pointInPolygonWithBoundary(newCentroid, h, tolerance));
+      if (!isInExistingHole) {
+        allHoles.push(newHole);
+      }
+    }
     return [{
       polygon: polygon.outer,
-      holes: orientedIntersectionHoles.length > 0 ? orientedIntersectionHoles : polygon.holes,
+      holes: allHoles,
       classification: 'outside',
       sourceFace: polygon.faceId,
       sourceBody,
@@ -354,13 +365,59 @@ export function imprintFaceAndExtractPieces(
     }];
   }
   
+  // Deduplicate faces with same centroid AND same area magnitude (keep the one with positive area)
+  const centroidKey = (c: Vec2, area: number) => 
+    `${Math.round(c[0] / tolerance) * tolerance},${Math.round(c[1] / tolerance) * tolerance},${Math.round(Math.abs(area) / tolerance) * tolerance}`;
+  const centroidMap = new Map<string, typeof faceData[0]>();
+  for (const fd of faceData) {
+    const key = centroidKey(fd.centroid, fd.area);
+    if (!centroidMap.has(key)) {
+      centroidMap.set(key, fd);
+    } else {
+      // Keep the one with positive area (proper CCW winding)
+      const existing = centroidMap.get(key)!;
+      if (fd.area > 0 && existing.area < 0) {
+        centroidMap.set(key, fd);
+      }
+    }
+  }
+  const dedupedFaceData = Array.from(centroidMap.values());
+  
+  // Check if we have the original face (same area as original within tolerance)
+  const originalArea = Math.abs(polygonSignedArea(polygon.outer));
+  const areaTol = Math.max(tolerance * originalArea * 0.1, tolerance * 10);
+  
+  // Mark faces that match the original size as "isOriginal"
+  for (const fd of dedupedFaceData) {
+    const sameArea = Math.abs(Math.abs(fd.area) - originalArea) < areaTol;
+    const sameVertexCount = fd.polygon.length === polygon.outer.length;
+    (fd as { isOriginal: boolean }).isOriginal = sameArea && sameVertexCount;
+  }
+  
+  // If we have split pieces (non-original faces), filter out the original face
+  const splitFaces = dedupedFaceData.filter(fd => !fd.isOriginal);
+  const effectiveFaceData = splitFaces.length > 0 ? splitFaces : dedupedFaceData;
+  
   // Sort by absolute area descending (larger faces first)
-  faceData.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
+  effectiveFaceData.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
+  
+  
+  // Helper: check if a point is inside any existing hole
+  const isInsideExistingHole = (pt: Vec2): boolean => {
+    for (const hole of polygon.holes) {
+      if (pointInPolygon2D(pt, hole)) {
+        return true;
+      }
+    }
+    return false;
+  };
   
   // Robust containment-based hole assignment for all extracted faces
-  const facesInOriginal = faceData
+  // Filter out pieces whose centroid is inside an existing hole (these are void regions)
+  const facesInOriginal = effectiveFaceData
     .map((fd, idx) => ({ ...fd, idx, absArea: Math.abs(fd.area) }))
-    .filter(fd => pointInPolygonWithBoundary(fd.centroid, polygon.outer, tolerance));
+    .filter(fd => pointInPolygonWithBoundary(fd.centroid, polygon.outer, tolerance))
+    .filter(fd => !isInsideExistingHole(fd.centroid));
   
   interface Node { idx: number; poly: Vec2[]; area: number; signedArea: number; centroid: Vec2; parent: number | null; children: number[]; }
   const nodes: Node[] = facesInOriginal.map(fd => ({

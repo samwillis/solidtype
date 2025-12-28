@@ -62,16 +62,17 @@ export function classifyPiece(
     }
   }
   
-  if (insideHits > 0 && outsideHits === 0) {
+  // Use the centroid for primary classification, then validate with other points
+  // If centroid is clearly inside or outside, use that
+  // If mixed or boundary, use 'on_same' for boundary handling
+  
+  if (insideHits > 0 && outsideHits === 0 && boundaryHits === 0) {
     return 'inside';
   }
   if (outsideHits > 0 && insideHits === 0 && boundaryHits === 0) {
     return 'outside';
   }
-  // Boundary/mixed -> treat as shared boundary
-  return 'on_same';
-  
-  // Fallback (should not reach here)
+  // Mixed results -> treat as boundary
   return 'on_same';
 }
 
