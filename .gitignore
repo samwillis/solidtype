@@ -58,3 +58,9 @@ lerna-debug.log*
 *.temp
 .cache/
 .temp/
+
+# Reference implementations (downloaded on-demand)
+refs/occt/
+refs/cgal/
+refs/freecad/
+refs/fornjot/

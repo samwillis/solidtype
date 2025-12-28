@@ -8,8 +8,28 @@ Before you write *any* code, read:
 - [`OVERVIEW.md`](OVERVIEW.md) – **What** SolidType is and why it exists.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) – **How** it is structured (packages, layers, data flow).
 - [`/plan/*`](plan/*) – The **phase-by-phase implementation plan** you must follow.
+- [`KERNEL-REFACTOR.md`](KERNEL-REFACTOR.md) – **Current kernel refactor** plan (UV-trimming, booleans).
 
-Treat those three documents as the source of truth. If they conflict with existing code, the docs win and the code should be brought back into line.
+Treat those documents as the source of truth. If they conflict with existing code, the docs win and the code should be brought back into line.
+
+---
+
+## Reference Implementations
+
+The [`/refs/`](refs/) directory contains downloadable source code from production CAD kernels for reference:
+
+- **OCCT** (Open CASCADE) – Production B-Rep kernel with boolean operations
+- **CGAL** – Robust geometry algorithms, especially planar arrangements (DCEL)
+- **FreeCAD toponaming** – Persistent naming implementation (realthunder's branch)
+- **Fornjot** – Modern Rust B-Rep kernel with similar goals to SolidType
+
+To download references:
+
+```bash
+cd refs && ./download-refs.sh
+```
+
+See [`refs/README.md`](refs/README.md) for detailed guidance on what to study in each reference.
 
 ---
 

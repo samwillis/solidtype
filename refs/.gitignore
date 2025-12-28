@@ -1,0 +1,19 @@
+# Ignore extracted reference source code
+# These are downloaded on-demand via download-refs.sh
+
+# OCCT (Open CASCADE Technology)
+occt/
+
+# CGAL
+cgal/
+
+# FreeCAD toponaming branch
+freecad/
+
+# Fornjot
+fornjot/
+
+# Downloaded archives (should be cleaned up by script, but just in case)
+*.tar.gz
+*.tgz
+*.zip
