@@ -254,6 +254,8 @@ This matches the pcurve-per-face model used in kernels like OCCT. ([Open CASCADE
 
 **Outcome:** Replace boolean stub with true planar boundary evaluation booleans (imprint/classify/select/merge), using robust predicates and explicit topology stitching. CUT works for planar polyhedra, preview matches final.
 
+**Current Status (Dec 2024):** ✅ Axis-aligned geometry works correctly. ⚠️ Tilted geometry produces non-manifold edges due to floating-point precision issues in UV projection. See section 2.11 for details and next steps.
+
 This step follows the classic boundary evaluation + merging architecture (PADL boundary evaluation) and matches BOOLE’s approach of computing trimmed surface boundaries as the result. ([UR Research][2])
 
 ## 2.1 Robust predicates behind your existing `num/predicates.ts`
@@ -265,6 +267,8 @@ Minimum API:
 
 * `orient2d(a,b,c): number` (robust sign)
 * `segSegHit(...) -> none | point | overlap`
+
+**Status (Dec 2024):** ✅ Implemented. `mourner/robust-predicates` integrated into `num/predicates.ts`. Used in `intersect.ts` for `orient2DRobust`, `pointInPolygon`, `clipLineToPolygon`, and segment intersection detection. However, robust predicates alone don't solve tilted geometry issues—the problem is floating-point errors in coordinate transformations (UV projection/unprojection), not in the geometric tests themselves.
 
 ## 2.2 Planar boolean pipeline modules
 
@@ -354,7 +358,9 @@ Then unify:
 * redirect halfedges from duplicate edge → canonical edge
 * delete duplicate edge record
 
-This step is part of “merging” in boundary evaluation literature. ([UR Research][2])
+This step is part of "merging" in boundary evaluation literature. ([UR Research][2])
+
+**Status (Dec 2024):** ✅ Implemented in `stitch.ts` via `setupTwinsByPosition`. Uses position-based matching with tolerance to find twin half-edges. Works correctly for axis-aligned geometry. ⚠️ For tilted geometry, floating-point errors in UV unprojection cause intersection segment endpoints from different faces to not coincide, leaving half-edges without twins. Added `snapIntersectionEndpoints` in `planarBoolean.ts` as a mitigation, but full fix requires computing intersection endpoints in 3D before projecting to UV (see section 2.11).
 
 ## 2.8 Heal/validate
 
@@ -383,6 +389,89 @@ Shape healing as a first-class phase is heavily emphasised in OCCT docs. ([Open 
 **App:**
 
 * box then cut with another extrude → preview and final match visually (bbox/tri count checks).
+
+---
+
+## 2.11 Tilted Geometry Robustness (Current Status + Next Steps)
+
+**Status:** Planar booleans work correctly for axis-aligned geometry. Non-axis-aligned (tilted) geometry produces non-manifold edges and incorrect results.
+
+### 2.11.1 Root Causes Identified
+
+1. **Floating-point errors in UV projection/unprojection**
+   - `projectToPlane` and `unprojectFromPlane` use floating-point arithmetic
+   - When intersection segments are computed on face A and face B separately, the endpoints don't perfectly coincide in 3D
+   - This causes twin matching to fail in `setupTwinsByPosition`, leaving unpaired half-edges
+
+2. **Endpoint snapping is insufficient**
+   - We added `snapIntersectionEndpoints` to cluster and average nearby intersection segment endpoints
+   - This helps but doesn't fully resolve the issue because snapping happens too late (after projection errors accumulate)
+
+3. **Sutherland-Hodgman polygon clipping limitations**
+   - `clipPolygonToPolygon` uses Sutherland-Hodgman algorithm
+   - This algorithm only works correctly for **convex** clipping polygons
+   - Concave tool profiles will produce incorrect intersection segments
+
+4. **Tolerance propagation**
+   - Different stages use different tolerances (`ctx.tol`, vertex welding tolerance, twin matching tolerance)
+   - Tolerances that work for axis-aligned geometry are too tight for tilted geometry where floating-point errors accumulate
+
+### 2.11.2 Next Steps (Priority Order)
+
+**Step A: 3D-space intersection computation (highest priority)**
+- Compute intersection segment endpoints in 3D space first
+- Snap endpoints to a consistent 3D position before projecting to UV
+- This ensures both faces see exactly the same segment endpoints
+
+```ts
+// Conceptual approach:
+function computeFaceIntersectionRobust(faceA, faceB) {
+  // 1. Compute plane-plane intersection line in 3D
+  const line3D = intersectPlanes(planeA, planeB);
+  
+  // 2. Clip line to both faces in 3D (not UV)
+  const segA = clipLineToFace3D(line3D, faceA);
+  const segB = clipLineToFace3D(line3D, faceB);
+  
+  // 3. Intersect intervals in 3D → single canonical segment
+  const seg3D = intersectSegments3D(segA, segB);
+  
+  // 4. Project canonical 3D endpoints to UV for each face
+  const segUvA = projectSegmentToUV(seg3D, faceA);
+  const segUvB = projectSegmentToUV(seg3D, faceB);
+}
+```
+
+**Step B: Canonical plane basis generation**
+- Ensure `projectToPlane` uses a deterministic, numerically stable basis
+- Consider using the plane equation coefficients directly to generate basis vectors
+- Avoid cross-products with arbitrary vectors that can produce different results for nearly-parallel inputs
+
+**Step C: Replace Sutherland-Hodgman with robust polygon clipping**
+- Options:
+  - Weiler-Atherton algorithm (handles concave polygons)
+  - Martinez et al. polygon clipping (robust, handles all cases)
+  - Use the DCEL arrangement machinery directly for clipping
+- Must use robust predicates throughout
+
+**Step D: Vertex welding in 3D before stitching**
+- After computing all intersection segments, weld nearby 3D positions globally
+- This creates a consistent vertex set across all faces
+- Then project welded vertices to UV for each face
+
+**Step E: Tolerance strategy**
+- Define a single "model tolerance" that propagates through all stages
+- Scale tolerance based on model bounding box for robustness
+- Consider using exact rational arithmetic for intersection computations (more complex but eliminates floating-point issues)
+
+### 2.11.3 Testing Tilted Geometry
+
+Add these test cases once fixed:
+
+* `tilted_box_subtract_produces_valid_mesh` — tool at 20° angle
+* `diagonal_cut_through_box_produces_watertight_mesh` — 45° cut
+* `arbitrary_angle_union_is_manifold` — two boxes at random orientations
+* fuzz: random rotation matrices applied to boxes → manifold
 
 ---
 

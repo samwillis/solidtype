@@ -135,9 +135,25 @@ export function planarBoolean(
   }
   
   // Add intersection segments
+  const DEBUG_INTERSECTION = typeof globalThis !== 'undefined' && (globalThis as Record<string, unknown>).DEBUG_PLANAR_BOOLEAN;
   for (const polyA of polygonsA) {
     for (const polyB of polygonsB) {
       const intersection = computeFaceIntersection(polyA, polyB, ctx, operation);
+      if (DEBUG_INTERSECTION) {
+        const nA = polyA.surface.normal;
+        const nB = polyB.surface.normal;
+        const isTiltedPair = (polyA.faceId === 4 && polyB.faceId === 10) || (polyA.faceId === 10 && polyB.faceId === 4);
+        if (isTiltedPair) {
+          console.log(`\n=== DETAILED: Face ${polyA.faceId} vs Face ${polyB.faceId} ===`);
+          console.log(`  FaceA normal: [${nA[0].toFixed(3)},${nA[1].toFixed(3)},${nA[2].toFixed(3)}]`);
+          console.log(`  FaceA outer vertices (2D): ${JSON.stringify(polyA.outer.map(v => [v[0].toFixed(2), v[1].toFixed(2)]))}`);
+          console.log(`  FaceB normal: [${nB[0].toFixed(3)},${nB[1].toFixed(3)},${nB[2].toFixed(3)}]`);
+          console.log(`  FaceB outer vertices (2D): ${JSON.stringify(polyB.outer.map(v => [v[0].toFixed(2), v[1].toFixed(2)]))}`);
+          console.log(`  Result: ${intersection ? intersection.segmentsA.length + ' segs' : 'null'}`);
+        } else {
+          console.log(`Face ${polyA.faceId} (n=[${nA[0].toFixed(3)},${nA[1].toFixed(3)},${nA[2].toFixed(3)}]) vs Face ${polyB.faceId} (n=[${nB[0].toFixed(3)},${nB[1].toFixed(3)},${nB[2].toFixed(3)}]): ${intersection ? intersection.segmentsA.length + ' segs' : 'null'}`);
+        }
+      }
       if (intersection) {
         const segsA = imprintDataA.get(polyA.faceId)!;
         segsA.push(...intersection.segmentsA);
@@ -278,7 +294,11 @@ export function imprintFaceAndExtractPieces(
 ): FacePiece[] {
   const baseTol = ctx.tol.length;
   const snapTol = scaledTol(ctx, 1);
-  const sanitizedSegments = sanitizeSegmentsForDCEL(segments, ctx);
+  
+  // Snap intersection segment endpoints to each other if they're close
+  // This handles floating-point errors from independent intersection calculations
+  const snappedSegments = snapIntersectionEndpoints(segments, ctx);
+  const sanitizedSegments = sanitizeSegmentsForDCEL(snappedSegments, ctx);
   // Check if we have any intersection segments
   const intersectionSegs = sanitizedSegments.filter(s => s.isIntersection);
   const hasIntersections = intersectionSegs.length > 0;
@@ -317,7 +337,6 @@ export function imprintFaceAndExtractPieces(
     if (facePolygon.length < 3) continue;
     
     // Validate: check for any duplicate vertices (degenerate cycle detection)
-    // Use extractTol for consistent tolerance with getCyclePolygon
     const vertexKeys = new Set<string>();
     let hasDuplicates = false;
     for (const p of facePolygon) {
@@ -328,25 +347,22 @@ export function imprintFaceAndExtractPieces(
       }
       vertexKeys.add(key);
     }
-    if (hasDuplicates) continue; // Skip degenerate cycles
+    if (hasDuplicates) continue;
     
     const area = polygonSignedArea(facePolygon);
     if (Math.abs(area) < baseTol * baseTol) continue;
     
     // Validate: extracted piece should be within original face bounds
-    // (with some tolerance for numerical precision)
     const pieceBounds = computePolygonBounds(facePolygon);
     if (pieceBounds.minX < originalBounds.minX - boundsPadding ||
         pieceBounds.maxX > originalBounds.maxX + boundsPadding ||
         pieceBounds.minY < originalBounds.minY - boundsPadding ||
         pieceBounds.maxY > originalBounds.maxY + boundsPadding) {
-      // This piece extends beyond the original face - skip it
       continue;
     }
     
     // Compute centroid for containment testing
     const centroid = computePolygonCentroid2D(facePolygon);
-    
     faceData.push({ polygon: facePolygon, area, centroid, isOriginal: false });
   }
   
@@ -577,6 +593,87 @@ export function imprintFaceAndExtractPieces(
   }
   
   return pieces;
+}
+
+/**
+ * Snap intersection segment endpoints that are close together.
+ * This handles floating-point errors from independent intersection calculations
+ * across different face pairs. Segments that should meet at the same point
+ * may have slightly different coordinates (e.g., 1.52 vs 1.56).
+ * 
+ * The approach: collect all intersection endpoints, cluster nearby ones,
+ * and replace each cluster with its centroid.
+ */
+function snapIntersectionEndpoints(segments: Segment2D[], _ctx: NumericContext): Segment2D[] {
+  // Use a larger tolerance for snapping intersection endpoints
+  // 0.1 should handle floating-point errors from tilted geometry
+  const snapTol = 0.1;  // Fixed tolerance for robustness
+  
+  // Collect all unique endpoints from intersection segments
+  const interSegs = segments.filter(s => s.isIntersection);
+  if (interSegs.length === 0) return segments;
+  
+  const allPoints: Vec2[] = [];
+  for (const seg of interSegs) {
+    allPoints.push(seg.a, seg.b);
+  }
+  
+  // Build clusters of nearby points
+  const clusters: Vec2[][] = [];
+  const assigned = new Set<number>();
+  
+  for (let i = 0; i < allPoints.length; i++) {
+    if (assigned.has(i)) continue;
+    
+    const cluster: Vec2[] = [allPoints[i]];
+    assigned.add(i);
+    
+    for (let j = i + 1; j < allPoints.length; j++) {
+      if (assigned.has(j)) continue;
+      
+      // Check if point j is close to any point in the cluster
+      for (const cp of cluster) {
+        const dx = Math.abs(allPoints[j][0] - cp[0]);
+        const dy = Math.abs(allPoints[j][1] - cp[1]);
+        if (dx <= snapTol && dy <= snapTol) {
+          cluster.push(allPoints[j]);
+          assigned.add(j);
+          break;
+        }
+      }
+    }
+    
+    clusters.push(cluster);
+  }
+  
+  // Compute centroid for each cluster
+  const clusterCentroids: Vec2[] = clusters.map(cluster => {
+    const cx = cluster.reduce((sum, p) => sum + p[0], 0) / cluster.length;
+    const cy = cluster.reduce((sum, p) => sum + p[1], 0) / cluster.length;
+    return [cx, cy] as Vec2;
+  });
+  
+  // Build point-to-centroid map
+  const pointToCentroid = new Map<string, Vec2>();
+  for (let ci = 0; ci < clusters.length; ci++) {
+    for (const p of clusters[ci]) {
+      const key = `${p[0]},${p[1]}`;
+      pointToCentroid.set(key, clusterCentroids[ci]);
+    }
+  }
+  
+  // Replace segment endpoints with cluster centroids
+  return segments.map(seg => {
+    if (!seg.isIntersection) return seg;
+    
+    const keyA = `${seg.a[0]},${seg.a[1]}`;
+    const keyB = `${seg.b[0]},${seg.b[1]}`;
+    
+    const newA = pointToCentroid.get(keyA) ?? seg.a;
+    const newB = pointToCentroid.get(keyB) ?? seg.b;
+    
+    return { ...seg, a: newA, b: newB };
+  });
 }
 
 /**

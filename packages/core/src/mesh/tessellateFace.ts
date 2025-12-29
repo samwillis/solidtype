@@ -54,8 +54,10 @@ function getLoopVertices(model: TopoModel, loopId: LoopId): Vec3[] {
 
 /**
  * Tessellate a planar face
+ * NOTE: This function is retained but unused - it was causing issues with concave polygons
  */
-function sortLoopAroundCentroid(verts3D: Vec3[], surface: PlaneSurface): { verts3D: Vec3[]; verts2D: Vec2[] } {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _sortLoopAroundCentroid(verts3D: Vec3[], surface: PlaneSurface): { verts3D: Vec3[]; verts2D: Vec2[] } {
   const verts2D = verts3D.map((v) => projectToPlane(v, surface));
   if (verts2D.length <= 2) {
     return { verts3D, verts2D };

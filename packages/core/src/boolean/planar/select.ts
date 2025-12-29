@@ -97,7 +97,7 @@ export function selectPieces(
   
   // Key that includes polygon shape (for exact duplicates) - retained for future debugging
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const exactKey = (piece: FacePiece): string => `${planeKey(piece)}|${normalizeLoop3D(piece)}`;
+  const _exactKey = (piece: FacePiece): string => `${planeKey(piece)}|${normalizeLoop3D(piece)}`;
   
   let fromA: FacePiece[];
   let fromB: FacePiece[];
@@ -374,7 +374,8 @@ function computePolygonArea(polygon: readonly [number, number][]): number {
 /**
  * Point-in-polygon test for Vec2
  */
-function pointInPolygon2D(point: Vec2, polygon: Vec2[]): boolean {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _pointInPolygon2D(point: Vec2, polygon: Vec2[]): boolean {
   const n = polygon.length;
   let inside = false;
   
@@ -394,7 +395,8 @@ function pointInPolygon2D(point: Vec2, polygon: Vec2[]): boolean {
 /**
  * Check if two line segments intersect (proper intersection, not just touching)
  */
-function segmentsIntersect(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2): boolean {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _segmentsIntersect(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2): boolean {
   const d1 = cross2D(b1, b2, a1);
   const d2 = cross2D(b1, b2, a2);
   const d3 = cross2D(a1, a2, b1);

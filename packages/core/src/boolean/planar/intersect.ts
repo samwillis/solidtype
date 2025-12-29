@@ -10,7 +10,7 @@ import type { Vec3 } from '../../num/vec3.js';
 import { dot3, cross3, sub3, add3, mul3, normalize3, length3 } from '../../num/vec3.js';
 import type { NumericContext } from '../../num/tolerance.js';
 import { isZero } from '../../num/tolerance.js';
-import { segSegHit } from '../../num/predicates.js';
+import { segSegHit, orient2DRobust } from '../../num/predicates.js';
 import type { PlaneSurface } from '../../geom/surface.js';
 import type { Segment2D, FacePolygon2D } from './types.js';
 
@@ -92,7 +92,10 @@ export function unprojectFromPlane(uv: Vec2, plane: PlaneSurface): Vec3 {
  * Clip a line (given by direction and point) against a polygon.
  * Returns the segment(s) of the line that lie inside the polygon.
  * 
- * Uses a simpler approach: find all edge crossings, sort by parameter,
+ * Uses robust orientation predicates for numerical stability with
+ * tilted/rotated geometry.
+ * 
+ * Approach: find all edge crossings using segSegHit (robust), sort by parameter,
  * then use odd-even rule to determine inside intervals.
  * 
  * Returns empty if the line lies on a polygon edge (degenerate case).
@@ -108,46 +111,69 @@ export function clipLineToPolygon(
   // Normalize line direction for consistent parameterization
   const dirLen = Math.sqrt(lineDir[0] ** 2 + lineDir[1] ** 2);
   if (dirLen < 1e-12) return [];
-  lineDir = [lineDir[0] / dirLen, lineDir[1] / dirLen];
+  const normDir: Vec2 = [lineDir[0] / dirLen, lineDir[1] / dirLen];
   
-  // Collect segments where the line lies exactly on a polygon edge (collinear overlap)
+  // Compute polygon extent along line direction for bounding the "infinite" line
+  let tMin = Infinity;
+  let tMax = -Infinity;
+  for (const p of polygon) {
+    const t = ((p[0] - linePoint[0]) * normDir[0] + (p[1] - linePoint[1]) * normDir[1]);
+    tMin = Math.min(tMin, t);
+    tMax = Math.max(tMax, t);
+  }
+  
+  // Extend beyond polygon bounds to create a finite segment for intersection testing
+  const padding = Math.max(1, (tMax - tMin) * 0.1);
+  const lineStart: Vec2 = [
+    linePoint[0] + (tMin - padding) * normDir[0],
+    linePoint[1] + (tMin - padding) * normDir[1]
+  ];
+  const lineEnd: Vec2 = [
+    linePoint[0] + (tMax + padding) * normDir[0],
+    linePoint[1] + (tMax + padding) * normDir[1]
+  ];
+  
+  // Collect intersection parameters with polygon edges using robust segment-segment test
+  const crossings: number[] = [];
   const collinearIntervals: { tStart: number; tEnd: number }[] = [];
   
-  // First, check if the line lies ON any polygon edge (degenerate case)
   const n = polygon.length;
   for (let i = 0; i < n; i++) {
     const p1 = polygon[i];
     const p2 = polygon[(i + 1) % n];
     
-    const edgeDir: Vec2 = [p2[0] - p1[0], p2[1] - p1[1]];
-    const edgeLen = Math.sqrt(edgeDir[0] ** 2 + edgeDir[1] ** 2);
-    if (edgeLen < 1e-12) continue;
+    // Use robust segment-segment intersection
+    const hit = segSegHit(lineStart, lineEnd, p1, p2);
     
-    // Check if line is parallel to this edge
-    const cross = lineDir[0] * edgeDir[1] - lineDir[1] * edgeDir[0];
-    if (Math.abs(cross) < 1e-10 * edgeLen) {
-      // Parallel - check if linePoint is on the edge line
-      const toP1: Vec2 = [p1[0] - linePoint[0], p1[1] - linePoint[1]];
-      const distToLine = Math.abs(toP1[0] * edgeDir[1] - toP1[1] * edgeDir[0]) / edgeLen;
-      if (distToLine < 1e-10) {
-        // Line lies ON this edge - record the overlapping interval along the line
-        const t1 = ((p1[0] - linePoint[0]) * lineDir[0] + (p1[1] - linePoint[1]) * lineDir[1]);
-        const t2 = ((p2[0] - linePoint[0]) * lineDir[0] + (p2[1] - linePoint[1]) * lineDir[1]);
-        const tMin = Math.min(t1, t2);
-        const tMax = Math.max(t1, t2);
-        collinearIntervals.push({ tStart: tMin, tEnd: tMax });
-      }
+    if (hit.kind === 'point') {
+      // Convert t1 from lineStart-lineEnd parameterization to linePoint parameterization
+      const hitPoint = hit.point;
+      const t = ((hitPoint[0] - linePoint[0]) * normDir[0] + (hitPoint[1] - linePoint[1]) * normDir[1]);
+      crossings.push(t);
+    } else if (hit.kind === 'overlap') {
+      // Line is collinear with this edge - record the overlapping interval
+      const pt1: Vec2 = [
+        lineStart[0] + hit.t1Start * (lineEnd[0] - lineStart[0]),
+        lineStart[1] + hit.t1Start * (lineEnd[1] - lineStart[1])
+      ];
+      const pt2: Vec2 = [
+        lineStart[0] + hit.t1End * (lineEnd[0] - lineStart[0]),
+        lineStart[1] + hit.t1End * (lineEnd[1] - lineStart[1])
+      ];
+      const t1 = ((pt1[0] - linePoint[0]) * normDir[0] + (pt1[1] - linePoint[1]) * normDir[1]);
+      const t2 = ((pt2[0] - linePoint[0]) * normDir[0] + (pt2[1] - linePoint[1]) * normDir[1]);
+      collinearIntervals.push({ tStart: Math.min(t1, t2), tEnd: Math.max(t1, t2) });
     }
   }
   
+  // If we have collinear overlaps, merge and return them
   if (collinearIntervals.length > 0) {
-    // Merge overlapping intervals to avoid tiny duplicates
     collinearIntervals.sort((a, b) => a.tStart - b.tStart);
     const merged: { tStart: number; tEnd: number }[] = [];
     let current = { ...collinearIntervals[0] };
     for (let i = 1; i < collinearIntervals.length; i++) {
       const next = collinearIntervals[i];
-      if (next.tStart <= current.tEnd + 1e-12) {
+      if (next.tStart <= current.tEnd + 1e-10) {
         current.tEnd = Math.max(current.tEnd, next.tEnd);
       } else {
         merged.push(current);
@@ -158,51 +184,11 @@ export function clipLineToPolygon(
     return merged;
   }
   
-  // Collect intersection parameters with polygon edges
-  const crossings: number[] = [];
-  
-  for (let i = 0; i < n; i++) {
-    const p1 = polygon[i];
-    const p2 = polygon[(i + 1) % n];
-    
-    const edgeDir: Vec2 = [p2[0] - p1[0], p2[1] - p1[1]];
-    
-    // Solve: linePoint + t * lineDir = p1 + s * edgeDir
-    const denom = lineDir[0] * edgeDir[1] - lineDir[1] * edgeDir[0];
-    
-    if (Math.abs(denom) < 1e-12) {
-      // Line parallel to edge - skip
-      continue;
-    }
-    
-    const diff: Vec2 = [p1[0] - linePoint[0], p1[1] - linePoint[1]];
-    const t = (diff[0] * edgeDir[1] - diff[1] * edgeDir[0]) / denom;
-    const s = (diff[0] * lineDir[1] - diff[1] * lineDir[0]) / denom;
-    
-    // Check if intersection is within edge bounds (exclusive of endpoints to avoid double counting)
-    if (s > 1e-10 && s < 1 - 1e-10) {
-      crossings.push(t);
-    } else if (Math.abs(s) < 1e-10) {
-      // Intersection at p1 - count only if entering/leaving through this vertex
-      // For simplicity, include it
-      crossings.push(t);
-    }
-  }
-  
   if (crossings.length === 0) {
     // No edge crossings - check if line is entirely inside or outside
     if (pointInPolygon(linePoint, polygon)) {
-      // Line is entirely inside polygon - compute extent along line direction
-      // by finding the polygon's bounds projected onto the line
-      let tMin = Infinity;
-      let tMax = -Infinity;
-      for (const p of polygon) {
-        const t = ((p[0] - linePoint[0]) * lineDir[0] + (p[1] - linePoint[1]) * lineDir[1]);
-        tMin = Math.min(tMin, t);
-        tMax = Math.max(tMax, t);
-      }
-      // Extend slightly beyond polygon bounds to ensure full coverage
-      return [{ tStart: tMin - 1, tEnd: tMax + 1 }];
+      // Line is entirely inside polygon - return the full extent
+      return [{ tStart: tMin - padding, tEnd: tMax + padding }];
     }
     return [];
   }
@@ -218,28 +204,19 @@ export function clipLineToPolygon(
     }
   }
   
-  // Compute polygon extent along line direction for bounding "infinite" intervals
-  let tMin = Infinity;
-  let tMax = -Infinity;
-  for (const p of polygon) {
-    const t = ((p[0] - linePoint[0]) * lineDir[0] + (p[1] - linePoint[1]) * lineDir[1]);
-    tMin = Math.min(tMin, t);
-    tMax = Math.max(tMax, t);
-  }
-  
   // Use odd-even rule: between each pair of crossings, test if inside
   const segments: { tStart: number; tEnd: number }[] = [];
   
   // Test before first crossing
   const testBefore: Vec2 = [
-    linePoint[0] + (uniqueCrossings[0] - 1) * lineDir[0],
-    linePoint[1] + (uniqueCrossings[0] - 1) * lineDir[1]
+    linePoint[0] + (uniqueCrossings[0] - 1) * normDir[0],
+    linePoint[1] + (uniqueCrossings[0] - 1) * normDir[1]
   ];
   let inside = pointInPolygon(testBefore, polygon);
   
   if (inside) {
     // Line starts inside - interval from polygon extent to first crossing
-    segments.push({ tStart: tMin - 1, tEnd: uniqueCrossings[0] });
+    segments.push({ tStart: tMin - padding, tEnd: uniqueCrossings[0] });
   }
   
   // Process each interval between crossings
@@ -253,32 +230,55 @@ export function clipLineToPolygon(
   // Test after last crossing
   inside = !inside;
   if (inside) {
-    segments.push({ tStart: uniqueCrossings[uniqueCrossings.length - 1], tEnd: tMax + 1 });
+    segments.push({ tStart: uniqueCrossings[uniqueCrossings.length - 1], tEnd: tMax + padding });
   }
   
   return segments;
 }
 
 /**
- * Point-in-polygon test using ray casting
+ * Point-in-polygon test using robust winding number algorithm.
+ * 
+ * Uses robust orientation predicates to correctly handle edge cases
+ * where the point is very close to polygon edges.
+ * 
+ * The winding number method counts how many times the polygon winds
+ * around the point. For a simple polygon, winding != 0 means inside.
  */
 export function pointInPolygon(point: Vec2, polygon: Vec2[]): boolean {
   const n = polygon.length;
-  let inside = false;
+  if (n < 3) return false;
   
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = polygon[i][0];
-    const yi = polygon[i][1];
-    const xj = polygon[j][0];
-    const yj = polygon[j][1];
+  let windingNumber = 0;
+  
+  for (let i = 0; i < n; i++) {
+    const p1 = polygon[i];
+    const p2 = polygon[(i + 1) % n];
     
-    if (((yi > point[1]) !== (yj > point[1])) &&
-        (point[0] < (xj - xi) * (point[1] - yi) / (yj - yi) + xi)) {
-      inside = !inside;
+    if (p1[1] <= point[1]) {
+      // Edge goes upward
+      if (p2[1] > point[1]) {
+        // Upward crossing - check if point is to the left of edge
+        const orient = orient2DRobust(p1, p2, point);
+        if (orient > 0) {
+          // Point is strictly to the left - count upward crossing
+          windingNumber++;
+        }
+      }
+    } else {
+      // Edge goes downward
+      if (p2[1] <= point[1]) {
+        // Downward crossing - check if point is to the right of edge
+        const orient = orient2DRobust(p1, p2, point);
+        if (orient < 0) {
+          // Point is strictly to the right - count downward crossing
+          windingNumber--;
+        }
+      }
     }
   }
   
-  return inside;
+  return windingNumber !== 0;
 }
 
 /**
@@ -295,6 +295,8 @@ export function computeFaceIntersection(
   ctx: NumericContext,
   operation?: 'union' | 'subtract' | 'intersect'
 ): { segmentsA: Segment2D[]; segmentsB: Segment2D[] } | null {
+  const DEBUG = typeof globalThis !== 'undefined' && (globalThis as Record<string, unknown>).DEBUG_FACE_INTERSECTION;
+  
   // Intersect the two planes
   const intersection = intersectPlanes(faceA.surface, faceB.surface, ctx);
   
@@ -305,7 +307,12 @@ export function computeFaceIntersection(
       // Coplanar faces - handle specially (overlap detection)
       return handleCoplanarFaces(faceA, faceB, ctx, operation);
     }
+    if (DEBUG) console.log(`  -> Planes parallel, not coplanar`);
     return null;
+  }
+  
+  if (DEBUG) {
+    console.log(`  Intersection line: point=[${intersection.point[0].toFixed(3)},${intersection.point[1].toFixed(3)},${intersection.point[2].toFixed(3)}], dir=[${intersection.direction[0].toFixed(3)},${intersection.direction[1].toFixed(3)},${intersection.direction[2].toFixed(3)}]`);
   }
   
   // Project intersection line to each face's 2D system
@@ -333,11 +340,22 @@ export function computeFaceIntersection(
     lineDirB2D[1] /= lenB;
   }
   
+  if (DEBUG) {
+    console.log(`  Line in A's 2D: point=[${linePointA[0].toFixed(3)},${linePointA[1].toFixed(3)}], dir=[${lineDirA2D[0].toFixed(3)},${lineDirA2D[1].toFixed(3)}]`);
+    console.log(`  Line in B's 2D: point=[${linePointB[0].toFixed(3)},${linePointB[1].toFixed(3)}], dir=[${lineDirB2D[0].toFixed(3)},${lineDirB2D[1].toFixed(3)}]`);
+  }
+  
   // Clip line to each polygon
   const intervalsA = clipLineToPolygon(linePointA, lineDirA2D, faceA.outer, ctx);
   const intervalsB = clipLineToPolygon(linePointB, lineDirB2D, faceB.outer, ctx);
   
+  if (DEBUG) {
+    console.log(`  IntervalsA: ${JSON.stringify(intervalsA)}`);
+    console.log(`  IntervalsB: ${JSON.stringify(intervalsB)}`);
+  }
+  
   if (intervalsA.length === 0 || intervalsB.length === 0) {
+    if (DEBUG) console.log(`  -> No intervals, returning null`);
     return null;
   }
   
@@ -617,26 +635,22 @@ function handleCoplanarFaces(
 
 /**
  * Check if two line segments intersect (not just touch at endpoints)
+ * Uses robust orientation predicates for numerical stability.
  */
 function edgesIntersect(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2): boolean {
-  const d1 = cross2D(a1, a2, b1);
-  const d2 = cross2D(a1, a2, b2);
-  const d3 = cross2D(b1, b2, a1);
-  const d4 = cross2D(b1, b2, a2);
+  // Use robust orientation predicates
+  const d1 = orient2DRobust(a1, a2, b1);
+  const d2 = orient2DRobust(a1, a2, b2);
+  const d3 = orient2DRobust(b1, b2, a1);
+  const d4 = orient2DRobust(b1, b2, a2);
   
+  // Proper crossing: endpoints of each segment are on opposite sides of the other
   if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
       ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
     return true;
   }
   
   return false;
-}
-
-/**
- * Cross product for 2D orientation test
- */
-function cross2D(o: Vec2, a: Vec2, b: Vec2): number {
-  return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 }
 
 /**
@@ -702,22 +716,30 @@ export function _clipSegmentToPolygon(p1: Vec2, p2: Vec2, polygon: Vec2[]): [Vec
 
 /**
  * Point-in-polygon with boundary inclusion.
+ * Uses robust predicates for boundary detection.
  */
 function pointInPolygonWithBoundary(point: Vec2, polygon: Vec2[]): boolean {
   if (pointInPolygon(point, polygon)) return true;
+  
+  // Check if point is on any edge using robust orientation test
   for (let i = 0; i < polygon.length; i++) {
     const a = polygon[i];
     const b = polygon[(i + 1) % polygon.length];
+    
+    // Use robust orientation to check collinearity
+    const orient = orient2DRobust(a, b, point);
+    if (orient !== 0) continue; // Not collinear
+    
+    // Point is collinear with edge - check if it's between endpoints
     const dx = b[0] - a[0];
     const dy = b[1] - a[1];
     const len2 = dx * dx + dy * dy;
-    if (len2 === 0) continue;
+    if (len2 < 1e-24) continue; // Degenerate edge
+    
     const t = ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / len2;
-    const tClamped = Math.max(0, Math.min(1, t));
-    const px = a[0] + tClamped * dx;
-    const py = a[1] + tClamped * dy;
-    const dist2 = (point[0] - px) ** 2 + (point[1] - py) ** 2;
-    if (dist2 < 1e-12) return true;
+    if (t >= -1e-10 && t <= 1 + 1e-10) {
+      return true; // Point is on the edge
+    }
   }
   return false;
 }
@@ -752,8 +774,13 @@ function clipPolygonToPolygon(subject: Vec2[], clip: Vec2[]): Vec2[] {
   return output;
 }
 
+/**
+ * Check if point p is to the left of line from a to b.
+ * Uses robust orientation predicates.
+ * Returns positive if left (CCW), negative if right (CW), zero if collinear.
+ */
 function isLeft(a: Vec2, b: Vec2, p: Vec2): number {
-  return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+  return orient2DRobust(a, b, p);
 }
 
 function lineIntersect(a: Vec2, b: Vec2, p: Vec2, q: Vec2): Vec2 {
