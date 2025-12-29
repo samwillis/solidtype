@@ -42,11 +42,12 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
   const { mode, startSketch, finishSketch, cancelSketch, addRectangle, setTool, canApplyConstraint, applyConstraint, clearSelection: clearSketchSelection } = useSketch();
   const { undo, redo, canUndo, canRedo, features, addBoolean } = useDocument();
   const { selectedFeatureId, selectFeature, clearSelection } = useSelection();
-  const { exportStl, bodies } = useKernel();
+  const { exportStl, exportJson, bodies } = useKernel();
   const { startExtrudeEdit, startRevolveEdit, isEditing } = useFeatureEdit();
   const [constraintsDropdownOpen, setConstraintsDropdownOpen] = useState(false);
   const [booleanDropdownOpen, setBooleanDropdownOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingJson, setIsExportingJson] = useState(false);
   const constraintsDropdownRef = React.useRef<HTMLDivElement>(null);
   const booleanDropdownRef = React.useRef<HTMLDivElement>(null);
   
@@ -97,6 +98,26 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
       setIsExporting(false);
     }
   }, [canExport, exportStl]);
+
+  const handleExportJson = useCallback(async () => {
+    if (!canExport || isExportingJson) return;
+    setIsExportingJson(true);
+    try {
+      const content = await exportJson();
+      const blob = new Blob([content], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'model.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export JSON failed:', err);
+      alert(`Export JSON failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsExportingJson(false);
+    }
+  }, [canExport, exportJson, isExportingJson]);
 
   // Close constraints dropdown when clicking outside
   React.useEffect(() => {
@@ -635,6 +656,23 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
             <Tooltip.Positioner side="bottom" sideOffset={6}>
               <Tooltip.Popup className="toolbar-tooltip">
                 {isExporting ? 'Exporting...' : (canExport ? 'Export STL' : 'Export STL (no bodies)')}
+              </Tooltip.Popup>
+            </Tooltip.Positioner>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+        <Tooltip.Root>
+          <Tooltip.Trigger
+            delay={300}
+            className={`toolbar-button ${!canExport ? 'disabled' : ''} ${isExportingJson ? 'loading' : ''}`}
+            onClick={handleExportJson}
+            render={<button aria-label="Export JSON" disabled={!canExport} />}
+          >
+            <ExportIcon />
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Positioner side="bottom" sideOffset={6}>
+              <Tooltip.Popup className="toolbar-tooltip">
+                {isExportingJson ? 'Exporting...' : (canExport ? 'Export JSON' : 'Export JSON (no bodies)')}
               </Tooltip.Popup>
             </Tooltip.Positioner>
           </Tooltip.Portal>

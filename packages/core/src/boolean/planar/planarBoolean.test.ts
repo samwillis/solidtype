@@ -197,4 +197,42 @@ describe('planar boolean trimming', () => {
     
     expect(hasHolesApproach || hasReasonableFaceCount).toBe(true);
   });
+
+  it('fuzz: random small box subtracts remain manifold', () => {
+    const seeds: [number, number, number][] = [
+      [0.2, 0.1, 0],
+      [-0.3, 0.25, 0.1],
+      [0.15, -0.2, -0.1],
+      [-0.25, -0.15, 0.05],
+      [0.05, 0.3, -0.2],
+    ];
+
+    for (const [dx, dy, dz] of seeds) {
+      const model = new TopoModel(createNumericContext());
+      const base = createBox(model, { center: vec3(0, 0, 0), width: 2, depth: 2, height: 2 });
+      const tool = createBox(model, { center: vec3(dx, dy, dz), width: 1, depth: 1, height: 1.4 });
+      const result = subtract(model, base, tool);
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+
+      if (!result.body) continue;
+      const shells = model.getBodyShells(result.body);
+      expect(shells.length).toBeGreaterThan(0);
+      const faces = model.getShellFaces(shells[0]);
+      expect(faces.length).toBeGreaterThan(0);
+
+      // Basic manifold sanity: every face has at least one loop, and loops have >=3 half-edges
+      for (const faceId of faces) {
+        const loops = model.getFaceLoops(faceId);
+        expect(loops.length).toBeGreaterThan(0);
+        for (const loop of loops) {
+          let count = 0;
+          for (const he of model.iterateLoopHalfEdges(loop)) {
+            count++;
+          }
+          expect(count).toBeGreaterThanOrEqual(3);
+        }
+      }
+    }
+  });
 });

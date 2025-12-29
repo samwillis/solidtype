@@ -47,6 +47,10 @@ export interface ExportStlMessage {
   name?: string;
 }
 
+export interface ExportJsonMessage {
+  type: 'export-json';
+}
+
 export type MainToWorkerMessage =
   | InitSyncMessage
   | YjsInitMessage
@@ -54,7 +58,8 @@ export type MainToWorkerMessage =
   | PreviewExtrudeMessage
   | PreviewRevolveMessage
   | ClearPreviewMessage
-  | ExportStlMessage;
+  | ExportStlMessage
+  | ExportJsonMessage;
 
 // ============================================================================
 // Message Types: Worker → Main Thread
@@ -129,6 +134,11 @@ export interface StlExportedMessage {
   content?: string;
 }
 
+export interface JsonExportedMessage {
+  type: 'json-exported';
+  content: string;
+}
+
 export type WorkerToMainMessage =
   | ReadyMessage
   | RebuildStartMessage
@@ -137,7 +147,8 @@ export type WorkerToMainMessage =
   | SketchSolvedMessage
   | PreviewErrorMessage
   | ErrorMessage
-  | StlExportedMessage;
+  | StlExportedMessage
+  | JsonExportedMessage;
 
 // ============================================================================
 // Shared Types

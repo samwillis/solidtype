@@ -9,12 +9,19 @@ import type { Vec2 } from '../../num/vec2.js';
 import type { Vec3 } from '../../num/vec3.js';
 import { vec3, add3, mul3, sub3, dot3, normalize3 } from '../../num/vec3.js';
 import type { NumericContext } from '../../num/tolerance.js';
+import { scaledTol } from '../../num/tolerance.js';
 import type { TopoModel } from '../../topo/TopoModel.js';
 import type { BodyId, FaceId } from '../../topo/handles.js';
 import type { PlaneSurface } from '../../geom/surface.js';
-import type { FacePiece, PieceClassification } from './types.js';
+import type { FacePiece, PieceClassification, BoundingBox3D } from './types.js';
 import { pointInPolygon, unprojectFromPlane } from './intersect.js';
 import { isPointOnSegment2D } from '../../num/predicates.js';
+
+interface FaceRecord {
+  faceId: FaceId;
+  plane: PlaneSurface;
+  bounds: { min: Vec3; max: Vec3 };
+}
 
 /**
  * Classify a face piece relative to another body.
@@ -30,15 +37,17 @@ export function classifyPiece(
   piece: FacePiece,
   otherBody: BodyId,
   model: TopoModel,
-  ctx: NumericContext
+  ctx: NumericContext,
+  faceIndex?: FaceRecord[]
 ): PieceClassification {
-  const testOffset = Math.max(ctx.tol.length * 1000, 0.001);
+  const testOffset = scaledTol(ctx, 50);
   const normal = piece.surface.normal;
   
-  // Sample multiple points (centroid + vertices) with offset tests.
+  // Sample multiple points (interior + vertices) with offset tests.
   const samplePoints3D: Vec3[] = [];
-  const centroid2D = computePolygonCentroid(piece.polygon);
-  samplePoints3D.push(unprojectFromPlane(centroid2D, piece.surface));
+  const interior2D = pickInteriorPoint(piece);
+  const interior3D = unprojectFromPlane(interior2D, piece.surface);
+  samplePoints3D.push(interior3D);
   for (const v of piece.polygon) {
     samplePoints3D.push(unprojectFromPlane(v, piece.surface));
   }
@@ -50,8 +59,8 @@ export function classifyPiece(
   for (const pt of samplePoints3D) {
     const pos = add3(pt, mul3(normal, testOffset));
     const neg = add3(pt, mul3(normal, -testOffset));
-    const inPos = isPointInsideBody(pos, otherBody, model, ctx);
-    const inNeg = isPointInsideBody(neg, otherBody, model, ctx);
+    const inPos = isPointInsideBody(pos, otherBody, model, ctx, faceIndex);
+    const inNeg = isPointInsideBody(neg, otherBody, model, ctx, faceIndex);
     
     if (inPos && inNeg) {
       insideHits++;
@@ -78,12 +87,11 @@ export function classifyPiece(
   const centroidPt = samplePoints3D[0];
   const centroidPos = add3(centroidPt, mul3(normal, testOffset));
   const centroidNeg = add3(centroidPt, mul3(normal, -testOffset));
-  const centroidInPos = isPointInsideBody(centroidPos, otherBody, model, ctx);
-  const centroidInNeg = isPointInsideBody(centroidNeg, otherBody, model, ctx);
+  const centroidInPos = isPointInsideBody(centroidPos, otherBody, model, ctx, faceIndex);
+  const centroidInNeg = isPointInsideBody(centroidNeg, otherBody, model, ctx, faceIndex);
   
   const centroidIsInside = centroidInPos && centroidInNeg;
   const centroidIsOutside = !centroidInPos && !centroidInNeg;
-  
   if (centroidIsInside) {
     result = 'inside';
   } else if (centroidIsOutside) {
@@ -100,7 +108,27 @@ export function classifyPiece(
       result = 'on_same';
     }
   }
-  
+
+  // Fallback: if we believe the piece is outside but the face plane
+  // actually cuts through the other body's bounding box (and their
+  // bounds overlap), keep it as boundary so it can be clamped later.
+  if (result === 'outside') {
+    const otherBounds = faceIndex ? combineBounds(faceIndex) : combineBounds(buildFaceIndex(otherBody, model, ctx));
+    const pieceBounds = computePieceBounds(piece);
+    if (
+      boundsOverlap(pieceBounds, otherBounds, scaledTol(ctx, 10)) &&
+      planeIntersectsBounds(piece.surface, otherBounds, scaledTol(ctx, 10))
+    ) {
+      result = 'on_same';
+    }
+  }
+
+  if (result === 'on_same') {
+    const coplanar = _findCoplanarFace(interior3D, normal, otherBody, model, ctx);
+    if (coplanar.found) {
+      result = coplanar.sameNormal ? 'on_same' : 'on_opposite';
+    }
+  }
   return result;
 }
 
@@ -258,8 +286,9 @@ export function classifyAllPieces(
   model: TopoModel,
   ctx: NumericContext
 ): void {
+  const faceIndex = buildFaceIndex(otherBody, model, ctx);
   for (const piece of pieces) {
-    piece.classification = classifyPiece(piece, otherBody, model, ctx);
+    piece.classification = classifyPiece(piece, otherBody, model, ctx, faceIndex);
   }
 }
 
@@ -297,6 +326,152 @@ function computePolygonCentroid(polygon: Vec2[]): Vec2 {
   return [cx * factor, cy * factor];
 }
 
+function isPointInFace2D(pt: Vec2, piece: FacePiece): boolean {
+  if (!pointInPolygon2D(pt, piece.polygon)) return false;
+  for (const hole of piece.holes) {
+    if (pointInPolygon2D(pt, hole)) return false;
+  }
+  return true;
+}
+
+function pickInteriorPoint(piece: FacePiece): Vec2 {
+  const centroid = computePolygonCentroid(piece.polygon);
+  if (isPointInFace2D(centroid, piece)) return centroid;
+  // Try triangle fan centroids from first vertex
+  for (let i = 1; i < piece.polygon.length - 1; i++) {
+    const tri = [
+      piece.polygon[0],
+      piece.polygon[i],
+      piece.polygon[i + 1],
+    ] as const;
+    const triCentroid: Vec2 = [
+      (tri[0][0] + tri[1][0] + tri[2][0]) / 3,
+      (tri[0][1] + tri[1][1] + tri[2][1]) / 3,
+    ];
+    if (isPointInFace2D(triCentroid, piece)) return triCentroid;
+  }
+  // Fallback to first vertex
+  return piece.polygon[0];
+}
+
+function buildFaceIndex(bodyId: BodyId, model: TopoModel, ctx: NumericContext): FaceRecord[] {
+  const faces: FaceRecord[] = [];
+  const shells = model.getBodyShells(bodyId);
+  for (const shellId of shells) {
+    const shellFaces = model.getShellFaces(shellId);
+    for (const faceId of shellFaces) {
+      const surfaceIdx = model.getFaceSurfaceIndex(faceId);
+      const surface = model.getSurface(surfaceIdx);
+      if (surface.kind !== 'plane') continue;
+      const loops = model.getFaceLoops(faceId);
+      if (loops.length === 0) continue;
+      let min: Vec3 = [Infinity, Infinity, Infinity];
+      let max: Vec3 = [-Infinity, -Infinity, -Infinity];
+      for (const he of model.iterateLoopHalfEdges(loops[0])) {
+        const vId = model.getHalfEdgeStartVertex(he);
+        const pos = model.getVertexPosition(vId);
+        min = [Math.min(min[0], pos[0]), Math.min(min[1], pos[1]), Math.min(min[2], pos[2])];
+        max = [Math.max(max[0], pos[0]), Math.max(max[1], pos[1]), Math.max(max[2], pos[2])];
+      }
+      const pad = scaledTol(ctx, 2);
+      min = [min[0] - pad, min[1] - pad, min[2] - pad];
+      max = [max[0] + pad, max[1] + pad, max[2] + pad];
+      faces.push({ faceId, plane: surface as PlaneSurface, bounds: { min, max } });
+    }
+  }
+  return faces;
+}
+
+function combineBounds(records: FaceRecord[]): BoundingBox3D {
+  const min: Vec3 = [Infinity, Infinity, Infinity];
+  const max: Vec3 = [-Infinity, -Infinity, -Infinity];
+  
+  for (const r of records) {
+    min[0] = Math.min(min[0], r.bounds.min[0]);
+    min[1] = Math.min(min[1], r.bounds.min[1]);
+    min[2] = Math.min(min[2], r.bounds.min[2]);
+    max[0] = Math.max(max[0], r.bounds.max[0]);
+    max[1] = Math.max(max[1], r.bounds.max[1]);
+    max[2] = Math.max(max[2], r.bounds.max[2]);
+  }
+  
+  return { min, max };
+}
+
+function computePieceBounds(piece: FacePiece): BoundingBox3D {
+  const min: Vec3 = [Infinity, Infinity, Infinity];
+  const max: Vec3 = [-Infinity, -Infinity, -Infinity];
+  const push = (p: Vec3) => {
+    min[0] = Math.min(min[0], p[0]);
+    min[1] = Math.min(min[1], p[1]);
+    min[2] = Math.min(min[2], p[2]);
+    max[0] = Math.max(max[0], p[0]);
+    max[1] = Math.max(max[1], p[1]);
+    max[2] = Math.max(max[2], p[2]);
+  };
+  for (const v of piece.polygon) {
+    push(unprojectFromPlane(v, piece.surface));
+  }
+  for (const hole of piece.holes) {
+    for (const v of hole) {
+      push(unprojectFromPlane(v, piece.surface));
+    }
+  }
+  return { min, max };
+}
+
+function boundsOverlap(a: BoundingBox3D, b: BoundingBox3D, tol: number): boolean {
+  return (
+    a.max[0] >= b.min[0] - tol && a.min[0] <= b.max[0] + tol &&
+    a.max[1] >= b.min[1] - tol && a.min[1] <= b.max[1] + tol &&
+    a.max[2] >= b.min[2] - tol && a.min[2] <= b.max[2] + tol
+  );
+}
+
+function planeIntersectsBounds(plane: PlaneSurface, bounds: BoundingBox3D, tol: number): boolean {
+  // Evaluate signed distances at all 8 corners
+  const corners: Vec3[] = [
+    [bounds.min[0], bounds.min[1], bounds.min[2]],
+    [bounds.max[0], bounds.min[1], bounds.min[2]],
+    [bounds.min[0], bounds.max[1], bounds.min[2]],
+    [bounds.min[0], bounds.min[1], bounds.max[2]],
+    [bounds.max[0], bounds.max[1], bounds.min[2]],
+    [bounds.max[0], bounds.min[1], bounds.max[2]],
+    [bounds.min[0], bounds.max[1], bounds.max[2]],
+    [bounds.max[0], bounds.max[1], bounds.max[2]],
+  ];
+  
+  let minDist = Infinity;
+  let maxDist = -Infinity;
+  
+  for (const c of corners) {
+    const dist = dot3(sub3(c, plane.origin), plane.normal);
+    minDist = Math.min(minDist, dist);
+    maxDist = Math.max(maxDist, dist);
+  }
+  
+  return minDist <= tol && maxDist >= -tol;
+}
+
+function aabbRayIntersect(origin: Vec3, dir: Vec3, bounds: { min: Vec3; max: Vec3 }): boolean {
+  let tmin = -Infinity;
+  let tmax = Infinity;
+  for (let i = 0; i < 3; i++) {
+    const invD = 1 / dir[i];
+    let t0 = (bounds.min[i] - origin[i]) * invD;
+    let t1 = (bounds.max[i] - origin[i]) * invD;
+    if (invD < 0) {
+      const tmp = t0;
+      t0 = t1;
+      t1 = tmp;
+    }
+    tmin = Math.max(tmin, t0);
+    tmax = Math.min(tmax, t1);
+    if (tmax < tmin) return false;
+  }
+  return tmax >= 0;
+}
+
 /**
  * Test if a 3D point is inside a body using ray casting
  */
@@ -304,42 +479,30 @@ function isPointInsideBody(
   point: Vec3,
   bodyId: BodyId,
   model: TopoModel,
-  ctx: NumericContext
+  ctx: NumericContext,
+  faceIndex?: FaceRecord[]
 ): boolean {
   // Cast ray along a slightly off-axis direction to avoid hitting face edges/corners exactly.
   // Using irrational-ish numbers to minimize the chance of hitting exact boundaries.
   const rayDir: Vec3 = normalize3(vec3(1, 0.00017, 0.00013));
   let intersectionCount = 0;
   
-  const shells = model.getBodyShells(bodyId);
-  
-  for (const shellId of shells) {
-    const faces = model.getShellFaces(shellId);
+  const faces = faceIndex ?? buildFaceIndex(bodyId, model, ctx);
+  for (const face of faces) {
+    if (!aabbRayIntersect(point, rayDir, face.bounds)) continue;
     
-    for (const faceId of faces) {
-      const surfaceIdx = model.getFaceSurfaceIndex(faceId);
-      const surface = model.getSurface(surfaceIdx);
-      
-      if (surface.kind !== 'plane') {
-        // Skip non-planar faces for now (they shouldn't exist in planar booleans)
-        continue;
-      }
-      
-      const plane = surface as PlaneSurface;
-      
-      // Ray-plane intersection
-      const denom = dot3(rayDir, plane.normal);
-      if (Math.abs(denom) < 1e-12) continue; // Parallel
-      
-      const t = dot3(sub3(plane.origin, point), plane.normal) / denom;
-      if (t < -ctx.tol.length) continue; // Behind ray origin
-      
-      const hitPoint = add3(point, mul3(rayDir, t));
-      
-      // Check if hit point is inside face polygon
-      if (pointInFace(hitPoint, faceId, model, plane, ctx)) {
-        intersectionCount++;
-      }
+    const plane = face.plane;
+    const denom = dot3(rayDir, plane.normal);
+    if (Math.abs(denom) < scaledTol(ctx, 0.1)) continue; // Parallel
+    
+    const t = dot3(sub3(plane.origin, point), plane.normal) / denom;
+    if (t < -ctx.tol.length) continue; // Behind ray origin
+    
+    const hitPoint = add3(point, mul3(rayDir, t));
+    
+    // Check if hit point is inside face polygon
+    if (pointInFace(hitPoint, face.faceId, model, plane, ctx)) {
+      intersectionCount++;
     }
   }
   

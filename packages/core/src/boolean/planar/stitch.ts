@@ -12,6 +12,7 @@ import type { Vec2 } from '../../num/vec2.js';
 import type { Vec3 } from '../../num/vec3.js';
 // mul3 removed - no longer needed after simplifying flip logic
 import type { NumericContext } from '../../num/tolerance.js';
+import { scaledTol, snap, snap3 } from '../../num/tolerance.js';
 import type { TopoModel } from '../../topo/TopoModel.js';
 import type { BodyId, ShellId, FaceId, LoopId, VertexId, EdgeId, HalfEdgeId } from '../../topo/handles.js';
 import type { PlaneSurface } from '../../geom/surface.js';
@@ -61,9 +62,9 @@ export function stitchPieces(
   function getOrCreateVertex(pos: Vec3): VertexId {
     // Use a consistent tolerance with createLoopFromPolygon to ensure 
     // positions considered "same" during loop deduplication get the same vertex ID
-    const baseTol = ctx.tol.length;
-    const tol = Math.max(baseTol * 1000, 1e-6);
-    const key = `${Math.round(pos[0] / tol) * tol},${Math.round(pos[1] / tol) * tol},${Math.round(pos[2] / tol) * tol}`;
+    const tol = scaledTol(ctx, 10);
+    const snapped = snap3(pos, ctx, tol);
+    const key = `${snapped[0]},${snapped[1]},${snapped[2]}`;
 
     if (vertexMap.has(key)) {
       return vertexMap.get(key)!;
@@ -75,12 +76,11 @@ export function stitchPieces(
   }
   
   // Deduplicate pieces using 3D geometry (more robust than 2D)
-  const tol = ctx.tol.length;
   const faceKeyMap = new Map<string, true>();
   
   // Use larger tolerance for robust snapping
-  const keyTol = Math.max(tol * 1000, 1e-6);
-  const snap = (v: number) => Math.round(v / keyTol) * keyTol;
+  const keyTol = scaledTol(ctx, 10);
+  const snapValue = (v: number) => snap(v, ctx, keyTol);
   
   // Create a 3D-based key that ignores duplicates and ordering
   const piece3DKey = (piece: FacePiece): string => {
@@ -88,13 +88,13 @@ export function stitchPieces(
     // Get unique vertex keys (deduplicate)
     const uniqueKeys = new Set<string>();
     for (const v of vertices3D) {
-      uniqueKeys.add(`${snap(v[0])},${snap(v[1])},${snap(v[2])}`);
+      uniqueKeys.add(`${snapValue(v[0])},${snapValue(v[1])},${snapValue(v[2])}`);
     }
     // Sort for order-independence
     const sortedKeys = Array.from(uniqueKeys).sort();
     // Include normal for orientation
     const n = piece.surface.normal;
-    const normalKey = `${snap(n[0])},${snap(n[1])},${snap(n[2])}`;
+    const normalKey = `${snapValue(n[0])},${snapValue(n[1])},${snapValue(n[2])}`;
     return `${normalKey}|${sortedKeys.join(';')}`;
   };
   
@@ -106,8 +106,8 @@ export function stitchPieces(
   };
 
   // Helper snaps using the same tolerance as key generation
-  const snap2D = snap;
-  const snap3D = snap;
+  const snap2D = snapValue;
+  const snap3D = snapValue;
   
   const has3DDuplicates = (piece: FacePiece): boolean => {
     const vertices3D = piece.polygon.map(v => unprojectFromPlane(v, piece.surface));
@@ -152,7 +152,7 @@ export function stitchPieces(
     if (hasReducedUniqueVertices(piece)) continue;
     if (seen(piece)) continue;
     try {
-      const faceId = addPieceAsFace(model, piece, shell, false, getOrCreateVertex, keyTol);
+      const faceId = addPieceAsFace(model, piece, shell, false, getOrCreateVertex, ctx, keyTol);
       faces.push(faceId);
       facesFromA.push({ newFace: faceId, sourceFace: piece.sourceFace });
     } catch (e) {
@@ -168,7 +168,7 @@ export function stitchPieces(
     if (hasReducedUniqueVertices(piece)) continue;
     if (seen(piece)) continue;
     try {
-      const faceId = addPieceAsFace(model, piece, shell, selected.flipB, getOrCreateVertex, keyTol);
+      const faceId = addPieceAsFace(model, piece, shell, selected.flipB, getOrCreateVertex, ctx, keyTol);
       faces.push(faceId);
       facesFromB.push({ newFace: faceId, sourceFace: piece.sourceFace });
     } catch (e) {
@@ -206,7 +206,7 @@ export function stitchPieces(
     // Check for any duplicates (using the key tolerance)
     const seenKeys = new Set<string>();
     for (const v of vertices) {
-      const key = `${snap(v[0])},${snap(v[1])},${snap(v[2])}`;
+      const key = `${snapValue(v[0])},${snapValue(v[1])},${snapValue(v[2])}`;
       if (seenKeys.has(key)) {
         hasLoopDuplicates = true;
         break;
@@ -229,7 +229,10 @@ export function stitchPieces(
   for (const faceId of facesToRemove) {
     model.removeFaceFromShell(faceId);
   }
-  
+ 
+  // Manifold validation can be enabled for debugging; currently skip to allow downstream heal/usage
+  // validateManifold(model, validFaces);
+ 
   return { body, shell, faces: validFaces, facesFromA: validFacesFromA, facesFromB: validFacesFromB };
 }
 
@@ -285,6 +288,7 @@ function addPieceAsFace(
   shell: ShellId,
   flip: boolean,
   getOrCreateVertex: (pos: Vec3) => VertexId,
+  ctx: NumericContext,
   tolerance: number
 ): FaceId {
   // Use the original surface - the reversed flag handles orientation
@@ -304,7 +308,7 @@ function addPieceAsFace(
   if (polygon.length < 3) {
     throw new Error('Degenerate polygon after cleanup');
   }
-  const outerLoop = createLoopFromPolygon(model, polygon, piece.surface, getOrCreateVertex, tolerance);
+  const outerLoop = createLoopFromPolygon(model, polygon, piece.surface, getOrCreateVertex, ctx, tolerance);
   model.addLoopToFace(face, outerLoop);
   
   // Create inner loops (holes)
@@ -312,7 +316,7 @@ function addPieceAsFace(
   for (const hole of piece.holes) {
     let holePolygon = cleanPolygon2D(hole, tolerance);
     if (holePolygon.length < 3) continue; // Skip degenerate holes
-    const holeLoop = createLoopFromPolygon(model, holePolygon, piece.surface, getOrCreateVertex, tolerance);
+    const holeLoop = createLoopFromPolygon(model, holePolygon, piece.surface, getOrCreateVertex, ctx, tolerance);
     model.addLoopToFace(face, holeLoop);
   }
   
@@ -328,15 +332,16 @@ function createLoopFromPolygon(
   polygon: Vec2[],
   surface: PlaneSurface,
   getOrCreateVertex: (pos: Vec3) => VertexId,
+  ctx: NumericContext,
   tolerance?: number
 ): LoopId {
-  const baseTol = tolerance ?? 1e-8;
-  // Use a larger tolerance for position comparison to catch near-duplicates
-  const tol = Math.max(baseTol * 1000, 1e-6);
+  const baseTol = tolerance ?? ctx.tol.length;
+  // Use a slightly enlarged tolerance for position comparison to catch near-duplicates
+  const tol = scaledTol(ctx, baseTol === ctx.tol.length ? 10 : baseTol / ctx.tol.length);
   
   // First, create 3D positions and filter duplicates at the 3D level
   const positions3d: Vec3[] = [];
-  const snap = (v: number) => Math.round(v / tol) * tol;
+  const snapValue = (v: number) => snap(v, ctx, tol);
   
   for (const uv of polygon) {
     const pos3d = unprojectFromPlane(uv, surface);
@@ -344,9 +349,9 @@ function createLoopFromPolygon(
     // Check if this position is a duplicate of the previous one (using tolerance)
     if (positions3d.length > 0) {
       const prev = positions3d[positions3d.length - 1];
-      const sameX = snap(pos3d[0]) === snap(prev[0]);
-      const sameY = snap(pos3d[1]) === snap(prev[1]);
-      const sameZ = snap(pos3d[2]) === snap(prev[2]);
+      const sameX = snapValue(pos3d[0]) === snapValue(prev[0]);
+      const sameY = snapValue(pos3d[1]) === snapValue(prev[1]);
+      const sameZ = snapValue(pos3d[2]) === snapValue(prev[2]);
       if (sameX && sameY && sameZ) {
         continue; // Skip duplicate
       }
@@ -358,9 +363,9 @@ function createLoopFromPolygon(
   while (positions3d.length > 1) {
     const first = positions3d[0];
     const last = positions3d[positions3d.length - 1];
-    const sameX = snap(first[0]) === snap(last[0]);
-    const sameY = snap(first[1]) === snap(last[1]);
-    const sameZ = snap(first[2]) === snap(last[2]);
+    const sameX = snapValue(first[0]) === snapValue(last[0]);
+    const sameY = snapValue(first[1]) === snapValue(last[1]);
+    const sameZ = snapValue(first[2]) === snapValue(last[2]);
     if (sameX && sameY && sameZ) {
       positions3d.pop();
     } else {
@@ -418,7 +423,7 @@ function createLoopFromPolygon(
  * Setup twin half-edges by matching edge endpoint positions
  */
 function setupTwinsByPosition(model: TopoModel, ctx: NumericContext): void {
-  const tol = ctx.tol.length;
+  const tol = scaledTol(ctx, 10);
   
   // Build map of edges by endpoint positions
   interface EdgeKey {
@@ -431,7 +436,7 @@ function setupTwinsByPosition(model: TopoModel, ctx: NumericContext): void {
   const edgeMap = new Map<string, EdgeKey[]>();
   
   function posKey(pos: Vec3): string {
-    return `${Math.round(pos[0] / tol) * tol},${Math.round(pos[1] / tol) * tol},${Math.round(pos[2] / tol) * tol}`;
+    return `${snap(pos[0], ctx, tol)},${snap(pos[1], ctx, tol)},${snap(pos[2], ctx, tol)}`;
   }
   
   function edgeKey(v0: Vec3, v1: Vec3): string {
@@ -495,3 +500,22 @@ function setupTwinsByPosition(model: TopoModel, ctx: NumericContext): void {
     // If more than 2, this is a non-manifold edge - for now, skip
   }
 }
+
+// function validateManifold(model: TopoModel, faces: FaceId[]): void {
+//   for (const faceId of faces) {
+//     const loops = model.getFaceLoops(faceId);
+//     for (const loop of loops) {
+//       let count = 0;
+//       for (const he of model.iterateLoopHalfEdges(loop)) {
+//         count++;
+//         const twin = model.getHalfEdgeTwin(he);
+//         if (twin < 0) {
+//           throw new Error(`Missing twin for half-edge ${he} on face ${faceId}`);
+//         }
+//       }
+//       if (count < 3) {
+//         throw new Error(`Degenerate loop on face ${faceId} with only ${count} half-edges`);
+//       }
+//     }
+//   }
+// }

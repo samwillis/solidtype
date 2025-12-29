@@ -74,6 +74,8 @@ interface KernelContextValue {
   sketchPlaneTransforms: Record<string, PlaneTransform>;
   /** Export model to STL format (Phase 18) */
   exportStl: (options?: { binary?: boolean; name?: string }) => Promise<ArrayBuffer | string>;
+  /** Export full document JSON for debugging/support */
+  exportJson: () => Promise<string>;
 }
 
 // ============================================================================
@@ -98,6 +100,11 @@ export function KernelProvider({ children }: KernelProviderProps) {
   // For STL export promise resolution (Phase 18)
   const stlResolveRef = useRef<{
     resolve: (value: ArrayBuffer | string) => void;
+    reject: (reason: Error) => void;
+  } | null>(null);
+  // For JSON export promise resolution
+  const jsonResolveRef = useRef<{
+    resolve: (value: string) => void;
     reject: (reason: Error) => void;
   } | null>(null);
 
@@ -238,12 +245,23 @@ export function KernelProvider({ children }: KernelProviderProps) {
           }
           break;
 
+        case 'json-exported':
+          if (jsonResolveRef.current) {
+            jsonResolveRef.current.resolve(msg.content);
+            jsonResolveRef.current = null;
+          }
+          break;
+
         case 'error':
           console.error('Kernel worker error:', msg.message);
           // Also reject pending STL export if any
           if (stlResolveRef.current) {
             stlResolveRef.current.reject(new Error(msg.message));
             stlResolveRef.current = null;
+          }
+          if (jsonResolveRef.current) {
+            jsonResolveRef.current.reject(new Error(msg.message));
+            jsonResolveRef.current = null;
           }
           setIsRebuilding(false);
           break;
@@ -321,6 +339,17 @@ export function KernelProvider({ children }: KernelProviderProps) {
     });
   };
 
+  const exportJson = (): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      if (!workerRef.current) {
+        reject(new Error('Worker not ready'));
+        return;
+      }
+      jsonResolveRef.current = { resolve, reject };
+      workerRef.current.postMessage({ type: 'export-json' });
+    });
+  };
+
   const value: KernelContextValue = {
     meshes,
     errors,
@@ -335,6 +364,7 @@ export function KernelProvider({ children }: KernelProviderProps) {
     sketchSolveInfo,
     sketchPlaneTransforms,
     exportStl,
+    exportJson,
   };
 
   return (

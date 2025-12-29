@@ -14,6 +14,7 @@ import type { Vec2 } from '../../num/vec2.js';
 import type { Vec3 } from '../../num/vec3.js';
 import { vec3, sub3, dot3, mul3, add3 } from '../../num/vec3.js';
 import type { NumericContext } from '../../num/tolerance.js';
+import { scaledTol, snap, snap2 } from '../../num/tolerance.js';
 import type { TopoModel } from '../../topo/TopoModel.js';
 import type { BodyId, FaceId, ShellId, HalfEdgeId, VertexId } from '../../topo/handles.js';
 import type { PlaneSurface } from '../../geom/surface.js';
@@ -153,13 +154,13 @@ export function planarBoolean(
   
   for (const poly of polygonsA) {
     const segments = imprintDataA.get(poly.faceId)!;
-    const pieces = imprintFaceAndExtractPieces(segments, poly, 0, ctx.tol.length);
+    const pieces = imprintFaceAndExtractPieces(segments, poly, 0, ctx);
     allPiecesA.push(...pieces);
   }
   
   for (const poly of polygonsB) {
     const segments = imprintDataB.get(poly.faceId)!;
-    const pieces = imprintFaceAndExtractPieces(segments, poly, 1, ctx.tol.length);
+    const pieces = imprintFaceAndExtractPieces(segments, poly, 1, ctx);
     allPiecesB.push(...pieces);
   }
   
@@ -272,10 +273,13 @@ export function imprintFaceAndExtractPieces(
   segments: Segment2D[],
   polygon: FacePolygon2D,
   sourceBody: 0 | 1,
-  tolerance: number
+  ctx: NumericContext
 ): FacePiece[] {
+  const baseTol = ctx.tol.length;
+  const snapTol = scaledTol(ctx, 1);
+  const sanitizedSegments = sanitizeSegmentsForDCEL(segments, ctx);
   // Check if we have any intersection segments
-  const intersectionSegs = segments.filter(s => s.isIntersection);
+  const intersectionSegs = sanitizedSegments.filter(s => s.isIntersection);
   const hasIntersections = intersectionSegs.length > 0;
   
   if (!hasIntersections) {
@@ -291,21 +295,21 @@ export function imprintFaceAndExtractPieces(
   }
   
   // Build DCEL and extract faces
-  const dcel = buildDCEL(segments, tolerance);
+  const dcel = buildDCEL(sanitizedSegments, baseTol);
   
   // Collect all bounded face polygons with their areas
   const faceData: { polygon: Vec2[]; area: number; centroid: Vec2; isOriginal: boolean }[] = [];
   
   // Compute bounding box of original face for validation
   const originalBounds = computePolygonBounds(polygon.outer);
-  const boundsPadding = tolerance * 10;
+  const boundsPadding = scaledTol(ctx, 10);
   
   for (const face of dcel.faces) {
     if (face.isUnbounded) continue;
     if (face.outerComponent === -1) continue;
     
     // Use a larger tolerance for vertex deduplication to catch near-duplicates
-    const extractTol = Math.max(tolerance * 1000, 1e-6);
+    const extractTol = scaledTol(ctx, 10);
     let facePolygon = getCyclePolygon(dcel, face.outerComponent, extractTol);
     facePolygon = sanitizePolygon(facePolygon, extractTol);
     if (facePolygon.length < 3) continue;
@@ -325,7 +329,7 @@ export function imprintFaceAndExtractPieces(
     if (hasDuplicates) continue; // Skip degenerate cycles
     
     const area = polygonSignedArea(facePolygon);
-    if (Math.abs(area) < tolerance * tolerance) continue;
+    if (Math.abs(area) < baseTol * baseTol) continue;
     
     // Validate: extracted piece should be within original face bounds
     // (with some tolerance for numerical precision)
@@ -345,7 +349,7 @@ export function imprintFaceAndExtractPieces(
     faceData.push({ polygon: facePolygon, area, centroid, isOriginal: false });
   }
   
-  const intersectionHoles = extractIntersectionPolygons(segments, tolerance);
+  const intersectionHoles = extractIntersectionPolygons(sanitizedSegments, baseTol);
   const orientedIntersectionHoles = (() => {
     if (intersectionHoles.length === 0) return [];
     const holeMap = new Map<string, Vec2[]>();
@@ -366,7 +370,7 @@ export function imprintFaceAndExtractPieces(
     for (const newHole of orientedIntersectionHoles) {
       // Check if this hole overlaps with existing holes
       const newCentroid = computePolygonCentroid2D(newHole);
-      const isInExistingHole = polygon.holes.some(h => pointInPolygonWithBoundary(newCentroid, h, tolerance));
+      const isInExistingHole = polygon.holes.some(h => pointInPolygonWithBoundary(newCentroid, h, baseTol));
       if (!isInExistingHole) {
         allHoles.push(newHole);
       }
@@ -385,7 +389,7 @@ export function imprintFaceAndExtractPieces(
   const validFaceData = faceData.filter(fd => {
     const seen = new Set<string>();
     for (const p of fd.polygon) {
-      const key = `${Math.round(p[0] / tolerance) * tolerance},${Math.round(p[1] / tolerance) * tolerance}`;
+      const key = `${snap(p[0], ctx, snapTol)},${snap(p[1], ctx, snapTol)}`;
       if (seen.has(key)) return false; // Duplicate vertex detected
       seen.add(key);
     }
@@ -393,11 +397,8 @@ export function imprintFaceAndExtractPieces(
   });
   
   // Deduplicate faces by vertex set (not just centroid) - keeps the one with proper CCW winding
-  const vertexSetKey = (polygon: Vec2[]): string => {
-    // Create a sorted, unique set of vertex keys
-    const keys = polygon.map(p => 
-      `${Math.round(p[0] / tolerance) * tolerance},${Math.round(p[1] / tolerance) * tolerance}`
-    );
+  const vertexSetKey = (poly: Vec2[]): string => {
+    const keys = poly.map(p => `${snap(p[0], ctx, snapTol)},${snap(p[1], ctx, snapTol)}`);
     return [...new Set(keys)].sort().join('|');
   };
   
@@ -421,7 +422,7 @@ export function imprintFaceAndExtractPieces(
   
   // Check if we have the original face (same area as original within tolerance)
   const originalArea = Math.abs(polygonSignedArea(polygon.outer));
-  const areaTol = Math.max(tolerance * originalArea * 0.1, tolerance * 10);
+  const areaTol = Math.max(baseTol * originalArea * 0.1, scaledTol(ctx, 10));
   
   // Mark faces that match the original size as "isOriginal"
   for (const fd of dedupedFaceData) {
@@ -452,7 +453,7 @@ export function imprintFaceAndExtractPieces(
   // Filter out pieces whose centroid is inside an existing hole (these are void regions)
   const facesInOriginal = effectiveFaceData
     .map((fd, idx) => ({ ...fd, idx, absArea: Math.abs(fd.area) }))
-    .filter(fd => pointInPolygonWithBoundary(fd.centroid, polygon.outer, tolerance))
+    .filter(fd => pointInPolygonWithBoundary(fd.centroid, polygon.outer, baseTol))
     .filter(fd => !isInsideExistingHole(fd.centroid));
   
   interface Node { idx: number; poly: Vec2[]; area: number; signedArea: number; centroid: Vec2; parent: number | null; children: number[]; }
@@ -467,10 +468,9 @@ export function imprintFaceAndExtractPieces(
   }));
   
   const strictContainsPoly = (outer: Vec2[], inner: Vec2[]): boolean => {
-    const allInside = inner.every(pt => pointInPolygonWithBoundary(pt, outer, tolerance));
+    const allInside = inner.every(pt => pointInPolygonWithBoundary(pt, outer, baseTol));
     if (!allInside) return false;
-    // Ensure polygons are not identical (outer must have some point outside inner)
-    const outerHasOutside = outer.some(pt => !pointInPolygonWithBoundary(pt, inner, tolerance));
+    const outerHasOutside = outer.some(pt => !pointInPolygonWithBoundary(pt, inner, baseTol));
     return outerHasOutside;
   };
   
@@ -527,6 +527,31 @@ export function imprintFaceAndExtractPieces(
 }
 
 /**
+ * Snap and deduplicate segments before DCEL construction.
+ */
+function sanitizeSegmentsForDCEL(segments: Segment2D[], ctx: NumericContext): Segment2D[] {
+  const tol = scaledTol(ctx, 1);
+  const snapPoint = (p: Vec2) => snap2(p, ctx, tol);
+  const keyFor = (a: Vec2, b: Vec2) => {
+    const ka = `${a[0]},${a[1]}`;
+    const kb = `${b[0]},${b[1]}`;
+    return ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+  };
+  const result: Segment2D[] = [];
+  const seen = new Set<string>();
+  for (const seg of segments) {
+    const a = snapPoint(seg.a);
+    const b = snapPoint(seg.b);
+    if (Math.abs(a[0] - b[0]) <= tol && Math.abs(a[1] - b[1]) <= tol) continue;
+    const key = keyFor(a, b);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ ...seg, a, b });
+  }
+  return result;
+}
+
+/**
  * Simple polygon centroid computation
  */
 function computePolygonCentroid2D(polygon: Vec2[]): Vec2 {
@@ -562,7 +587,7 @@ function sanitizePolygon(poly: Vec2[], tol: number): Vec2[] {
   if (poly.length < 3) return [];
   
   // Use a slightly larger tolerance for deduplication to catch near-duplicates
-  const dedupTol = Math.max(tol * 10, 1e-9);
+  const dedupTol = Math.max(tol * 5, tol);
   
   const dedup: Vec2[] = [];
   for (let i = 0; i < poly.length; i++) {
@@ -595,7 +620,7 @@ function sanitizePolygon(poly: Vec2[], tol: number): Vec2[] {
   if (dedup.length < 3) return [];
   
   // Remove collinear points (with a slightly relaxed tolerance)
-  const collinearTol = Math.max(tol * tol * 10, 1e-16);
+  const collinearTol = Math.max(tol * tol, tol * tol * 0.1);
   const cleaned: Vec2[] = [];
   for (let i = 0; i < dedup.length; i++) {
     const a = dedup[(i - 1 + dedup.length) % dedup.length];
@@ -621,7 +646,7 @@ function extractIntersectionPolygons(segments: Segment2D[], tolerance: number): 
   for (const face of dcel.faces) {
     if (face.outerComponent === -1) continue;
     // Use a larger tolerance for vertex deduplication  
-    const extractTol2 = Math.max(tolerance * 1000, 1e-6);
+    const extractTol2 = Math.max(tolerance * 5, tolerance);
     const poly = sanitizePolygon(getCyclePolygon(dcel, face.outerComponent, extractTol2), extractTol2);
     if (poly.length < 3) continue;
     const area = polygonSignedArea(poly);

@@ -6,8 +6,66 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { TopoModel } from '../topo/TopoModel.js';
 import { createNumericContext } from '../num/tolerance.js';
 import { createBox } from './primitives.js';
+import { SolidSession } from '../api/SolidSession.js';
 import { union, subtract, intersect, booleanOperation } from './boolean.js';
 import { vec3 } from '../num/vec3.js';
+import type { BodyId, FaceId, LoopId } from '../topo/handles.js';
+
+function approxEqual(a: number, b: number, tol = 1e-6): boolean {
+  return Math.abs(a - b) <= tol;
+}
+
+function approxVec(a: readonly number[], b: readonly number[], tol = 1e-6): boolean {
+  return approxEqual(a[0], b[0], tol) && approxEqual(a[1], b[1], tol) && approxEqual(a[2], b[2], tol);
+}
+
+function collectBoundingBox(model: TopoModel, body: BodyId): { min: [number, number, number]; max: [number, number, number] } {
+  const shells = model.getBodyShells(body);
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  const seen = new Set<number>();
+
+  for (const shell of shells) {
+    const faces = model.getShellFaces(shell);
+    for (const face of faces) {
+      const loops = model.getFaceLoops(face);
+      for (const loop of loops) {
+        for (const he of model.iterateLoopHalfEdges(loop)) {
+          const v = model.getHalfEdgeStartVertex(he);
+          const idx = v as unknown as number;
+          if (seen.has(idx)) continue;
+          seen.add(idx);
+          const pos = model.getVertexPosition(v);
+          min[0] = Math.min(min[0], pos[0]);
+          min[1] = Math.min(min[1], pos[1]);
+          min[2] = Math.min(min[2], pos[2]);
+          max[0] = Math.max(max[0], pos[0]);
+          max[1] = Math.max(max[1], pos[1]);
+          max[2] = Math.max(max[2], pos[2]);
+        }
+      }
+    }
+  }
+
+  if (!seen.size) {
+    throw new Error('Body has no vertices');
+  }
+
+  return { min, max };
+}
+
+function faceNormal(model: TopoModel, face: FaceId): [number, number, number] | null {
+  const surfaceIdx = model.getFaceSurfaceIndex(face);
+  const surface = model.getSurface(surfaceIdx);
+  if (surface.kind !== 'plane') return null;
+  return surface.normal;
+}
+
+function loopVertexCount(model: TopoModel, loop: LoopId): number {
+  let count = 0;
+  for (const _he of model.iterateLoopHalfEdges(loop)) count += 1;
+  return count;
+}
 
 describe('boolean operations', () => {
   let model: TopoModel;
@@ -521,6 +579,193 @@ describe('boolean operations', () => {
         // For a box-box subtraction, we shouldn't have triangular faces
         expect(triangularFaces).toBe(0);
       }
+    });
+
+    it('perpendicular extrudes: subtract produces holed caps (regression)', () => {
+      // Base from (-21, -20, 0) to (21, 9, 10)
+      const base = createBox(model, { center: vec3(0, -5.5, 5), width: 42, depth: 29, height: 10 });
+      // Tool from (0, -5, -8) to (10, 18, 22)
+      const tool = createBox(model, { center: vec3(5, 6.5, 7), width: 10, depth: 23, height: 30 });
+
+      const result = subtract(model, base, tool);
+
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+      if (!result.body) return;
+
+      const shells = model.getBodyShells(result.body);
+      expect(shells.length).toBeGreaterThan(0);
+      const faces = model.getShellFaces(shells[0]);
+      // Should have outer walls + inner slot walls; allow some splitting
+      expect(faces.length).toBeGreaterThanOrEqual(8);
+
+      const bottom = faces.find((f) => {
+        const n = faceNormal(model, f);
+        return n && approxVec(n, [0, 0, -1], 1e-6);
+      });
+      const top = faces.find((f) => {
+        const n = faceNormal(model, f);
+        return n && approxVec(n, [0, 0, 1], 1e-6);
+      });
+
+      expect(bottom).toBeDefined();
+      expect(top).toBeDefined();
+
+      if (bottom) {
+        const loops = model.getFaceLoops(bottom);
+        expect(loops.length).toBeGreaterThanOrEqual(2); // holed cap
+        expect(loopVertexCount(model, loops[0])).toBeGreaterThanOrEqual(4);
+      }
+
+      if (top) {
+        const loops = model.getFaceLoops(top);
+        expect(loops.length).toBeGreaterThanOrEqual(2); // holed cap
+        expect(loopVertexCount(model, loops[0])).toBeGreaterThanOrEqual(4);
+      }
+    });
+
+    it('perpendicular extrudes: intersect returns full rectangular block (regression)', () => {
+      // Same geometry as above
+      const base = createBox(model, { center: vec3(0, -5.5, 5), width: 42, depth: 29, height: 10 });
+      const tool = createBox(model, { center: vec3(5, 6.5, 7), width: 10, depth: 23, height: 30 });
+
+      const result = intersect(model, base, tool);
+
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+      if (!result.body) return;
+
+      const shells = model.getBodyShells(result.body);
+      expect(shells.length).toBeGreaterThan(0);
+      const faces = model.getShellFaces(shells[0]);
+
+      // A proper box intersection should have 6 faces (allow some splitting)
+      if (faces.length < 6) {
+        const normals = faces
+          .map((f) => faceNormal(model, f))
+          .filter((n): n is [number, number, number] => !!n)
+          .map((n) => n.map((c) => c.toFixed(3)));
+        console.log('perpendicular intersect faces', faces.length, normals);
+      }
+      expect(faces.length).toBeGreaterThanOrEqual(6);
+      expect(faces.length).toBeLessThanOrEqual(12);
+
+      // Bounding box should be the overlap: x[0,10], y[-5,9], z[0,10]
+      const bbox = collectBoundingBox(model, result.body);
+      expect(approxVec(bbox.min, [0, -5, 0], 1e-3)).toBe(true);
+      expect(approxVec(bbox.max, [10, 9, 10], 1e-3)).toBe(true);
+
+      // Ensure we have faces for all principal axes
+      const axes = new Set<string>();
+      for (const face of faces) {
+        const n = faceNormal(model, face);
+        if (!n) continue;
+        const abs = [Math.abs(n[0]), Math.abs(n[1]), Math.abs(n[2])];
+        const axisIdx = abs[0] >= abs[1] && abs[0] >= abs[2] ? 0 : abs[1] >= abs[2] ? 1 : 2;
+        const sign = n[axisIdx] >= 0 ? '+' : '-';
+        axes.add(`${['x', 'y', 'z'][axisIdx]}${sign}`);
+      }
+      expect(axes.has('x+')).toBe(true);
+      expect(axes.has('x-')).toBe(true);
+      expect(axes.has('y+')).toBe(true);
+      expect(axes.has('y-')).toBe(true);
+      expect(axes.has('z+')).toBe(true);
+      expect(axes.has('z-')).toBe(true);
+    });
+
+    it('perpendicular offset cut trims side wall (app repro)', () => {
+      // From user-provided model JSON:
+      // Base sketch on YZ, rectangle y ∈ [-10, 16], z ∈ [-14, 15], extruded +X 10mm.
+      // Tool sketch on XY, rectangle x ∈ [-8, 17], y ∈ [9, 27], extruded +Z 10mm (cut).
+      // Expect: +X side wall of base is trimmed where the cut passes through.
+
+      // Base bounds: x [0,10], y [-10,16], z [-14,15]
+      const base = createBox(model, { center: vec3(5, 3, 0.5), width: 10, depth: 26, height: 29 });
+      // Tool bounds: x [-8,17], y [9,27], z [0,10]
+      const tool = createBox(model, { center: vec3(4.5, 18, 5), width: 25, depth: 18, height: 10 });
+
+      const result = subtract(model, base, tool);
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+      if (!result.body) return;
+
+      const shells = model.getBodyShells(result.body);
+      expect(shells.length).toBeGreaterThan(0);
+      const faces = model.getShellFaces(shells[0]);
+
+      const plusXFace = faces.find((f) => {
+        const n = faceNormal(model, f);
+        return n && approxVec(n, [1, 0, 0], 1e-6);
+      });
+      expect(plusXFace).toBeDefined();
+      if (!plusXFace) return;
+
+      const loops = model.getFaceLoops(plusXFace);
+      expect(loops.length).toBeGreaterThan(0);
+      const vertexCount = loopVertexCount(model, loops[0]);
+      // A simple quad (4 verts) means the side wall was not trimmed.
+      expect(vertexCount).toBeGreaterThan(4);
+    });
+
+    it('perpendicular offset cut trims side wall (SolidSession build)', () => {
+      const session = new SolidSession();
+
+      // Base sketch on YZ: y ∈ [-10, 16], z ∈ [-14, 15]
+      const sketchBase = session.createSketch(session.getYZPlane());
+      const p1 = sketchBase.addPoint(-10, -14);
+      const p2 = sketchBase.addPoint(16, -14);
+      const p3 = sketchBase.addPoint(16, 15);
+      const p4 = sketchBase.addPoint(-10, 15);
+      sketchBase.addLine(p1, p2);
+      sketchBase.addLine(p2, p3);
+      sketchBase.addLine(p3, p4);
+      sketchBase.addLine(p4, p1);
+
+      const baseExtrude = session.extrudeSketch(sketchBase, {
+        operation: 'add',
+        distance: 10,
+      });
+      expect(baseExtrude.success).toBe(true);
+      expect(baseExtrude.body).toBeDefined();
+      if (!baseExtrude.body) return;
+
+      // Tool sketch on XY: x ∈ [-8, 17], y ∈ [9, 27]
+      const sketchTool = session.createSketch(session.getXYPlane());
+      const q1 = sketchTool.addPoint(-8, 9);
+      const q2 = sketchTool.addPoint(17, 9);
+      const q3 = sketchTool.addPoint(17, 27);
+      const q4 = sketchTool.addPoint(-8, 27);
+      sketchTool.addLine(q1, q2);
+      sketchTool.addLine(q2, q3);
+      sketchTool.addLine(q3, q4);
+      sketchTool.addLine(q4, q1);
+
+      const cutExtrude = session.extrudeSketch(sketchTool, {
+        operation: 'cut',
+        distance: 10,
+        targetBody: baseExtrude.body,
+      });
+      expect(cutExtrude.success).toBe(true);
+      const bodyId = (cutExtrude.body?.id ?? baseExtrude.body?.id) as number | undefined;
+      expect(bodyId).toBeDefined();
+      if (!bodyId) return;
+
+      const model = session.getModel();
+      const shells = model.getBodyShells(bodyId);
+      expect(shells.length).toBeGreaterThan(0);
+      const faces = model.getShellFaces(shells[0]);
+
+      const plusXFace = faces.find((f) => {
+        const n = faceNormal(model, f);
+        return n && approxVec(n, [1, 0, 0], 1e-6);
+      });
+      expect(plusXFace).toBeDefined();
+      if (!plusXFace) return;
+
+      const loops = model.getFaceLoops(plusXFace);
+      expect(loops.length).toBeGreaterThan(0);
+      const vertexCount = loopVertexCount(model, loops[0]);
+      expect(vertexCount).toBeGreaterThan(4);
     });
   });
 

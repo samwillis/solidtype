@@ -6,6 +6,9 @@
  * rather than using raw comparisons.
  */
 
+import type { Vec2 } from './vec2.js';
+import type { Vec3 } from './vec3.js';
+
 /**
  * Tolerance values for a model
  */
@@ -21,6 +24,15 @@ export interface Tolerances {
  */
 export interface NumericContext {
   tol: Tolerances;
+}
+
+// Minimum snap step to avoid division by zero and preserve stability
+const MIN_SNAP = 1e-12;
+
+// Helper to choose a positive snap step
+function snapStep(step: number): number {
+  const s = Math.abs(step);
+  return s > MIN_SNAP ? s : MIN_SNAP;
 }
 
 /**
@@ -41,6 +53,21 @@ export function createNumericContext(tol?: Partial<Tolerances>): NumericContext 
       angle: tol?.angle ?? DEFAULT_TOLERANCES.angle,
     },
   };
+}
+
+/**
+ * Snap a scalar to the nearest multiple of `step` (default: ctx.tol.length)
+ */
+export function snap(value: number, ctx: NumericContext, step: number = ctx.tol.length): number {
+  const s = snapStep(step);
+  return Math.round(value / s) * s;
+}
+
+/**
+ * Get a length tolerance scaled by factor, clamped to a minimum snap step.
+ */
+export function scaledTol(ctx: NumericContext, scale = 1, min: number = MIN_SNAP): number {
+  return Math.max(ctx.tol.length * scale, min);
 }
 
 /**
@@ -79,6 +106,34 @@ export function clampToZero(value: number, ctx: NumericContext): number {
  */
 export function eq(a: number, b: number, ctx: NumericContext): boolean {
   return eqLength(a, b, ctx);
+}
+
+/**
+ * Check approximate equality of 2D/3D coordinates
+ */
+export function eq2(a: Vec2, b: Vec2, ctx: NumericContext, scale = 1): boolean {
+  const tol = ctx.tol.length * scale;
+  return Math.abs(a[0] - b[0]) <= tol && Math.abs(a[1] - b[1]) <= tol;
+}
+
+export function eq3(a: Vec3, b: Vec3, ctx: NumericContext, scale = 1): boolean {
+  const tol = ctx.tol.length * scale;
+  return (
+    Math.abs(a[0] - b[0]) <= tol &&
+    Math.abs(a[1] - b[1]) <= tol &&
+    Math.abs(a[2] - b[2]) <= tol
+  );
+}
+
+/**
+ * Snap vectors component-wise
+ */
+export function snap2(a: Vec2, ctx: NumericContext, step: number = ctx.tol.length): Vec2 {
+  return [snap(a[0], ctx, step), snap(a[1], ctx, step)];
+}
+
+export function snap3(a: Vec3, ctx: NumericContext, step: number = ctx.tol.length): Vec3 {
+  return [snap(a[0], ctx, step), snap(a[1], ctx, step), snap(a[2], ctx, step)];
 }
 
 /**

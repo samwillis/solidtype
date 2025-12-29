@@ -1960,5 +1960,23 @@ self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
       }
       break;
     }
+
+    case 'export-json': {
+      try {
+        if (!doc) {
+          throw new Error('Worker not ready');
+        }
+        const root = getRoot(doc);
+        const json = mapToObject(root);
+        const content = JSON.stringify(json, null, 2);
+        self.postMessage({ type: 'json-exported', content } as WorkerToMainMessage);
+      } catch (err) {
+        self.postMessage({
+          type: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        } as WorkerToMainMessage);
+      }
+      break;
+    }
   }
 };
