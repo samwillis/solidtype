@@ -5,13 +5,17 @@
     "jsx": "react-jsx",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "target": "ES2022",
+    "skipLibCheck": true,
+    "strictNullChecks": true,
     "types": ["vite/client"],
     "noEmit": true,
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
     "paths": {
-      "@solidtype/core": ["../core/src"]
+      "@solidtype/core": ["../core/src"],
+      "~/*": ["./src/*"]
     }
   },
   "include": ["src"]

@@ -12,10 +12,10 @@ import { KernelProvider } from './contexts/KernelContext';
 import { SketchProvider } from './contexts/SketchContext';
 import { SelectionProvider } from './contexts/SelectionContext';
 import { FeatureEditProvider } from './contexts/FeatureEditContext';
-import './App.css';
+import './Editor.css';
 
 // Inner component that uses the document context
-const AppContent: React.FC = () => {
+const EditorContent: React.FC = () => {
   const [aiPanelVisible, setAiPanelVisible] = useState(false);
   const { undo, redo, canUndo, canRedo } = useDocument();
 
@@ -89,15 +89,15 @@ const AppContent: React.FC = () => {
   );
 };
 
-// Main App component wraps everything with providers
-const App: React.FC = () => {
+// Main Editor component wraps everything with providers
+export const Editor: React.FC = () => {
   return (
     <DocumentProvider>
       <KernelProvider>
         <SelectionProvider>
           <SketchProvider>
             <FeatureEditProvider>
-              <AppContent />
+              <EditorContent />
             </FeatureEditProvider>
           </SketchProvider>
         </SelectionProvider>
@@ -105,5 +105,3 @@ const App: React.FC = () => {
     </DocumentProvider>
   );
 };
-
-export default App;

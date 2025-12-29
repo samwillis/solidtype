@@ -4,8 +4,8 @@
   "type": "module",
   "description": "SolidType CAD application with React and three.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "vite dev",
+    "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -14,6 +14,8 @@
     "@base-ui/react": "^1.0.0",
     "@solidtype/core": "workspace:*",
     "@tanstack/react-form": "^1.27.5",
+    "@tanstack/react-router": "^1.120.3",
+    "@tanstack/react-start": "^1.120.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "three": "^0.161.0",
@@ -28,10 +30,11 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/three": "^0.161.2",
-    "@vitejs/plugin-react": "^4.2.1",
+    "@vitejs/plugin-react": "^4.5.0",
     "jsdom": "^24.0.0",
     "typescript": "^5.3.3",
-    "vite": "^5.1.0",
+    "vite": "^7.0.0",
+    "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^1.2.0"
   }
 }

@@ -7,8 +7,8 @@
 
 import { describe, test, expect } from 'vitest';
 import * as Y from 'yjs';
-import { createDocument, getDatumPlaneIds } from '../document/createDocument';
-import { uuid } from '../document/yjs';
+import { createDocument, getDatumPlaneIds } from '../editor/document/createDocument';
+import { uuid } from '../editor/document/yjs';
 import {
   findFeature,
   getFeatureIds,
@@ -24,9 +24,9 @@ import {
   parseFeature,
   deleteFeature,
   renameFeature,
-} from '../document/featureHelpers';
-import { validateDocument, validateInvariants } from '../document/validate';
-import type { SketchPlaneRef } from '../document/schema';
+} from '../editor/document/featureHelpers';
+import { validateDocument, validateInvariants } from '../editor/document/validate';
+import type { SketchPlaneRef } from '../editor/document/schema';
 
 // ============================================================================
 // Document Creation Tests
