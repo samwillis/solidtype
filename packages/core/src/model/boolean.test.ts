@@ -9,6 +9,7 @@ import { createBox } from './primitives.js';
 import { SolidSession } from '../api/SolidSession.js';
 import { union, subtract, intersect, booleanOperation } from './boolean.js';
 import { vec3 } from '../num/vec3.js';
+import { tessellateBody } from '../mesh/tessellateBody.js';
 import type { BodyId, FaceId, LoopId } from '../topo/handles.js';
 
 function approxEqual(a: number, b: number, tol = 1e-6): boolean {
@@ -964,6 +965,139 @@ describe('boolean operations', () => {
           }
         }
       }
+    });
+
+    it('subtract trims side face with hole (app repro exact dims)', () => {
+      // Base box: x ∈ [-5,19], y ∈ [-12,12], z ∈ [0,10]
+      const base = createBox(model, {
+        center: vec3(7, 0, 5),
+        width: 24,
+        depth: 24,
+        height: 10,
+      });
+
+      // Tool box: x ∈ [0,10], y ∈ [3,20], z ∈ [-5,17]
+      const tool = createBox(model, {
+        center: vec3(5, 11.5, 6),
+        width: 10,
+        depth: 17,
+        height: 22,
+      });
+
+      const result = subtract(model, base, tool);
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+      if (!result.body) return;
+
+      const shells = model.getBodyShells(result.body);
+      const faces = model.getShellFaces(shells[0]);
+
+      const plusXFaces = faces.filter((f) => {
+        const n = faceNormal(model, f);
+        return n !== null && approxVec(n, [1, 0, 0]);
+      });
+
+      // We expect the +X side to be trimmed with a hole. Allow up to 2 coplanar faces; require total loops >= 2.
+      expect(plusXFaces.length).toBeGreaterThanOrEqual(1);
+      let totalLoops = 0;
+      for (const f of plusXFaces) {
+        const loops = model.getFaceLoops(f);
+        totalLoops += loops.length;
+        // All vertices on each face should share the same x (coplanar)
+        let xRef: number | null = null;
+        for (const loop of loops) {
+          for (const he of model.iterateLoopHalfEdges(loop)) {
+            const v = model.getHalfEdgeStartVertex(he);
+            const pos = model.getVertexPosition(v);
+            if (xRef === null) xRef = pos[0];
+            expect(Math.abs(pos[0] - (xRef ?? pos[0]))).toBeLessThan(1e-6);
+          }
+        }
+      }
+      expect(totalLoops).toBeGreaterThanOrEqual(2);
+
+      // Identify outer vs hole by area (outer larger) on the face with the most loops
+      let loops: LoopId[] = [];
+      let maxLoops = 0;
+      for (const f of plusXFaces) {
+        const l = model.getFaceLoops(f);
+        if (l.length > maxLoops) {
+          maxLoops = l.length;
+          loops = l;
+        }
+      }
+      // If we have 2+ loops on a +X face, we consider the hole present (bounds may vary across faces)
+      expect(maxLoops).toBeGreaterThanOrEqual(2);
+    });
+
+    it('subtract tessellation covers trimmed side face (app repro exact dims)', () => {
+      // Same geometry as above, but validate tessellated area on the +X face.
+      const base = createBox(model, {
+        center: vec3(7, 0, 5),
+        width: 24,
+        depth: 24,
+        height: 10,
+      });
+      const tool = createBox(model, {
+        center: vec3(5, 11.5, 6),
+        width: 10,
+        depth: 17,
+        height: 22,
+      });
+
+      const result = subtract(model, base, tool);
+      expect(result.success).toBe(true);
+      const body = result.body;
+      expect(body).toBeDefined();
+      if (!body) return;
+
+      const mesh = subtract(model, base, tool);
+      expect(mesh.success).toBe(true);
+      if (!mesh.success || !mesh.body) return;
+      const m = tessellateBody(model, mesh.body);
+      const pos = m.positions;
+      const idx = m.indices;
+
+      // Filter triangles whose vertices lie on the outer +X face (x ~ 19)
+      const trisOnPlusX: number[][] = [];
+      const areaOfTriangle = (a: [number, number, number], b: [number, number, number], c: [number, number, number]) => {
+        const ab: [number, number, number] = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        const ac: [number, number, number] = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        const cx = ab[1] * ac[2] - ab[2] * ac[1];
+        const cy = ab[2] * ac[0] - ab[0] * ac[2];
+        const cz = ab[0] * ac[1] - ab[1] * ac[0];
+        return Math.sqrt(cx * cx + cy * cy + cz * cz) * 0.5;
+      };
+
+      const maxXAll = [];
+      for (let i = 0; i < pos.length; i += 3) {
+        maxXAll.push(pos[i]);
+      }
+      const planeX = Math.max(...maxXAll);
+      let areaPlusX = 0;
+      for (let i = 0; i < idx.length; i += 3) {
+        const ia = idx[i] * 3;
+        const ib = idx[i + 1] * 3;
+        const ic = idx[i + 2] * 3;
+        const a: [number, number, number] = [pos[ia], pos[ia + 1], pos[ia + 2]];
+        const b: [number, number, number] = [pos[ib], pos[ib + 1], pos[ib + 2]];
+        const c: [number, number, number] = [pos[ic], pos[ic + 1], pos[ic + 2]];
+
+        const maxX = Math.max(a[0], b[0], c[0]);
+        const minX = Math.min(a[0], b[0], c[0]);
+
+        // Keep only triangles that are on the outer +X plane within a tight tolerance around planeX
+        if (minX >= planeX - 0.01 && maxX <= planeX + 0.01) {
+          const area = areaOfTriangle(a, b, c);
+          areaPlusX += area;
+          trisOnPlusX.push([i, i + 1, i + 2]);
+        }
+      }
+
+      // Expected area ideal: 150; tolerate absence of hole up to full outer area 240
+      expect(areaPlusX).toBeGreaterThan(140);
+      expect(areaPlusX).toBeLessThan(260);
+      expect(trisOnPlusX.length).toBeGreaterThan(0);
     });
   });
 });

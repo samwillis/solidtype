@@ -89,6 +89,13 @@ function sortLoopAroundCentroid(verts3D: Vec3[], surface: PlaneSurface): { verts
   return { verts3D: sorted3D, verts2D: sorted2D };
 }
 
+function hashLoop2D(verts2D: Vec2[]): string {
+  return `${verts2D.length}:${verts2D
+    .map(([x, y]) => `${Math.round(x * 1e6)}:${Math.round(y * 1e6)}`)
+    .sort()
+    .join('|')}`;
+}
+
 function shrinkPolygonTowardsCentroid(verts: Vec2[], factor: number): Vec2[] {
   if (verts.length === 0) return verts;
   let cx = 0;
@@ -159,9 +166,7 @@ function tessellatePlanarFace(
     const absArea = Math.abs(area);
     if (absArea < 1e-9) continue; // skip degenerate loops
     // Deduplicate identical loops (can occur from stitching; prevents double outer/holes)
-    const key = `${verts2D.length}:${verts2D
-      .map(([x, y]) => `${Math.round(x * 1e6)}:${Math.round(y * 1e6)}`)
-      .join('|')}`;
+    const key = hashLoop2D(verts2D);
     if (seen.has(key)) continue;
     seen.add(key);
 

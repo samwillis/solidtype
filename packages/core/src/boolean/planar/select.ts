@@ -229,12 +229,23 @@ export function selectPieces(
     }
   }
 
-  // For subtract, if a tool piece (fromB) exists on the same plane, drop target pieces on that plane
-  // to avoid keeping the untrimmed target face alongside the cut face.
+  // For subtract: collapse per-plane
+  // - If any tool piece exists on a plane, drop all target pieces on that plane.
+  // - Keep only the first tool piece per plane (after geometry dedup).
   if (operation === 'subtract') {
     const planesB = new Set(dedupedB.map(planeKey));
     const filteredA = dedupedA.filter(p => !planesB.has(planeKey(p)));
-    return { fromA: filteredA, fromB: dedupedB, flipB };
+
+    const seenPlanes = new Set<string>();
+    const mergedB: FacePiece[] = [];
+    for (const p of dedupedB) {
+      const pk = planeKey(p);
+      if (seenPlanes.has(pk)) continue;
+      seenPlanes.add(pk);
+      mergedB.push(p);
+    }
+
+    return { fromA: filteredA, fromB: mergedB, flipB };
   }
 
   return { fromA: dedupedA, fromB: dedupedB, flipB };
