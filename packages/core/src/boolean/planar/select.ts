@@ -248,6 +248,32 @@ export function selectPieces(
     return { fromA: filteredA, fromB: mergedB, flipB };
   }
 
+  // For intersect: collapse per-plane to avoid duplicate coplanar faces
+  // When both bodies have a face on the same plane, keep only one (prefer A)
+  if (operation === 'intersect') {
+    const seenPlanesA = new Set<string>();
+    const filteredA: FacePiece[] = [];
+    for (const p of dedupedA) {
+      const pk = planeKey(p);
+      if (!seenPlanesA.has(pk)) {
+        seenPlanesA.add(pk);
+        filteredA.push(p);
+      }
+    }
+    
+    // For B, skip planes already covered by A
+    const filteredB: FacePiece[] = [];
+    for (const p of dedupedB) {
+      const pk = planeKey(p);
+      if (!seenPlanesA.has(pk)) {
+        seenPlanesA.add(pk); // Also track B's planes to avoid duplicates within B
+        filteredB.push(p);
+      }
+    }
+    
+    return { fromA: filteredA, fromB: filteredB, flipB };
+  }
+
   return { fromA: dedupedA, fromB: dedupedB, flipB };
 }
 

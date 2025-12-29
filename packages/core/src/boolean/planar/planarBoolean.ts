@@ -144,6 +144,7 @@ export function planarBoolean(
         
         const segsB = imprintDataB.get(polyB.faceId)!;
         segsB.push(...intersection.segmentsB);
+        
       }
     }
   }
@@ -297,6 +298,7 @@ export function imprintFaceAndExtractPieces(
   // Build DCEL and extract faces
   const dcel = buildDCEL(sanitizedSegments, baseTol);
   
+  
   // Collect all bounded face polygons with their areas
   const faceData: { polygon: Vec2[]; area: number; centroid: Vec2; isOriginal: boolean }[] = [];
   
@@ -339,7 +341,6 @@ export function imprintFaceAndExtractPieces(
         pieceBounds.minY < originalBounds.minY - boundsPadding ||
         pieceBounds.maxY > originalBounds.maxY + boundsPadding) {
       // This piece extends beyond the original face - skip it
-      // This can happen when the DCEL includes segments from intersecting faces
       continue;
     }
     
@@ -354,10 +355,13 @@ export function imprintFaceAndExtractPieces(
     if (intersectionHoles.length === 0) return [];
     const holeMap = new Map<string, Vec2[]>();
     for (const hole of intersectionHoles) {
-      const oriented = polygonSignedArea(hole) < 0 ? hole.slice().reverse() : hole;
-      const key = oriented.map(p => `${p[0].toFixed(6)},${p[1].toFixed(6)}`).join('|');
-      if (!holeMap.has(key)) {
-        holeMap.set(key, oriented);
+      // Orient CW (negative area) - holes must have opposite winding to outer boundary
+      const oriented = polygonSignedArea(hole) > 0 ? hole.slice().reverse() : hole;
+      // Create a rotation-independent key by sorting vertex keys
+      const vertexKeys = oriented.map(p => `${p[0].toFixed(6)},${p[1].toFixed(6)}`);
+      const sortedKey = [...vertexKeys].sort().join('|');
+      if (!holeMap.has(sortedKey)) {
+        holeMap.set(sortedKey, oriented);
       }
     }
     return Array.from(holeMap.values());
@@ -499,19 +503,41 @@ export function imprintFaceAndExtractPieces(
     return d;
   };
   
+  // Helper: check if a hole's vertices are already embedded in the outer polygon
+  // This happens when the DCEL produces a "frame" polygon that traces around the hole
+  const holeIsEmbeddedInOuter = (outer: Vec2[], hole: Vec2[]): boolean => {
+    // Check if all hole vertices appear in the outer polygon
+    const outerKeys = new Set(outer.map(v => `${snap(v[0], ctx, snapTol)},${snap(v[1], ctx, snapTol)}`));
+    let matchCount = 0;
+    for (const v of hole) {
+      const key = `${snap(v[0], ctx, snapTol)},${snap(v[1], ctx, snapTol)}`;
+      if (outerKeys.has(key)) matchCount++;
+    }
+    // If most hole vertices are in the outer polygon, it's embedded
+    return matchCount >= hole.length - 1;
+  };
+  
   const pieces: FacePiece[] = [];
   nodes.forEach((node, localIdx) => {
     const depth = depthOf(localIdx);
     if (depth % 2 === 0) {
+      const orientedPoly = node.signedArea < 0 ? node.poly.slice().reverse() : node.poly;
+      
+      // Collect holes, but skip any that are already embedded in the outer polygon
       const holes: Vec2[][] = [];
       for (const child of node.children) {
         if (depthOf(child) === depth + 1) {
           const childNode = nodes[child];
           const orientedHole = childNode.signedArea < 0 ? childNode.poly.slice().reverse() : childNode.poly;
+          
+          // Skip if hole is already embedded in outer polygon
+          if (holeIsEmbeddedInOuter(orientedPoly, orientedHole)) {
+            continue;
+          }
           holes.push(orientedHole);
         }
       }
-      const orientedPoly = node.signedArea < 0 ? node.poly.slice().reverse() : node.poly;
+      
       pieces.push({
         polygon: orientedPoly,
         holes,
@@ -522,6 +548,33 @@ export function imprintFaceAndExtractPieces(
       });
     }
   });
+  
+  // Special case: if we have pieces that are all inside the original face boundary,
+  // and they came from intersection segments forming closed loops, treat them as holes
+  // in the original face rather than separate pieces.
+  if (pieces.length > 0 && orientedIntersectionHoles.length > 0) {
+    // Check if all pieces are inside the original face and came from intersection segments
+    const allPiecesAreInteriorHoles = pieces.every(p => {
+      // Check if this piece's polygon matches one of the intersection holes
+      const pieceArea = Math.abs(polygonSignedArea(p.polygon));
+      return orientedIntersectionHoles.some(hole => {
+        const holeArea = Math.abs(polygonSignedArea(hole));
+        return Math.abs(pieceArea - holeArea) < baseTol * 10;
+      });
+    });
+    
+    if (allPiecesAreInteriorHoles) {
+      // All pieces match intersection holes - return the original face with holes instead
+      return [{
+        polygon: polygon.outer,
+        holes: [...polygon.holes, ...orientedIntersectionHoles],
+        classification: 'outside',
+        sourceFace: polygon.faceId,
+        sourceBody,
+        surface: polygon.surface
+      }];
+    }
+  }
   
   return pieces;
 }

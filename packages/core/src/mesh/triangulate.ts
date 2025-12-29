@@ -248,18 +248,25 @@ export function triangulatePolygonWithHoles(
 ): TriangleIndices {
   if (holes.length === 0) return triangulatePolygon(outer);
 
-  // Helper: point on segment
-  const lerp = (a: Vec2, b: Vec2, t: number): Vec2 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
-  // For each hole, connect its rightmost vertex to a visible point on the outer boundary via a horizontal ray.
-  let combined = [...outer];
+  // Build the combined vertex array: outer vertices first, then all hole vertices
+  const allVertices: Vec2[] = [...outer];
+  for (const hole of holes) {
+    allVertices.push(...hole);
+  }
+  
+  // Build combined polygon by connecting holes to outer using bridge edges
+  let combined: Vec2[] = [...outer];
   let indexMap: number[] = outer.map((_, i) => i);
-  let vertexOffset = outer.length;
+  let currentOffset = outer.length;
 
   for (const hole of holes) {
-    if (hole.length < 3) continue;
+    if (hole.length < 3) {
+      currentOffset += hole.length;
+      continue;
+    }
 
-    // 1) Find rightmost hole vertex
+    // 1) Find rightmost hole vertex (for visibility ray casting)
     let hIdx = 0;
     for (let i = 1; i < hole.length; i++) {
       if (hole[i][0] > hole[hIdx][0] || (hole[i][0] === hole[hIdx][0] && hole[i][1] < hole[hIdx][1])) {
@@ -268,23 +275,25 @@ export function triangulatePolygonWithHoles(
     }
     const hPoint = hole[hIdx];
 
-    // 2) Cast ray to +X and find nearest intersection with outer edges
+    // 2) Cast ray to +X and find nearest intersection with combined polygon edges
     let bestT = Infinity;
     let bestEdgeIdx = -1;
     let bestPoint: Vec2 | null = null;
+    
     for (let i = 0; i < combined.length; i++) {
       const a = combined[i];
       const b = combined[(i + 1) % combined.length];
-      // Skip horizontal edges
-      if (a[1] === b[1]) continue;
-      // Check if ray crosses the edge in Y
-      const minY = Math.min(a[1], b[1]);
-      const maxY = Math.max(a[1], b[1]);
-      if (hPoint[1] < minY || hPoint[1] > maxY) continue;
-      // Compute intersection X for the horizontal ray y = hPoint.y
-      const tEdge = (hPoint[1] - a[1]) / (b[1] - a[1]);
-      const xInt = a[0] + tEdge * (b[0] - a[0]);
-      if (xInt <= hPoint[0]) continue; // only to the right
+      
+      // Skip if edge doesn't cross the Y level of hPoint
+      if ((a[1] - hPoint[1]) * (b[1] - hPoint[1]) > 0) continue;
+      if (a[1] === b[1]) continue; // Skip horizontal edges
+      
+      // Compute intersection X
+      const t = (hPoint[1] - a[1]) / (b[1] - a[1]);
+      const xInt = a[0] + t * (b[0] - a[0]);
+      
+      if (xInt <= hPoint[0]) continue; // Only to the right
+      
       const dist = xInt - hPoint[0];
       if (dist < bestT) {
         bestT = dist;
@@ -293,80 +302,67 @@ export function triangulatePolygonWithHoles(
       }
     }
 
-    // Fallback: if no intersection found, connect to nearest outer vertex (very rare)
-    if (!bestPoint || bestEdgeIdx === -1) {
-      let bestOuter = 0;
+    // Find the best connection vertex - the endpoint of the intersected edge closest to intersection point
+    let connectionIdx: number;
+    if (bestEdgeIdx !== -1 && bestPoint) {
+      const a = combined[bestEdgeIdx];
+      const b = combined[(bestEdgeIdx + 1) % combined.length];
+      const distA = Math.hypot(a[0] - bestPoint[0], a[1] - bestPoint[1]);
+      const distB = Math.hypot(b[0] - bestPoint[0], b[1] - bestPoint[1]);
+      connectionIdx = distA <= distB ? bestEdgeIdx : (bestEdgeIdx + 1) % combined.length;
+    } else {
+      // Fallback: find nearest vertex to the right
+      connectionIdx = 0;
       let bestDist = Infinity;
       for (let i = 0; i < combined.length; i++) {
-        const dx = combined[i][0] - hPoint[0];
-        const dy = combined[i][1] - hPoint[1];
+        const v = combined[i];
+        const dx = v[0] - hPoint[0];
+        const dy = v[1] - hPoint[1];
         const d = dx * dx + dy * dy;
-        if (d < bestDist) {
+        if (v[0] >= hPoint[0] && d < bestDist) {
           bestDist = d;
-          bestOuter = i;
+          connectionIdx = i;
         }
       }
-      // Insert bridge as before
-      const newCombined: Vec2[] = [];
-      const newIndexMap: number[] = [];
-      for (let i = 0; i <= bestOuter; i++) {
-        newCombined.push(combined[i]);
-        newIndexMap.push(indexMap[i]);
-      }
-      for (let i = 0; i < hole.length; i++) {
-        const idx = (hIdx + i) % hole.length;
-        newCombined.push(hole[idx]);
-        newIndexMap.push(vertexOffset + idx);
-      }
-      newCombined.push(hole[hIdx]);
-      newIndexMap.push(vertexOffset + hIdx);
-      for (let i = bestOuter; i < combined.length; i++) {
-        newCombined.push(combined[i]);
-        newIndexMap.push(indexMap[i]);
-      }
-      combined = newCombined;
-      indexMap = newIndexMap;
-      vertexOffset += hole.length;
-      continue;
     }
 
-    // 3) Split the outer edge at intersection point
-    const insertIdx = bestEdgeIdx + 1;
-    combined.splice(insertIdx, 0, bestPoint);
-    const beforeIdx = indexMap[bestEdgeIdx];
-    const afterIdx = indexMap[(bestEdgeIdx + 1) % indexMap.length];
-    // Map the new split point to the "after" vertex index (it shares the same original vertex index)
-    indexMap.splice(insertIdx, 0, afterIdx);
-
-    // 4) Build combined polygon inserting the hole starting at hIdx, bridged to the split point
+    // 3) Build new combined polygon
+    // Structure: combined[0..connectionIdx] + hole[hIdx..hIdx+n-1] + hole[hIdx] + combined[connectionIdx..n-1]
     const newCombined: Vec2[] = [];
     const newIndexMap: number[] = [];
 
-    for (let i = 0; i <= insertIdx; i++) {
+    // Outer up to and including connection point
+    for (let i = 0; i <= connectionIdx; i++) {
       newCombined.push(combined[i]);
       newIndexMap.push(indexMap[i]);
     }
 
+    // All hole vertices starting from hIdx (in original CW order)
     for (let i = 0; i < hole.length; i++) {
       const idx = (hIdx + i) % hole.length;
       newCombined.push(hole[idx]);
-      newIndexMap.push(vertexOffset + idx);
+      newIndexMap.push(currentOffset + idx);
     }
 
-    newCombined.push(hPoint);
-    newIndexMap.push(vertexOffset + hIdx);
+    // Bridge back: hole start point again
+    newCombined.push(hole[hIdx]);
+    newIndexMap.push(currentOffset + hIdx);
 
-    for (let i = insertIdx; i < combined.length; i++) {
+    // Remaining outer vertices (from connectionIdx to end)
+    for (let i = connectionIdx; i < combined.length; i++) {
       newCombined.push(combined[i]);
       newIndexMap.push(indexMap[i]);
     }
 
     combined = newCombined;
     indexMap = newIndexMap;
-    vertexOffset += hole.length;
+    currentOffset += hole.length;
   }
-
+  
+  // Triangulate the combined polygon
   const localIndices = triangulatePolygon(combined);
+  
+  // Map local indices back to original vertex indices
   const result: TriangleIndices = [];
   for (const localIdx of localIndices) {
     result.push(indexMap[localIdx]);

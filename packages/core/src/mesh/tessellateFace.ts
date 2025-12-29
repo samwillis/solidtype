@@ -160,8 +160,10 @@ function tessellatePlanarFace(
     const rawVerts3D = getLoopVertices(model, loopId);
     if (rawVerts3D.length < 3) continue;
 
-    // Normalize ordering for stability (sort around centroid)
-    const { verts3D, verts2D } = sortLoopAroundCentroid(rawVerts3D, surface);
+    // Project to 2D without reordering - preserve original polygon topology
+    // Sorting by angle would destroy concave polygon shapes like L-shapes
+    const verts3D = rawVerts3D;
+    const verts2D = rawVerts3D.map((v) => projectToPlane(v, surface));
     const area = computeSignedArea(verts2D);
     const absArea = Math.abs(area);
     if (absArea < 1e-9) continue; // skip degenerate loops
