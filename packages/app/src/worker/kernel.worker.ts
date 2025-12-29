@@ -68,6 +68,182 @@ self.onunhandledrejection = (event) => {
 console.log('[Worker] Kernel worker starting...');
 
 // ============================================================================
+// Debug Logging for Test Reproduction
+// ============================================================================
+
+/**
+ * Log geometry in a format that can be copied into test files.
+ * Enable by setting DEBUG_GEOMETRY = true
+ */
+const DEBUG_GEOMETRY = true;
+
+interface SketchGeometryLog {
+  plane: {
+    origin: [number, number, number];
+    normal: [number, number, number];
+    xDir: [number, number, number];
+    yDir: [number, number, number];
+  };
+  points: { id: string; x: number; y: number; fixed?: boolean }[];
+  lines: { start: string; end: string }[];
+  arcs: { start: string; end: string; center: string; ccw: boolean }[];
+}
+
+interface BodyGeometryLog {
+  faces: {
+    normal: [number, number, number];
+    origin: [number, number, number];
+    vertices: [number, number, number][];
+    loopCount: number;
+  }[];
+}
+
+function logSketchGeometry(
+  sketchInfo: { plane: DatumPlane; data: { pointsById: Record<string, any>; entitiesById: Record<string, any> } },
+  label: string
+): void {
+  if (!DEBUG_GEOMETRY) return;
+  
+  const plane = sketchInfo.plane;
+  const surface = plane.surface;
+  const log: SketchGeometryLog = {
+    plane: {
+      origin: [surface.origin[0], surface.origin[1], surface.origin[2]],
+      normal: [surface.normal[0], surface.normal[1], surface.normal[2]],
+      xDir: [surface.xDir[0], surface.xDir[1], surface.xDir[2]],
+      yDir: [surface.yDir[0], surface.yDir[1], surface.yDir[2]],
+    },
+    points: [],
+    lines: [],
+    arcs: [],
+  };
+  
+  // Collect points
+  for (const [id, point] of Object.entries(sketchInfo.data.pointsById)) {
+    log.points.push({
+      id,
+      x: (point as any).x,
+      y: (point as any).y,
+      fixed: (point as any).fixed,
+    });
+  }
+  
+  // Collect entities
+  for (const [_id, entity] of Object.entries(sketchInfo.data.entitiesById)) {
+    const e = entity as any;
+    if (e.type === 'line') {
+      log.lines.push({ start: e.start, end: e.end });
+    } else if (e.type === 'arc') {
+      log.arcs.push({ start: e.start, end: e.end, center: e.center, ccw: e.ccw ?? true });
+    }
+  }
+  
+  console.log(`[Geometry] ${label} Sketch:`, JSON.stringify(log, null, 2));
+  
+  // Also log in a more test-friendly format
+  console.log(`[Test Code] // ${label} sketch setup:`);
+  console.log(`[Test Code] const plane = createDatumPlane(`);
+  console.log(`[Test Code]   vec3(${log.plane.origin.join(', ')}),`);
+  console.log(`[Test Code]   vec3(${log.plane.normal.join(', ')}),`);
+  console.log(`[Test Code]   vec3(${log.plane.xDir.join(', ')})`);
+  console.log(`[Test Code] );`);
+  console.log(`[Test Code] const sketch = session.createSketch(plane);`);
+  
+  for (const p of log.points) {
+    console.log(`[Test Code] const ${p.id} = sketch.addPoint(${p.x}, ${p.y}${p.fixed ? ', { fixed: true }' : ''});`);
+  }
+  for (const line of log.lines) {
+    console.log(`[Test Code] sketch.addLine(${line.start}, ${line.end});`);
+  }
+  for (const arc of log.arcs) {
+    console.log(`[Test Code] sketch.addArc(${arc.start}, ${arc.end}, ${arc.center}, ${arc.ccw});`);
+  }
+}
+
+function logBodyGeometry(body: Body, session: SolidSession, label: string): void {
+  if (!DEBUG_GEOMETRY) return;
+  
+  const model = session.getModel();
+  const faces = body.getFaces();
+  
+  const log: BodyGeometryLog = { faces: [] };
+  
+  for (const face of faces) {
+    const surfaceIdx = model.getFaceSurfaceIndex(face.id);
+    const surface = model.getSurface(surfaceIdx);
+    const loops = model.getFaceLoops(face.id);
+    
+    const vertices: [number, number, number][] = [];
+    if (loops.length > 0) {
+      for (const he of model.iterateLoopHalfEdges(loops[0])) {
+        const vertex = model.getHalfEdgeStartVertex(he);
+        const pos = model.getVertexPosition(vertex);
+        vertices.push([pos[0], pos[1], pos[2]]);
+      }
+    }
+    
+    if (surface.kind === 'plane') {
+      log.faces.push({
+        normal: [surface.normal[0], surface.normal[1], surface.normal[2]],
+        origin: [surface.origin[0], surface.origin[1], surface.origin[2]],
+        vertices,
+        loopCount: loops.length,
+      });
+    }
+  }
+  
+  console.log(`[Geometry] ${label} Body (${faces.length} faces):`, JSON.stringify(log, null, 2));
+  
+  // Log a summary for quick inspection
+  console.log(`[Body Summary] ${label}:`);
+  for (let i = 0; i < log.faces.length; i++) {
+    const f = log.faces[i];
+    const normalStr = `(${f.normal.map(n => n.toFixed(2)).join(',')})`;
+    const vertStr = f.vertices.map(v => `(${v.map(c => c.toFixed(2)).join(',')})`).join(' ');
+    console.log(`[Body Summary]   Face ${i}: n=${normalStr} loops=${f.loopCount} verts=[${vertStr}]`);
+  }
+}
+
+function logExtrudeOperation(
+  sketchInfo: any,
+  distance: number,
+  op: string,
+  direction: string
+): void {
+  if (!DEBUG_GEOMETRY) return;
+  
+  console.log(`[Operation] Extrude: op=${op}, distance=${distance}, direction=${direction}`);
+  logSketchGeometry(sketchInfo, 'Extrude');
+}
+
+function logBooleanOperation(
+  targetBody: Body,
+  toolBody: Body,
+  operation: string,
+  session: SolidSession
+): void {
+  if (!DEBUG_GEOMETRY) return;
+  
+  console.log(`[Operation] Boolean: ${operation}`);
+  logBodyGeometry(targetBody, session, 'Target');
+  logBodyGeometry(toolBody, session, 'Tool');
+}
+
+function logBooleanResult(
+  resultBody: Body | null,
+  operation: string,
+  session: SolidSession
+): void {
+  if (!DEBUG_GEOMETRY) return;
+  
+  if (resultBody) {
+    logBodyGeometry(resultBody, session, `Result (${operation})`);
+  } else {
+    console.log(`[Operation] Boolean ${operation} failed - no result body`);
+  }
+}
+
+// ============================================================================
 // Worker State
 // ============================================================================
 
@@ -847,6 +1023,9 @@ function interpretExtrude(
     throw new Error(`Sketch not found: ${sketchId}`);
   }
 
+  // Log sketch geometry for test reproduction
+  logSketchGeometry(sketchInfo, `Extrude(${op})`);
+
   // Create sketch and add entities
   const sketch = session.createSketch(sketchInfo.plane);
   const pointIdMap = new Map<string, any>();
@@ -897,68 +1076,27 @@ function interpretExtrude(
     throw new Error(result.error || 'Extrude failed');
   }
 
+  // Log the extruded body geometry
+  logExtrudeOperation(sketchInfo, finalDistance, op, direction);
+  logBodyGeometry(result.body, session, `Extrude result (${op})`);
+
   // Handle cut operation
   if (op === 'cut') {
     console.log('[Worker] Extrude CUT operation');
-    console.log(`[Worker] Tool body has ${result.body.getFaces().length} faces`);
-    
-    // Debug: Log tool body face info
-    const toolFaces = result.body.getFaces();
-    const model = session.getModel();
-    for (let i = 0; i < toolFaces.length; i++) {
-      const face = toolFaces[i];
-      const surfaceIdx = model.getFaceSurfaceIndex(face.id);
-      const surface = model.getSurface(surfaceIdx);
-      if (surface.kind === 'plane') {
-        console.log(`[Worker] Tool face ${i}: normal=[${surface.normal.map(n => n.toFixed(3)).join(', ')}], origin=[${surface.origin.map(o => o.toFixed(2)).join(', ')}]`);
-      }
-    }
     
     let anySuccess = false;
     let lastError: string | undefined;
     for (const [existingId, entry] of bodyMap) {
-      console.log(`[Worker] Subtracting from body ${existingId}, faces before: ${entry.body.getFaces().length}`);
+      console.log(`[Worker] Subtracting from body ${existingId}`);
       
-      // Debug: Log target body face info
-      const targetFaces = entry.body.getFaces();
-      for (let i = 0; i < targetFaces.length; i++) {
-        const face = targetFaces[i];
-        const surfaceIdx = model.getFaceSurfaceIndex(face.id);
-        const surface = model.getSurface(surfaceIdx);
-        if (surface.kind === 'plane') {
-          const loops = model.getFaceLoops(face.id);
-          console.log(`[Worker] Target face ${i}: normal=[${surface.normal.map(n => n.toFixed(3)).join(', ')}], origin=[${surface.origin.map(o => o.toFixed(2)).join(', ')}], loops=${loops.length}`);
-        }
-      }
+      // Log both bodies for test reproduction
+      logBooleanOperation(entry.body, result.body, 'subtract', session);
       
       const boolResult = session.subtract(entry.body, result.body);
       console.log(`[Worker] Subtract result: success=${boolResult.success}, error=${boolResult.error || 'none'}`);
       if (boolResult.success && boolResult.body) {
-        console.log(`[Worker] After subtract: ${boolResult.body.getFaces().length} faces`);
-        
-        // Debug: Log result body face info with vertices
-        const resultFaces = boolResult.body.getFaces();
-        for (let i = 0; i < resultFaces.length; i++) {
-          const face = resultFaces[i];
-          const surfaceIdx = model.getFaceSurfaceIndex(face.id);
-          const surface = model.getSurface(surfaceIdx);
-          if (surface.kind === 'plane') {
-            const loops = model.getFaceLoops(face.id);
-            const normalStr = `[${surface.normal.map(n => n.toFixed(2)).join(', ')}]`;
-            
-            // Get vertex positions for debugging
-            let vertexCount = 0;
-            let minZ = Infinity, maxZ = -Infinity;
-            for (const he of model.iterateLoopHalfEdges(loops[0])) {
-              const pos = model.getVertexPosition(model.getHalfEdgeStartVertex(he));
-              minZ = Math.min(minZ, pos[2]);
-              maxZ = Math.max(maxZ, pos[2]);
-              vertexCount++;
-            }
-            
-            console.log(`[Worker] Result face ${i}: normal=${normalStr}, loops=${loops.length}${loops.length > 1 ? ' HAS_HOLE' : ''}, verts=${vertexCount}, z=[${minZ.toFixed(2)},${maxZ.toFixed(2)}]`);
-          }
-        }
+        // Log result for test reproduction
+        logBooleanResult(boolResult.body, 'subtract', session);
         
         bodyMap.set(existingId, { ...entry, body: boolResult.body });
         anySuccess = true;
@@ -1302,6 +1440,9 @@ function interpretBoolean(
     throw new Error(`Tool body not found: ${toolId}`);
   }
 
+  // Log geometry for test reproduction
+  logBooleanOperation(targetEntry.body, toolEntry.body, operation, session);
+
   let result;
   switch (operation) {
     case 'union':
@@ -1320,6 +1461,9 @@ function interpretBoolean(
   if (!result.success || !result.body) {
     throw new Error(result.error || 'Boolean operation failed');
   }
+  
+  // Log result for test reproduction
+  logBooleanResult(result.body, operation, session);
 
   bodyMap.delete(toolId);
   bodyMap.set(targetId, { ...targetEntry, body: result.body });
@@ -1498,7 +1642,7 @@ function sendMesh(featureId: string, body: Body, color?: string): void {
           continue;
         }
         if (surface.kind === 'plane') {
-          const normalStr = `[${surface.normal.map(n => n.toFixed(2)).join(', ')}]`;
+          const normalStr = `[${surface.normal.map((n: number) => n.toFixed(2)).join(', ')}]`;
           console.log(`[Worker]   Face ${i}: normal=${normalStr}, loops=${loops.length}${loops.length > 1 ? ' (has holes)' : ''}`);
         } else {
           console.log(`[Worker]   Face ${i}: non-planar surface kind=${surface.kind}, loops=${loops.length}`);

@@ -544,18 +544,31 @@ function handleCoplanarFaces(
     return null;
   }
   
-  // There is overlap - add edges of B that are inside or cross A's boundary
-  for (let i = 0; i < bInA.length; i++) {
-    const p1 = bInA[i];
-    const p2 = bInA[(i + 1) % bInA.length];
-    
-    const p1Inside = pointInPolygon(p1, faceA.outer);
-    const p2Inside = pointInPolygon(p2, faceA.outer);
-    
-    // Add if either endpoint is inside, or if edge crosses A's boundary
-    if (p1Inside || p2Inside || edgesCrossBoundary(p1, p2, faceA.outer)) {
-      const clippedSegments = clipSegmentToPolygon(p1, p2, faceA.outer);
-      for (const [a, b] of clippedSegments) {
+  // Helper to deduplicate segments
+  const segKey = (a: Vec2, b: Vec2): string => {
+    const ax = Math.round(a[0] / tolerance) * tolerance;
+    const ay = Math.round(a[1] / tolerance) * tolerance;
+    const bx = Math.round(b[0] / tolerance) * tolerance;
+    const by = Math.round(b[1] / tolerance) * tolerance;
+    const k1 = `${ax},${ay}|${bx},${by}`;
+    const k2 = `${bx},${by}|${ax},${ay}`;
+    return k1 < k2 ? k1 : k2;
+  };
+  
+  const seenA = new Set<string>();
+  const seenB = new Set<string>();
+  
+  // Compute the overlap polygon (intersection of B with A)
+  const overlapBA = clipPolygonToPolygon(bInA, faceA.outer);
+  
+  // Only add the overlap polygon edges (not individual edge clips to avoid duplicates)
+  if (overlapBA.length >= 3) {
+    for (let i = 0; i < overlapBA.length; i++) {
+      const a = overlapBA[i];
+      const b = overlapBA[(i + 1) % overlapBA.length];
+      const key = segKey(a, b);
+      if (!seenA.has(key)) {
+        seenA.add(key);
         segmentsA.push({
           a,
           b,
@@ -567,22 +580,6 @@ function handleCoplanarFaces(
       }
     }
   }
-  // Add full overlap polygon edges (intersection of B with A) to ensure closed cycles
-  const overlapBA = clipPolygonToPolygon(bInA, faceA.outer);
-  if (overlapBA.length >= 3) {
-    for (let i = 0; i < overlapBA.length; i++) {
-      const a = overlapBA[i];
-      const b = overlapBA[(i + 1) % overlapBA.length];
-      segmentsA.push({
-        a,
-        b,
-        sourceBody: 1,
-        sourceFace: faceB.faceId,
-        sourceHalfEdge: null,
-        isIntersection: true
-      });
-    }
-  }
   
   // Similarly for A in B's space
   const aInB: Vec2[] = faceA.outer.map(p => {
@@ -590,16 +587,14 @@ function handleCoplanarFaces(
     return projectToPlane2D(p3d, faceB.surface);
   });
   
-  for (let i = 0; i < aInB.length; i++) {
-    const p1 = aInB[i];
-    const p2 = aInB[(i + 1) % aInB.length];
-    
-    const p1Inside = pointInPolygon(p1, faceB.outer);
-    const p2Inside = pointInPolygon(p2, faceB.outer);
-    
-    if (p1Inside || p2Inside || edgesCrossBoundary(p1, p2, faceB.outer)) {
-      const clippedSegments = clipSegmentToPolygon(p1, p2, faceB.outer);
-      for (const [a, b] of clippedSegments) {
+  const overlapAB = clipPolygonToPolygon(aInB, faceB.outer);
+  if (overlapAB.length >= 3) {
+    for (let i = 0; i < overlapAB.length; i++) {
+      const a = overlapAB[i];
+      const b = overlapAB[(i + 1) % overlapAB.length];
+      const key = segKey(a, b);
+      if (!seenB.has(key)) {
+        seenB.add(key);
         segmentsB.push({
           a,
           b,
@@ -609,21 +604,6 @@ function handleCoplanarFaces(
           isIntersection: true
         });
       }
-    }
-  }
-  const overlapAB = clipPolygonToPolygon(aInB, faceB.outer);
-  if (overlapAB.length >= 3) {
-    for (let i = 0; i < overlapAB.length; i++) {
-      const a = overlapAB[i];
-      const b = overlapAB[(i + 1) % overlapAB.length];
-      segmentsB.push({
-        a,
-        b,
-        sourceBody: 0,
-        sourceFace: faceA.faceId,
-        sourceHalfEdge: null,
-        isIntersection: true
-      });
     }
   }
   
@@ -661,8 +641,9 @@ function cross2D(o: Vec2, a: Vec2, b: Vec2): number {
 
 /**
  * Check if an edge crosses a polygon's boundary
+ * (Reserved for future use in coplanar face handling)
  */
-function edgesCrossBoundary(p1: Vec2, p2: Vec2, polygon: Vec2[]): boolean {
+export function _edgesCrossBoundary(p1: Vec2, p2: Vec2, polygon: Vec2[]): boolean {
   for (let i = 0; i < polygon.length; i++) {
     const a1 = polygon[i];
     const a2 = polygon[(i + 1) % polygon.length];
@@ -676,8 +657,9 @@ function edgesCrossBoundary(p1: Vec2, p2: Vec2, polygon: Vec2[]): boolean {
 /**
  * Clip a segment to a (possibly concave) polygon.
  * Returns zero, one, or multiple sub-segments that lie inside or on the boundary.
+ * (Reserved for future use in coplanar face handling)
  */
-function clipSegmentToPolygon(p1: Vec2, p2: Vec2, polygon: Vec2[]): [Vec2, Vec2][] {
+export function _clipSegmentToPolygon(p1: Vec2, p2: Vec2, polygon: Vec2[]): [Vec2, Vec2][] {
   const ts: number[] = [0, 1];
   
   // Collect intersection parameters along the segment

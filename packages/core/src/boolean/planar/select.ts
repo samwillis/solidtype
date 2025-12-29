@@ -6,8 +6,9 @@
  */
 
 import type { NumericContext } from '../../num/tolerance.js';
+import type { Vec2 } from '../../num/vec2.js';
 import type { Vec3 } from '../../num/vec3.js';
-import { dot3, add3, mul3 } from '../../num/vec3.js';
+import { dot3 } from '../../num/vec3.js';
 import type { FacePiece, BoolOp, SelectedPieces, BoundingBox3D } from './types.js';
 import { projectToPlane2D, unprojectFromPlane } from './intersect.js';
 
@@ -36,11 +37,6 @@ export function selectPieces(
 ): SelectedPieces {
   const tol = ctx?.tol.length ?? 1e-6;
   const snap = (v: number) => Math.round(v / tol) * tol;
-  const normalizeLoop2D = (loop: readonly [number, number][]): string => {
-    const forward = loop.map(p => `${snap(p[0])},${snap(p[1])}`).join(';');
-    const reverse = loop.slice().reverse().map(p => `${snap(p[0])},${snap(p[1])}`).join(';');
-    return forward < reverse ? forward : reverse;
-  };
   
   // Normalize a 3D polygon loop (unproject 2D to 3D, then sort)
   const normalizeLoop3D = (piece: FacePiece): string => {
@@ -59,22 +55,57 @@ export function selectPieces(
     return forward < reversed ? forward : reversed;
   };
   
-  // Key that ignores normal direction (treats coplanar faces as same) using 3D geometry
-  const coplanarKey = (piece: FacePiece): string => {
+  // Key that identifies the PLANE only (not the polygon shape)
+  // Two faces on the same plane will have the same planeKey
+  const planeKey = (piece: FacePiece): string => {
     const surf = piece.surface;
-    // Use absolute normal for plane orientation
-    const normKey = `${snap(Math.abs(surf.normal[0]))},${snap(Math.abs(surf.normal[1]))},${snap(Math.abs(surf.normal[2]))}`;
-    // Use plane distance from origin
-    const dist = snap(dot3(surf.origin, surf.normal));
-    return `${normKey}|${Math.abs(dist)}|${normalizeLoop3D(piece)}`;
+    const n = surf.normal;
+    
+    // Canonicalize normal direction: prefer positive first non-zero component
+    // This ensures faces on the same plane (with opposite normals) get the same key
+    let sign = 1;
+    for (let i = 0; i < 3; i++) {
+      if (Math.abs(n[i]) > 1e-9) {
+        sign = n[i] > 0 ? 1 : -1;
+        break;
+      }
+    }
+    const canonNormal: Vec3 = [n[0] * sign, n[1] * sign, n[2] * sign];
+    
+    // Compute plane equation: n · p = d (using canonical normal)
+    // For the same plane, d will be the same regardless of which point on the plane we use
+    const d = snap(dot3(surf.origin, canonNormal));
+    
+    const normKey = `${snap(canonNormal[0])},${snap(canonNormal[1])},${snap(canonNormal[2])}`;
+    return `${normKey}|${d}`;
   };
   
-  // Key that includes signed normal (orientation-sensitive)
-  const orientedKey = (piece: FacePiece): string => {
-    const surf = piece.surface;
-    const surfKey = `${snap(surf.origin[0])},${snap(surf.origin[1])},${snap(surf.origin[2])}|${snap(surf.normal[0])},${snap(surf.normal[1])},${snap(surf.normal[2])}`;
-    const holesKey = piece.holes.map(h => normalizeLoop2D(h)).sort().join('|');
-    return `${surfKey}|${normalizeLoop2D(piece.polygon)}|${holesKey}`;
+  // Key that includes polygon shape (for exact duplicates)
+  const exactKey = (piece: FacePiece): string => {
+    return `${planeKey(piece)}|${normalizeLoop3D(piece)}`;
+  };
+  
+  // Check if two 2D polygons overlap (one contains a point of the other, or edges cross)
+  const polygonsOverlap2D = (polyA: Vec2[], polyB: Vec2[]): boolean => {
+    // Check if any vertex of A is inside B
+    for (const p of polyA) {
+      if (pointInPolygon2D(p, polyB)) return true;
+    }
+    // Check if any vertex of B is inside A
+    for (const p of polyB) {
+      if (pointInPolygon2D(p, polyA)) return true;
+    }
+    // Check if any edges cross
+    for (let i = 0; i < polyA.length; i++) {
+      const a1 = polyA[i];
+      const a2 = polyA[(i + 1) % polyA.length];
+      for (let j = 0; j < polyB.length; j++) {
+        const b1 = polyB[j];
+        const b2 = polyB[(j + 1) % polyB.length];
+        if (segmentsIntersect(a1, a2, b1, b2)) return true;
+      }
+    }
+    return false;
   };
   
   let fromA: FacePiece[];
@@ -87,53 +118,67 @@ export function selectPieces(
       fromA = piecesA.filter(p => p.classification === 'outside' || p.classification === 'on_same');
       fromB = piecesB.filter(p => p.classification === 'outside' || p.classification === 'on_same');
       
-      // Drop paired coplanar faces (shared internal walls):
-      // 1. Opposing normals (internal wall between touching volumes)
-      // 2. Same-normal duplicates from both bodies (exact geometry match)
-      // Cache the coplanar key for each piece to avoid recomputation issues
-      const pieceKeyMapA = new Map<FacePiece, string>();
-      const pieceKeyMapB = new Map<FacePiece, string>();
-      const coplanarGroups = new Map<string, { fromA: FacePiece[]; fromB: FacePiece[] }>();
+      // Handle coplanar faces: group by PLANE (not polygon shape)
+      // For overlapping coplanar faces with opposite normals, remove both (internal wall)
+      const planeGroupsA = new Map<string, FacePiece[]>();
+      const planeGroupsB = new Map<string, FacePiece[]>();
       
       for (const p of fromA) {
-        const key = coplanarKey(p);
-        pieceKeyMapA.set(p, key);
-        if (!coplanarGroups.has(key)) {
-          coplanarGroups.set(key, { fromA: [], fromB: [] });
-        }
-        coplanarGroups.get(key)!.fromA.push(p);
+        const key = planeKey(p);
+        if (!planeGroupsA.has(key)) planeGroupsA.set(key, []);
+        planeGroupsA.get(key)!.push(p);
       }
       for (const p of fromB) {
-        const key = coplanarKey(p);
-        pieceKeyMapB.set(p, key);
-        if (!coplanarGroups.has(key)) {
-          coplanarGroups.set(key, { fromA: [], fromB: [] });
-        }
-        coplanarGroups.get(key)!.fromB.push(p);
+        const key = planeKey(p);
+        if (!planeGroupsB.has(key)) planeGroupsB.set(key, []);
+        planeGroupsB.get(key)!.push(p);
       }
       
-      // Find keys to drop: coplanar pieces from both A and B
-      const keysToDrop = new Set<string>();
-      for (const [key, group] of coplanarGroups) {
-        if (group.fromA.length > 0 && group.fromB.length > 0) {
-          // Both bodies have pieces at this location - check normals
-          const normA = group.fromA[0].surface.normal;
-          for (const pB of group.fromB) {
-            const dotN = dot3(normA, pB.surface.normal);
-            // Drop if opposing normals (internal wall) OR if same normal (duplicate)
-            if (Math.abs(dotN) > 0.5) {
-              keysToDrop.add(key);
-              break;
+      // Find pieces to remove: coplanar overlapping faces with opposite normals
+      const piecesToRemoveA = new Set<FacePiece>();
+      const piecesToRemoveB = new Set<FacePiece>();
+      
+      for (const [key, piecesOnPlaneA] of planeGroupsA) {
+        const piecesOnPlaneB = planeGroupsB.get(key);
+        if (!piecesOnPlaneB || piecesOnPlaneB.length === 0) continue;
+        
+        // Check each pair for overlap and opposite normals
+        for (const pA of piecesOnPlaneA) {
+          for (const pB of piecesOnPlaneB) {
+            // Check if normals are opposite
+            const dotN = dot3(pA.surface.normal, pB.surface.normal);
+            if (dotN > -0.5) continue; // Not opposite normals
+            
+            // Project B's polygon to A's coordinate system for overlap check
+            const bInA = pB.polygon.map(v => {
+              const p3d = unprojectFromPlane(v, pB.surface);
+              return projectToPlane2D(p3d, pA.surface);
+            });
+            
+            if (polygonsOverlap2D(pA.polygon, bInA)) {
+              // These are internal walls - remove both
+              piecesToRemoveA.add(pA);
+              piecesToRemoveB.add(pB);
             }
           }
         }
       }
       
-      if (keysToDrop.size > 0) {
-        // Use cached keys to avoid recomputation issues
-        fromA = fromA.filter(p => !keysToDrop.has(pieceKeyMapA.get(p)!));
-        fromB = fromB.filter(p => !keysToDrop.has(pieceKeyMapB.get(p)!));
+      
+      // Also handle exact duplicates (same plane, same shape, any normal direction)
+      const seenExact = new Set<string>();
+      const exactDuplicatesB = new Set<FacePiece>();
+      for (const p of fromA) {
+        seenExact.add(exactKey(p));
       }
+      for (const p of fromB) {
+        if (seenExact.has(exactKey(p))) {
+          exactDuplicatesB.add(p);
+        }
+      }
+      
+      fromA = fromA.filter(p => !piecesToRemoveA.has(p));
+      fromB = fromB.filter(p => !piecesToRemoveB.has(p) && !exactDuplicatesB.has(p));
       break;
       
     case 'intersect':
@@ -189,20 +234,51 @@ export function selectPieces(
     fromB = filterPiecesByBounds3D(fromB, intersectBounds, tol);
   }
   
-  // Final dedup: remove exact duplicates (same orientation, same geometry)
+  // Final dedup: remove exact duplicates using 3D vertex positions
+  // This catches coplanar faces from different bodies that occupy the same 3D space
+  const geometry3DKey = (piece: FacePiece): string => {
+    const vertices3D = piece.polygon.map(v => unprojectFromPlane(v, piece.surface));
+    // Sort vertices by position to create a canonical key
+    const vertexKeys = vertices3D
+      .map(v => `${snap(v[0])},${snap(v[1])},${snap(v[2])}`)
+      .sort();
+    // Include normal direction for orientation
+    const n = piece.surface.normal;
+    const normalKey = `${snap(n[0])},${snap(n[1])},${snap(n[2])}`;
+    return `${normalKey}|${vertexKeys.join(';')}`;
+  };
+  
+  // Filter out pieces with duplicate vertices (degenerate cycles)
+  const hasUniqueVertices = (piece: FacePiece): boolean => {
+    const vertices3D = piece.polygon.map(v => unprojectFromPlane(v, piece.surface));
+    const seen = new Set<string>();
+    for (const v of vertices3D) {
+      const key = `${snap(v[0])},${snap(v[1])},${snap(v[2])}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+    }
+    return true;
+  };
+  
+  // First filter out degenerate pieces
+  const validA = fromA.filter(hasUniqueVertices);
+  const validB = fromB.filter(hasUniqueVertices);
+  
+  // Then deduplicate by 3D geometry
   const seenKeys = new Set<string>();
   const dedupedA: FacePiece[] = [];
   const dedupedB: FacePiece[] = [];
   
-  for (const p of fromA) {
-    const key = orientedKey(p);
+  // Prefer pieces from A over B (A has priority)
+  for (const p of validA) {
+    const key = geometry3DKey(p);
     if (!seenKeys.has(key)) {
       seenKeys.add(key);
       dedupedA.push(p);
     }
   }
-  for (const p of fromB) {
-    const key = orientedKey(p);
+  for (const p of validB) {
+    const key = geometry3DKey(p);
     if (!seenKeys.has(key)) {
       seenKeys.add(key);
       dedupedB.push(p);
@@ -214,66 +290,72 @@ export function selectPieces(
 
 /**
  * Filter pieces to keep only those that are at least partially within bounds.
- * Uses 3D centroid check: if the face's 3D centroid is outside bounds, drop it.
- * Also clamps piece geometry to bounds to trim overhanging portions.
+ * 
+ * For pieces that extend beyond bounds, clamps vertices to the exact bounds.
+ * This ensures that the result doesn't contain geometry outside the target body.
  */
 function filterPiecesByBounds3D(pieces: FacePiece[], bounds: BoundingBox3D, tol: number): FacePiece[] {
   const result: FacePiece[] = [];
+  const boundsTol = Math.max(tol * 1000, 0.001);
   
   for (const piece of pieces) {
     const vertices3D = piece.polygon.map(v => unprojectFromPlane(v, piece.surface));
     if (vertices3D.length < 3) continue;
     
-    // Compute 3D centroid
-    let cx = 0, cy = 0, cz = 0;
+    // Check if ANY vertex is within bounds
+    let anyVertexInBounds = false;
     for (const v of vertices3D) {
-      cx += v[0];
-      cy += v[1];
-      cz += v[2];
+      if (v[0] >= bounds.min[0] - boundsTol && v[0] <= bounds.max[0] + boundsTol &&
+          v[1] >= bounds.min[1] - boundsTol && v[1] <= bounds.max[1] + boundsTol &&
+          v[2] >= bounds.min[2] - boundsTol && v[2] <= bounds.max[2] + boundsTol) {
+        anyVertexInBounds = true;
+        break;
+      }
     }
-    cx /= vertices3D.length;
-    cy /= vertices3D.length;
-    cz /= vertices3D.length;
     
-    // Check if centroid is within bounds (with tolerance)
-    const inBounds = 
-      cx >= bounds.min[0] - tol && cx <= bounds.max[0] + tol &&
-      cy >= bounds.min[1] - tol && cy <= bounds.max[1] + tol &&
-      cz >= bounds.min[2] - tol && cz <= bounds.max[2] + tol;
-    
-    if (!inBounds) {
-      // Piece centroid is outside bounds - skip it
-      continue;
-    }
+    if (!anyVertexInBounds) continue;
     
     // Check if piece needs clamping (any vertex outside bounds)
     let needsClamping = false;
     for (const v of vertices3D) {
-      if (v[0] < bounds.min[0] - tol || v[0] > bounds.max[0] + tol ||
-          v[1] < bounds.min[1] - tol || v[1] > bounds.max[1] + tol ||
-          v[2] < bounds.min[2] - tol || v[2] > bounds.max[2] + tol) {
+      if (v[0] < bounds.min[0] - boundsTol || v[0] > bounds.max[0] + boundsTol ||
+          v[1] < bounds.min[1] - boundsTol || v[1] > bounds.max[1] + boundsTol ||
+          v[2] < bounds.min[2] - boundsTol || v[2] > bounds.max[2] + boundsTol) {
         needsClamping = true;
         break;
       }
     }
     
     if (!needsClamping) {
-      // Piece is entirely within bounds - keep as is
       result.push(piece);
       continue;
     }
     
-    // Clamp vertices to bounds
+    // Clamp vertices to EXACT bounds (not bounds ± tolerance)
+    // This ensures we don't create vertices like 10.001 or -0.001
     const clamped3D = vertices3D.map(v => ([
-      Math.min(Math.max(v[0], bounds.min[0] - tol), bounds.max[0] + tol),
-      Math.min(Math.max(v[1], bounds.min[1] - tol), bounds.max[1] + tol),
-      Math.min(Math.max(v[2], bounds.min[2] - tol), bounds.max[2] + tol),
+      Math.min(Math.max(v[0], bounds.min[0]), bounds.max[0]),
+      Math.min(Math.max(v[1], bounds.min[1]), bounds.max[1]),
+      Math.min(Math.max(v[2], bounds.min[2]), bounds.max[2]),
     ] as [number, number, number]));
     
-    const clamped2D = clamped3D.map(p => projectToPlane2D(p, piece.surface));
+    // Deduplicate vertices that collapsed to the same position after clamping
+    const deduped3D: [number, number, number][] = [];
+    const seen = new Set<string>();
+    for (const v of clamped3D) {
+      const key = `${v[0].toFixed(6)},${v[1].toFixed(6)},${v[2].toFixed(6)}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduped3D.push(v);
+      }
+    }
+    
+    if (deduped3D.length < 3) continue;
+    
+    const clamped2D = deduped3D.map(p => projectToPlane2D(p, piece.surface));
     const area = computePolygonArea(clamped2D);
     
-    if (area <= tol * tol) continue;
+    if (area <= boundsTol * boundsTol) continue;
     
     result.push({
       ...piece,
@@ -308,4 +390,49 @@ function computePolygonArea(polygon: readonly [number, number][]): number {
     area -= polygon[j][0] * polygon[i][1];
   }
   return Math.abs(area) / 2;
+}
+
+/**
+ * Point-in-polygon test for Vec2
+ */
+function pointInPolygon2D(point: Vec2, polygon: Vec2[]): boolean {
+  const n = polygon.length;
+  let inside = false;
+  
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygon[i][0], yi = polygon[i][1];
+    const xj = polygon[j][0], yj = polygon[j][1];
+    
+    if (((yi > point[1]) !== (yj > point[1])) &&
+        (point[0] < (xj - xi) * (point[1] - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  
+  return inside;
+}
+
+/**
+ * Check if two line segments intersect (proper intersection, not just touching)
+ */
+function segmentsIntersect(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2): boolean {
+  const d1 = cross2D(b1, b2, a1);
+  const d2 = cross2D(b1, b2, a2);
+  const d3 = cross2D(a1, a2, b1);
+  const d4 = cross2D(a1, a2, b2);
+  
+  // Proper intersection: points are on opposite sides of each line
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+      ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Cross product for 2D orientation test: (b - o) × (c - o)
+ */
+function cross2D(o: Vec2, a: Vec2, b: Vec2): number {
+  return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 }

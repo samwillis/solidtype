@@ -69,20 +69,24 @@ export interface DCELStructure {
  * 
  * Steps:
  * 1. Split all segments at intersection points
- * 2. Build vertices and half-edges
- * 3. Sort outgoing edges around each vertex
- * 4. Set next/prev pointers using "turn-left" rule
- * 5. Extract faces
+ * 2. Filter degenerate and duplicate segments
+ * 3. Build vertices and half-edges
+ * 4. Sort outgoing edges around each vertex
+ * 5. Set next/prev pointers using "turn-left" rule
+ * 6. Extract faces
  */
 export function buildDCEL(segments: Segment2D[], tolerance: number = 1e-8): DCELStructure {
   // Step 1: Split segments at intersections
   const splitSegments = splitAllSegments(segments, tolerance);
   
+  // Step 1.5: Filter degenerate segments (near-zero length) and deduplicate
+  const cleanedSegments = filterDegenerateAndDuplicateSegments(splitSegments, tolerance);
+  
   // Step 2: Build vertices
-  const { vertices, vertexMap } = buildVertices(splitSegments, tolerance);
+  const { vertices, vertexMap } = buildVertices(cleanedSegments, tolerance);
   
   // Step 3: Build half-edges
-  const halfEdges = buildHalfEdges(splitSegments, vertexMap, tolerance);
+  const halfEdges = buildHalfEdges(cleanedSegments, vertexMap, tolerance);
   
   // Step 4: Populate outgoing edges for each vertex
   populateOutgoing(vertices, halfEdges);
@@ -97,6 +101,47 @@ export function buildDCEL(segments: Segment2D[], tolerance: number = 1e-8): DCEL
   const faces = extractFaces(halfEdges, vertices);
   
   return { vertices, halfEdges, faces };
+}
+
+/**
+ * Filter out degenerate segments (near-zero length) and duplicate segments
+ */
+function filterDegenerateAndDuplicateSegments(
+  segments: Segment2D[],
+  tolerance: number
+): Segment2D[] {
+  const seen = new Set<string>();
+  const result: Segment2D[] = [];
+  
+  // Round coordinates for consistent comparison
+  const snap = (v: number) => Math.round(v / tolerance) * tolerance;
+  
+  for (const seg of segments) {
+    const ax = snap(seg.a[0]);
+    const ay = snap(seg.a[1]);
+    const bx = snap(seg.b[0]);
+    const by = snap(seg.b[1]);
+    
+    // Skip degenerate segments
+    if (ax === bx && ay === by) continue;
+    
+    // Check segment length
+    const dx = seg.b[0] - seg.a[0];
+    const dy = seg.b[1] - seg.a[1];
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < tolerance * 2) continue;
+    
+    // Create canonical key (direction-independent)
+    const k1 = `${ax},${ay}|${bx},${by}`;
+    const k2 = `${bx},${by}|${ax},${ay}`;
+    const key = k1 < k2 ? k1 : k2;
+    
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(seg);
+  }
+  
+  return result;
 }
 
 /**
@@ -390,8 +435,9 @@ function extractFaces(halfEdges: HalfEdge[], vertices: Vertex[]): Face[] {
     
     if (cycle.length < 3) continue;
     
-    // Compute signed area to determine if outer or hole
-    const area = computeCycleSignedArea(cycle, halfEdges, vertices);
+    // Compute signed area to determine if outer or hole (reserved for future use)
+    // The area computation is used for winding order but not returned currently
+    void computeCycleSignedArea(cycle, halfEdges, vertices);
     
     const face: Face = {
       id: faces.length,
@@ -437,11 +483,12 @@ function computeCycleSignedArea(
 }
 
 /**
- * Extract polygon vertices for a face cycle
+ * Extract polygon vertices for a face cycle, skipping consecutive duplicates
  */
 export function getCyclePolygon(
   dcel: DCELStructure,
-  startHalfEdge: number
+  startHalfEdge: number,
+  tolerance: number = 1e-8
 ): Vec2[] {
   const polygon: Vec2[] = [];
   let current = startHalfEdge;
@@ -451,10 +498,35 @@ export function getCyclePolygon(
   do {
     const he = dcel.halfEdges[current];
     const v = dcel.vertices[he.origin];
-    polygon.push([v.pos[0], v.pos[1]]);
+    const pos: Vec2 = [v.pos[0], v.pos[1]];
+    
+    // Skip if this vertex is the same as the last one
+    if (polygon.length > 0) {
+      const last = polygon[polygon.length - 1];
+      const dx = Math.abs(pos[0] - last[0]);
+      const dy = Math.abs(pos[1] - last[1]);
+      if (dx <= tolerance && dy <= tolerance) {
+        current = he.next;
+        iterations++;
+        continue;
+      }
+    }
+    
+    polygon.push(pos);
     current = he.next;
     iterations++;
   } while (current !== startHalfEdge && current !== -1 && iterations < maxIterations);
+  
+  // Also check if first and last are duplicates
+  if (polygon.length > 1) {
+    const first = polygon[0];
+    const last = polygon[polygon.length - 1];
+    const dx = Math.abs(first[0] - last[0]);
+    const dy = Math.abs(first[1] - last[1]);
+    if (dx <= tolerance && dy <= tolerance) {
+      polygon.pop();
+    }
+  }
   
   return polygon;
 }

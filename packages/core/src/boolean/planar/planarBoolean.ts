@@ -294,7 +294,7 @@ export function imprintFaceAndExtractPieces(
   const dcel = buildDCEL(segments, tolerance);
   
   // Collect all bounded face polygons with their areas
-  const faceData: { polygon: Vec2[]; area: number; centroid: Vec2 }[] = [];
+  const faceData: { polygon: Vec2[]; area: number; centroid: Vec2; isOriginal: boolean }[] = [];
   
   // Compute bounding box of original face for validation
   const originalBounds = computePolygonBounds(polygon.outer);
@@ -304,9 +304,25 @@ export function imprintFaceAndExtractPieces(
     if (face.isUnbounded) continue;
     if (face.outerComponent === -1) continue;
     
-    let facePolygon = getCyclePolygon(dcel, face.outerComponent);
-    facePolygon = sanitizePolygon(facePolygon, tolerance);
+    // Use a larger tolerance for vertex deduplication to catch near-duplicates
+    const extractTol = Math.max(tolerance * 1000, 1e-6);
+    let facePolygon = getCyclePolygon(dcel, face.outerComponent, extractTol);
+    facePolygon = sanitizePolygon(facePolygon, extractTol);
     if (facePolygon.length < 3) continue;
+    
+    // Validate: check for any duplicate vertices (degenerate cycle detection)
+    // Use extractTol for consistent tolerance with getCyclePolygon
+    const vertexKeys = new Set<string>();
+    let hasDuplicates = false;
+    for (const p of facePolygon) {
+      const key = `${Math.round(p[0] / extractTol) * extractTol},${Math.round(p[1] / extractTol) * extractTol}`;
+      if (vertexKeys.has(key)) {
+        hasDuplicates = true;
+        break;
+      }
+      vertexKeys.add(key);
+    }
+    if (hasDuplicates) continue; // Skip degenerate cycles
     
     const area = polygonSignedArea(facePolygon);
     if (Math.abs(area) < tolerance * tolerance) continue;
@@ -365,23 +381,43 @@ export function imprintFaceAndExtractPieces(
     }];
   }
   
-  // Deduplicate faces with same centroid AND same area magnitude (keep the one with positive area)
-  const centroidKey = (c: Vec2, area: number) => 
-    `${Math.round(c[0] / tolerance) * tolerance},${Math.round(c[1] / tolerance) * tolerance},${Math.round(Math.abs(area) / tolerance) * tolerance}`;
-  const centroidMap = new Map<string, typeof faceData[0]>();
-  for (const fd of faceData) {
-    const key = centroidKey(fd.centroid, fd.area);
-    if (!centroidMap.has(key)) {
-      centroidMap.set(key, fd);
+  // Filter out faces with repeated vertices (degenerate cycles)
+  const validFaceData = faceData.filter(fd => {
+    const seen = new Set<string>();
+    for (const p of fd.polygon) {
+      const key = `${Math.round(p[0] / tolerance) * tolerance},${Math.round(p[1] / tolerance) * tolerance}`;
+      if (seen.has(key)) return false; // Duplicate vertex detected
+      seen.add(key);
+    }
+    return true;
+  });
+  
+  // Deduplicate faces by vertex set (not just centroid) - keeps the one with proper CCW winding
+  const vertexSetKey = (polygon: Vec2[]): string => {
+    // Create a sorted, unique set of vertex keys
+    const keys = polygon.map(p => 
+      `${Math.round(p[0] / tolerance) * tolerance},${Math.round(p[1] / tolerance) * tolerance}`
+    );
+    return [...new Set(keys)].sort().join('|');
+  };
+  
+  const vertexSetMap = new Map<string, typeof faceData[0]>();
+  for (const fd of validFaceData) {
+    const key = vertexSetKey(fd.polygon);
+    if (!vertexSetMap.has(key)) {
+      vertexSetMap.set(key, fd);
     } else {
-      // Keep the one with positive area (proper CCW winding)
-      const existing = centroidMap.get(key)!;
-      if (fd.area > 0 && existing.area < 0) {
-        centroidMap.set(key, fd);
+      // Keep the one with positive area (proper CCW winding) and more vertices
+      const existing = vertexSetMap.get(key)!;
+      const preferNew = 
+        (fd.area > 0 && existing.area < 0) ||
+        (fd.area > 0 && existing.area > 0 && fd.polygon.length < existing.polygon.length);
+      if (preferNew) {
+        vertexSetMap.set(key, fd);
       }
     }
   }
-  const dedupedFaceData = Array.from(centroidMap.values());
+  const dedupedFaceData = Array.from(vertexSetMap.values());
   
   // Check if we have the original face (same area as original within tolerance)
   const originalArea = Math.abs(polygonSignedArea(polygon.outer));
@@ -520,36 +556,58 @@ function computePolygonCentroid2D(polygon: Vec2[]): Vec2 {
 
 /**
  * Remove consecutive duplicate or collinear points to simplify polygons.
+ * Uses a more relaxed tolerance for duplicates to catch near-duplicate vertices.
  */
 function sanitizePolygon(poly: Vec2[], tol: number): Vec2[] {
+  if (poly.length < 3) return [];
+  
+  // Use a slightly larger tolerance for deduplication to catch near-duplicates
+  const dedupTol = Math.max(tol * 10, 1e-9);
+  
   const dedup: Vec2[] = [];
   for (let i = 0; i < poly.length; i++) {
     const p = poly[i];
     const prev = dedup[dedup.length - 1];
-    if (!prev || (Math.abs(p[0] - prev[0]) > tol || Math.abs(p[1] - prev[1]) > tol)) {
+    if (!prev) {
       dedup.push([p[0], p[1]]);
+    } else {
+      const dx = Math.abs(p[0] - prev[0]);
+      const dy = Math.abs(p[1] - prev[1]);
+      if (dx > dedupTol || dy > dedupTol) {
+        dedup.push([p[0], p[1]]);
+      }
     }
   }
-  // Close if needed
-  if (dedup.length > 1) {
+  
+  // Check first and last for duplicates (close the polygon)
+  while (dedup.length > 1) {
     const first = dedup[0];
     const last = dedup[dedup.length - 1];
-    if (Math.abs(first[0] - last[0]) < tol && Math.abs(first[1] - last[1]) < tol) {
+    const dx = Math.abs(first[0] - last[0]);
+    const dy = Math.abs(first[1] - last[1]);
+    if (dx <= dedupTol && dy <= dedupTol) {
       dedup.pop();
+    } else {
+      break;
     }
   }
-  // Remove collinear points
+  
+  if (dedup.length < 3) return [];
+  
+  // Remove collinear points (with a slightly relaxed tolerance)
+  const collinearTol = Math.max(tol * tol * 10, 1e-16);
   const cleaned: Vec2[] = [];
   for (let i = 0; i < dedup.length; i++) {
     const a = dedup[(i - 1 + dedup.length) % dedup.length];
     const b = dedup[i];
     const c = dedup[(i + 1) % dedup.length];
     const cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
-    if (Math.abs(cross) > tol * tol) {
+    if (Math.abs(cross) > collinearTol) {
       cleaned.push(b);
     }
   }
-  return cleaned;
+  
+  return cleaned.length >= 3 ? cleaned : [];
 }
 
 /**
@@ -562,7 +620,9 @@ function extractIntersectionPolygons(segments: Segment2D[], tolerance: number): 
   const polys: Vec2[][] = [];
   for (const face of dcel.faces) {
     if (face.outerComponent === -1) continue;
-    const poly = sanitizePolygon(getCyclePolygon(dcel, face.outerComponent), tolerance);
+    // Use a larger tolerance for vertex deduplication  
+    const extractTol2 = Math.max(tolerance * 1000, 1e-6);
+    const poly = sanitizePolygon(getCyclePolygon(dcel, face.outerComponent, extractTol2), extractTol2);
     if (poly.length < 3) continue;
     const area = polygonSignedArea(poly);
     if (Math.abs(area) < tolerance * tolerance) continue;

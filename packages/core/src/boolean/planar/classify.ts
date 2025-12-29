@@ -66,20 +66,49 @@ export function classifyPiece(
   // If centroid is clearly inside or outside, use that
   // If mixed or boundary, use 'on_same' for boundary handling
   
-  if (insideHits > 0 && outsideHits === 0 && boundaryHits === 0) {
-    return 'inside';
+  let result: PieceClassification;
+  
+  // Classification strategy using majority voting:
+  // - Use the centroid as the primary classification signal
+  // - If centroid is clear (inside or outside), use that
+  // - If centroid is on boundary, use majority of other points
+  // - Treat boundary-heavy cases as on_same
+  
+  // Check centroid first (first sample point)
+  const centroidPt = samplePoints3D[0];
+  const centroidPos = add3(centroidPt, mul3(normal, testOffset));
+  const centroidNeg = add3(centroidPt, mul3(normal, -testOffset));
+  const centroidInPos = isPointInsideBody(centroidPos, otherBody, model, ctx);
+  const centroidInNeg = isPointInsideBody(centroidNeg, otherBody, model, ctx);
+  
+  const centroidIsInside = centroidInPos && centroidInNeg;
+  const centroidIsOutside = !centroidInPos && !centroidInNeg;
+  
+  if (centroidIsInside) {
+    result = 'inside';
+  } else if (centroidIsOutside) {
+    result = 'outside';
+  } else {
+    // Centroid is on boundary - use majority of all points
+    const totalPoints = insideHits + outsideHits + boundaryHits;
+    if (insideHits > totalPoints / 2) {
+      result = 'inside';
+    } else if (outsideHits > totalPoints / 2) {
+      result = 'outside';
+    } else {
+      // No clear majority - truly on boundary
+      result = 'on_same';
+    }
   }
-  if (outsideHits > 0 && insideHits === 0 && boundaryHits === 0) {
-    return 'outside';
-  }
-  // Mixed results -> treat as boundary
-  return 'on_same';
+  
+  return result;
 }
 
 /**
  * Check if there's a coplanar face of the body at the given location
+ * Reserved for future use in advanced coplanar face classification.
  */
-function findCoplanarFace(
+export function _findCoplanarFace(
   point: Vec3,
   normal: Vec3,
   bodyId: BodyId,
@@ -141,7 +170,7 @@ function findCoplanarFace(
  * For faces without holes, just return the centroid.
  * For faces with holes, find a point on the outer boundary that's not in any hole.
  */
-function findPointOnFaceMaterial(piece: FacePiece): Vec2 {
+export function _findPointOnFaceMaterial(piece: FacePiece): Vec2 {
   const centroid = computePolygonCentroid(piece.polygon);
   
   // If no holes, centroid is fine

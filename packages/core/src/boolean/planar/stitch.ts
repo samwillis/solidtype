@@ -10,7 +10,7 @@
 
 import type { Vec2 } from '../../num/vec2.js';
 import type { Vec3 } from '../../num/vec3.js';
-import { mul3 } from '../../num/vec3.js';
+// mul3 removed - no longer needed after simplifying flip logic
 import type { NumericContext } from '../../num/tolerance.js';
 import type { TopoModel } from '../../topo/TopoModel.js';
 import type { BodyId, ShellId, FaceId, LoopId, VertexId, EdgeId, HalfEdgeId } from '../../topo/handles.js';
@@ -59,110 +59,260 @@ export function stitchPieces(
   const vertexMap = new Map<string, VertexId>();
   
   function getOrCreateVertex(pos: Vec3): VertexId {
-    const tol = ctx.tol.length;
+    // Use a consistent tolerance with createLoopFromPolygon to ensure 
+    // positions considered "same" during loop deduplication get the same vertex ID
+    const baseTol = ctx.tol.length;
+    const tol = Math.max(baseTol * 1000, 1e-6);
     const key = `${Math.round(pos[0] / tol) * tol},${Math.round(pos[1] / tol) * tol},${Math.round(pos[2] / tol) * tol}`;
-    
+
     if (vertexMap.has(key)) {
       return vertexMap.get(key)!;
     }
-    
+
     const vid = model.addVertex(pos[0], pos[1], pos[2]);
     vertexMap.set(key, vid);
     return vid;
   }
   
-  // Deduplicate identical coplanar pieces (exact matches, orientation-sensitive)
-  const faceKeyMap = new Map<string, true>();
+  // Deduplicate pieces using 3D geometry (more robust than 2D)
   const tol = ctx.tol.length;
-  const snap = (v: number) => Math.round(v / tol) * tol;
-  const normalizeLoop = (loop: Vec2[]): string => {
-    const forward = loop.map(p => `${snap(p[0])},${snap(p[1])}`).join(';');
-    const reverse = loop.slice().reverse().map(p => `${snap(p[0])},${snap(p[1])}`).join(';');
-    return forward < reverse ? forward : reverse;
+  const faceKeyMap = new Map<string, true>();
+  
+  // Use larger tolerance for robust snapping
+  const keyTol = Math.max(tol * 1000, 1e-6);
+  const snap = (v: number) => Math.round(v / keyTol) * keyTol;
+  
+  // Create a 3D-based key that ignores duplicates and ordering
+  const piece3DKey = (piece: FacePiece): string => {
+    const vertices3D = piece.polygon.map(v => unprojectFromPlane(v, piece.surface));
+    // Get unique vertex keys (deduplicate)
+    const uniqueKeys = new Set<string>();
+    for (const v of vertices3D) {
+      uniqueKeys.add(`${snap(v[0])},${snap(v[1])},${snap(v[2])}`);
+    }
+    // Sort for order-independence
+    const sortedKeys = Array.from(uniqueKeys).sort();
+    // Include normal for orientation
+    const n = piece.surface.normal;
+    const normalKey = `${snap(n[0])},${snap(n[1])},${snap(n[2])}`;
+    return `${normalKey}|${sortedKeys.join(';')}`;
   };
-  const pieceKey = (piece: FacePiece): string => {
-    const surf = piece.surface;
-    const surfKey = `${snap(surf.origin[0])},${snap(surf.origin[1])},${snap(surf.origin[2])}|${snap(surf.normal[0])},${snap(surf.normal[1])},${snap(surf.normal[2])}`;
-    const outer = normalizeLoop(piece.polygon);
-    const holes = piece.holes.map(normalizeLoop).sort().join('|');
-    return `${surfKey}|${outer}|${holes}`;
-  };
+  
   const seen = (piece: FacePiece): boolean => {
-    const k = pieceKey(piece);
+    const k = piece3DKey(piece);
     if (faceKeyMap.has(k)) return true;
     faceKeyMap.set(k, true);
     return false;
   };
 
+  // Helper snaps using the same tolerance as key generation
+  const snap2D = snap;
+  const snap3D = snap;
+  
+  const has3DDuplicates = (piece: FacePiece): boolean => {
+    const vertices3D = piece.polygon.map(v => unprojectFromPlane(v, piece.surface));
+    const seen3D = new Set<string>();
+    for (const v of vertices3D) {
+      const key = `${snap3D(v[0])},${snap3D(v[1])},${snap3D(v[2])}`;
+      if (seen3D.has(key)) return true;
+      seen3D.add(key);
+    }
+    return false;
+  };
+  
+  // Check if piece has fewer than 4 unique 3D vertices (for quads) or fewer than its polygon size
+  // This catches pieces where 2D vertices map to the same 3D position
+  const hasReducedUniqueVertices = (piece: FacePiece): boolean => {
+    const vertices3D = piece.polygon.map(v => unprojectFromPlane(v, piece.surface));
+    const seen3D = new Set<string>();
+    for (const v of vertices3D) {
+      seen3D.add(`${snap3D(v[0])},${snap3D(v[1])},${snap3D(v[2])}`);
+    }
+    // If unique count is less than polygon size, we have duplicates
+    return seen3D.size < piece.polygon.length;
+  };
+  
+  // Helper to check for consecutive duplicate 2D vertices
+  const hasConsecutive2DDuplicates = (piece: FacePiece): boolean => {
+    for (let i = 0; i < piece.polygon.length; i++) {
+      const curr = piece.polygon[i];
+      const next = piece.polygon[(i + 1) % piece.polygon.length];
+      if (snap2D(curr[0]) === snap2D(next[0]) && snap2D(curr[1]) === snap2D(next[1])) {
+        return true;
+      }
+    }
+    return false;
+  };
+  
   // Add faces from A
   for (const piece of selected.fromA) {
-    // Validate polygon has at least 3 vertices
-    if (piece.polygon.length < 3) {
-      console.warn(`[Boolean] Skipping degenerate A piece with ${piece.polygon.length} vertices`);
-      continue;
-    }
+    if (piece.polygon.length < 3) continue;
+    if (hasConsecutive2DDuplicates(piece)) continue;
+    if (has3DDuplicates(piece)) continue;
+    if (hasReducedUniqueVertices(piece)) continue;
     if (seen(piece)) continue;
-    const faceId = addPieceAsFace(model, piece, shell, false, getOrCreateVertex);
-    faces.push(faceId);
-    facesFromA.push({ newFace: faceId, sourceFace: piece.sourceFace });
+    try {
+      const faceId = addPieceAsFace(model, piece, shell, false, getOrCreateVertex, keyTol);
+      faces.push(faceId);
+      facesFromA.push({ newFace: faceId, sourceFace: piece.sourceFace });
+    } catch (e) {
+      // Skip degenerate pieces
+    }
   }
   
   // Add faces from B (possibly flipped)
   for (const piece of selected.fromB) {
-    // Validate polygon has at least 3 vertices
-    if (piece.polygon.length < 3) {
-      console.warn(`[Boolean] Skipping degenerate B piece with ${piece.polygon.length} vertices`);
-      continue;
-    }
+    if (piece.polygon.length < 3) continue;
+    if (hasConsecutive2DDuplicates(piece)) continue;
+    if (has3DDuplicates(piece)) continue;
+    if (hasReducedUniqueVertices(piece)) continue;
     if (seen(piece)) continue;
-    const faceId = addPieceAsFace(model, piece, shell, selected.flipB, getOrCreateVertex);
-    faces.push(faceId);
-    facesFromB.push({ newFace: faceId, sourceFace: piece.sourceFace });
+    try {
+      const faceId = addPieceAsFace(model, piece, shell, selected.flipB, getOrCreateVertex, keyTol);
+      faces.push(faceId);
+      facesFromB.push({ newFace: faceId, sourceFace: piece.sourceFace });
+    } catch (e) {
+      // Skip degenerate pieces
+    }
   }
   
   // Setup twin half-edges by matching edge endpoints
   setupTwinsByPosition(model, ctx);
   
-  return { body, shell, faces, facesFromA, facesFromB };
+  // Post-process: remove faces that have duplicate vertices in their loops
+  // This catches degenerate faces that weren't filtered at the piece level
+  const validFaces: FaceId[] = [];
+  const validFacesFromA: { newFace: FaceId; sourceFace: FaceId }[] = [];
+  const validFacesFromB: { newFace: FaceId; sourceFace: FaceId }[] = [];
+  const facesToRemove: FaceId[] = [];
+  
+  for (let i = 0; i < faces.length; i++) {
+    const faceId = faces[i];
+    const loops = model.getFaceLoops(faceId);
+    if (loops.length === 0) {
+      facesToRemove.push(faceId);
+      continue;
+    }
+    
+    // Check if the outer loop has duplicate vertices
+    let hasLoopDuplicates = false;
+    const vertices: Vec3[] = [];
+    for (const he of model.iterateLoopHalfEdges(loops[0])) {
+      const vertex = model.getHalfEdgeStartVertex(he);
+      const pos = model.getVertexPosition(vertex);
+      vertices.push(pos);
+    }
+    
+    // Check for any duplicates (using the key tolerance)
+    const seenKeys = new Set<string>();
+    for (const v of vertices) {
+      const key = `${snap(v[0])},${snap(v[1])},${snap(v[2])}`;
+      if (seenKeys.has(key)) {
+        hasLoopDuplicates = true;
+        break;
+      }
+      seenKeys.add(key);
+    }
+    
+    if (hasLoopDuplicates) {
+      facesToRemove.push(faceId);
+    } else {
+      validFaces.push(faceId);
+      const fromA = facesFromA.find(f => f.newFace === faceId);
+      if (fromA) validFacesFromA.push(fromA);
+      const fromB = facesFromB.find(f => f.newFace === faceId);
+      if (fromB) validFacesFromB.push(fromB);
+    }
+  }
+  
+  // Remove degenerate faces from the shell
+  for (const faceId of facesToRemove) {
+    model.removeFaceFromShell(faceId);
+  }
+  
+  return { body, shell, faces: validFaces, facesFromA: validFacesFromA, facesFromB: validFacesFromB };
+}
+
+/**
+ * Clean a 2D polygon by removing consecutive duplicates and collinear points
+ */
+function cleanPolygon2D(polygon: Vec2[], tol: number): Vec2[] {
+  if (polygon.length < 3) return [];
+  
+  // Remove consecutive duplicates
+  const deduped: Vec2[] = [];
+  for (let i = 0; i < polygon.length; i++) {
+    const p = polygon[i];
+    if (deduped.length === 0) {
+      deduped.push(p);
+    } else {
+      const last = deduped[deduped.length - 1];
+      const dx = Math.abs(p[0] - last[0]);
+      const dy = Math.abs(p[1] - last[1]);
+      if (dx > tol || dy > tol) {
+        deduped.push(p);
+      }
+    }
+  }
+  
+  // Check first and last
+  while (deduped.length > 1) {
+    const first = deduped[0];
+    const last = deduped[deduped.length - 1];
+    const dx = Math.abs(first[0] - last[0]);
+    const dy = Math.abs(first[1] - last[1]);
+    if (dx <= tol && dy <= tol) {
+      deduped.pop();
+    } else {
+      break;
+    }
+  }
+  
+  return deduped.length >= 3 ? deduped : [];
 }
 
 /**
  * Add a face piece as a new face in the model
+ * 
+ * When flip=true (for subtract operations), we need to reverse the face orientation.
+ * Instead of manually flipping the surface normal and reversing the polygon (which
+ * can cause winding issues due to coordinate system handedness), we use the face's
+ * `reversed` flag. This tells the tessellation to flip normals and triangle winding.
  */
 function addPieceAsFace(
   model: TopoModel,
   piece: FacePiece,
   shell: ShellId,
   flip: boolean,
-  getOrCreateVertex: (pos: Vec3) => VertexId
+  getOrCreateVertex: (pos: Vec3) => VertexId,
+  tolerance: number
 ): FaceId {
-  // Create surface (possibly flipped)
-  let normal = piece.surface.normal;
-  let xDir = piece.surface.xDir;
-  let yDir = piece.surface.yDir;
-  
-  if (flip) {
-    normal = mul3(normal, -1);
-    // Keep xDir, flip yDir to maintain right-hand rule
-    yDir = mul3(yDir, -1);
-  }
-  
-  const surface = createPlaneSurface(piece.surface.origin, normal, xDir);
+  // Use the original surface - the reversed flag handles orientation
+  const surface = createPlaneSurface(
+    piece.surface.origin, 
+    piece.surface.normal, 
+    piece.surface.xDir
+  );
   const surfaceIdx = model.addSurface(surface);
   
-  // Create face
-  const face = model.addFace(surfaceIdx, false);
+  // Create face with reversed flag if flipping
+  // The reversed flag tells tessellation to flip normals and triangle winding
+  const face = model.addFace(surfaceIdx, flip);
   
-  // Create outer loop
-  const polygon = flip ? piece.polygon.slice().reverse() : piece.polygon;
-  const outerLoop = createLoopFromPolygon(model, polygon, piece.surface, getOrCreateVertex);
+  // Use the original polygon (no reversal needed - reversed flag handles winding)
+  let polygon = cleanPolygon2D(piece.polygon, tolerance);
+  if (polygon.length < 3) {
+    throw new Error('Degenerate polygon after cleanup');
+  }
+  const outerLoop = createLoopFromPolygon(model, polygon, piece.surface, getOrCreateVertex, tolerance);
   model.addLoopToFace(face, outerLoop);
   
   // Create inner loops (holes)
+  // Holes normally have opposite winding, but with reversed flag, keep original winding
   for (const hole of piece.holes) {
-    // Holes have opposite winding
-    const holePolygon = flip ? hole : hole.slice().reverse();
-    const holeLoop = createLoopFromPolygon(model, holePolygon, piece.surface, getOrCreateVertex);
+    let holePolygon = cleanPolygon2D(hole, tolerance);
+    if (holePolygon.length < 3) continue; // Skip degenerate holes
+    const holeLoop = createLoopFromPolygon(model, holePolygon, piece.surface, getOrCreateVertex, tolerance);
     model.addLoopToFace(face, holeLoop);
   }
   
@@ -171,30 +321,94 @@ function addPieceAsFace(
 }
 
 /**
- * Create a loop from a 2D polygon
+ * Create a loop from a 2D polygon, filtering degenerate edges
  */
 function createLoopFromPolygon(
   model: TopoModel,
   polygon: Vec2[],
   surface: PlaneSurface,
-  getOrCreateVertex: (pos: Vec3) => VertexId
+  getOrCreateVertex: (pos: Vec3) => VertexId,
+  tolerance?: number
 ): LoopId {
-  const n = polygon.length;
-  const vertices: VertexId[] = [];
+  const baseTol = tolerance ?? 1e-8;
+  // Use a larger tolerance for position comparison to catch near-duplicates
+  const tol = Math.max(baseTol * 1000, 1e-6);
   
-  // Create/reuse vertices
+  // First, create 3D positions and filter duplicates at the 3D level
+  const positions3d: Vec3[] = [];
+  const snap = (v: number) => Math.round(v / tol) * tol;
+  
   for (const uv of polygon) {
     const pos3d = unprojectFromPlane(uv, surface);
-    vertices.push(getOrCreateVertex(pos3d));
+    
+    // Check if this position is a duplicate of the previous one (using tolerance)
+    if (positions3d.length > 0) {
+      const prev = positions3d[positions3d.length - 1];
+      const sameX = snap(pos3d[0]) === snap(prev[0]);
+      const sameY = snap(pos3d[1]) === snap(prev[1]);
+      const sameZ = snap(pos3d[2]) === snap(prev[2]);
+      if (sameX && sameY && sameZ) {
+        continue; // Skip duplicate
+      }
+    }
+    positions3d.push(pos3d);
   }
   
-  // Create edges and half-edges
+  // Check first and last for duplicates
+  while (positions3d.length > 1) {
+    const first = positions3d[0];
+    const last = positions3d[positions3d.length - 1];
+    const sameX = snap(first[0]) === snap(last[0]);
+    const sameY = snap(first[1]) === snap(last[1]);
+    const sameZ = snap(first[2]) === snap(last[2]);
+    if (sameX && sameY && sameZ) {
+      positions3d.pop();
+    } else {
+      break;
+    }
+  }
+  
+  // Need at least 3 vertices for a valid loop
+  if (positions3d.length < 3) {
+    throw new Error(`Degenerate loop with only ${positions3d.length} unique 3D positions`);
+  }
+  
+  // Now create vertices
+  const vertices: VertexId[] = positions3d.map(pos => getOrCreateVertex(pos));
+  
+  // Filter out any remaining consecutive duplicates by vertex ID
+  const uniqueVertices: VertexId[] = [];
+  for (const v of vertices) {
+    const prev = uniqueVertices[uniqueVertices.length - 1];
+    if (prev === undefined || prev !== v) {
+      uniqueVertices.push(v);
+    }
+  }
+  
+  // Check first and last for duplicates by ID
+  while (uniqueVertices.length > 1 && uniqueVertices[0] === uniqueVertices[uniqueVertices.length - 1]) {
+    uniqueVertices.pop();
+  }
+  
+  // Need at least 3 vertices for a valid loop
+  if (uniqueVertices.length < 3) {
+    throw new Error(`Degenerate loop with only ${uniqueVertices.length} unique vertex IDs`);
+  }
+  
+  // Create edges and half-edges, skipping degenerate edges
   const halfEdges: HalfEdgeId[] = [];
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    const edge = model.addEdge(vertices[i], vertices[j]);
+  for (let i = 0; i < uniqueVertices.length; i++) {
+    const j = (i + 1) % uniqueVertices.length;
+    if (uniqueVertices[i] === uniqueVertices[j]) {
+      continue; // Skip degenerate edge
+    }
+    const edge = model.addEdge(uniqueVertices[i], uniqueVertices[j]);
     const he = model.addHalfEdge(edge, 1); // direction +1
     halfEdges.push(he);
+  }
+  
+  if (halfEdges.length < 3) {
+    throw new Error(`Degenerate loop with only ${halfEdges.length} edges`);
   }
   
   return model.addLoop(halfEdges);
