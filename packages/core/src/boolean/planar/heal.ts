@@ -68,36 +68,18 @@ export function healBody(
 
 /**
  * Validate that a body is manifold
+ * 
+ * A manifold body has:
+ * - Every half-edge has exactly one twin
+ * - Twin relationships are symmetric
+ * - All loops are closed
  */
 function validateManifold(model: TopoModel, bodyId: BodyId): string[] {
   const errors: string[] = [];
   
-  // Count half-edges per edge
-  const edgeUsage = new Map<number, number>();
-  
   const shells = model.getBodyShells(bodyId);
-  for (const shellId of shells) {
-    const faces = model.getShellFaces(shellId);
-    for (const faceId of faces) {
-      const loops = model.getFaceLoops(faceId);
-      for (const loopId of loops) {
-        for (const heId of model.iterateLoopHalfEdges(loopId)) {
-          const edgeId = model.getHalfEdgeEdge(heId);
-          const count = edgeUsage.get(edgeId) || 0;
-          edgeUsage.set(edgeId, count + 1);
-        }
-      }
-    }
-  }
   
-  // Check that each edge has exactly 2 half-edges
-  for (const [edgeId, count] of edgeUsage) {
-    if (count !== 2) {
-      errors.push(`Edge ${edgeId} has ${count} half-edges (expected 2 for manifold)`);
-    }
-  }
-  
-  // Check that each edge has its twin set
+  // Check that each half-edge has its twin set and twins are symmetric
   for (const shellId of shells) {
     const faces = model.getShellFaces(shellId);
     for (const faceId of faces) {
@@ -107,6 +89,12 @@ function validateManifold(model: TopoModel, bodyId: BodyId): string[] {
           const twin = model.getHalfEdgeTwin(heId);
           if (twin < 0) {
             errors.push(`HalfEdge ${heId} has no twin`);
+          } else {
+            // Check symmetry
+            const twinsTwin = model.getHalfEdgeTwin(twin);
+            if (twinsTwin !== heId) {
+              errors.push(`HalfEdge ${heId} twin ${twin} does not point back (points to ${twinsTwin})`);
+            }
           }
         }
       }

@@ -121,31 +121,6 @@ export function selectPieces(
       break;
   }
 
-  if (operation === 'intersect' && process.env.VITEST) {
-    const countClasses = (arr: FacePiece[]) =>
-      arr.reduce<Record<string, number>>((acc, p) => {
-        acc[p.classification] = (acc[p.classification] ?? 0) + 1;
-        return acc;
-      }, {});
-    // eslint-disable-next-line no-console
-    console.log('selectPieces(intersect)', {
-      piecesA: piecesA.length,
-      piecesB: piecesB.length,
-      selectedA: fromA.length,
-      selectedB: fromB.length,
-      classesA: countClasses(piecesA),
-      classesB: countClasses(piecesB),
-    });
-    const detail = [...fromA, ...fromB].map(p => ({
-      source: p.sourceBody,
-      classification: p.classification,
-      normal: p.surface.normal.map(v => Number(v.toFixed(3))),
-      verts: p.polygon.length,
-    }));
-    // eslint-disable-next-line no-console
-    console.log('intersect detail', detail);
-  }
-
   if (operation === 'subtract' && boundsA) {
     fromB = filterPiecesByBounds3D(fromB, boundsA, numericCtx);
   }
