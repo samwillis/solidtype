@@ -674,15 +674,13 @@ describe('boolean operations', () => {
     });
 
     it('perpendicular offset cut trims side wall (app repro)', () => {
-      // From user-provided model JSON:
-      // Base sketch on YZ, rectangle y ∈ [-10, 16], z ∈ [-14, 15], extruded +X 10mm.
-      // Tool sketch on XY, rectangle x ∈ [-8, 17], y ∈ [9, 27], extruded +Z 10mm (cut).
-      // Expect: +X side wall of base is trimmed where the cut passes through.
-
-      // Base bounds: x [0,10], y [-10,16], z [-14,15]
-      const base = createBox(model, { center: vec3(5, 3, 0.5), width: 10, depth: 26, height: 29 });
-      // Tool bounds: x [-8,17], y [9,27], z [0,10]
-      const tool = createBox(model, { center: vec3(4.5, 18, 5), width: 25, depth: 18, height: 10 });
+      // From user JSON (latest):
+      // Base sketch on YZ, rectangle: u ∈ [-10, 13] (maps to world Y), v ∈ [-12, 12] (world Z), extruded +X 10mm.
+      // Base bounds: x [0,10], y [-10,13], z [-12,12]
+      const base = createBox(model, { center: vec3(5, 1.5, 0), width: 10, depth: 23, height: 24 });
+      // Tool sketch on XY, rectangle: x ∈ [-8, 21], y ∈ [6, 25], extruded +Z 10mm.
+      // Tool bounds: x [-8,21], y [6,25], z [0,10]
+      const tool = createBox(model, { center: vec3(6.5, 15.5, 5), width: 29, depth: 19, height: 10 });
 
       const result = subtract(model, base, tool);
       expect(result.success).toBe(true);
@@ -707,51 +705,76 @@ describe('boolean operations', () => {
       expect(vertexCount).toBeGreaterThan(4);
     });
 
-    it('perpendicular offset cut trims side wall (SolidSession build)', () => {
+    it('SolidSession pipeline trims side wall (app JSON)', () => {
       const session = new SolidSession();
 
-      // Base sketch on YZ: y ∈ [-10, 16], z ∈ [-14, 15]
+      // Base sketch on YZ
       const sketchBase = session.createSketch(session.getYZPlane());
-      const p1 = sketchBase.addPoint(-10, -14);
-      const p2 = sketchBase.addPoint(16, -14);
-      const p3 = sketchBase.addPoint(16, 15);
-      const p4 = sketchBase.addPoint(-10, 15);
-      sketchBase.addLine(p1, p2);
-      sketchBase.addLine(p2, p3);
-      sketchBase.addLine(p3, p4);
-      sketchBase.addLine(p4, p1);
-
-      const baseExtrude = session.extrudeSketch(sketchBase, {
-        operation: 'add',
-        distance: 10,
-      });
+      const b1 = sketchBase.addPoint(-10, -12);
+      const b2 = sketchBase.addPoint(13, -12);
+      const b3 = sketchBase.addPoint(13, 12);
+      const b4 = sketchBase.addPoint(-10, 12);
+      sketchBase.addLine(b1, b2);
+      sketchBase.addLine(b2, b3);
+      sketchBase.addLine(b3, b4);
+      sketchBase.addLine(b4, b1);
+      const baseExtrude = session.extrudeSketch(sketchBase, { operation: 'add', distance: 10 });
       expect(baseExtrude.success).toBe(true);
       expect(baseExtrude.body).toBeDefined();
       if (!baseExtrude.body) return;
 
-      // Tool sketch on XY: x ∈ [-8, 17], y ∈ [9, 27]
+      // Tool sketch on XY
       const sketchTool = session.createSketch(session.getXYPlane());
-      const q1 = sketchTool.addPoint(-8, 9);
-      const q2 = sketchTool.addPoint(17, 9);
-      const q3 = sketchTool.addPoint(17, 27);
-      const q4 = sketchTool.addPoint(-8, 27);
-      sketchTool.addLine(q1, q2);
-      sketchTool.addLine(q2, q3);
-      sketchTool.addLine(q3, q4);
-      sketchTool.addLine(q4, q1);
+      const t1 = sketchTool.addPoint(-8, 6);
+      const t2 = sketchTool.addPoint(21, 6);
+      const t3 = sketchTool.addPoint(21, 25);
+      const t4 = sketchTool.addPoint(-8, 25);
+      sketchTool.addLine(t1, t2);
+      sketchTool.addLine(t2, t3);
+      sketchTool.addLine(t3, t4);
+      sketchTool.addLine(t4, t1);
+      const toolExtrude = session.extrudeSketch(sketchTool, { operation: 'add', distance: 10 });
+      expect(toolExtrude.success).toBe(true);
+      expect(toolExtrude.body).toBeDefined();
+      if (!toolExtrude.body) return;
 
-      const cutExtrude = session.extrudeSketch(sketchTool, {
-        operation: 'cut',
-        distance: 10,
-        targetBody: baseExtrude.body,
-      });
-      expect(cutExtrude.success).toBe(true);
-      const bodyId = (cutExtrude.body?.id ?? baseExtrude.body?.id) as number | undefined;
-      expect(bodyId).toBeDefined();
-      if (!bodyId) return;
+      // Boolean subtract
+      const boolResult = session.subtract(baseExtrude.body, toolExtrude.body);
+      expect(boolResult.success).toBe(true);
+      expect(boolResult.body).toBeDefined();
+      if (!boolResult.body) return;
 
       const model = session.getModel();
-      const shells = model.getBodyShells(bodyId);
+      const shells = model.getBodyShells(boolResult.body.id as number);
+      expect(shells.length).toBeGreaterThan(0);
+      const faces = model.getShellFaces(shells[0]);
+      const plusXFace = faces.find((f) => {
+        const n = model.getSurface(model.getFaceSurfaceIndex(f)).normal;
+        return Math.abs(n[0] - 1) < 1e-6 && Math.abs(n[1]) < 1e-6 && Math.abs(n[2]) < 1e-6;
+      });
+      expect(plusXFace).toBeDefined();
+      if (!plusXFace) return;
+      const loops = model.getFaceLoops(plusXFace);
+      expect(loops.length).toBeGreaterThan(0);
+      let count = 0;
+      for (const he of model.iterateLoopHalfEdges(loops[0])) {
+        count++;
+      }
+      expect(count).toBeGreaterThan(4);
+    });
+
+    it('perpendicular offset cut trims side wall (app repro variant, wider)', () => {
+      // Base sketch on YZ: y ∈ [-16,16], z ∈ [-15,16], extruded +X 10mm.
+      const base = createBox(model, { center: vec3(5, 0, 0.5), width: 10, depth: 32, height: 31 });
+      // Tool sketch on XY: x ∈ [-10,20], y ∈ [7,28], extruded +Z 10mm.
+      const tool = createBox(model, { center: vec3(5, 17.5, 5), width: 30, depth: 21, height: 10 });
+
+      const result = subtract(model, base, tool);
+      expect(result.success).toBe(true);
+      expect(result.body).toBeDefined();
+      if (!result.body) return;
+
+      const shells = model.getBodyShells(result.body);
       expect(shells.length).toBeGreaterThan(0);
       const faces = model.getShellFaces(shells[0]);
 
@@ -766,7 +789,20 @@ describe('boolean operations', () => {
       expect(loops.length).toBeGreaterThan(0);
       const vertexCount = loopVertexCount(model, loops[0]);
       expect(vertexCount).toBeGreaterThan(4);
+
+      // Ensure trim introduced vertices at expected offsets (y=7 and z=0/10)
+      const verts: number[][] = [];
+      for (const he of model.iterateLoopHalfEdges(loops[0])) {
+        const vId = model.getHalfEdgeStartVertex(he);
+        const pos = model.getVertexPosition(vId);
+        verts.push(pos);
+      }
+      const hasY7 = verts.some((v) => Math.abs(v[1] - 7) < 1e-6);
+      const hasZ0 = verts.some((v) => Math.abs(v[2] - 0) < 1e-6);
+      const hasZ10 = verts.some((v) => Math.abs(v[2] - 10) < 1e-6);
+      expect(hasY7 && hasZ0 && hasZ10).toBe(true);
     });
+
   });
 
   describe('non-axis-aligned planar faces', () => {

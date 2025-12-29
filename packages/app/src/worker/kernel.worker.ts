@@ -66,6 +66,8 @@ self.onunhandledrejection = (event) => {
 };
 
 console.log('[Worker] Kernel worker starting...');
+const WORKER_BUILD_TAG = 'trim-log-2025-01-27';
+console.log('[Worker] Build tag:', WORKER_BUILD_TAG);
 
 // ============================================================================
 // Debug Logging for Test Reproduction
@@ -240,6 +242,87 @@ function logBooleanResult(
     logBodyGeometry(resultBody, session, `Result (${operation})`);
   } else {
     console.log(`[Operation] Boolean ${operation} failed - no result body`);
+  }
+}
+
+function logPlusXFaceLoops(model: TopoModel, bodyId: number, label: string): void {
+  try {
+    const shells = model.getBodyShells(bodyId);
+    if (shells.length === 0) {
+      console.log('[Worker][Debug] trim-check', label, { bodyId, shells: 0 });
+      return;
+    }
+
+    const faces = model.getShellFaces(shells[0]);
+    const counts: number[] = [];
+    const detail: Array<{
+      faceId: number;
+      loops: Array<{
+        loopId: number;
+        vertexCount: number;
+        areaYZ: number;
+        verts: Array<[number, number, number]>;
+      }>;
+    }> = [];
+
+    const signedAreaYZ = (verts: Array<[number, number, number]>): number => {
+      let area = 0;
+      const n = verts.length;
+      for (let i = 0; i < n; i++) {
+        const [, y1, z1] = verts[i];
+        const [, y2, z2] = verts[(i + 1) % n];
+        area += y1 * z2 - y2 * z1;
+      }
+      return 0.5 * area;
+    };
+
+    for (const f of faces) {
+      const surf = model.getSurface(model.getFaceSurfaceIndex(f));
+      if (!surf || surf.kind !== 'plane') continue;
+      const n = surf.normal;
+      const isPlusX = Math.abs(n[0] - 1) < 1e-6 && Math.abs(n[1]) < 1e-6 && Math.abs(n[2]) < 1e-6;
+      if (!isPlusX) continue;
+
+      const loops = model.getFaceLoops(f);
+      if (loops.length === 0) continue;
+
+      const loopDetails: Array<{
+        loopId: number;
+        vertexCount: number;
+        areaYZ: number;
+        verts: Array<[number, number, number]>;
+      }> = [];
+
+      for (const loopId of loops) {
+        const verts: Array<[number, number, number]> = [];
+        for (const he of model.iterateLoopHalfEdges(loopId)) {
+          const vId = model.getHalfEdgeStartVertex(he);
+          const pos = model.getVertexPosition(
+            vId as Parameters<typeof model.getVertexPosition>[0]
+          );
+          verts.push([pos[0], pos[1], pos[2]]);
+        }
+        loopDetails.push({
+          loopId: loopId as number,
+          vertexCount: verts.length,
+          areaYZ: signedAreaYZ(verts),
+          verts,
+        });
+        counts.push(verts.length);
+      }
+
+      detail.push({
+        faceId: f as number,
+        loops: loopDetails,
+      });
+    }
+
+    console.log('[Worker][Debug] trim-check', label, { bodyId, plusXLoops: counts });
+    if (detail.length > 0) {
+      console.log('[Worker][Debug] trim-check detail', label, detail);
+    }
+  } catch (err) {
+    console.warn('[Worker][Debug] trim-check failed', err);
   }
 }
 
@@ -1097,6 +1180,8 @@ function interpretExtrude(
       if (boolResult.success && boolResult.body) {
         // Log result for test reproduction
         logBooleanResult(boolResult.body, 'subtract', session);
+        // Quick trim check on +X face
+        logPlusXFaceLoops(session.getModel(), boolResult.body.id as number, `subtract:${existingId}`);
         
         bodyMap.set(existingId, { ...entry, body: boolResult.body });
         anySuccess = true;

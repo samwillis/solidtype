@@ -15,7 +15,7 @@ import { TopoModel } from '../topo/TopoModel.js';
 import type { FaceId, LoopId } from '../topo/handles.js';
 import type { Mesh, TessellationOptions } from './types.js';
 import { createMesh, DEFAULT_TESSELLATION_OPTIONS } from './types.js';
-import { triangulatePolygon, triangulatePolygonWithHoles } from './triangulate.js';
+import { computeSignedArea, triangulatePolygon, triangulatePolygonWithHoles } from './triangulate.js';
 
 /**
  * Project a 3D point onto a plane's 2D coordinate system
@@ -55,6 +55,81 @@ function getLoopVertices(model: TopoModel, loopId: LoopId): Vec3[] {
 /**
  * Tessellate a planar face
  */
+function sortLoopAroundCentroid(verts3D: Vec3[], surface: PlaneSurface): { verts3D: Vec3[]; verts2D: Vec2[] } {
+  const verts2D = verts3D.map((v) => projectToPlane(v, surface));
+  if (verts2D.length <= 2) {
+    return { verts3D, verts2D };
+  }
+
+  // Compute centroid in 2D
+  let cx = 0;
+  let cy = 0;
+  for (const [x, y] of verts2D) {
+    cx += x;
+    cy += y;
+  }
+  cx /= verts2D.length;
+  cy /= verts2D.length;
+
+  // Sort by angle around centroid
+  const indices = verts2D.map((_, i) => i);
+  indices.sort((i, j) => {
+    const ai = Math.atan2(verts2D[i][1] - cy, verts2D[i][0] - cx);
+    const aj = Math.atan2(verts2D[j][1] - cy, verts2D[j][0] - cx);
+    return ai - aj;
+  });
+
+  const sorted2D: Vec2[] = [];
+  const sorted3D: Vec3[] = [];
+  for (const idx of indices) {
+    sorted2D.push(verts2D[idx]);
+    sorted3D.push(verts3D[idx]);
+  }
+
+  return { verts3D: sorted3D, verts2D: sorted2D };
+}
+
+function shrinkPolygonTowardsCentroid(verts: Vec2[], factor: number): Vec2[] {
+  if (verts.length === 0) return verts;
+  let cx = 0;
+  let cy = 0;
+  for (const [x, y] of verts) {
+    cx += x;
+    cy += y;
+  }
+  cx /= verts.length;
+  cy /= verts.length;
+  return verts.map(([x, y]) => [cx + (x - cx) * factor, cy + (y - cy) * factor] as Vec2);
+}
+
+function segmentsDistance(p: Vec2, a: Vec2, b: Vec2): number {
+  // Project point p onto segment ab and clamp
+  const ax = a[0], ay = a[1];
+  const bx = b[0], by = b[1];
+  const px = p[0], py = p[1];
+  const abx = bx - ax;
+  const aby = by - ay;
+  const abLen2 = abx * abx + aby * aby;
+  if (abLen2 < 1e-20) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * abx + (py - ay) * aby) / abLen2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = ax + t * abx;
+  const cy = ay + t * aby;
+  return Math.hypot(px - cx, py - cy);
+}
+
+function holeTouchesOuter(hole: Vec2[], outer: Vec2[], tol: number): boolean {
+  // Check each hole vertex against each outer edge
+  for (const hv of hole) {
+    for (let i = 0; i < outer.length; i++) {
+      const a = outer[i];
+      const b = outer[(i + 1) % outer.length];
+      if (segmentsDistance(hv, a, b) <= tol) return true;
+    }
+  }
+  return false;
+}
+
 function tessellatePlanarFace(
   model: TopoModel,
   faceId: FaceId,
@@ -62,59 +137,111 @@ function tessellatePlanarFace(
   reversed: boolean
 ): Mesh {
   const loops = model.getFaceLoops(faceId);
-  
-  if (loops.length === 0) {
-    return createMesh([], [], []);
+  if (loops.length === 0) return createMesh([], [], []);
+
+  type LoopData = {
+    loopId: LoopId;
+    verts3D: Vec3[];
+    verts2D: Vec2[];
+    area: number;
+    absArea: number;
+  };
+
+  const loopsData: LoopData[] = [];
+  const seen = new Set<string>();
+  for (const loopId of loops) {
+    const rawVerts3D = getLoopVertices(model, loopId);
+    if (rawVerts3D.length < 3) continue;
+
+    // Normalize ordering for stability (sort around centroid)
+    const { verts3D, verts2D } = sortLoopAroundCentroid(rawVerts3D, surface);
+    const area = computeSignedArea(verts2D);
+    const absArea = Math.abs(area);
+    if (absArea < 1e-9) continue; // skip degenerate loops
+    // Deduplicate identical loops (can occur from stitching; prevents double outer/holes)
+    const key = `${verts2D.length}:${verts2D
+      .map(([x, y]) => `${Math.round(x * 1e6)}:${Math.round(y * 1e6)}`)
+      .join('|')}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    loopsData.push({ loopId, verts3D, verts2D, area, absArea });
   }
-  
-  const outerLoop = loops[0];
-  const outerVertices3D = getLoopVertices(model, outerLoop);
-  
-  if (outerVertices3D.length < 3) {
-    return createMesh([], [], []);
+
+  if (loopsData.length === 0) return createMesh([], [], []);
+
+  // Identify outer loop as the one with largest absolute area
+  loopsData.sort((a, b) => b.absArea - a.absArea);
+  const outer = loopsData[0];
+  const holes = loopsData.slice(1);
+
+  // Ensure outer is CCW
+  let outerVerts3D = outer.verts3D.slice();
+  let outerVerts2D = outer.verts2D.slice();
+  if (computeSignedArea(outerVerts2D) < 0) {
+    outerVerts2D.reverse();
+    outerVerts3D.reverse();
   }
-  
-  const outerVertices2D: Vec2[] = outerVertices3D.map(v => projectToPlane(v, surface));
-  
-  // Collect all vertices (outer + holes) for position/normal buffers
-  const allVertices3D: Vec3[] = [...outerVertices3D];
-  
-  // Collect hole vertices
+
+  // Holes must be opposite winding (CW)
   const holes2D: Vec2[][] = [];
-  for (let i = 1; i < loops.length; i++) {
-    const holeVertices3D = getLoopVertices(model, loops[i]);
-    if (holeVertices3D.length < 3) continue;
-    
-    const holeVertices2D = holeVertices3D.map(v => projectToPlane(v, surface));
-    holes2D.push(holeVertices2D);
-    allVertices3D.push(...holeVertices3D);
+  const allVertices3D: Vec3[] = [...outerVerts3D];
+
+  // Precompute outer bbox for tolerance
+  let minX = outerVerts2D[0][0];
+  let maxX = outerVerts2D[0][0];
+  let minY = outerVerts2D[0][1];
+  let maxY = outerVerts2D[0][1];
+  for (const [x, y] of outerVerts2D) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
   }
-  
+  const diag = Math.hypot(maxX - minX, maxY - minY);
+  const touchTol = Math.max(1e-6, diag * 1e-5);
+
+  for (const h of holes) {
+    let holeVerts3D = h.verts3D.slice();
+    let holeVerts2D = h.verts2D.slice();
+    if (computeSignedArea(holeVerts2D) > 0) {
+      holeVerts2D.reverse();
+      holeVerts3D.reverse();
+    }
+
+    // If hole touches or coincides with outer boundary, shrink slightly to avoid degeneracy
+    if (holeTouchesOuter(holeVerts2D, outerVerts2D, touchTol)) {
+      holeVerts2D = shrinkPolygonTowardsCentroid(holeVerts2D, 0.999);
+      // Re-sync 3D positions proportionally along the shrink (simple approach: project back using plane axes)
+      // We map shrink in 2D then unproject to 3D
+      holeVerts3D = holeVerts2D.map((p2) => unprojectFromPlane(p2, surface));
+    }
+
+    holes2D.push(holeVerts2D);
+    allVertices3D.push(...holeVerts3D);
+  }
+
   // Triangulate with holes if any
-  let triangleIndices: number[];
-  if (holes2D.length > 0) {
-    triangleIndices = triangulatePolygonWithHoles(outerVertices2D, holes2D);
-  } else {
-    triangleIndices = triangulatePolygon(outerVertices2D);
-  }
-  
-  if (triangleIndices.length === 0) {
-    return createMesh([], [], []);
-  }
-  
+  const triangleIndices =
+    holes2D.length > 0
+      ? triangulatePolygonWithHoles(outerVerts2D, holes2D)
+      : triangulatePolygon(outerVerts2D);
+
+  if (triangleIndices.length === 0) return createMesh([], [], []);
+
   const positions: number[] = [];
   const normals: number[] = [];
-  
+
   let normal = normalize3(surface.normal);
   if (reversed) {
     normal = [-normal[0], -normal[1], -normal[2]];
   }
-  
+
   for (const v of allVertices3D) {
     positions.push(v[0], v[1], v[2]);
     normals.push(normal[0], normal[1], normal[2]);
   }
-  
+
   const indices: number[] = [];
   if (reversed) {
     for (let i = 0; i < triangleIndices.length; i += 3) {
@@ -123,7 +250,7 @@ function tessellatePlanarFace(
   } else {
     indices.push(...triangleIndices);
   }
-  
+
   return createMesh(positions, normals, indices);
 }
 

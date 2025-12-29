@@ -228,6 +228,15 @@ export function selectPieces(
       dedupedB.push(p);
     }
   }
+
+  // For subtract, if a tool piece (fromB) exists on the same plane, drop target pieces on that plane
+  // to avoid keeping the untrimmed target face alongside the cut face.
+  if (operation === 'subtract') {
+    const planesB = new Set(dedupedB.map(planeKey));
+    const filteredA = dedupedA.filter(p => !planesB.has(planeKey(p)));
+    return { fromA: filteredA, fromB: dedupedB, flipB };
+  }
+
   return { fromA: dedupedA, fromB: dedupedB, flipB };
 }
 
