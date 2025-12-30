@@ -61,6 +61,7 @@ lerna-debug.log*
 *.temp
 .cache/
 .temp/
+.tanstack/
 
 # Reference implementations (downloaded on-demand)
 refs/occt/

@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import '~/styles/home.css';
 
 export const Route = createFileRoute('/')({
+  ssr: false, // Client-only: user-facing route
   component: Home,
 });
 

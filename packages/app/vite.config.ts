@@ -10,10 +10,8 @@ export default defineConfig({
   plugins: [
     tsConfigPaths(),
     tanstackStart({
-      // Enable SPA mode - no server-side rendering
-      spa: {
-        enabled: true,
-      },
+      // Disable SPA mode to enable server functions
+      // spa: { enabled: true },
     }),
     // React's vite plugin must come after start's vite plugin
     react(),
