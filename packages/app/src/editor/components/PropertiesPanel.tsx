@@ -6,8 +6,8 @@
  * Uses Tanstack Form with Zod validation for feature editing.
  */
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Menu } from '@base-ui/react/menu';
 import { useForm } from '@tanstack/react-form';
 import { useDocument } from '../contexts/DocumentContext';
 import { useSelection } from '../contexts/SelectionContext';
@@ -19,7 +19,7 @@ import { useViewer } from '../contexts/ViewerContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { Tooltip } from '@base-ui/react';
 import AIPanel from './AIPanel';
-import { AIIcon, ChevronDownIcon } from './Icons';
+import { AIIcon } from './Icons';
 import './PropertiesPanel.css';
 
 // ============================================================================
@@ -1115,11 +1115,6 @@ const PropertiesPanel: React.FC = () => {
   const { state: viewerState, actions: viewerActions } = useViewer();
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const [showAIChat, setShowAIChat] = useState(false);
-  const [showDisplayDropdown, setShowDisplayDropdown] = useState(false);
-  const displayDropdownRef = useRef<HTMLDivElement>(null);
-  const displayButtonRef = useRef<HTMLButtonElement>(null);
-  const displayDropdownContainerRef = useRef<HTMLDivElement>(null);
-  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
   
   // Get axis candidates for revolve
   const axisCandidates = useMemo(() => {
@@ -1150,49 +1145,6 @@ const PropertiesPanel: React.FC = () => {
     }
   }, [effectiveFeature, doc]);
 
-  // Calculate dropdown position when it opens
-  useEffect(() => {
-    if (!showDisplayDropdown || !displayButtonRef.current) {
-      setDropdownPosition(null);
-      return;
-    }
-    
-    const updatePosition = () => {
-      if (displayButtonRef.current) {
-        const rect = displayButtonRef.current.getBoundingClientRect();
-        setDropdownPosition({
-          top: rect.bottom + 4,
-          right: window.innerWidth - rect.right,
-        });
-      }
-    };
-    
-    updatePosition();
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
-    
-    return () => {
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
-    };
-  }, [showDisplayDropdown]);
-
-  // Close display dropdown when clicking outside
-  useEffect(() => {
-    if (!showDisplayDropdown) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      const isClickInsideDropdown = displayDropdownRef.current?.contains(target);
-      const isClickInsideButton = displayButtonRef.current?.contains(target);
-      const isClickInsideContainer = displayDropdownContainerRef.current?.contains(target);
-      
-      if (!isClickInsideDropdown && !isClickInsideButton && !isClickInsideContainer) {
-        setShowDisplayDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showDisplayDropdown]);
 
   // Render header with user, display dropdown, chat, and share buttons
   const renderHeader = () => (
@@ -1217,156 +1169,123 @@ const PropertiesPanel: React.FC = () => {
               </Tooltip.Positioner>
             </Tooltip.Portal>
           </Tooltip.Root>
-          <div className="properties-panel-header-display-dropdown" ref={displayDropdownContainerRef}>
-            <Tooltip.Root>
-              <Tooltip.Trigger
-                delay={300}
-                ref={displayButtonRef}
-                className="properties-panel-header-icon-button"
-                onClick={() => setShowDisplayDropdown(!showDisplayDropdown)}
-                render={<button aria-label="Display Options" />}
-              >
-                {viewerState.projectionMode === 'perspective' ? (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M12 2l8 4v12l-8 4-8-4V6l8-4z" />
-                    <path d="M12 22V10M12 10L4 6M12 10l8-4" />
-                  </svg>
-                ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <rect x="4" y="4" width="16" height="16" />
-                    <line x1="4" y1="12" x2="20" y2="12" />
-                    <line x1="12" y1="4" x2="12" y2="20" />
-                  </svg>
-                )}
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Positioner side="bottom" sideOffset={6}>
-                  <Tooltip.Popup className="properties-panel-header-tooltip">Display Options</Tooltip.Popup>
-                </Tooltip.Positioner>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </div>
-        {showDisplayDropdown && dropdownPosition && createPortal(
-          <div 
-            className="properties-panel-header-dropdown"
-            style={{
-              position: 'fixed',
-              top: `${dropdownPosition.top}px`,
-              right: `${dropdownPosition.right}px`,
-            }}
-            ref={displayDropdownRef}
-          >
-            <div className="properties-panel-header-dropdown-section">
-              <div className="properties-panel-header-dropdown-label">Projection</div>
-              <button
-                className={`properties-panel-header-dropdown-item ${viewerState.projectionMode === 'perspective' ? 'active' : ''}`}
-                onClick={() => {
-                  if (viewerState.projectionMode !== 'perspective') {
-                    viewerActions.toggleProjection();
-                  }
-                  setShowDisplayDropdown(false);
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <Menu.Root>
+            <Menu.Trigger className="properties-panel-header-icon-button" aria-label="Display Options">
+              {viewerState.projectionMode === 'perspective' ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M12 2l8 4v12l-8 4-8-4V6l8-4z" />
                   <path d="M12 22V10M12 10L4 6M12 10l8-4" />
                 </svg>
-                <span>Perspective</span>
-              </button>
-              <button
-                className={`properties-panel-header-dropdown-item ${viewerState.projectionMode === 'orthographic' ? 'active' : ''}`}
-                onClick={() => {
-                  if (viewerState.projectionMode !== 'orthographic') {
-                    viewerActions.toggleProjection();
-                  }
-                  setShowDisplayDropdown(false);
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <rect x="4" y="4" width="16" height="16" />
                   <line x1="4" y1="12" x2="20" y2="12" />
                   <line x1="12" y1="4" x2="12" y2="20" />
                 </svg>
-                <span>Orthographic</span>
-              </button>
-            </div>
-            <div className="properties-panel-header-dropdown-section">
-              <div className="properties-panel-header-dropdown-label">Display</div>
-              <button
-                className={`properties-panel-header-dropdown-item ${viewerState.displayMode === 'shaded' ? 'active' : ''}`}
-                onClick={() => {
-                  if (viewerState.displayMode !== 'shaded') {
-                    viewerActions.setDisplayMode('shaded');
-                  }
-                  setShowDisplayDropdown(false);
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1">
-                  <path d="M12 3l9 5v8l-9 5-9-5V8l9-5z" />
-                </svg>
-                <span>Shaded</span>
-              </button>
-              <button
-                className={`properties-panel-header-dropdown-item ${viewerState.displayMode === 'wireframe' ? 'active' : ''}`}
-                onClick={() => {
-                  if (viewerState.displayMode !== 'wireframe') {
-                    viewerActions.setDisplayMode('wireframe');
-                  }
-                  setShowDisplayDropdown(false);
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M12 3l9 5v8l-9 5-9-5V8l9-5z" />
-                  <path d="M12 21V12M3 8l9 4 9-4" />
-                </svg>
-                <span>Wireframe</span>
-              </button>
-            </div>
-            <div className="properties-panel-header-dropdown-section">
-              <div className="properties-panel-header-dropdown-label">Theme</div>
-              <button
-                className={`properties-panel-header-dropdown-item ${themeMode === 'light' ? 'active' : ''}`}
-                onClick={() => {
-                  setThemeMode('light');
-                  setShowDisplayDropdown(false);
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <circle cx="12" cy="12" r="4" />
-                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-                </svg>
-                <span>Light</span>
-              </button>
-              <button
-                className={`properties-panel-header-dropdown-item ${themeMode === 'dark' ? 'active' : ''}`}
-                onClick={() => {
-                  setThemeMode('dark');
-                  setShowDisplayDropdown(false);
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                </svg>
-                <span>Dark</span>
-              </button>
-              <button
-                className={`properties-panel-header-dropdown-item ${themeMode === 'auto' ? 'active' : ''}`}
-                onClick={() => {
-                  setThemeMode('auto');
-                  setShowDisplayDropdown(false);
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="2" y="3" width="20" height="18" rx="2" />
-                  <path d="M8 3v4M16 3v4M2 9h20" />
-                  <path d="M9 13h6M9 17h6" />
-                </svg>
-                <span>System</span>
-              </button>
-            </div>
-          </div>,
-          document.body
-        )}
+              )}
+            </Menu.Trigger>
+            <Menu.Portal>
+              <Menu.Positioner sideOffset={8}>
+                <Menu.Popup className="properties-panel-header-dropdown">
+                  <Menu.Group>
+                    <Menu.GroupLabel className="properties-panel-header-dropdown-label">Projection</Menu.GroupLabel>
+                    <Menu.Item
+                      className={`properties-panel-header-dropdown-item ${viewerState.projectionMode === 'perspective' ? 'active' : ''}`}
+                      onClick={() => {
+                        if (viewerState.projectionMode !== 'perspective') {
+                          viewerActions.toggleProjection();
+                        }
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M12 2l8 4v12l-8 4-8-4V6l8-4z" />
+                        <path d="M12 22V10M12 10L4 6M12 10l8-4" />
+                      </svg>
+                      <span>Perspective</span>
+                    </Menu.Item>
+                    <Menu.Item
+                      className={`properties-panel-header-dropdown-item ${viewerState.projectionMode === 'orthographic' ? 'active' : ''}`}
+                      onClick={() => {
+                        if (viewerState.projectionMode !== 'orthographic') {
+                          viewerActions.toggleProjection();
+                        }
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <rect x="4" y="4" width="16" height="16" />
+                        <line x1="4" y1="12" x2="20" y2="12" />
+                        <line x1="12" y1="4" x2="12" y2="20" />
+                      </svg>
+                      <span>Orthographic</span>
+                    </Menu.Item>
+                  </Menu.Group>
+                  <Menu.Group>
+                    <Menu.GroupLabel className="properties-panel-header-dropdown-label">Display</Menu.GroupLabel>
+                    <Menu.Item
+                      className={`properties-panel-header-dropdown-item ${viewerState.displayMode === 'shaded' ? 'active' : ''}`}
+                      onClick={() => {
+                        if (viewerState.displayMode !== 'shaded') {
+                          viewerActions.setDisplayMode('shaded');
+                        }
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1">
+                        <path d="M12 3l9 5v8l-9 5-9-5V8l9-5z" />
+                      </svg>
+                      <span>Shaded</span>
+                    </Menu.Item>
+                    <Menu.Item
+                      className={`properties-panel-header-dropdown-item ${viewerState.displayMode === 'wireframe' ? 'active' : ''}`}
+                      onClick={() => {
+                        if (viewerState.displayMode !== 'wireframe') {
+                          viewerActions.setDisplayMode('wireframe');
+                        }
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M12 3l9 5v8l-9 5-9-5V8l9-5z" />
+                        <path d="M12 21V12M3 8l9 4 9-4" />
+                      </svg>
+                      <span>Wireframe</span>
+                    </Menu.Item>
+                  </Menu.Group>
+                  <Menu.Group>
+                    <Menu.GroupLabel className="properties-panel-header-dropdown-label">Theme</Menu.GroupLabel>
+                    <Menu.Item
+                      className={`properties-panel-header-dropdown-item ${themeMode === 'light' ? 'active' : ''}`}
+                      onClick={() => setThemeMode('light')}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                      </svg>
+                      <span>Light</span>
+                    </Menu.Item>
+                    <Menu.Item
+                      className={`properties-panel-header-dropdown-item ${themeMode === 'dark' ? 'active' : ''}`}
+                      onClick={() => setThemeMode('dark')}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                      </svg>
+                      <span>Dark</span>
+                    </Menu.Item>
+                    <Menu.Item
+                      className={`properties-panel-header-dropdown-item ${themeMode === 'auto' ? 'active' : ''}`}
+                      onClick={() => setThemeMode('auto')}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <rect x="2" y="3" width="20" height="18" rx="2" />
+                        <path d="M8 3v4M16 3v4M2 9h20" />
+                        <path d="M9 13h6M9 17h6" />
+                      </svg>
+                      <span>System</span>
+                    </Menu.Item>
+                  </Menu.Group>
+                </Menu.Popup>
+              </Menu.Positioner>
+            </Menu.Portal>
+          </Menu.Root>
       </div>
       <div className="properties-panel-header-right">
         <Tooltip.Root>

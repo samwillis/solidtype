@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Tooltip } from '@base-ui/react';
+import { Menu } from '@base-ui/react/menu';
 import { useSketch } from '../contexts/SketchContext';
 import { useDocument } from '../contexts/DocumentContext';
 import { useSelection } from '../contexts/SelectionContext';
@@ -41,12 +42,8 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
   const { exportStl, exportJson, bodies, sketchPlaneTransforms } = useKernel();
   const { startExtrudeEdit, startRevolveEdit, isEditing } = useFeatureEdit();
   const { actions: viewerActions } = useViewer();
-  const [constraintsDropdownOpen, setConstraintsDropdownOpen] = useState(false);
-  const [booleanDropdownOpen, setBooleanDropdownOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingJson, setIsExportingJson] = useState(false);
-  const constraintsDropdownRef = React.useRef<HTMLDivElement>(null);
-  const booleanDropdownRef = React.useRef<HTMLDivElement>(null);
   
   // Toggle tool - clicking an active tool toggles it off
   const toggleTool = useCallback((tool: 'select' | 'line' | 'arc' | 'circle' | 'rectangle') => {
@@ -111,29 +108,6 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
     }
   }, [canExport, exportJson, isExportingJson]);
 
-  // Close constraints dropdown when clicking outside
-  React.useEffect(() => {
-    if (!constraintsDropdownOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (constraintsDropdownRef.current && !constraintsDropdownRef.current.contains(e.target as Node)) {
-        setConstraintsDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [constraintsDropdownOpen]);
-
-  // Close boolean dropdown when clicking outside
-  React.useEffect(() => {
-    if (!booleanDropdownOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (booleanDropdownRef.current && !booleanDropdownRef.current.contains(e.target as Node)) {
-        setBooleanDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [booleanDropdownOpen]);
 
   const sketches = useMemo(() => {
     return features.filter((f) => f.type === 'sketch');
@@ -227,8 +201,6 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
     const tool = bodyFeatures[bodyFeatures.length - 1];
     
     addBoolean(operation, target.id, tool.id);
-    
-    setBooleanDropdownOpen(false);
   };
 
   const handleRevolve = () => {
@@ -357,99 +329,96 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
             </Tooltip.Root>
 
             {/* Constraints dropdown */}
-            <div className="floating-toolbar-dropdown-container" ref={constraintsDropdownRef}>
-              <button
-                className={`floating-toolbar-button floating-toolbar-dropdown-button ${constraintsDropdownOpen ? 'active' : ''}`}
-                onClick={() => setConstraintsDropdownOpen(!constraintsDropdownOpen)}
-                aria-label="Constraints"
-                title="Constraints"
-              >
+            <Menu.Root>
+              <Menu.Trigger className="floating-toolbar-button floating-toolbar-dropdown-button" aria-label="Constraints">
                 <ConstraintsIcon />
                 <ChevronDownIcon />
-              </button>
-              {constraintsDropdownOpen && (
-                <div className="floating-toolbar-dropdown-menu">
-                  <button
-                    className="floating-toolbar-dropdown-item"
-                    onClick={() => { applyConstraint('horizontal'); setConstraintsDropdownOpen(false); }}
-                    disabled={!canApplyConstraint('horizontal')}
-                  >
-                    <span className="floating-toolbar-dropdown-key">H</span> Horizontal
-                  </button>
-                  <button
-                    className="floating-toolbar-dropdown-item"
-                    onClick={() => { applyConstraint('vertical'); setConstraintsDropdownOpen(false); }}
-                    disabled={!canApplyConstraint('vertical')}
-                  >
-                    <span className="floating-toolbar-dropdown-key">V</span> Vertical
-                  </button>
-                  <button
-                    className="floating-toolbar-dropdown-item"
-                    onClick={() => { applyConstraint('coincident'); setConstraintsDropdownOpen(false); }}
-                    disabled={!canApplyConstraint('coincident')}
-                  >
-                    <span className="floating-toolbar-dropdown-key">C</span> Coincident
-                  </button>
-                  <button
-                    className="floating-toolbar-dropdown-item"
-                    onClick={() => { applyConstraint('fixed'); setConstraintsDropdownOpen(false); }}
-                    disabled={!canApplyConstraint('fixed')}
-                  >
-                    <span className="floating-toolbar-dropdown-key">F</span> Fixed
-                  </button>
-                  <button
-                    className="floating-toolbar-dropdown-item"
-                    onClick={() => { applyConstraint('distance'); setConstraintsDropdownOpen(false); }}
-                    disabled={!canApplyConstraint('distance')}
-                  >
-                    <span className="floating-toolbar-dropdown-key">D</span> Distance
-                  </button>
-                  <button
-                    className="floating-toolbar-dropdown-item"
-                    onClick={() => { applyConstraint('angle'); setConstraintsDropdownOpen(false); }}
-                    disabled={!canApplyConstraint('angle')}
-                  >
-                    <span className="floating-toolbar-dropdown-key">∠</span> Angle
-                  </button>
-                  <div className="floating-toolbar-dropdown-separator" />
-                  <button
-                    className="floating-toolbar-dropdown-item"
-                    onClick={() => { applyConstraint('parallel'); setConstraintsDropdownOpen(false); }}
-                    disabled={!canApplyConstraint('parallel')}
-                  >
-                    <span className="floating-toolbar-dropdown-key">∥</span> Parallel
-                  </button>
-                  <button
-                    className="floating-toolbar-dropdown-item"
-                    onClick={() => { applyConstraint('perpendicular'); setConstraintsDropdownOpen(false); }}
-                    disabled={!canApplyConstraint('perpendicular')}
-                  >
-                    <span className="floating-toolbar-dropdown-key">⊥</span> Perpendicular
-                  </button>
-                  <button
-                    className="floating-toolbar-dropdown-item"
-                    onClick={() => { applyConstraint('equalLength'); setConstraintsDropdownOpen(false); }}
-                    disabled={!canApplyConstraint('equalLength')}
-                  >
-                    <span className="floating-toolbar-dropdown-key">=</span> Equal Length
-                  </button>
-                  <button
-                    className="floating-toolbar-dropdown-item"
-                    onClick={() => { applyConstraint('tangent'); setConstraintsDropdownOpen(false); }}
-                    disabled={!canApplyConstraint('tangent')}
-                  >
-                    <span className="floating-toolbar-dropdown-key">⌒</span> Tangent
-                  </button>
-                  <button
-                    className="floating-toolbar-dropdown-item"
-                    onClick={() => { applyConstraint('symmetric'); setConstraintsDropdownOpen(false); }}
-                    disabled={!canApplyConstraint('symmetric')}
-                  >
-                    <span className="floating-toolbar-dropdown-key">⇔</span> Symmetric
-                  </button>
-                </div>
-              )}
-            </div>
+              </Menu.Trigger>
+              <Menu.Portal>
+                <Menu.Positioner sideOffset={4}>
+                  <Menu.Popup className="floating-toolbar-dropdown-menu">
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => applyConstraint('horizontal')}
+                      disabled={!canApplyConstraint('horizontal')}
+                    >
+                      <span className="floating-toolbar-dropdown-key">H</span> Horizontal
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => applyConstraint('vertical')}
+                      disabled={!canApplyConstraint('vertical')}
+                    >
+                      <span className="floating-toolbar-dropdown-key">V</span> Vertical
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => applyConstraint('coincident')}
+                      disabled={!canApplyConstraint('coincident')}
+                    >
+                      <span className="floating-toolbar-dropdown-key">C</span> Coincident
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => applyConstraint('fixed')}
+                      disabled={!canApplyConstraint('fixed')}
+                    >
+                      <span className="floating-toolbar-dropdown-key">F</span> Fixed
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => applyConstraint('distance')}
+                      disabled={!canApplyConstraint('distance')}
+                    >
+                      <span className="floating-toolbar-dropdown-key">D</span> Distance
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => applyConstraint('angle')}
+                      disabled={!canApplyConstraint('angle')}
+                    >
+                      <span className="floating-toolbar-dropdown-key">∠</span> Angle
+                    </Menu.Item>
+                    <Menu.Separator className="floating-toolbar-dropdown-separator" />
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => applyConstraint('parallel')}
+                      disabled={!canApplyConstraint('parallel')}
+                    >
+                      <span className="floating-toolbar-dropdown-key">∥</span> Parallel
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => applyConstraint('perpendicular')}
+                      disabled={!canApplyConstraint('perpendicular')}
+                    >
+                      <span className="floating-toolbar-dropdown-key">⊥</span> Perpendicular
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => applyConstraint('equalLength')}
+                      disabled={!canApplyConstraint('equalLength')}
+                    >
+                      <span className="floating-toolbar-dropdown-key">=</span> Equal Length
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => applyConstraint('tangent')}
+                      disabled={!canApplyConstraint('tangent')}
+                    >
+                      <span className="floating-toolbar-dropdown-key">⌒</span> Tangent
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => applyConstraint('symmetric')}
+                      disabled={!canApplyConstraint('symmetric')}
+                    >
+                      <span className="floating-toolbar-dropdown-key">⇔</span> Symmetric
+                    </Menu.Item>
+                  </Menu.Popup>
+                </Menu.Positioner>
+              </Menu.Portal>
+            </Menu.Root>
 
             {/* Sketch mode actions: Normal to Sketch, Accept, Cancel */}
             <div className="floating-toolbar-separator" />
@@ -597,17 +566,21 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
               </Tooltip.Root>
 
               {/* Boolean Operations Dropdown */}
-              <div ref={booleanDropdownRef} className="floating-toolbar-dropdown-wrapper">
+              <Menu.Root>
                 <Tooltip.Root>
                   <Tooltip.Trigger
                     delay={300}
-                    className={`floating-toolbar-button ${!canBoolean ? 'disabled' : ''} ${booleanDropdownOpen ? 'active' : ''}`}
-                    onClick={() => canBoolean && setBooleanDropdownOpen(!booleanDropdownOpen)}
-                    render={<button aria-label="Boolean" disabled={!canBoolean} />}
-                  >
-                    <BooleanIcon />
-                    <ChevronDownIcon />
-                  </Tooltip.Trigger>
+                    render={
+                      <Menu.Trigger 
+                        className={`floating-toolbar-button ${!canBoolean ? 'disabled' : ''}`}
+                        aria-label="Boolean"
+                        disabled={!canBoolean}
+                      >
+                        <BooleanIcon />
+                        <ChevronDownIcon />
+                      </Menu.Trigger>
+                    }
+                  />
                   <Tooltip.Portal>
                     <Tooltip.Positioner side="top" sideOffset={6}>
                       <Tooltip.Popup className="floating-toolbar-tooltip">
@@ -616,32 +589,34 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                     </Tooltip.Positioner>
                   </Tooltip.Portal>
                 </Tooltip.Root>
-                {booleanDropdownOpen && (
-                  <div className="floating-toolbar-dropdown">
-                    <button 
-                      className="floating-toolbar-dropdown-item"
-                      onClick={() => handleBoolean('union')}
-                    >
-                      <UnionIcon />
-                      <span>Union</span>
-                    </button>
-                    <button 
-                      className="floating-toolbar-dropdown-item"
-                      onClick={() => handleBoolean('subtract')}
-                    >
-                      <SubtractIcon />
-                      <span>Subtract</span>
-                    </button>
-                    <button 
-                      className="floating-toolbar-dropdown-item"
-                      onClick={() => handleBoolean('intersect')}
-                    >
-                      <IntersectIcon />
-                      <span>Intersect</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+                <Menu.Portal>
+                  <Menu.Positioner sideOffset={4}>
+                    <Menu.Popup className="floating-toolbar-dropdown">
+                      <Menu.Item
+                        className="floating-toolbar-dropdown-item"
+                        onClick={() => handleBoolean('union')}
+                      >
+                        <UnionIcon />
+                        <span>Union</span>
+                      </Menu.Item>
+                      <Menu.Item
+                        className="floating-toolbar-dropdown-item"
+                        onClick={() => handleBoolean('subtract')}
+                      >
+                        <SubtractIcon />
+                        <span>Subtract</span>
+                      </Menu.Item>
+                      <Menu.Item
+                        className="floating-toolbar-dropdown-item"
+                        onClick={() => handleBoolean('intersect')}
+                      >
+                        <IntersectIcon />
+                        <span>Intersect</span>
+                      </Menu.Item>
+                    </Menu.Popup>
+                  </Menu.Positioner>
+                </Menu.Portal>
+              </Menu.Root>
             </div>
           </>
         )}

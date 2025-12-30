@@ -6,8 +6,8 @@
  */
 
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { Menu } from '@base-ui/react/menu';
 import { useSession } from '../lib/auth-client';
 import { useLiveQuery, createCollection, liveQueryCollectionOptions } from '@tanstack/react-db';
 import { workspacesCollection, projectsCollection } from '../lib/electric-collections';
@@ -400,101 +400,55 @@ function WorkspaceHeader({
   activeSection: string;
   onProjectClick: (projectId: string) => void;
 }) {
-  const [isCreateDropdownOpen, setIsCreateDropdownOpen] = useState(false);
-  const createButtonRef = useRef<HTMLButtonElement>(null);
-  const createDropdownRef = useRef<HTMLDivElement>(null);
-  const [createDropdownPosition, setCreateDropdownPosition] = useState<{ top: number; left: number } | null>(null);
-
-  // Calculate dropdown position
-  useEffect(() => {
-    if (!isCreateDropdownOpen || !createButtonRef.current) {
-      setCreateDropdownPosition(null);
-      return;
-    }
-    const buttonRect = createButtonRef.current.getBoundingClientRect();
-    setCreateDropdownPosition({
-      top: buttonRect.bottom + 4,
-      left: buttonRect.right - 180, // Position dropdown to the left of button, accounting for dropdown width
-    });
-  }, [isCreateDropdownOpen]);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    if (!isCreateDropdownOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        createDropdownRef.current &&
-        !createDropdownRef.current.contains(e.target as Node) &&
-        createButtonRef.current &&
-        !createButtonRef.current.contains(e.target as Node)
-      ) {
-        setIsCreateDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isCreateDropdownOpen]);
 
   return (
     <div className="dashboard-workspace-section">
       <div className="dashboard-workspace-header">
         <span className="dashboard-workspace-name">{workspace.name}</span>
-        <button
-          ref={createButtonRef}
-          className="dashboard-workspace-create-btn"
-          onClick={() => setIsCreateDropdownOpen(!isCreateDropdownOpen)}
-          aria-label="Create"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-        </button>
-        {isCreateDropdownOpen && createDropdownPosition && createPortal(
-          <div 
-            className="dashboard-create-dropdown"
-            style={{
-              position: 'fixed',
-              top: `${createDropdownPosition.top}px`,
-              left: `${createDropdownPosition.left}px`,
-            }}
-            ref={createDropdownRef}
-          >
-            <div className="dashboard-create-dropdown-section">
-              <button
-                className="dashboard-create-dropdown-item"
-                onClick={() => {
-                  // TODO: Implement create project in workspace
-                  setIsCreateDropdownOpen(false);
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <line x1="3" y1="9" x2="21" y2="9" />
-                  <line x1="9" y1="21" x2="9" y2="9" />
-                </svg>
-                <span>Project</span>
-              </button>
-              <button
-                className="dashboard-create-dropdown-item"
-                onClick={() => {
-                  // TODO: Implement create document in workspace
-                  setIsCreateDropdownOpen(false);
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="16" y1="13" x2="8" y2="13" />
-                  <line x1="16" y1="17" x2="8" y2="17" />
-                  <polyline points="10 9 9 9 8 9" />
-                </svg>
-                <span>Document</span>
-              </button>
-            </div>
-          </div>,
-          document.body
-        )}
+        <Menu.Root>
+          <Menu.Trigger className="dashboard-workspace-create-btn" aria-label="Create">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Positioner sideOffset={4}>
+              <Menu.Popup className="dashboard-create-dropdown">
+                <Menu.Group>
+                  <Menu.Item
+                    className="dashboard-create-dropdown-item"
+                    onClick={() => {
+                      // TODO: Implement create project in workspace
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <line x1="3" y1="9" x2="21" y2="9" />
+                      <line x1="9" y1="21" x2="9" y2="9" />
+                    </svg>
+                    <span>Project</span>
+                  </Menu.Item>
+                  <Menu.Item
+                    className="dashboard-create-dropdown-item"
+                    onClick={() => {
+                      // TODO: Implement create document in workspace
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="16" y1="13" x2="8" y2="13" />
+                      <line x1="16" y1="17" x2="8" y2="17" />
+                      <polyline points="10 9 9 9 8 9" />
+                    </svg>
+                    <span>Document</span>
+                  </Menu.Item>
+                </Menu.Group>
+              </Menu.Popup>
+            </Menu.Positioner>
+          </Menu.Portal>
+        </Menu.Root>
       </div>
       {projects.length > 0 ? (
         <div className="dashboard-workspace-projects">
