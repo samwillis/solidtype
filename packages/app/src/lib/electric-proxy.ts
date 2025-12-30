@@ -138,6 +138,22 @@ export const documentsProxy = createElectricProxy(
 );
 
 /**
+ * Proxy for projects
+ * Shape: projects where user has access via workspace or project membership
+ */
+export const projectsProxy = createElectricProxy(
+  'projects',
+  (userId) => {
+    return {
+      // where: `workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $1)
+      //   OR id IN (SELECT project_id FROM project_members WHERE user_id = $1)`,
+      where: `workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $1)`,
+      params: [userId],
+    };
+  }
+);
+
+/**
  * Proxy for folders
  * Shape: folders where user has access via project membership
  */

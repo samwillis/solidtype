@@ -1,0 +1,7 @@
+/**
+ * Dashboard-specific styles for Properties Panel
+ */
+
+.dashboard-properties-panel.properties-panel-floating {
+  width: 244px; /* 20px wider than editor version (224px) */
+}

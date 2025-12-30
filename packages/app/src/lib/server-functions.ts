@@ -554,3 +554,40 @@ export const deleteWorkspaceMutation = createServerFn({ method: 'POST' })
     const txid = await getCurrentTxid();
     return { data: { id: data.workspaceId }, txid };
   });
+
+// Project mutations
+export const createProjectMutation = createServerFn({ method: 'POST' })
+  .inputValidator((d: { project: any }) => d)
+  .handler(async ({ data }) => {
+    const [created] = await db
+      .insert(projects)
+      .values(data.project)
+      .returning();
+    
+    const txid = await getCurrentTxid();
+    return { data: created, txid };
+  });
+
+export const updateProjectMutation = createServerFn({ method: 'POST' })
+  .inputValidator((d: { projectId: string; updates: any }) => d)
+  .handler(async ({ data }) => {
+    const [updated] = await db
+      .update(projects)
+      .set(data.updates)
+      .where(eq(projects.id, data.projectId))
+      .returning();
+    
+    const txid = await getCurrentTxid();
+    return { data: updated, txid };
+  });
+
+export const deleteProjectMutation = createServerFn({ method: 'POST' })
+  .inputValidator((d: { projectId: string }) => d)
+  .handler(async ({ data }) => {
+    await db
+      .delete(projects)
+      .where(eq(projects.id, data.projectId));
+    
+    const txid = await getCurrentTxid();
+    return { data: { id: data.projectId }, txid };
+  });

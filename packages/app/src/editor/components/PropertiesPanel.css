@@ -145,7 +145,12 @@
   color: white;
 }
 
-.properties-panel-header-display-dropdown {
+.properties-panel-header-create {
+  padding-right: 6px !important;
+}
+
+.properties-panel-header-display-dropdown,
+.properties-panel-header-create-dropdown {
   position: relative;
 }
 

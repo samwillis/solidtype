@@ -31,6 +31,9 @@ import {
   createWorkspaceMutation,
   updateWorkspaceMutation,
   deleteWorkspaceMutation,
+  createProjectMutation,
+  updateProjectMutation,
+  deleteProjectMutation,
 } from './server-functions';
 
 // ============================================================================
@@ -89,11 +92,22 @@ export const workspaceSchema = z.object({
   updated_at: z.string().datetime(),
 });
 
+export const projectSchema = z.object({
+  id: z.string().uuid(),
+  workspace_id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  created_by: z.string(), // text ID from better-auth
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+});
+
 // Type exports
 export type Branch = z.infer<typeof branchSchema>;
 export type Document = z.infer<typeof documentSchema>;
 export type Folder = z.infer<typeof folderSchema>;
 export type Workspace = z.infer<typeof workspaceSchema>;
+export type Project = z.infer<typeof projectSchema>;
 
 // ============================================================================
 // Singleton Collections (one per table)
@@ -201,6 +215,39 @@ export const documentsCollection = createCollection(
     onDelete: async ({ transaction }) => {
       const deleted = transaction.mutations[0].original;
       const { txid } = await deleteDocumentMutation({ data: { documentId: deleted.id } });
+      return { txid };
+    },
+  })
+);
+
+/**
+ * Projects collection
+ * Syncs all projects the authenticated user has access to.
+ */
+export const projectsCollection = createCollection(
+  electricCollectionOptions({
+    id: 'projects',
+    schema: projectSchema,
+    getKey: (row) => row.id,
+    shapeOptions: {
+      url: `${getApiBase()}/api/shapes/projects`,
+      parser: {
+        timestamptz: (date: string) => date,
+      },
+    },
+    onInsert: async ({ transaction }) => {
+      const newProject = transaction.mutations[0].modified;
+      const { txid } = await createProjectMutation({ data: { project: newProject } });
+      return { txid };
+    },
+    onUpdate: async ({ transaction }) => {
+      const updated = transaction.mutations[0].modified;
+      const { txid } = await updateProjectMutation({ data: { projectId: updated.id, updates: updated } });
+      return { txid };
+    },
+    onDelete: async ({ transaction }) => {
+      const deleted = transaction.mutations[0].original;
+      const { txid } = await deleteProjectMutation({ data: { projectId: deleted.id } });
       return { txid };
     },
   })
