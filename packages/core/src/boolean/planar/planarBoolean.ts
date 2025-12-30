@@ -603,11 +603,14 @@ export function imprintFaceAndExtractPieces(
  * 
  * The approach: collect all intersection endpoints, cluster nearby ones,
  * and replace each cluster with its centroid.
+ * 
+ * Note: With the 3D clipping fix (Step A), intersection endpoints are now
+ * computed from canonical 3D points, so this snapping is mostly a safety net.
  */
-function snapIntersectionEndpoints(segments: Segment2D[], _ctx: NumericContext): Segment2D[] {
-  // Use a larger tolerance for snapping intersection endpoints
-  // 0.1 should handle floating-point errors from tilted geometry
-  const snapTol = 0.1;  // Fixed tolerance for robustness
+function snapIntersectionEndpoints(segments: Segment2D[], ctx: NumericContext): Segment2D[] {
+  // Use scaled tolerance for snapping intersection endpoints
+  // This should handle floating-point errors while being proportional to model scale
+  const snapTol = scaledTol(ctx, 100);  // 100× base tolerance for robustness
   
   // Collect all unique endpoints from intersection segments
   const interSegs = segments.filter(s => s.isIntersection);

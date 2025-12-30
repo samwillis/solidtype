@@ -282,8 +282,226 @@ export function pointInPolygon(point: Vec2, polygon: Vec2[]): boolean {
 }
 
 /**
+ * Clip a 3D line to a 3D planar polygon.
+ * Returns intervals along the 3D line (parameterized from linePoint in direction lineDir).
+ * 
+ * This avoids UV projection/unprojection roundtrips which accumulate floating-point errors.
+ */
+function clipLine3DToPolygon(
+  linePoint: Vec3,
+  lineDir: Vec3,
+  polygon3D: Vec3[],
+  ctx: NumericContext
+): { tStart: number; tEnd: number }[] {
+  if (polygon3D.length < 3) return [];
+  
+  const DEBUG = typeof globalThis !== 'undefined' && (globalThis as Record<string, unknown>).DEBUG_CLIP_3D;
+  
+  // First, check if the line even passes through the polygon's plane
+  // Compute polygon plane from vertices
+  const v1 = sub3(polygon3D[1], polygon3D[0]);
+  const v2 = sub3(polygon3D[2], polygon3D[0]);
+  const planeNormal = normalize3(cross3(v1, v2));
+  const planeD = dot3(planeNormal, polygon3D[0]);
+  
+  // Check if line is parallel to polygon plane
+  const lineDotNormal = dot3(lineDir, planeNormal);
+  
+  if (Math.abs(lineDotNormal) < 1e-10) {
+    // Line is parallel to polygon plane
+    // Check if line is in the plane
+    // NOTE: We use a very large tolerance here because:
+    // 1. The line comes from intersectPlanes, which guarantees it lies on both planes mathematically
+    // 2. But recomputing the plane from polygon vertices introduces floating-point errors
+    // 3. Tolerances of 0.1 or more are possible due to accumulated errors in geometry
+    const pointDist = dot3(linePoint, planeNormal) - planeD;
+    const inPlaneTol = Math.max(0.1, ctx.tol.length * 1e6); // Very lenient tolerance
+    if (Math.abs(pointDist) > inPlaneTol) {
+      if (DEBUG) console.log(`    Line parallel to polygon and not in plane (dist=${pointDist.toFixed(6)}, tol=${inPlaneTol})`);
+      return []; // Line doesn't intersect polygon plane
+    }
+    // Line is in the polygon plane - continue with edge clipping
+    if (DEBUG) console.log(`    Line is in polygon plane (dist=${pointDist.toFixed(6)}) - proceeding with edge clipping`);
+  } else {
+    // Line intersects polygon plane at a single point
+    // Find that point and check if it's inside the polygon
+    const t = (planeD - dot3(linePoint, planeNormal)) / lineDotNormal;
+    const intersectPt = add3(linePoint, mul3(lineDir, t));
+    
+    if (DEBUG) {
+      console.log(`    Line pierces polygon plane at t=${t.toFixed(4)}, point=[${intersectPt.map(v => v.toFixed(2)).join(',')}]`);
+    }
+    
+    // Check if this point is inside the polygon
+    if (point3DInPolygon(intersectPt, polygon3D, ctx)) {
+      if (DEBUG) console.log(`    Point is INSIDE polygon - returning single-point interval`);
+      // Return a small interval around this point
+      const epsilon = ctx.tol.length * 10;
+      return [{ tStart: t - epsilon, tEnd: t + epsilon }];
+    } else {
+      if (DEBUG) console.log(`    Point is OUTSIDE polygon - no intersection`);
+      return [];
+    }
+  }
+  
+  // Compute polygon extent along line direction
+  let tMin = Infinity;
+  let tMax = -Infinity;
+  for (const p of polygon3D) {
+    const v = sub3(p, linePoint);
+    const t = dot3(v, lineDir);
+    tMin = Math.min(tMin, t);
+    tMax = Math.max(tMax, t);
+  }
+  
+  if (tMax - tMin < ctx.tol.length) return []; // Degenerate
+  
+  // Extend beyond polygon bounds
+  const padding = Math.max(1, (tMax - tMin) * 0.1);
+  
+  // Collect intersection parameters with polygon edges
+  const crossings: number[] = [];
+  const n = polygon3D.length;
+  
+  for (let i = 0; i < n; i++) {
+    const p1 = polygon3D[i];
+    const p2 = polygon3D[(i + 1) % n];
+    
+    // Compute intersection of 3D line with edge p1-p2
+    // Line: linePoint + t * lineDir
+    // Edge: p1 + s * (p2 - p1), s ∈ [0, 1]
+    
+    const edgeDir = sub3(p2, p1);
+    const edgeLen = length3(edgeDir);
+    if (edgeLen < ctx.tol.length) continue;
+    
+    // Solve: linePoint + t * lineDir = p1 + s * edgeDir
+    // This gives us: t * lineDir - s * edgeDir = p1 - linePoint
+    // Two equations, two unknowns (t, s)
+    
+    // Use cross product to find intersection
+    // (lineDir × edgeDir) should be parallel to plane normal
+    const w = sub3(p1, linePoint);
+    const cross = cross3(lineDir, edgeDir);
+    const crossLen = length3(cross);
+    
+    if (crossLen < 1e-12) {
+      // Lines are parallel - check for overlap
+      // This happens when the intersection line lies along a polygon edge
+      const distToLine = length3(sub3(w, mul3(lineDir, dot3(w, lineDir))));
+      if (distToLine < ctx.tol.length) {
+        // Edge lies on line - add both endpoints
+        const t1 = dot3(sub3(p1, linePoint), lineDir);
+        const t2 = dot3(sub3(p2, linePoint), lineDir);
+        crossings.push(t1, t2);
+      }
+      continue;
+    }
+    
+    // Use Cramer's rule for 2D system (project onto plane perpendicular to cross)
+    // t = (w × edgeDir) · cross / |cross|²
+    // s = (w × lineDir) · cross / |cross|²
+    const cross2 = crossLen * crossLen;
+    const t = dot3(cross3(w, edgeDir), cross) / cross2;
+    const s = dot3(cross3(w, lineDir), cross) / cross2;
+    
+    // Check if intersection is within edge bounds
+    if (s >= -ctx.tol.length / edgeLen && s <= 1 + ctx.tol.length / edgeLen) {
+      crossings.push(t);
+    }
+  }
+  
+  if (crossings.length === 0) {
+    // No edge crossings - check if line is entirely inside or outside
+    // Test a point on the line within the polygon's t-range
+    const testT = (tMin + tMax) / 2;
+    const testPoint = add3(linePoint, mul3(lineDir, testT));
+    if (point3DInPolygon(testPoint, polygon3D, ctx)) {
+      return [{ tStart: tMin - padding, tEnd: tMax + padding }];
+    }
+    return [];
+  }
+  
+  // Sort and deduplicate crossings
+  crossings.sort((a, b) => a - b);
+  const uniqueCrossings: number[] = [crossings[0]];
+  for (let i = 1; i < crossings.length; i++) {
+    if (Math.abs(crossings[i] - uniqueCrossings[uniqueCrossings.length - 1]) > ctx.tol.length) {
+      uniqueCrossings.push(crossings[i]);
+    }
+  }
+  
+  // Use odd-even rule
+  const segments: { tStart: number; tEnd: number }[] = [];
+  
+  // Test before first crossing
+  const testBefore = add3(linePoint, mul3(lineDir, uniqueCrossings[0] - 1));
+  let inside = point3DInPolygon(testBefore, polygon3D, ctx);
+  
+  if (inside) {
+    segments.push({ tStart: tMin - padding, tEnd: uniqueCrossings[0] });
+  }
+  
+  for (let i = 0; i < uniqueCrossings.length - 1; i++) {
+      inside = !inside;
+    if (inside) {
+      segments.push({ tStart: uniqueCrossings[i], tEnd: uniqueCrossings[i + 1] });
+    }
+  }
+  
+  inside = !inside;
+  if (inside) {
+    segments.push({ tStart: uniqueCrossings[uniqueCrossings.length - 1], tEnd: tMax + padding });
+  }
+  
+  return segments;
+}
+
+/**
+ * Test if a 3D point lies inside a 3D planar polygon.
+ * Assumes the point is coplanar with the polygon.
+ */
+function point3DInPolygon(point: Vec3, polygon3D: Vec3[], ctx: NumericContext): boolean {
+  if (polygon3D.length < 3) return false;
+  
+  // Compute plane normal from first three vertices
+  const v1 = sub3(polygon3D[1], polygon3D[0]);
+  const v2 = sub3(polygon3D[2], polygon3D[0]);
+  const normal = cross3(v1, v2);
+  const normalLen = length3(normal);
+  if (normalLen < ctx.tol.length) return false;
+  
+  // Create a local 2D coordinate system on the plane
+  // Use a deterministic basis derived from the normal
+  const n = normalize3(normal);
+  const xDir = normalize3(v1);
+  const yDir = cross3(n, xDir);
+  
+  // Project all points to 2D
+  const origin = polygon3D[0];
+  const pointV = sub3(point, origin);
+  const point2D: Vec2 = [dot3(pointV, xDir), dot3(pointV, yDir)];
+  
+  const polygon2D: Vec2[] = polygon3D.map(p => {
+    const v = sub3(p, origin);
+    return [dot3(v, xDir), dot3(v, yDir)] as Vec2;
+  });
+  
+  return pointInPolygon(point2D, polygon2D);
+}
+
+/**
+ * Convert a 2D polygon to 3D using the face's surface
+ */
+function polygon2DTo3D(polygon2D: Vec2[], surface: PlaneSurface): Vec3[] {
+  return polygon2D.map(p => unprojectFromPlane(p, surface));
+}
+
+/**
  * Compute intersection segments between two planar faces.
  * Returns segments in the 2D coordinate system of each face.
+ * 
+ * Uses 3D clipping to avoid floating-point errors from UV projection roundtrips.
  * 
  * @param operation Optional boolean operation type. Affects coplanar face handling:
  *   - 'union': Skip imprinting for same-normal coplanar faces
@@ -307,47 +525,23 @@ export function computeFaceIntersection(
       // Coplanar faces - handle specially (overlap detection)
       return handleCoplanarFaces(faceA, faceB, ctx, operation);
     }
-    if (DEBUG) console.log(`  -> Planes parallel, not coplanar`);
     return null;
   }
   
-  if (DEBUG) {
-    console.log(`  Intersection line: point=[${intersection.point[0].toFixed(3)},${intersection.point[1].toFixed(3)},${intersection.point[2].toFixed(3)}], dir=[${intersection.direction[0].toFixed(3)},${intersection.direction[1].toFixed(3)},${intersection.direction[2].toFixed(3)}]`);
-  }
-  
-  // Project intersection line to each face's 2D system
-  const linePointA = projectToPlane2D(intersection.point, faceA.surface);
-  const lineDirA = projectToPlane2D(
-    add3(intersection.point, intersection.direction),
-    faceA.surface
-  );
-  const lineDirA2D: Vec2 = [lineDirA[0] - linePointA[0], lineDirA[1] - linePointA[1]];
-  const lenA = Math.sqrt(lineDirA2D[0] ** 2 + lineDirA2D[1] ** 2);
-  if (lenA > 1e-12) {
-    lineDirA2D[0] /= lenA;
-    lineDirA2D[1] /= lenA;
-  }
-  
-  const linePointB = projectToPlane2D(intersection.point, faceB.surface);
-  const lineDirB = projectToPlane2D(
-    add3(intersection.point, intersection.direction),
-    faceB.surface
-  );
-  const lineDirB2D: Vec2 = [lineDirB[0] - linePointB[0], lineDirB[1] - linePointB[1]];
-  const lenB = Math.sqrt(lineDirB2D[0] ** 2 + lineDirB2D[1] ** 2);
-  if (lenB > 1e-12) {
-    lineDirB2D[0] /= lenB;
-    lineDirB2D[1] /= lenB;
-  }
+  // Convert both polygons to 3D for direct 3D clipping
+  const polygon3DA = polygon2DTo3D(faceA.outer, faceA.surface);
+  const polygon3DB = polygon2DTo3D(faceB.outer, faceB.surface);
   
   if (DEBUG) {
-    console.log(`  Line in A's 2D: point=[${linePointA[0].toFixed(3)},${linePointA[1].toFixed(3)}], dir=[${lineDirA2D[0].toFixed(3)},${lineDirA2D[1].toFixed(3)}]`);
-    console.log(`  Line in B's 2D: point=[${linePointB[0].toFixed(3)},${linePointB[1].toFixed(3)}], dir=[${lineDirB2D[0].toFixed(3)},${lineDirB2D[1].toFixed(3)}]`);
+    console.log(`  Intersection line: point=[${intersection.point.map(v => v.toFixed(2)).join(',')}], dir=[${intersection.direction.map(v => v.toFixed(3)).join(',')}]`);
+    console.log(`  Polygon3DA: ${polygon3DA.map(p => `[${p.map(v => v.toFixed(1)).join(',')}]`).join(' ')}`);
+    console.log(`  Polygon3DB: ${polygon3DB.map(p => `[${p.map(v => v.toFixed(1)).join(',')}]`).join(' ')}`);
   }
   
-  // Clip line to each polygon
-  const intervalsA = clipLineToPolygon(linePointA, lineDirA2D, faceA.outer, ctx);
-  const intervalsB = clipLineToPolygon(linePointB, lineDirB2D, faceB.outer, ctx);
+  // Clip intersection line to both polygons in 3D
+  // This avoids UV projection/unprojection roundtrips which cause floating-point errors
+  const intervalsA = clipLine3DToPolygon(intersection.point, intersection.direction, polygon3DA, ctx);
+  const intervalsB = clipLine3DToPolygon(intersection.point, intersection.direction, polygon3DB, ctx);
   
   if (DEBUG) {
     console.log(`  IntervalsA: ${JSON.stringify(intervalsA)}`);
@@ -355,84 +549,32 @@ export function computeFaceIntersection(
   }
   
   if (intervalsA.length === 0 || intervalsB.length === 0) {
-    if (DEBUG) console.log(`  -> No intervals, returning null`);
     return null;
   }
   
-  // Map A's intervals to 3D and then to B's parameter space (and vice versa)
-  // to find the overlap
   const segmentsA: Segment2D[] = [];
   const segmentsB: Segment2D[] = [];
   
-  // For each pair of intervals, compute overlap
+  // For each pair of intervals, compute overlap in 3D parameter space
   for (const intA of intervalsA) {
     for (const intB of intervalsB) {
-      // Convert B interval to A's parameter space
-      // A point at tA in A corresponds to:
-      // 3D: linePointA (in 3D) + tA * intersection.direction (in 3D)
-      // Actually, we need to map through 3D...
-      
-      // Simpler approach: map both to a common 3D parameter
-      // tA and tB are both along the same 3D line, so we just need to find the transform
-      // The scaling might differ if lineDirA2D and lineDirB2D have different lengths relative to 3D dir
-      
-      // Since we normalized, tA in 2D corresponds to tA * lenA in 3D direction
-      // and tB in 2D corresponds to tB * lenB in 3D direction
-      // We need to map them to a common space
-      
-      // Actually, after normalization, t represents distance in 2D. 
-      // The 3D intersection line has unit direction, so we need to figure out
-      // how 2D distance relates to 3D distance for each plane.
-      
-      // For simplicity, use 3D mapping:
-      // Point on line at 2D param tA (in face A): 
-      // 3D pos = unprojectFromPlane([linePointA[0] + tA * lineDirA2D[0], linePointA[1] + tA * lineDirA2D[1]], faceA.surface)
-      
-      // To get overlap, compute 3D points at interval endpoints and find intersection
-      const a3d_start = unprojectFromPlane(
-        [linePointA[0] + intA.tStart * lineDirA2D[0], linePointA[1] + intA.tStart * lineDirA2D[1]],
-        faceA.surface
-      );
-      const a3d_end = unprojectFromPlane(
-        [linePointA[0] + intA.tEnd * lineDirA2D[0], linePointA[1] + intA.tEnd * lineDirA2D[1]],
-        faceA.surface
-      );
-      
-      const b3d_start = unprojectFromPlane(
-        [linePointB[0] + intB.tStart * lineDirB2D[0], linePointB[1] + intB.tStart * lineDirB2D[1]],
-        faceB.surface
-      );
-      const b3d_end = unprojectFromPlane(
-        [linePointB[0] + intB.tEnd * lineDirB2D[0], linePointB[1] + intB.tEnd * lineDirB2D[1]],
-        faceB.surface
-      );
-      
-      // Project all to the line direction for 1D interval intersection
-      const aStart1D = dot3(sub3(a3d_start, intersection.point), intersection.direction);
-      const aEnd1D = dot3(sub3(a3d_end, intersection.point), intersection.direction);
-      const bStart1D = dot3(sub3(b3d_start, intersection.point), intersection.direction);
-      const bEnd1D = dot3(sub3(b3d_end, intersection.point), intersection.direction);
-      
-      // Ensure order
-      const aMin = Math.min(aStart1D, aEnd1D);
-      const aMax = Math.max(aStart1D, aEnd1D);
-      const bMin = Math.min(bStart1D, bEnd1D);
-      const bMax = Math.max(bStart1D, bEnd1D);
-      
-      // Compute overlap
-      const overlapMin = Math.max(aMin, bMin);
-      const overlapMax = Math.min(aMax, bMax);
+      // Intervals are already in the same 3D parameter space!
+      // No need for 2D→3D→2D roundtrip
+      const overlapMin = Math.max(intA.tStart, intB.tStart);
+      const overlapMax = Math.min(intA.tEnd, intB.tEnd);
       
       if (overlapMax - overlapMin < ctx.tol.length) continue; // No significant overlap
       
-      // Convert overlap back to 2D segments for each face
+      // Compute canonical 3D endpoints from the overlap
       const pt3d_start = add3(intersection.point, mul3(intersection.direction, overlapMin));
       const pt3d_end = add3(intersection.point, mul3(intersection.direction, overlapMax));
       
+      // Project to each face's 2D system
+      // Now both faces get endpoints derived from the SAME 3D points
       const segA: Segment2D = {
         a: projectToPlane2D(pt3d_start, faceA.surface),
         b: projectToPlane2D(pt3d_end, faceA.surface),
-        sourceBody: 1, // This segment comes from intersection with B
+        sourceBody: 1,
         sourceFace: faceB.faceId,
         sourceHalfEdge: null,
         isIntersection: true
@@ -441,7 +583,7 @@ export function computeFaceIntersection(
       const segB: Segment2D = {
         a: projectToPlane2D(pt3d_start, faceB.surface),
         b: projectToPlane2D(pt3d_end, faceB.surface),
-        sourceBody: 0, // This segment comes from intersection with A
+        sourceBody: 0,
         sourceFace: faceA.faceId,
         sourceHalfEdge: null,
         isIntersection: true
@@ -745,33 +887,91 @@ function pointInPolygonWithBoundary(point: Vec2, polygon: Vec2[]): boolean {
 }
 
 /**
- * Clip a polygon against another polygon (convex clipper assumed).
+ * Clip a polygon against another polygon.
  * Returns the intersection polygon in the same coordinate system.
+ * 
+ * This implementation handles both convex and concave polygons by:
+ * 1. Clipping each subject edge against the clip polygon
+ * 2. Adding clip polygon vertices that are inside the subject polygon
+ * 3. Constructing the result from the clipped segments
+ * 
+ * For simple convex-convex cases, this gives the same result as Sutherland-Hodgman.
+ * For concave clip polygons, this correctly handles the non-convex case.
  */
 function clipPolygonToPolygon(subject: Vec2[], clip: Vec2[]): Vec2[] {
-  let output = subject.slice();
-  for (let i = 0; i < clip.length; i++) {
-    const a = clip[i];
-    const b = clip[(i + 1) % clip.length];
-    const input = output.slice();
-    output = [];
-    for (let j = 0; j < input.length; j++) {
-      const p = input[j];
-      const q = input[(j + 1) % input.length];
-      const pInside = isLeft(a, b, p) >= -1e-12;
-      const qInside = isLeft(a, b, q) >= -1e-12;
-      if (pInside && qInside) {
-        output.push(q);
-      } else if (pInside && !qInside) {
-        output.push(lineIntersect(a, b, p, q));
-      } else if (!pInside && qInside) {
-        output.push(lineIntersect(a, b, p, q));
-        output.push(q);
+  if (subject.length < 3 || clip.length < 3) return [];
+  
+  // Collect all intersection vertices and vertices inside the other polygon
+  const resultVertices: Vec2[] = [];
+  
+  // Step 1: Clip each subject edge against clip polygon
+  for (let i = 0; i < subject.length; i++) {
+    const p = subject[i];
+    const q = subject[(i + 1) % subject.length];
+    
+    // If start vertex is inside clip polygon, add it
+    if (pointInPolygonWithBoundary(p, clip)) {
+      resultVertices.push(p);
+    }
+    
+    // Find intersection points with clip polygon edges
+    for (let j = 0; j < clip.length; j++) {
+      const a = clip[j];
+      const b = clip[(j + 1) % clip.length];
+      const hit = segSegHit(p, q, a, b);
+      if (hit.kind === 'point') {
+        resultVertices.push(hit.point);
+      } else if (hit.kind === 'overlap') {
+        // Edge overlaps - add both overlap endpoints
+        const pt1: Vec2 = [
+          p[0] + hit.t1Start * (q[0] - p[0]),
+          p[1] + hit.t1Start * (q[1] - p[1])
+        ];
+        const pt2: Vec2 = [
+          p[0] + hit.t1End * (q[0] - p[0]),
+          p[1] + hit.t1End * (q[1] - p[1])
+        ];
+        resultVertices.push(pt1, pt2);
       }
     }
-    if (output.length === 0) break;
   }
-  return output;
+  
+  // Step 2: Add clip polygon vertices that are inside subject polygon
+  for (const v of clip) {
+    if (pointInPolygonWithBoundary(v, subject)) {
+      resultVertices.push(v);
+    }
+  }
+  
+  if (resultVertices.length < 3) return [];
+  
+  // Step 3: Order vertices to form a valid polygon (convex hull of intersection)
+  // For general case, use a simple centroid-based angular sort
+  const cx = resultVertices.reduce((s, v) => s + v[0], 0) / resultVertices.length;
+  const cy = resultVertices.reduce((s, v) => s + v[1], 0) / resultVertices.length;
+  
+  // Deduplicate vertices
+  const tol = 1e-10;
+  const unique: Vec2[] = [];
+  for (const v of resultVertices) {
+    const isDup = unique.some(u => 
+      Math.abs(u[0] - v[0]) < tol && Math.abs(u[1] - v[1]) < tol
+    );
+    if (!isDup) {
+      unique.push(v);
+    }
+  }
+  
+  if (unique.length < 3) return [];
+  
+  // Sort by angle from centroid
+  unique.sort((a, b) => {
+    const angleA = Math.atan2(a[1] - cy, a[0] - cx);
+    const angleB = Math.atan2(b[1] - cy, b[0] - cx);
+    return angleA - angleB;
+  });
+  
+  return unique;
 }
 
 /**

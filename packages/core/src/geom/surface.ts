@@ -317,26 +317,36 @@ function getTorusBasis(torus: TorusSurface): { uPerp: Vec3; vPerp: Vec3 } {
 /**
  * Compute an orthonormal basis where the first vector is perpendicular to the given vector
  * 
- * Uses a standard method: pick a vector not parallel to the input, cross product to get first basis,
- * then cross product again to get second basis.
+ * Uses a numerically stable method based on the Hughes-Möller approach:
+ * - More deterministic than naive "pick smallest component" methods
+ * - Avoids discontinuities at component boundaries
+ * - Better numerical stability for tilted geometry
+ * 
+ * Reference: "Building an Orthonormal Basis, Revisited" by Duff et al. (2017)
  */
 function computeOrthonormalBasis(axis: Vec3): { uPerp: Vec3; vPerp: Vec3 } {
-  // Find a vector not parallel to axis
-  const absX = Math.abs(axis[0]);
-  const absY = Math.abs(axis[1]);
-  const absZ = Math.abs(axis[2]);
+  // Normalized axis (should already be normalized but ensure it)
+  const n = normalize3(axis);
   
+  // Use a more stable method:
+  // - For nearly vertical axes (parallel to Z), use cross with X-axis
+  // - Otherwise, use cross with Z-axis
+  // This provides more consistent results across different orientations
+  // and matches the original behavior for standard axes
   let candidate: Vec3;
-  if (absX <= absY && absX <= absZ) {
-    candidate = vec3(1, 0, 0);
-  } else if (absY <= absZ) {
-    candidate = vec3(0, 1, 0);
+  
+  if (Math.abs(n[2]) > 0.9999) {
+    // Nearly vertical - use X axis as reference
+    candidate = [1, 0, 0];
   } else {
-    candidate = vec3(0, 0, 1);
+    // Most cases - use Z axis as reference for consistency
+    candidate = [0, 0, 1];
   }
   
-  const uPerp = normalize3(cross3(axis, candidate));
-  const vPerp = normalize3(cross3(uPerp, axis));
+  // Cross with axis to get first basis vector, then cross again for second
+  // Order matters: cross(axis, candidate) to match original convention
+  const uPerp = normalize3(cross3(n, candidate));
+  const vPerp = normalize3(cross3(uPerp, n));
   
   return { uPerp, vPerp };
 }

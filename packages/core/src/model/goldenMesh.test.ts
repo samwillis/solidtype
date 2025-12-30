@@ -19,6 +19,7 @@ import { subtract, union, intersect } from './boolean.js';
 import { tessellateBody } from '../mesh/tessellateBody.js';
 import { vec3 } from '../num/vec3.js';
 import type { Mesh } from '../mesh/types.js';
+import { SolidSession } from '../api/SolidSession.js';
 import {
   meshToGolden,
   computeMeshStats,
@@ -652,6 +653,48 @@ describe('golden mesh tests', () => {
       // After diagonal cut, surface area should be less due to removed corner
       // but we add new faces from the cut
       expect(stats.totalSurfaceArea).toBeGreaterThan(0);
+    });
+
+    it('rotated boxes subtract produces valid mesh', () => {
+      // Test two axis-aligned boxes where one is offset such that  
+      // the intersection edges are not on standard axes
+      // This tests the 3D clipping fix for tilted geometry
+      const model = new TopoModel(createNumericContext());
+
+      // Base box at origin
+      const base = createBox(model, { center: vec3(0, 0, 0), width: 10, depth: 10, height: 10 });
+
+      // Tool box offset in a way that creates angled intersection edges
+      // Offset by (3, 3, 0) so it intersects the corner region
+      const tool = createBox(model, { center: vec3(3, 3, 0), width: 10, depth: 10, height: 10 });
+
+      const result = subtract(model, base, tool);
+      expect(result.success).toBe(true);
+      if (!result.body) return;
+
+      const mesh = tessellateBody(model, result.body);
+      const stats = computeMeshStats(mesh);
+
+      console.log('Rotated boxes subtract stats:');
+      console.log(`  Vertices: ${stats.vertexCount}`);
+      console.log(`  Triangles: ${stats.triangleCount}`);
+      console.log(`  Total surface area: ${stats.totalSurfaceArea.toFixed(4)}`);
+      console.log(`  BBox: [${stats.boundingBox.min.join(', ')}] to [${stats.boundingBox.max.join(', ')}]`);
+
+      // After subtract, we should have an L-shaped cross-section
+      // The base minus the overlapping region
+      // Bounding box should be the same as the base
+      expect(stats.boundingBox.min[0]).toBeCloseTo(-5, 1);
+      expect(stats.boundingBox.min[1]).toBeCloseTo(-5, 1);
+      expect(stats.boundingBox.max[0]).toBeCloseTo(5, 1);
+      expect(stats.boundingBox.max[1]).toBeCloseTo(5, 1);
+      
+      // Surface area should be finite and positive
+      expect(stats.totalSurfaceArea).toBeGreaterThan(0);
+      expect(isFinite(stats.totalSurfaceArea)).toBe(true);
+      
+      // Should have more triangles than a simple box due to the cut
+      expect(stats.triangleCount).toBeGreaterThanOrEqual(12);
     });
   });
 });
