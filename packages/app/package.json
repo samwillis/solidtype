@@ -13,12 +13,15 @@
   "dependencies": {
     "@base-ui/react": "^1.0.0",
     "@solidtype/core": "workspace:*",
+    "opencascade.js": "^1.1.1",
     "@tanstack/react-form": "^1.27.5",
     "@tanstack/react-router": "^1.120.3",
     "@tanstack/react-start": "^1.120.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "three": "^0.161.0",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.5.0",
     "y-protocols": "^1.0.7",
     "yjs": "^13.6.28",
     "zod": "^4.2.1"

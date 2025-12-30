@@ -96,8 +96,8 @@ export function selectPieces(
   };
   
   // Key that includes polygon shape (for exact duplicates) - retained for future debugging
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _exactKey = (piece: FacePiece): string => `${planeKey(piece)}|${normalizeLoop3D(piece)}`;
+  void _exactKey; // Suppress unused warning
   
   let fromA: FacePiece[];
   let fromB: FacePiece[];
@@ -417,3 +417,7 @@ function _segmentsIntersect(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2): boolean {
 function cross2D(o: Vec2, a: Vec2, b: Vec2): number {
   return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 }
+
+// Suppress unused warnings for debugging utilities kept for future use
+void _pointInPolygon2D;
+void _segmentsIntersect;

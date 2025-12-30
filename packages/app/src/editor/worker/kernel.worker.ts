@@ -3,6 +3,8 @@
  * 
  * Runs the CAD kernel in a separate thread and syncs with the Yjs document.
  * Uses Y.Map/Y.Array model (no XML). See DOCUMENT-MODEL.md.
+ * 
+ * Updated to use the new OCCT-based SolidSession API.
  */
 
 /// <reference lib="webworker" />
@@ -10,7 +12,9 @@
 import * as Y from 'yjs';
 import {
   SolidSession,
-  Body,
+  setOC,
+  type BodyId,
+  type OperationResult,
   XY_PLANE,
   YZ_PLANE,
   ZX_PLANE,
@@ -32,7 +36,11 @@ import {
   tangent,
   symmetric,
   exportMeshesToStl,
+  type Mesh,
 } from '@solidtype/core';
+
+// Browser-specific OpenCascade.js initialization with static imports
+import { initOCCTBrowser } from './occt-init';
 import type {
   MainToWorkerMessage,
   WorkerToMainMessage,
@@ -66,265 +74,8 @@ self.onunhandledrejection = (event) => {
 };
 
 console.log('[Worker] Kernel worker starting...');
-const WORKER_BUILD_TAG = 'trim-log-2025-01-27';
+const WORKER_BUILD_TAG = 'occt-refactor-2025-01-30';
 console.log('[Worker] Build tag:', WORKER_BUILD_TAG);
-
-// ============================================================================
-// Debug Logging for Test Reproduction
-// ============================================================================
-
-/**
- * Log geometry in a format that can be copied into test files.
- * Enable by setting DEBUG_GEOMETRY = true
- */
-const DEBUG_GEOMETRY = true;
-
-interface SketchGeometryLog {
-  plane: {
-    origin: [number, number, number];
-    normal: [number, number, number];
-    xDir: [number, number, number];
-    yDir: [number, number, number];
-  };
-  points: { id: string; x: number; y: number; fixed?: boolean }[];
-  lines: { start: string; end: string }[];
-  arcs: { start: string; end: string; center: string; ccw: boolean }[];
-}
-
-interface BodyGeometryLog {
-  faces: {
-    normal: [number, number, number];
-    origin: [number, number, number];
-    vertices: [number, number, number][];
-    loopCount: number;
-  }[];
-}
-
-function logSketchGeometry(
-  sketchInfo: { plane: DatumPlane; data: { pointsById: Record<string, any>; entitiesById: Record<string, any> } },
-  label: string
-): void {
-  if (!DEBUG_GEOMETRY) return;
-  
-  const plane = sketchInfo.plane;
-  const surface = plane.surface;
-  const log: SketchGeometryLog = {
-    plane: {
-      origin: [surface.origin[0], surface.origin[1], surface.origin[2]],
-      normal: [surface.normal[0], surface.normal[1], surface.normal[2]],
-      xDir: [surface.xDir[0], surface.xDir[1], surface.xDir[2]],
-      yDir: [surface.yDir[0], surface.yDir[1], surface.yDir[2]],
-    },
-    points: [],
-    lines: [],
-    arcs: [],
-  };
-  
-  // Collect points
-  for (const [id, point] of Object.entries(sketchInfo.data.pointsById)) {
-    log.points.push({
-      id,
-      x: (point as any).x,
-      y: (point as any).y,
-      fixed: (point as any).fixed,
-    });
-  }
-  
-  // Collect entities
-  for (const [_id, entity] of Object.entries(sketchInfo.data.entitiesById)) {
-    const e = entity as any;
-    if (e.type === 'line') {
-      log.lines.push({ start: e.start, end: e.end });
-    } else if (e.type === 'arc') {
-      log.arcs.push({ start: e.start, end: e.end, center: e.center, ccw: e.ccw ?? true });
-    }
-  }
-  
-  console.log(`[Geometry] ${label} Sketch:`, JSON.stringify(log, null, 2));
-  
-  // Also log in a more test-friendly format
-  console.log(`[Test Code] // ${label} sketch setup:`);
-  console.log(`[Test Code] const plane = createDatumPlane(`);
-  console.log(`[Test Code]   vec3(${log.plane.origin.join(', ')}),`);
-  console.log(`[Test Code]   vec3(${log.plane.normal.join(', ')}),`);
-  console.log(`[Test Code]   vec3(${log.plane.xDir.join(', ')})`);
-  console.log(`[Test Code] );`);
-  console.log(`[Test Code] const sketch = session.createSketch(plane);`);
-  
-  for (const p of log.points) {
-    console.log(`[Test Code] const ${p.id} = sketch.addPoint(${p.x}, ${p.y}${p.fixed ? ', { fixed: true }' : ''});`);
-  }
-  for (const line of log.lines) {
-    console.log(`[Test Code] sketch.addLine(${line.start}, ${line.end});`);
-  }
-  for (const arc of log.arcs) {
-    console.log(`[Test Code] sketch.addArc(${arc.start}, ${arc.end}, ${arc.center}, ${arc.ccw});`);
-  }
-}
-
-function logBodyGeometry(body: Body, session: SolidSession, label: string): void {
-  if (!DEBUG_GEOMETRY) return;
-  
-  const model = session.getModel();
-  const faces = body.getFaces();
-  
-  const log: BodyGeometryLog = { faces: [] };
-  
-  for (const face of faces) {
-    const surfaceIdx = model.getFaceSurfaceIndex(face.id);
-    const surface = model.getSurface(surfaceIdx);
-    const loops = model.getFaceLoops(face.id);
-    
-    const vertices: [number, number, number][] = [];
-    if (loops.length > 0) {
-      for (const he of model.iterateLoopHalfEdges(loops[0])) {
-        const vertex = model.getHalfEdgeStartVertex(he);
-        const pos = model.getVertexPosition(vertex);
-        vertices.push([pos[0], pos[1], pos[2]]);
-      }
-    }
-    
-    if (surface.kind === 'plane') {
-      log.faces.push({
-        normal: [surface.normal[0], surface.normal[1], surface.normal[2]],
-        origin: [surface.origin[0], surface.origin[1], surface.origin[2]],
-        vertices,
-        loopCount: loops.length,
-      });
-    }
-  }
-  
-  console.log(`[Geometry] ${label} Body (${faces.length} faces):`, JSON.stringify(log, null, 2));
-  
-  // Log a summary for quick inspection
-  console.log(`[Body Summary] ${label}:`);
-  for (let i = 0; i < log.faces.length; i++) {
-    const f = log.faces[i];
-    const normalStr = `(${f.normal.map(n => n.toFixed(2)).join(',')})`;
-    const vertStr = f.vertices.map(v => `(${v.map(c => c.toFixed(2)).join(',')})`).join(' ');
-    console.log(`[Body Summary]   Face ${i}: n=${normalStr} loops=${f.loopCount} verts=[${vertStr}]`);
-  }
-}
-
-function logExtrudeOperation(
-  sketchInfo: any,
-  distance: number,
-  op: string,
-  direction: string
-): void {
-  if (!DEBUG_GEOMETRY) return;
-  
-  console.log(`[Operation] Extrude: op=${op}, distance=${distance}, direction=${direction}`);
-  logSketchGeometry(sketchInfo, 'Extrude');
-}
-
-function logBooleanOperation(
-  targetBody: Body,
-  toolBody: Body,
-  operation: string,
-  session: SolidSession
-): void {
-  if (!DEBUG_GEOMETRY) return;
-  
-  console.log(`[Operation] Boolean: ${operation}`);
-  logBodyGeometry(targetBody, session, 'Target');
-  logBodyGeometry(toolBody, session, 'Tool');
-}
-
-function logBooleanResult(
-  resultBody: Body | null,
-  operation: string,
-  session: SolidSession
-): void {
-  if (!DEBUG_GEOMETRY) return;
-  
-  if (resultBody) {
-    logBodyGeometry(resultBody, session, `Result (${operation})`);
-  } else {
-    console.log(`[Operation] Boolean ${operation} failed - no result body`);
-  }
-}
-
-function logPlusXFaceLoops(model: TopoModel, bodyId: number, label: string): void {
-  try {
-    const shells = model.getBodyShells(bodyId);
-    if (shells.length === 0) {
-      console.log('[Worker][Debug] trim-check', label, { bodyId, shells: 0 });
-      return;
-    }
-
-    const faces = model.getShellFaces(shells[0]);
-    const counts: number[] = [];
-    const detail: Array<{
-      faceId: number;
-      loops: Array<{
-        loopId: number;
-        vertexCount: number;
-        areaYZ: number;
-        verts: Array<[number, number, number]>;
-      }>;
-    }> = [];
-
-    const signedAreaYZ = (verts: Array<[number, number, number]>): number => {
-      let area = 0;
-      const n = verts.length;
-      for (let i = 0; i < n; i++) {
-        const [, y1, z1] = verts[i];
-        const [, y2, z2] = verts[(i + 1) % n];
-        area += y1 * z2 - y2 * z1;
-      }
-      return 0.5 * area;
-    };
-
-    for (const f of faces) {
-      const surf = model.getSurface(model.getFaceSurfaceIndex(f));
-      if (!surf || surf.kind !== 'plane') continue;
-      const n = surf.normal;
-      const isPlusX = Math.abs(n[0] - 1) < 1e-6 && Math.abs(n[1]) < 1e-6 && Math.abs(n[2]) < 1e-6;
-      if (!isPlusX) continue;
-
-      const loops = model.getFaceLoops(f);
-      if (loops.length === 0) continue;
-
-      const loopDetails: Array<{
-        loopId: number;
-        vertexCount: number;
-        areaYZ: number;
-        verts: Array<[number, number, number]>;
-      }> = [];
-
-      for (const loopId of loops) {
-        const verts: Array<[number, number, number]> = [];
-        for (const he of model.iterateLoopHalfEdges(loopId)) {
-          const vId = model.getHalfEdgeStartVertex(he);
-          const pos = model.getVertexPosition(
-            vId as Parameters<typeof model.getVertexPosition>[0]
-          );
-          verts.push([pos[0], pos[1], pos[2]]);
-        }
-        loopDetails.push({
-          loopId: loopId as number,
-          vertexCount: verts.length,
-          areaYZ: signedAreaYZ(verts),
-          verts,
-        });
-        counts.push(verts.length);
-      }
-
-      detail.push({
-        faceId: f as number,
-        loops: loopDetails,
-      });
-    }
-
-    console.log('[Worker][Debug] trim-check', label, { bodyId, plusXLoops: counts });
-    if (detail.length > 0) {
-      console.log('[Worker][Debug] trim-check detail', label, detail);
-    }
-  } catch (err) {
-    console.warn('[Worker][Debug] trim-check failed', err);
-  }
-}
 
 // ============================================================================
 // Worker State
@@ -334,20 +85,20 @@ let doc: Y.Doc | null = null;
 let syncPort: MessagePort | null = null;
 let session: SolidSession | null = null;
 let rebuildTimeout: ReturnType<typeof setTimeout> | null = null;
+let initializationPromise: Promise<void> | null = null;
 
 /**
- * Body entry in the bodyMap - stores body with metadata
+ * Body entry in the bodyMap - stores body ID with metadata
  */
 interface BodyEntry {
-  body: Body;
+  bodyId: BodyId;
   name: string;
   color: string;
   /** Feature ID that created this body (for reference tracking) */
   sourceFeatureId: string;
 }
 
-// Map of body IDs to their entries (body + metadata)
-// Key is the feature ID that created/owns the body
+// Map of feature IDs to their body entries
 const bodyMap = new Map<string, BodyEntry>();
 
 /** Default body colors - cycle through these for new bodies */
@@ -370,6 +121,43 @@ function getNextBodyColor(): string {
 
 function resetBodyColorIndex(): void {
   bodyColorIndex = 0;
+}
+
+// ============================================================================
+// Session Initialization
+// ============================================================================
+
+/**
+ * Initialize the OCCT session asynchronously
+ */
+async function initializeSession(): Promise<SolidSession> {
+  if (session && session.isInitialized()) {
+    return session;
+  }
+  
+  if (initializationPromise) {
+    await initializationPromise;
+    return session!;
+  }
+  
+  initializationPromise = (async () => {
+    // Initialize OpenCascade.js using browser-specific static imports
+    // This uses Vite-compatible imports from occt-init.ts
+    console.log('[Worker] Initializing OpenCascade.js...');
+    const oc = await initOCCTBrowser();
+    
+    // Set the OC instance in the core package so SolidSession can use it
+    setOC(oc);
+    console.log('[Worker] OpenCascade.js initialized and set in core');
+    
+    // Create and initialize the session
+    session = new SolidSession();
+    await session.init();
+    console.log('[Worker] OCCT session initialized');
+  })();
+  
+  await initializationPromise;
+  return session!;
 }
 
 // ============================================================================
@@ -530,6 +318,7 @@ function getDatumPlaneFromFeature(featureMap: Y.Map<unknown>): DatumPlane | null
 
 /**
  * Get sketch plane from a SketchPlaneRef
+ * Note: Face references are not supported in the new OCCT API yet
  */
 function getSketchPlane(
   planeRef: SketchPlaneRef,
@@ -542,44 +331,10 @@ function getSketchPlane(
   }
 
   if (planeRef.kind === 'faceRef') {
-    // Parse face reference: face:featureId:faceIndex
-    const parts = planeRef.ref.split(':');
-    if (parts.length < 3 || parts[0] !== 'face') return null;
-
-    const [, featureId, faceIndexStr] = parts;
-    const faceIndex = parseInt(faceIndexStr, 10);
-
-    // Find the body for this feature
-    const targetEntry = bodyMap.get(featureId);
-    if (!targetEntry || !session) return null;
-
-    // Get the face from the body
-    const faces = targetEntry.body.getFaces();
-    if (faceIndex < 0 || faceIndex >= faces.length) return null;
-
-    const face = faces[faceIndex];
-
-    // Get the face surface from the model
-    const model = session.getModel();
-    const surfaceIdx = model.getFaceSurfaceIndex(face.id);
-    const surface = model.getSurface(surfaceIdx);
-
-    // Only planar faces can be used as sketch planes
-    if (surface.kind !== 'plane') return null;
-
-    // Adjust normal direction based on face orientation
-    let normal = surface.normal;
-    if (model.isFaceReversed(face.id)) {
-      normal = [-normal[0], -normal[1], -normal[2]] as typeof normal;
-    }
-
-    return createDatumPlane(`Face:${featureId}:${faceIndex}`, {
-      kind: 'plane',
-      origin: surface.origin,
-      normal,
-      xDir: surface.xDir,
-      yDir: surface.yDir,
-    });
+    // TODO: Implement face selection in OCCT API
+    // For now, face references are not supported
+    console.warn('[Worker] Face references are not yet supported in the OCCT API');
+    return null;
   }
 
   return null;
@@ -588,16 +343,6 @@ function getSketchPlane(
 // ============================================================================
 // Feature Interpretation
 // ============================================================================
-
-function _getSketchFeatureById(
-  featuresById: Y.Map<Y.Map<unknown>>,
-  sketchId: string
-): Y.Map<unknown> | null {
-  const feature = featuresById.get(sketchId);
-  if (!feature || feature.get('type') !== 'sketch') return null;
-  return feature;
-}
-void _getSketchFeatureById; // suppress unused warning
 
 interface SketchData {
   pointsById: Record<string, { 
@@ -661,8 +406,7 @@ interface SketchInfo {
 }
 
 // Map of sketch IDs to their parsed data
-const _sketchMap = new Map<string, SketchInfo>();
-void _sketchMap; // suppress unused warning
+const sketchCache = new Map<string, SketchInfo>();
 
 /**
  * Calculate extrude distance based on extent type (Phase 14)
@@ -670,7 +414,7 @@ void _sketchMap; // suppress unused warning
 function calculateExtrudeDistance(
   featureMap: Y.Map<unknown>,
   direction: number,
-  sketchPlane?: DatumPlane
+  _sketchPlane?: DatumPlane
 ): number {
   const extent = (featureMap.get('extent') as string) || 'blind';
   const baseDistance = (featureMap.get('distance') as number) || 10;
@@ -683,42 +427,9 @@ function calculateExtrudeDistance(
       return 1000 * direction;
 
     case 'toFace': {
-      const extentRef = featureMap.get('extentRef') as string | undefined;
-      if (!extentRef) {
-        throw new Error('toFace extent requires extentRef');
-      }
-
-      const parts = extentRef.split(':');
-      if (parts.length < 3 || parts[0] !== 'face') {
-        throw new Error(`Invalid face reference: ${extentRef}`);
-      }
-      const [, featureId, faceIndexStr] = parts;
-      const faceIndex = parseInt(faceIndexStr, 10);
-
-      const targetEntry = bodyMap.get(featureId);
-      if (!targetEntry || !session || !sketchPlane) {
-        console.warn(`Cannot resolve toFace reference: ${extentRef}`);
-        return baseDistance * direction;
-      }
-
-      const faces = targetEntry.body.getFaces();
-      if (faceIndex < 0 || faceIndex >= faces.length) {
-        console.warn(`Face index out of range: ${faceIndex}`);
-        return baseDistance * direction;
-      }
-
-      const targetFace = faces[faceIndex];
-      const faceCentroid = targetFace.getCentroid();
-
-      const planeNormal = sketchPlane.surface.normal;
-      const planeOrigin = sketchPlane.surface.origin;
-
-      const dx = faceCentroid[0] - planeOrigin[0];
-      const dy = faceCentroid[1] - planeOrigin[1];
-      const dz = faceCentroid[2] - planeOrigin[2];
-      const dist = dx * planeNormal[0] + dy * planeNormal[1] + dz * planeNormal[2];
-
-      return Math.abs(dist) * direction;
+      // TODO: Implement toFace extent in OCCT API
+      console.warn('[Worker] toFace extent is not yet supported in the OCCT API');
+      return baseDistance * direction;
     }
 
     case 'toVertex':
@@ -729,125 +440,8 @@ function calculateExtrudeDistance(
   }
 }
 
-/**
- * Resolve an attachment reference to world coordinates (Phase 16)
- */
-function resolveAttachment(
-  attachedTo: string,
-  param: number = 0.5
-): { x: number; y: number; z: number } | null {
-  if (!session) return null;
-
-  if (attachedTo.startsWith('edge:')) {
-    const parts = attachedTo.split(':');
-    if (parts.length < 3) return null;
-
-    const [, featureId, edgeIndexStr] = parts;
-    const edgeIndex = parseInt(edgeIndexStr, 10);
-
-    const entry = bodyMap.get(featureId);
-    if (!entry) return null;
-
-    const model = session.getModel();
-    const shells = model.getBodyShells(entry.body.id);
-
-    const allEdges: Array<{ id: unknown; startVertex: unknown; endVertex: unknown }> = [];
-    for (const shellId of shells) {
-      const faces = model.getShellFaces(shellId);
-      for (const faceId of faces) {
-        const loops = model.getFaceLoops(faceId);
-        for (const loopId of loops) {
-          for (const he of model.iterateLoopHalfEdges(loopId)) {
-            const edgeId = model.getHalfEdgeEdge(he);
-            if (!allEdges.some((e) => e.id === edgeId)) {
-              const startVertex = model.getHalfEdgeStartVertex(he);
-              const endVertex = model.getHalfEdgeEndVertex(he);
-              allEdges.push({ id: edgeId, startVertex, endVertex });
-            }
-          }
-        }
-      }
-    }
-
-    if (edgeIndex < 0 || edgeIndex >= allEdges.length) return null;
-
-    const edge = allEdges[edgeIndex];
-    const startPos = model.getVertexPosition(
-      edge.startVertex as Parameters<typeof model.getVertexPosition>[0]
-    );
-    const endPos = model.getVertexPosition(
-      edge.endVertex as Parameters<typeof model.getVertexPosition>[0]
-    );
-
-    const t = Math.max(0, Math.min(1, param));
-    return {
-      x: startPos[0] + t * (endPos[0] - startPos[0]),
-      y: startPos[1] + t * (endPos[1] - startPos[1]),
-      z: startPos[2] + t * (endPos[2] - startPos[2]),
-    };
-  }
-
-  if (attachedTo.startsWith('vertex:')) {
-    const parts = attachedTo.split(':');
-    if (parts.length < 3) return null;
-
-    const [, featureId, vertexIndexStr] = parts;
-    const vertexIndex = parseInt(vertexIndexStr, 10);
-
-    const entry = bodyMap.get(featureId);
-    if (!entry) return null;
-
-    const model = session.getModel();
-    const shells = model.getBodyShells(entry.body.id);
-
-    const allVertices: unknown[] = [];
-    for (const shellId of shells) {
-      const faces = model.getShellFaces(shellId);
-      for (const faceId of faces) {
-        const loops = model.getFaceLoops(faceId);
-        for (const loopId of loops) {
-          for (const he of model.iterateLoopHalfEdges(loopId)) {
-            const vertexId = model.getHalfEdgeStartVertex(he);
-            if (!allVertices.includes(vertexId)) {
-              allVertices.push(vertexId);
-            }
-          }
-        }
-      }
-    }
-
-    if (vertexIndex < 0 || vertexIndex >= allVertices.length) return null;
-
-    const pos = model.getVertexPosition(
-      allVertices[vertexIndex] as Parameters<typeof model.getVertexPosition>[0]
-    );
-    return { x: pos[0], y: pos[1], z: pos[2] };
-  }
-
-  return null;
-}
-
-/**
- * Project a world point onto a sketch plane
- */
-function projectToSketchPlane(
-  worldPos: { x: number; y: number; z: number },
-  plane: DatumPlane
-): { x: number; y: number } {
-  const { origin, xDir, yDir } = plane.surface;
-
-  const dx = worldPos.x - origin[0];
-  const dy = worldPos.y - origin[1];
-  const dz = worldPos.z - origin[2];
-
-  const x = dx * xDir[0] + dy * xDir[1] + dz * xDir[2];
-  const y = dx * yDir[0] + dy * yDir[1] + dz * yDir[2];
-
-  return { x, y };
-}
-
 function interpretSketch(
-  session: SolidSession,
+  currentSession: SolidSession,
   sketchMap: Y.Map<unknown>,
   featuresById: Y.Map<Y.Map<unknown>>
 ): void {
@@ -862,7 +456,7 @@ function interpretSketch(
   const data = parseSketchData(sketchMap);
 
   // Build a kernel sketch
-  const sketch = session.createSketch(plane);
+  const sketch = currentSession.createSketch(plane);
   const pointIdMap = new Map<string, any>();
   const entityIdMap = new Map<string, any>();
 
@@ -870,20 +464,9 @@ function interpretSketch(
   const sortedPointIds = Object.keys(data.pointsById).sort();
   for (const pointId of sortedPointIds) {
     const point = data.pointsById[pointId];
-    let x = point.x;
-    let y = point.y;
-    let isFixed = point.fixed;
-
-    // Resolve external attachment if present (Phase 16)
-    if (point.attachedTo) {
-      const worldPos = resolveAttachment(point.attachedTo, point.param);
-      if (worldPos) {
-        const projected = projectToSketchPlane(worldPos, plane);
-        x = projected.x;
-        y = projected.y;
-        isFixed = true;
-      }
-    }
+    const x = point.x;
+    const y = point.y;
+    const isFixed = point.fixed;
 
     const pid = sketch.addPoint(x, y, { fixed: isFixed });
     pointIdMap.set(point.id, pid);
@@ -1069,22 +652,21 @@ function interpretSketch(
   } as WorkerToMainMessage);
 
   // Store for downstream features
-  (globalThis as any).__sketchMap = (globalThis as any).__sketchMap || new Map();
-  (globalThis as any).__sketchMap.set(id, { planeRef, plane, data });
+  sketchCache.set(id, { planeRef, plane, data });
 }
 
 /**
  * Result from interpretExtrude/interpretRevolve with metadata
  */
 interface FeatureInterpretResult {
-  body: Body | null;
+  bodyId: BodyId | null;
   bodyEntryId: string | null;
   bodyName?: string;
   bodyColor?: string;
 }
 
 function interpretExtrude(
-  session: SolidSession,
+  currentSession: SolidSession,
   featureMap: Y.Map<unknown>,
   featureId: string,
   _featuresById: Y.Map<Y.Map<unknown>>
@@ -1101,16 +683,13 @@ function interpretExtrude(
     throw new Error('Extrude requires a sketch reference');
   }
 
-  const sketchInfo = (globalThis as any).__sketchMap?.get(sketchId);
+  const sketchInfo = sketchCache.get(sketchId);
   if (!sketchInfo) {
     throw new Error(`Sketch not found: ${sketchId}`);
   }
 
-  // Log sketch geometry for test reproduction
-  logSketchGeometry(sketchInfo, `Extrude(${op})`);
-
   // Create sketch and add entities
-  const sketch = session.createSketch(sketchInfo.plane);
+  const sketch = currentSession.createSketch(sketchInfo.plane);
   const pointIdMap = new Map<string, any>();
 
   // Add points (sorted for determinism)
@@ -1150,18 +729,17 @@ function interpretExtrude(
   const dirMultiplier = direction === 'reverse' ? -1 : 1;
   const finalDistance = calculateExtrudeDistance(featureMap, dirMultiplier, sketchInfo.plane);
 
-  const result = session.extrude(profile, {
-    operation: 'add',
+  // Extrude to create new body
+  const result = currentSession.extrude(profile, {
+    operation: 'new',
     distance: finalDistance,
   });
 
-  if (!result.success || !result.body) {
-    throw new Error(result.error || 'Extrude failed');
+  if (!result.success) {
+    throw new Error(result.error?.message || 'Extrude failed');
   }
 
-  // Log the extruded body geometry
-  logExtrudeOperation(sketchInfo, finalDistance, op, direction);
-  logBodyGeometry(result.body, session, `Extrude result (${op})`);
+  const extrudedBodyId = result.value;
 
   // Handle cut operation
   if (op === 'cut') {
@@ -1172,37 +750,25 @@ function interpretExtrude(
     for (const [existingId, entry] of bodyMap) {
       console.log(`[Worker] Subtracting from body ${existingId}`);
       
-      // Log both bodies for test reproduction
-      logBooleanOperation(entry.body, result.body, 'subtract', session);
-      
-      const boolResult = session.subtract(entry.body, result.body);
-      console.log(`[Worker] Subtract result: success=${boolResult.success}, error=${boolResult.error || 'none'}`);
-      if (boolResult.success && boolResult.body) {
-        // Log result for test reproduction
-        logBooleanResult(boolResult.body, 'subtract', session);
-        // Quick trim check on +X face
-        logPlusXFaceLoops(session.getModel(), boolResult.body.id as number, `subtract:${existingId}`);
-        
-        bodyMap.set(existingId, { ...entry, body: boolResult.body });
+      const boolResult = currentSession.subtract(entry.bodyId, extrudedBodyId);
+      console.log(`[Worker] Subtract result: success=${boolResult.success}`);
+      if (boolResult.success) {
+        // Update the body entry with the new body ID from the boolean result
+        bodyMap.set(existingId, { ...entry, bodyId: boolResult.value });
         anySuccess = true;
       } else {
-        lastError = boolResult.error;
-        console.error(`[Worker] Boolean subtract failed: ${boolResult.error}`);
-        
-        // Check if failure is due to non-planar faces
-        if (boolResult.error?.includes('planar')) {
-          console.error(`[Worker] NOTE: Boolean failed because bodies contain non-planar faces (arcs, circles, or curved surfaces). Curved booleans are not yet implemented.`);
-        }
+        lastError = boolResult.error?.message;
+        console.error(`[Worker] Boolean subtract failed: ${lastError}`);
       }
     }
+    
+    // Delete the tool body
+    currentSession.deleteBody(extrudedBodyId);
+    
     if (!anySuccess && bodyMap.size > 0 && lastError) {
-      // Include hint about non-planar faces if applicable
-      if (lastError.includes('planar')) {
-        throw new Error(`Cut operation failed: ${lastError}. Sketches with arcs/circles create non-planar faces which are not yet supported.`);
-      }
       throw new Error(`Cut operation failed: ${lastError}`);
     }
-    return { body: null, bodyEntryId: null };
+    return { bodyId: null, bodyEntryId: null };
   }
 
   // Handle add operation with merge logic
@@ -1211,7 +777,7 @@ function interpretExtrude(
 
   if (mergeScope === 'new' || bodyMap.size === 0) {
     return {
-      body: result.body,
+      bodyId: extrudedBodyId,
       bodyEntryId: featureId,
       bodyName: finalBodyName,
       bodyColor: finalBodyColor,
@@ -1219,16 +785,23 @@ function interpretExtrude(
   }
 
   if (mergeScope === 'specific' && targetBodies.length > 0) {
-    let mergedBody = result.body;
+    let currentBodyId = extrudedBodyId;
     let mergedIntoId: string | null = null;
     let mergedEntry: BodyEntry | null = null;
 
     for (const targetId of targetBodies) {
       const targetEntry = bodyMap.get(targetId);
       if (targetEntry) {
-        const unionResult = session.union(targetEntry.body, mergedBody);
-        if (unionResult.success && unionResult.body) {
-          mergedBody = unionResult.body;
+        const unionResult = currentSession.union(targetEntry.bodyId, currentBodyId);
+        if (unionResult.success) {
+          // Delete old bodies if they're different from result
+          if (currentBodyId !== unionResult.value) {
+            currentSession.deleteBody(currentBodyId);
+          }
+          if (targetEntry.bodyId !== unionResult.value) {
+            currentSession.deleteBody(targetEntry.bodyId);
+          }
+          currentBodyId = unionResult.value;
           if (!mergedIntoId) {
             mergedIntoId = targetId;
             mergedEntry = targetEntry;
@@ -1238,9 +811,9 @@ function interpretExtrude(
     }
 
     if (mergedIntoId && mergedEntry) {
-      bodyMap.set(mergedIntoId, { ...mergedEntry, body: mergedBody });
+      bodyMap.set(mergedIntoId, { ...mergedEntry, bodyId: currentBodyId });
       return {
-        body: null,
+        bodyId: null,
         bodyEntryId: mergedIntoId,
         bodyName: mergedEntry.name,
         bodyColor: mergedEntry.color,
@@ -1248,7 +821,7 @@ function interpretExtrude(
     }
 
     return {
-      body: result.body,
+      bodyId: currentBodyId,
       bodyEntryId: featureId,
       bodyName: finalBodyName,
       bodyColor: finalBodyColor,
@@ -1257,40 +830,40 @@ function interpretExtrude(
 
   // mergeScope === 'auto'
   console.log('[Worker] Extrude ADD with auto merge');
-  console.log(`[Worker] New extrusion has ${result.body.getFaces().length} faces`);
-  let mergedBody = result.body;
+  let currentBodyId = extrudedBodyId;
   let mergedIntoId: string | null = null;
   let mergedEntry: BodyEntry | null = null;
-  let mergeWarnings: string[] = [];
+  const mergeWarnings: string[] = [];
 
   for (const [existingId, entry] of bodyMap) {
-    console.log(`[Worker] Union with body ${existingId}, faces: ${entry.body.getFaces().length}`);
-    const unionResult = session.union(entry.body, mergedBody);
-    console.log(`[Worker] Union result: success=${unionResult.success}, error=${unionResult.error || 'none'}`);
-    if (unionResult.success && unionResult.body) {
-      console.log(`[Worker] After union: ${unionResult.body.getFaces().length} faces`);
-      mergedBody = unionResult.body;
+    console.log(`[Worker] Union with body ${existingId}`);
+    const unionResult = currentSession.union(entry.bodyId, currentBodyId);
+    console.log(`[Worker] Union result: success=${unionResult.success}`);
+    if (unionResult.success) {
+      // Delete old bodies if they're different from result
+      if (currentBodyId !== unionResult.value) {
+        currentSession.deleteBody(currentBodyId);
+      }
+      if (entry.bodyId !== unionResult.value) {
+        currentSession.deleteBody(entry.bodyId);
+      }
+      currentBodyId = unionResult.value;
       if (!mergedIntoId) {
         mergedIntoId = existingId;
         mergedEntry = entry;
       }
     } else if (unionResult.error) {
       // Log warning but continue - bodies will remain separate
-      console.warn(`[Worker] Union failed (bodies will remain separate): ${unionResult.error}`);
-      mergeWarnings.push(`Union with existing body failed: ${unionResult.error}`);
-      
-      // Check if failure is due to non-planar faces
-      if (unionResult.error.includes('planar')) {
-        console.error(`[Worker] NOTE: Boolean failed because bodies contain non-planar faces (arcs, circles, or curved surfaces). Curved booleans are not yet implemented.`);
-      }
+      console.warn(`[Worker] Union failed (bodies will remain separate): ${unionResult.error.message}`);
+      mergeWarnings.push(`Union with existing body failed: ${unionResult.error.message}`);
     }
   }
 
   if (mergedIntoId && mergedEntry) {
-    console.log(`[Worker] Merged into ${mergedIntoId}, final faces: ${mergedBody.getFaces().length}`);
-    bodyMap.set(mergedIntoId, { ...mergedEntry, body: mergedBody });
+    console.log(`[Worker] Merged into ${mergedIntoId}`);
+    bodyMap.set(mergedIntoId, { ...mergedEntry, bodyId: currentBodyId });
     return {
-      body: null,
+      bodyId: null,
       bodyEntryId: mergedIntoId,
       bodyName: mergedEntry.name,
       bodyColor: mergedEntry.color,
@@ -1302,7 +875,7 @@ function interpretExtrude(
     console.warn(`[Worker] Creating separate body due to merge failures: ${mergeWarnings.join('; ')}`);
   }
   return {
-    body: result.body,
+    bodyId: currentBodyId,
     bodyEntryId: featureId,
     bodyName: finalBodyName,
     bodyColor: finalBodyColor,
@@ -1310,7 +883,7 @@ function interpretExtrude(
 }
 
 function interpretRevolve(
-  session: SolidSession,
+  currentSession: SolidSession,
   featureMap: Y.Map<unknown>,
   featureId: string,
   _featuresById: Y.Map<Y.Map<unknown>>
@@ -1331,7 +904,7 @@ function interpretRevolve(
     throw new Error('Revolve requires an axis line selection');
   }
 
-  const sketchInfo = (globalThis as any).__sketchMap?.get(sketchId);
+  const sketchInfo = sketchCache.get(sketchId);
   if (!sketchInfo) {
     throw new Error(`Sketch not found: ${sketchId}`);
   }
@@ -1347,7 +920,7 @@ function interpretRevolve(
     throw new Error('Axis references missing sketch points');
   }
 
-  const sketch = session.createSketch(sketchInfo.plane);
+  const sketch = currentSession.createSketch(sketchInfo.plane);
   const pointIdMap = new Map<string, any>();
   const entityIdMap = new Map<string, any>();
 
@@ -1397,26 +970,28 @@ function interpretRevolve(
   const axisEndWorld = planeToWorld(sketchInfo.plane, axisEnd2d.x, axisEnd2d.y);
   const axisDir = sub3(axisEndWorld, axisStartWorld);
 
-  const angleRad = (angleDeg * Math.PI) / 180;
-  const result = session.revolve(profile, {
-    operation: 'add',
+  const result = currentSession.revolve(profile, {
+    operation: 'new',
     axis: { origin: axisStartWorld, direction: axisDir },
-    angle: angleRad,
+    angleDegrees: angleDeg,
   });
 
-  if (!result.success || !result.body) {
-    throw new Error(result.error || 'Revolve failed');
+  if (!result.success) {
+    throw new Error(result.error?.message || 'Revolve failed');
   }
+
+  const revolvedBodyId = result.value;
 
   // Handle cut operation
   if (op === 'cut') {
     for (const [existingId, entry] of bodyMap) {
-      const boolResult = session.subtract(entry.body, result.body);
-      if (boolResult.success && boolResult.body) {
-        bodyMap.set(existingId, { ...entry, body: boolResult.body });
+      const boolResult = currentSession.subtract(entry.bodyId, revolvedBodyId);
+      if (boolResult.success) {
+        bodyMap.set(existingId, { ...entry, bodyId: boolResult.value });
       }
     }
-    return { body: null, bodyEntryId: null };
+    currentSession.deleteBody(revolvedBodyId);
+    return { bodyId: null, bodyEntryId: null };
   }
 
   // Handle add (same merge logic as extrude)
@@ -1425,7 +1000,7 @@ function interpretRevolve(
 
   if (mergeScope === 'new' || bodyMap.size === 0) {
     return {
-      body: result.body,
+      bodyId: revolvedBodyId,
       bodyEntryId: featureId,
       bodyName: finalBodyName,
       bodyColor: finalBodyColor,
@@ -1433,16 +1008,22 @@ function interpretRevolve(
   }
 
   if (mergeScope === 'specific' && targetBodies.length > 0) {
-    let mergedBody = result.body;
+    let currentBodyId = revolvedBodyId;
     let mergedIntoId: string | null = null;
     let mergedEntry: BodyEntry | null = null;
 
     for (const targetId of targetBodies) {
       const targetEntry = bodyMap.get(targetId);
       if (targetEntry) {
-        const unionResult = session.union(targetEntry.body, mergedBody);
-        if (unionResult.success && unionResult.body) {
-          mergedBody = unionResult.body;
+        const unionResult = currentSession.union(targetEntry.bodyId, currentBodyId);
+        if (unionResult.success) {
+          if (currentBodyId !== unionResult.value) {
+            currentSession.deleteBody(currentBodyId);
+          }
+          if (targetEntry.bodyId !== unionResult.value) {
+            currentSession.deleteBody(targetEntry.bodyId);
+          }
+          currentBodyId = unionResult.value;
           if (!mergedIntoId) {
             mergedIntoId = targetId;
             mergedEntry = targetEntry;
@@ -1452,9 +1033,9 @@ function interpretRevolve(
     }
 
     if (mergedIntoId && mergedEntry) {
-      bodyMap.set(mergedIntoId, { ...mergedEntry, body: mergedBody });
+      bodyMap.set(mergedIntoId, { ...mergedEntry, bodyId: currentBodyId });
       return {
-        body: null,
+        bodyId: null,
         bodyEntryId: mergedIntoId,
         bodyName: mergedEntry.name,
         bodyColor: mergedEntry.color,
@@ -1462,7 +1043,7 @@ function interpretRevolve(
     }
 
     return {
-      body: result.body,
+      bodyId: currentBodyId,
       bodyEntryId: featureId,
       bodyName: finalBodyName,
       bodyColor: finalBodyColor,
@@ -1470,14 +1051,20 @@ function interpretRevolve(
   }
 
   // auto merge
-  let mergedBody = result.body;
+  let currentBodyId = revolvedBodyId;
   let mergedIntoId: string | null = null;
   let mergedEntry: BodyEntry | null = null;
 
   for (const [existingId, entry] of bodyMap) {
-    const unionResult = session.union(entry.body, mergedBody);
-    if (unionResult.success && unionResult.body) {
-      mergedBody = unionResult.body;
+    const unionResult = currentSession.union(entry.bodyId, currentBodyId);
+    if (unionResult.success) {
+      if (currentBodyId !== unionResult.value) {
+        currentSession.deleteBody(currentBodyId);
+      }
+      if (entry.bodyId !== unionResult.value) {
+        currentSession.deleteBody(entry.bodyId);
+      }
+      currentBodyId = unionResult.value;
       if (!mergedIntoId) {
         mergedIntoId = existingId;
         mergedEntry = entry;
@@ -1486,9 +1073,9 @@ function interpretRevolve(
   }
 
   if (mergedIntoId && mergedEntry) {
-    bodyMap.set(mergedIntoId, { ...mergedEntry, body: mergedBody });
+    bodyMap.set(mergedIntoId, { ...mergedEntry, bodyId: currentBodyId });
     return {
-      body: null,
+      bodyId: null,
       bodyEntryId: mergedIntoId,
       bodyName: mergedEntry.name,
       bodyColor: mergedEntry.color,
@@ -1496,7 +1083,7 @@ function interpretRevolve(
   }
 
   return {
-    body: result.body,
+    bodyId: currentBodyId,
     bodyEntryId: featureId,
     bodyName: finalBodyName,
     bodyColor: finalBodyColor,
@@ -1504,7 +1091,7 @@ function interpretRevolve(
 }
 
 function interpretBoolean(
-  session: SolidSession,
+  currentSession: SolidSession,
   featureMap: Y.Map<unknown>
 ): FeatureInterpretResult {
   const operation = (featureMap.get('operation') as string) || 'union';
@@ -1525,36 +1112,33 @@ function interpretBoolean(
     throw new Error(`Tool body not found: ${toolId}`);
   }
 
-  // Log geometry for test reproduction
-  logBooleanOperation(targetEntry.body, toolEntry.body, operation, session);
-
-  let result;
+  let result: OperationResult<BodyId>;
   switch (operation) {
     case 'union':
-      result = session.union(targetEntry.body, toolEntry.body);
+      result = currentSession.union(targetEntry.bodyId, toolEntry.bodyId);
       break;
     case 'subtract':
-      result = session.subtract(targetEntry.body, toolEntry.body);
+      result = currentSession.subtract(targetEntry.bodyId, toolEntry.bodyId);
       break;
     case 'intersect':
-      result = session.intersect(targetEntry.body, toolEntry.body);
+      result = currentSession.intersect(targetEntry.bodyId, toolEntry.bodyId);
       break;
     default:
       throw new Error(`Unknown boolean operation: ${operation}`);
   }
 
-  if (!result.success || !result.body) {
-    throw new Error(result.error || 'Boolean operation failed');
+  if (!result.success) {
+    throw new Error(result.error?.message || 'Boolean operation failed');
   }
-  
-  // Log result for test reproduction
-  logBooleanResult(result.body, operation, session);
 
+  // Delete old bodies and update map
+  currentSession.deleteBody(targetEntry.bodyId);
+  currentSession.deleteBody(toolEntry.bodyId);
   bodyMap.delete(toolId);
-  bodyMap.set(targetId, { ...targetEntry, body: result.body });
+  bodyMap.set(targetId, { ...targetEntry, bodyId: result.value });
 
   return {
-    body: null,
+    bodyId: null,
     bodyEntryId: targetId,
     bodyName: targetEntry.name,
     bodyColor: targetEntry.color,
@@ -1565,7 +1149,7 @@ function interpretBoolean(
 // Rebuild Logic
 // ============================================================================
 
-function performRebuild(): void {
+async function performRebuild(): Promise<void> {
   if (!doc) return;
 
   const root = getRoot(doc);
@@ -1576,190 +1160,158 @@ function performRebuild(): void {
 
   self.postMessage({ type: 'rebuild-start' } as WorkerToMainMessage);
 
-  // Reset state
-  session = new SolidSession();
-  bodyMap.clear();
-  (globalThis as any).__sketchMap = new Map();
-  resetBodyColorIndex();
+  try {
+    // Initialize session (async)
+    const currentSession = await initializeSession();
+    
+    // Clear previous state
+    currentSession.dispose();
+    session = new SolidSession();
+    await session.init();
+    
+    bodyMap.clear();
+    sketchCache.clear();
+    resetBodyColorIndex();
 
-  // Build datum plane cache
-  buildDatumPlaneCache(featuresById);
+    // Build datum plane cache
+    buildDatumPlaneCache(featuresById);
 
-  const bodies: BodyInfo[] = [];
-  const errors: BuildError[] = [];
-  const featureStatus: Record<string, FeatureStatus> = {};
+    const bodies: BodyInfo[] = [];
+    const errors: BuildError[] = [];
+    const featureStatus: Record<string, FeatureStatus> = {};
 
-  let reachedGate = false;
+    let reachedGate = false;
 
-  // Iterate in featureOrder (array of UUIDs)
-  for (const id of featureOrder.toArray()) {
-    const featureMap = featuresById.get(id);
-    if (!featureMap) continue;
+    // Iterate in featureOrder (array of UUIDs)
+    for (const id of featureOrder.toArray()) {
+      const featureMap = featuresById.get(id);
+      if (!featureMap) continue;
 
-    const type = featureMap.get('type') as string;
-    const suppressed = featureMap.get('suppressed') === true;
+      const type = featureMap.get('type') as string;
+      const suppressed = featureMap.get('suppressed') === true;
 
-    // Check if we've passed the rebuild gate
-    if (reachedGate) {
-      featureStatus[id] = 'gated';
-      continue;
-    }
-
-    if (suppressed) {
-      featureStatus[id] = 'suppressed';
-      continue;
-    }
-
-    try {
-      let result: FeatureInterpretResult | null = null;
-
-      switch (type) {
-        case 'origin':
-        case 'plane':
-          featureStatus[id] = 'computed';
-          break;
-
-        case 'sketch':
-          interpretSketch(session!, featureMap, featuresById);
-          featureStatus[id] = 'computed';
-          break;
-
-        case 'extrude':
-          result = interpretExtrude(session!, featureMap, id, featuresById);
-          featureStatus[id] = 'computed';
-
-          if (result.body && result.bodyEntryId) {
-            const entry: BodyEntry = {
-              body: result.body,
-              name: result.bodyName || `Body${bodyMap.size + 1}`,
-              color: result.bodyColor || getNextBodyColor(),
-              sourceFeatureId: id,
-            };
-            bodyMap.set(result.bodyEntryId, entry);
-          }
-          break;
-
-        case 'revolve':
-          result = interpretRevolve(session!, featureMap, id, featuresById);
-          featureStatus[id] = 'computed';
-
-          if (result.body && result.bodyEntryId) {
-            const entry: BodyEntry = {
-              body: result.body,
-              name: result.bodyName || `Body${bodyMap.size + 1}`,
-              color: result.bodyColor || getNextBodyColor(),
-              sourceFeatureId: id,
-            };
-            bodyMap.set(result.bodyEntryId, entry);
-          }
-          break;
-
-        case 'boolean':
-          result = interpretBoolean(session!, featureMap);
-          featureStatus[id] = 'computed';
-          break;
-
-        default:
-          featureStatus[id] = 'computed';
-          break;
+      // Check if we've passed the rebuild gate
+      if (reachedGate) {
+        featureStatus[id] = 'gated';
+        continue;
       }
-    } catch (err) {
-      errors.push({
-        featureId: id,
-        code: 'BUILD_ERROR',
-        message: err instanceof Error ? err.message : String(err),
+
+      if (suppressed) {
+        featureStatus[id] = 'suppressed';
+        continue;
+      }
+
+      try {
+        let result: FeatureInterpretResult | null = null;
+
+        switch (type) {
+          case 'origin':
+          case 'plane':
+            featureStatus[id] = 'computed';
+            break;
+
+          case 'sketch':
+            interpretSketch(session!, featureMap, featuresById);
+            featureStatus[id] = 'computed';
+            break;
+
+          case 'extrude':
+            result = interpretExtrude(session!, featureMap, id, featuresById);
+            featureStatus[id] = 'computed';
+
+            // Check for bodyId !== null (not just truthy) because bodyId can be 0
+            if (result.bodyId !== null && result.bodyEntryId !== null) {
+              const entry: BodyEntry = {
+                bodyId: result.bodyId,
+                name: result.bodyName || `Body${bodyMap.size + 1}`,
+                color: result.bodyColor || getNextBodyColor(),
+                sourceFeatureId: id,
+              };
+              bodyMap.set(result.bodyEntryId, entry);
+            }
+            break;
+
+          case 'revolve':
+            result = interpretRevolve(session!, featureMap, id, featuresById);
+            featureStatus[id] = 'computed';
+
+            // Check for bodyId !== null (not just truthy) because bodyId can be 0
+            if (result.bodyId !== null && result.bodyEntryId !== null) {
+              const entry: BodyEntry = {
+                bodyId: result.bodyId,
+                name: result.bodyName || `Body${bodyMap.size + 1}`,
+                color: result.bodyColor || getNextBodyColor(),
+                sourceFeatureId: id,
+              };
+              bodyMap.set(result.bodyEntryId, entry);
+            }
+            break;
+
+          case 'boolean':
+            result = interpretBoolean(session!, featureMap);
+            featureStatus[id] = 'computed';
+            break;
+
+          default:
+            featureStatus[id] = 'computed';
+            break;
+        }
+      } catch (err) {
+        errors.push({
+          featureId: id,
+          code: 'BUILD_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        });
+        featureStatus[id] = 'error';
+      }
+
+      if (rebuildGate && id === rebuildGate) {
+        reachedGate = true;
+      }
+    }
+
+    // Build bodies list from bodyMap
+    for (const [entryId, entry] of bodyMap) {
+      bodies.push({
+        id: String(entry.bodyId),
+        featureId: entryId,
+        faceCount: 0, // Face count not available in new API without topology access
+        name: entry.name,
+        color: entry.color,
       });
-      featureStatus[id] = 'error';
     }
 
-    if (rebuildGate && id === rebuildGate) {
-      reachedGate = true;
+    self.postMessage({
+      type: 'rebuild-complete',
+      bodies,
+      featureStatus,
+      errors,
+    } as WorkerToMainMessage);
+
+    // Send meshes for all bodies
+    for (const [featureId, entry] of bodyMap) {
+      sendMesh(session!, featureId, entry.bodyId, entry.color);
     }
-  }
-
-  // Build bodies list from bodyMap
-  for (const [entryId, entry] of bodyMap) {
-    bodies.push({
-      id: String(entry.body.id),
-      featureId: entryId,
-      faceCount: entry.body.getFaces().length,
-      name: entry.name,
-      color: entry.color,
-    });
-  }
-
-  self.postMessage({
-    type: 'rebuild-complete',
-    bodies,
-    featureStatus,
-    errors,
-  } as WorkerToMainMessage);
-
-  // Send meshes for all bodies
-  for (const [featureId, entry] of bodyMap) {
-    sendMesh(featureId, entry.body, entry.color);
+  } catch (err) {
+    console.error('[Worker] Rebuild failed:', err);
+    self.postMessage({
+      type: 'error',
+      message: err instanceof Error ? err.message : String(err),
+    } as WorkerToMainMessage);
   }
 }
 
-function sendMesh(featureId: string, body: Body, color?: string): void {
+function sendMesh(currentSession: SolidSession, featureId: string, bodyId: BodyId, color?: string): void {
   try {
-    // Debug: Log body info before tessellation
-    const faces = body.getFaces();
-    const model = (body as any).session?.getModel?.();
-    console.log(`[Worker] sendMesh for ${featureId}: ${faces.length} faces`);
+    console.log(`[Worker] sendMesh for ${featureId}`);
     
-    // Log face details including loops (holes)
-    let missingSurface = false;
-    if (model) {
-      for (let i = 0; i < faces.length; i++) {
-        const face = faces[i];
-        const loops = model.getFaceLoops(face.id);
-        const surfaceIdx = model.getFaceSurfaceIndex(face.id);
-        if (surfaceIdx === -1) {
-          console.warn(`[Worker]   Face ${i}: missing surface index`);
-          missingSurface = true;
-          continue;
-        }
-        const surface = model.getSurface(surfaceIdx);
-        if (!surface) {
-          console.warn(`[Worker]   Face ${i}: surface ${surfaceIdx} not found`);
-          missingSurface = true;
-          continue;
-        }
-        if (surface.kind === 'plane') {
-          const normalStr = `[${surface.normal.map((n: number) => n.toFixed(2)).join(', ')}]`;
-          console.log(`[Worker]   Face ${i}: normal=${normalStr}, loops=${loops.length}${loops.length > 1 ? ' (has holes)' : ''}`);
-        } else {
-          console.log(`[Worker]   Face ${i}: non-planar surface kind=${surface.kind}, loops=${loops.length}`);
-        }
-      }
-    }
-    if (missingSurface) {
-      console.warn(`[Worker] Skipping tessellation for ${featureId} due to missing surface data`);
-      return;
-    }
+    const mesh = currentSession.tessellate(bodyId);
     
-    const mesh = body.tessellate();
-
     const positions = new Float32Array(mesh.positions);
     const normals = new Float32Array(mesh.normals);
     const indices = new Uint32Array(mesh.indices);
     
-    // Debug: Log mesh stats
     console.log(`[Worker] Mesh stats: ${positions.length / 3} vertices, ${indices.length / 3} triangles`);
-    
-    // Debug: Check for NaN/Infinity in positions
-    let hasInvalidPositions = false;
-    for (let i = 0; i < positions.length; i++) {
-      if (!Number.isFinite(positions[i])) {
-        hasInvalidPositions = true;
-        console.error(`[Worker] Invalid position at index ${i}: ${positions[i]}`);
-        break;
-      }
-    }
-    if (!hasInvalidPositions) {
-      console.log('[Worker] All positions are valid');
-    }
 
     const transferableMesh: TransferableMesh = {
       positions,
@@ -1785,19 +1337,21 @@ function sendMesh(featureId: string, body: Body, color?: string): void {
 // Preview Functions
 // ============================================================================
 
-function performPreviewExtrude(
-  session: SolidSession,
+async function performPreviewExtrude(
   sketchId: string,
   distance: number,
   direction: string,
   _op: string
-): Body | null {
-  const sketchInfo = (globalThis as any).__sketchMap?.get(sketchId);
+): Promise<BodyId | null> {
+  const previewSession = new SolidSession();
+  await previewSession.init();
+  
+  const sketchInfo = sketchCache.get(sketchId);
   if (!sketchInfo) {
     throw new Error(`Sketch not found: ${sketchId}`);
   }
 
-  const sketch = session.createSketch(sketchInfo.plane);
+  const sketch = previewSession.createSketch(sketchInfo.plane);
   const pointIdMap = new Map<string, any>();
 
   for (const [, point] of Object.entries(sketchInfo.data.pointsById)) {
@@ -1833,26 +1387,50 @@ function performPreviewExtrude(
   const dirMultiplier = direction === 'reverse' ? -1 : 1;
   const finalDistance = distance * dirMultiplier;
 
-  const result = session.extrude(profile, {
-    operation: 'add',
+  const result = previewSession.extrude(profile, {
+    operation: 'new',
     distance: finalDistance,
   });
 
-  if (!result.success || !result.body) {
-    throw new Error(result.error || 'Extrude failed');
+  if (!result.success) {
+    throw new Error(result.error?.message || 'Extrude failed');
   }
 
-  return result.body;
+  // Tessellate and send mesh
+  const mesh = previewSession.tessellate(result.value);
+  const positions = new Float32Array(mesh.positions);
+  const normals = new Float32Array(mesh.normals);
+  const indices = new Uint32Array(mesh.indices);
+
+  const transferableMesh: TransferableMesh = {
+    positions,
+    normals,
+    indices,
+  };
+
+  self.postMessage(
+    {
+      type: 'mesh',
+      bodyId: `__preview_extrude_${_op}`,
+      mesh: transferableMesh,
+    } as WorkerToMainMessage,
+    { transfer: [positions.buffer, normals.buffer, indices.buffer] }
+  );
+
+  previewSession.dispose();
+  return result.value;
 }
 
-function performPreviewRevolve(
-  session: SolidSession,
+async function performPreviewRevolve(
   sketchId: string,
   axisId: string,
   angleDeg: number,
   _op: string
-): Body | null {
-  const sketchInfo = (globalThis as any).__sketchMap?.get(sketchId);
+): Promise<BodyId | null> {
+  const previewSession = new SolidSession();
+  await previewSession.init();
+  
+  const sketchInfo = sketchCache.get(sketchId);
   if (!sketchInfo) {
     throw new Error(`Sketch not found: ${sketchId}`);
   }
@@ -1868,7 +1446,7 @@ function performPreviewRevolve(
     throw new Error('Axis references missing sketch points');
   }
 
-  const sketch = session.createSketch(sketchInfo.plane);
+  const sketch = previewSession.createSketch(sketchInfo.plane);
   const pointIdMap = new Map<string, any>();
   const entityIdMap = new Map<string, any>();
 
@@ -1916,25 +1494,46 @@ function performPreviewRevolve(
   const axisEndWorld = planeToWorld(sketchInfo.plane, axisEnd2d.x, axisEnd2d.y);
   const axisDir = sub3(axisEndWorld, axisStartWorld);
 
-  const angleRad = (angleDeg * Math.PI) / 180;
-  const result = session.revolve(profile, {
-    operation: 'add',
+  const result = previewSession.revolve(profile, {
+    operation: 'new',
     axis: { origin: axisStartWorld, direction: axisDir },
-    angle: angleRad,
+    angleDegrees: angleDeg,
   });
 
-  if (!result.success || !result.body) {
-    throw new Error(result.error || 'Revolve failed');
+  if (!result.success) {
+    throw new Error(result.error?.message || 'Revolve failed');
   }
 
-  return result.body;
+  // Tessellate and send mesh
+  const mesh = previewSession.tessellate(result.value);
+  const positions = new Float32Array(mesh.positions);
+  const normals = new Float32Array(mesh.normals);
+  const indices = new Uint32Array(mesh.indices);
+
+  const transferableMesh: TransferableMesh = {
+    positions,
+    normals,
+    indices,
+  };
+
+  self.postMessage(
+    {
+      type: 'mesh',
+      bodyId: `__preview_revolve_${_op}`,
+      mesh: transferableMesh,
+    } as WorkerToMainMessage,
+    { transfer: [positions.buffer, normals.buffer, indices.buffer] }
+  );
+
+  previewSession.dispose();
+  return result.value;
 }
 
 // ============================================================================
 // Message Handler
 // ============================================================================
 
-self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
+self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
   const { type } = event.data;
 
   switch (type) {
@@ -1957,26 +1556,21 @@ self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
         if (!doc) throw new Error('Worker not ready');
         const { sketchId, distance, direction, op } = event.data;
 
-        const previewSession = new SolidSession();
-
-        // Get sketch info from current rebuild state
+        // Ensure we have sketch data
         const root = getRoot(doc);
         const featuresById = getFeaturesById(root);
         const sketchMap = featuresById.get(sketchId);
         if (!sketchMap) throw new Error(`Sketch not found: ${sketchId}`);
 
-        // Build sketch info for preview
-        (globalThis as any).__sketchMap = (globalThis as any).__sketchMap || new Map();
-        interpretSketch(previewSession, sketchMap, featuresById);
-
-        const body = performPreviewExtrude(previewSession, sketchId, distance, direction, op);
-        if (!body) {
-          const tool = performPreviewExtrude(previewSession, sketchId, distance, direction, 'add');
-          if (!tool) throw new Error('Preview failed');
-          sendMesh(`__preview_extrude_${op}`, tool);
-        } else {
-          sendMesh(`__preview_extrude_${op}`, body);
+        // Build sketch info for preview if not cached
+        if (!sketchCache.has(sketchId)) {
+          const previewSession = new SolidSession();
+          await previewSession.init();
+          interpretSketch(previewSession, sketchMap, featuresById);
+          previewSession.dispose();
         }
+
+        await performPreviewExtrude(sketchId, distance, direction, op);
       } catch (err) {
         self.postMessage({
           type: 'preview-error',
@@ -1991,24 +1585,20 @@ self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
         if (!doc) throw new Error('Worker not ready');
         const { sketchId, axis, angle, op } = event.data;
 
-        const previewSession = new SolidSession();
-
         const root = getRoot(doc);
         const featuresById = getFeaturesById(root);
         const sketchMap = featuresById.get(sketchId);
         if (!sketchMap) throw new Error(`Sketch not found: ${sketchId}`);
 
-        (globalThis as any).__sketchMap = (globalThis as any).__sketchMap || new Map();
-        interpretSketch(previewSession, sketchMap, featuresById);
-
-        const body = performPreviewRevolve(previewSession, sketchId, axis, angle, op);
-        if (!body) {
-          const tool = performPreviewRevolve(previewSession, sketchId, axis, angle, 'add');
-          if (!tool) throw new Error('Preview failed');
-          sendMesh(`__preview_revolve_${op}`, tool);
-        } else {
-          sendMesh(`__preview_revolve_${op}`, body);
+        // Build sketch info for preview if not cached
+        if (!sketchCache.has(sketchId)) {
+          const previewSession = new SolidSession();
+          await previewSession.init();
+          interpretSketch(previewSession, sketchMap, featuresById);
+          previewSession.dispose();
         }
+
+        await performPreviewRevolve(sketchId, axis, angle, op);
       } catch (err) {
         self.postMessage({
           type: 'preview-error',
@@ -2022,7 +1612,16 @@ self.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
       try {
         const { binary = true, name = 'model' } = event.data;
 
-        const meshes = Array.from(bodyMap.values()).map((entry) => entry.body.tessellate());
+        if (!session) {
+          throw new Error('No session available');
+        }
+
+        // Collect meshes from all bodies
+        const meshes: Mesh[] = [];
+        for (const [, entry] of bodyMap) {
+          const mesh = session.tessellate(entry.bodyId);
+          meshes.push(mesh);
+        }
 
         if (meshes.length === 0) {
           throw new Error('No bodies to export');

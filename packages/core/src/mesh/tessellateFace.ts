@@ -91,6 +91,9 @@ function _sortLoopAroundCentroid(verts3D: Vec3[], surface: PlaneSurface): { vert
   return { verts3D: sorted3D, verts2D: sorted2D };
 }
 
+// Suppress unused warning for debugging utility
+void _sortLoopAroundCentroid;
+
 function hashLoop2D(verts2D: Vec2[]): string {
   return `${verts2D.length}:${verts2D
     .map(([x, y]) => `${Math.round(x * 1e6)}:${Math.round(y * 1e6)}`)

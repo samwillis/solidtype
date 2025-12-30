@@ -1,5 +1,10 @@
 # OpenCascade.js Integration Refactor
 
+> ✅ **COMPLETED**: This refactor has been implemented. The kernel layer is now powered by OpenCascade.js.
+> See `packages/core/src/kernel/` for the implementation and `packages/core/src/api/SolidSession.ts` for the public API.
+
+---
+
 ## Overview
 
 This document outlines the refactor to replace SolidType's custom CAD kernel with [OpenCascade.js](https://ocjs.org) - a WebAssembly port of the production-grade OpenCascade (OCCT) CAD kernel.

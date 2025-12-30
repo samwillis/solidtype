@@ -21,7 +21,24 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
-  optimizeDeps: {
-    exclude: ['typescript'],
+  resolve: {
+    // Ensure Vite can resolve opencascade.js paths from node_modules
+    dedupe: ['opencascade.js'],
   },
+  optimizeDeps: {
+    exclude: ['typescript', 'opencascade.js'],
+  },
+  ssr: {
+    noExternal: ['@solidtype/core'],
+  },
+  build: {
+    rollupOptions: {
+      external: [
+        'opencascade.js',
+        'opencascade.js/dist/opencascade.wasm.js',
+        /opencascade\.wasm\.wasm/,
+      ],
+    },
+  },
+  assetsInclude: ['**/*.wasm'],
 });

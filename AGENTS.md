@@ -8,9 +8,10 @@ Before you write *any* code, read:
 - [`OVERVIEW.md`](OVERVIEW.md) – **What** SolidType is and why it exists.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) – **How** it is structured (packages, layers, data flow).
 - [`/plan/*`](plan/*) – The **phase-by-phase implementation plan** you must follow.
-- [`OCC-REFACTOR.md`](OCC-REFACTOR.md) – **🚨 CURRENT PRIORITY** – Integrate OpenCascade.js to replace our custom kernel.
 
-> **Note:** `KERNEL-REFACTOR.md` documents our previous attempt at a custom kernel. That approach has been superseded by the OpenCascade.js integration in `OCC-REFACTOR.md`.
+> **Note on historical documents:**
+> - `OCC-REFACTOR.md` – ✅ **COMPLETED** – Documents the OpenCascade.js integration (now done).
+> - `KERNEL-REFACTOR.md` – Superseded by the OpenCascade.js integration.
 
 Treat those documents as the source of truth. If they conflict with existing code, the docs win and the code should be brought back into line.
 
@@ -55,8 +56,23 @@ If you are unsure how to implement something:
 
 You are working in a pnpm monorepo with:
 
-- `@solidtype/core` (CAD kernel with OO API),
+- `@solidtype/core` (CAD kernel wrapper with OO API, powered by OpenCascade.js),
 - `@solidtype/app` (full CAD application).
+
+### OCCT Integration Guidelines
+
+The `@solidtype/core` package now uses OpenCascade.js for all B-Rep operations:
+
+**DO:**
+- All modeling operations go through `SolidSession` (the public API)
+- Use the kernel/ module for OCCT wrappers (internal only)
+- Keep the sketch/ module in pure TypeScript (no OCCT dependency)
+- Dispose OCCT objects properly to prevent memory leaks
+
+**DON'T:**
+- Never import from `kernel/` in the app - use `SolidSession` instead
+- Never expose OCCT types (TopoDS_Shape, etc.) in the public API
+- Don't add OCCT dependencies to the sketch constraint solver
 
 ### Core rules
 

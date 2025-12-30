@@ -2,13 +2,13 @@
 
 ## 1. Purpose & Goals
 
-SolidType is a **pure TypeScript BREP kernel** aimed at proving that a **world-class CAD kernel** can live entirely in the JS/TS ecosystem (Node + browser), with:
+SolidType is a **TypeScript CAD application** powered by OpenCascade.js, aimed at delivering a **world-class parametric CAD experience** in the JS/TS ecosystem (Node + browser), with:
 
 * History-capable **parametric modeling** (sketch + feature driven).
-* Robust **BREP topology** (bodies, faces, edges, vertices, shells).
-* Strong, research-informed **persistent naming**.
-* A serious, interactive **2D sketch constraint solver**.
-* A path to **robust numerics** (tolerances + upgradeable predicates).
+* Robust **BREP operations** via OpenCascade.js (battle-tested C++ kernel compiled to WebAssembly).
+* Strong, research-informed **persistent naming** (planned integration with OCCT).
+* A serious, interactive **2D sketch constraint solver** (pure TypeScript).
+* Modern **AI integration** for intelligent modeling assistance.
 * Good **developer ergonomics** (clean layers, TDD, small number of packages).
 
 This document explains how the kernel is structured, how data flows, and where major responsibilities live.
@@ -19,7 +19,7 @@ This document explains how the kernel is structured, how data flows, and where m
 
 SolidType is a pnpm monorepo with a **small number of packages**:
 
-* `@solidtype/core` – the CAD kernel with an object-oriented API.
+* `@solidtype/core` – the CAD kernel wrapper with an object-oriented API.
 * `@solidtype/app` – the main React application with full CAD UI.
 
 Everything is ESM-only. `@solidtype/core` has no DOM/browser dependencies and is designed to run in **Node** or in a **Web Worker**.
@@ -28,25 +28,89 @@ Everything is ESM-only. `@solidtype/core` has no DOM/browser dependencies and is
 
 `@solidtype/core` exposes an ergonomic, class-based API as the primary interface:
 
-* `SolidSession` – main entry point for modeling operations.
-* `Body`, `Face`, `Edge` – wrappers for topological entities.
-* `Sketch` – 2D sketch with constraint solving.
+* `SolidSession` – main entry point for modeling operations (wraps OCCT).
+* `Sketch` – 2D sketch with constraint solving (pure TypeScript).
+* `BodyId`, `FaceId`, `EdgeId` – opaque handles for topological entities.
 
-### 2.2 Internal Modules (Data-Oriented)
+**Key principle: The app consumes our clean API, not OCCT directly.**
 
-Inside `@solidtype/core` we have logical submodules that use data-oriented design for performance:
+### 2.2 Internal Modules
 
-* `num` – numeric utilities, tolerances, predicates, root-finding.
-* `geom` – curves & surfaces (analytic, v1), evaluators, intersections.
-* `topo` – BREP topology (vertices/edges/faces/loops/shells/bodies).
-* `model` – modeling operators (primitives, extrude, revolve, booleans).
-* `naming` – persistent naming & evolution graph.
-* `sketch` – 2D sketch entities + constraint system + solver.
-* `mesh` – tessellation (BREP → triangle meshes) and STL export.
-* `export` – file format exporters (STL).
-* `api` – object-oriented wrappers that delegate to the internal modules.
+Inside `@solidtype/core` we have logical submodules:
 
-The `@solidtype/app` uses the OO API from core to provide real-time modeling and visual debugging.
+* `api/` – **PUBLIC API** - SolidSession, Sketch, and types exported to app.
+* `kernel/` – **INTERNAL** - OpenCascade.js wrappers (not exported from package).
+* `num/` – numeric utilities, tolerances, predicates, root-finding.
+* `geom/` – 2D curves for sketch construction.
+* `sketch/` – 2D sketch entities + constraint system + solver (pure TypeScript).
+* `naming/` – persistent naming & evolution graph (for future OCCT integration).
+* `model/` – datum planes, sketch profiles.
+* `export/` – file format exporters (STL, STEP via OCCT).
+
+The `@solidtype/app` uses only the public API from core to provide real-time modeling.
+
+### 2.3 Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      @solidtype/app                          │
+│   React UI • Feature Tree • Sketch Editor • AI Chat          │
+│   Three.js Viewer • Collaboration • File Management          │
+│                                                              │
+│   Uses ONLY: SolidSession, Sketch, SketchProfile, etc.       │
+│   Does NOT know about: OCCT, TopoDS_Shape, BRepAlgoAPI       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      @solidtype/core                         │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │              PUBLIC API (api/)                        │   │
+│  │                                                       │   │
+│  │  SolidSession        - Main modeling session          │   │
+│  │  Sketch, Constraint  - 2D sketch system               │   │
+│  │  BodyId, FaceId      - Opaque handles                 │   │
+│  │  Mesh                - Tessellated output             │   │
+│  │                                                       │   │
+│  │  This is the ONLY layer the app imports from core.    │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                              │                               │
+│                              ▼                               │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │              INTERNAL: kernel/ (private)              │   │
+│  │                                                       │   │
+│  │  init.ts             - OCCT WASM initialization       │   │
+│  │  Shape.ts            - Wrapper with memory mgmt       │   │
+│  │  primitives.ts       - Box, cylinder, sphere          │   │
+│  │  operations.ts       - Extrude, revolve, boolean      │   │
+│  │  tessellate.ts       - Shape → Mesh conversion        │   │
+│  │  sketch-to-wire.ts   - SketchProfile → OCCT Face      │   │
+│  │  io.ts               - STEP/BREP import/export        │   │
+│  │                                                       │   │
+│  │  NOT exported from @solidtype/core package.           │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                              │                               │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │              OUR CODE (pure TypeScript)               │   │
+│  │                                                       │   │
+│  │  sketch/             - 2D sketch & constraints        │   │
+│  │  naming/             - Persistent naming system       │   │
+│  │  num/                - Numeric utilities              │   │
+│  │  geom/               - 2D geometry for sketches       │   │
+│  │  model/              - Planes, profiles               │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  opencascade.js (WASM)                       │
+│     npm package: opencascade.js                              │
+│     Production B-Rep kernel with 30+ years of development    │
+│                                                              │
+│     Hidden behind kernel/ layer - app never touches this.   │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -140,111 +204,76 @@ This keeps geometry:
 
 ---
 
-### 3.3 `topo` – BREP Topology & Bodies
+### 3.3 `kernel/` – OpenCascade.js Integration (Internal)
 
 **Responsibility**
 
-* Maintain the boundary-representation: vertices, edges, faces, loops, shells, bodies.
-* Support multiple bodies per model.
-* Distinguish between open shells (surfaces) and closed solids.
-* Provide validation and basic healing.
+* Wrap OpenCascade.js (OCCT) for all B-Rep operations.
+* Handle WASM initialization and memory management.
+* Provide a clean internal API that `SolidSession` uses.
 
-**Data model**
+**Why OCCT?**
 
-* Handle types (branded IDs for type safety):
+OpenCascade is a production-grade B-Rep kernel with 30+ years of development:
+* Battle-tested boolean operations that work on all geometry orientations.
+* Support for complex surface types (NURBS, sweeps, lofts).
+* Used by FreeCAD, KiCad, and commercial products.
+* Frees us to focus on SolidType's differentiators: AI, UX, parametrics.
 
-  ```ts
-  type BodyId   = number & { __brand: "BodyId" };
-  type FaceId   = number & { __brand: "FaceId" };
-  type EdgeId   = number & { __brand: "EdgeId" };
-  type VertexId = number & { __brand: "VertexId" };
-  type LoopId   = number & { __brand: "LoopId" };
-  type HalfEdgeId = number & { __brand: "HalfEdgeId" };
-  ```
+**Module structure (internal - not exported)**
 
-* Internal storage uses struct-of-arrays for performance:
+```
+kernel/
+├── init.ts             # OCCT WASM initialization
+├── Shape.ts            # TopoDS_Shape wrapper with memory management
+├── primitives.ts       # Box, cylinder, sphere, cone, torus
+├── operations.ts       # Boolean ops, extrude, revolve, fillet, chamfer
+├── sketch-to-wire.ts   # SketchProfile → OCCT Face conversion
+├── tessellate.ts       # Shape → Mesh for Three.js rendering
+├── io.ts               # STEP/BREP import/export
+└── opencascade.d.ts    # Type declarations for opencascade.js
+```
 
-  * `VertexTable`: `x`, `y`, `z` as `Float64Array`.
-  * `EdgeTable`: `vStart`, `vEnd`, `curveIndex`, flags.
-  * `FaceTable`: `surfaceIndex`, shell reference, orientation.
-  * `Loop` & `HalfEdge` tables: capture boundary cycles and adjacency.
+**Memory management**
 
-**Object-Oriented API**
-
-The `TopoModel` class encapsulates the BREP data and exposes methods for all operations:
+OCCT objects must be manually deleted to prevent memory leaks:
 
 ```ts
-class TopoModel {
-  // Entity creation
-  addVertex(x: number, y: number, z: number): VertexId;
-  addEdge(vStart: VertexId, vEnd: VertexId): EdgeId;
-  addHalfEdge(edge: EdgeId, direction: 1 | -1): HalfEdgeId;
-  addLoop(firstHalfEdge: HalfEdgeId): LoopId;
-  addFace(surfaceIndex: SurfaceIndex): FaceId;
-  addShell(): ShellId;
-  addBody(): BodyId;
+class Shape {
+  private _shape: TopoDS_Shape;
+  private _disposed = false;
   
-  // Queries
-  getVertexPosition(id: VertexId): Vec3;
-  getEdgeStartVertex(id: EdgeId): VertexId;
-  getFaceLoops(id: FaceId): LoopId[];
-  iterateBodies(): Iterable<BodyId>;
-  
-  // Geometry storage
-  addSurface(surface: Surface): SurfaceIndex;
-  addCurve(curve: Curve3D): Curve3DIndex;
+  dispose(): void {
+    if (!this._disposed) {
+      this._shape.delete();
+      this._disposed = true;
+    }
+  }
 }
 ```
 
-This design provides:
-* Clean encapsulation with methods instead of raw data access.
-* Type-safe operations using branded handle IDs.
-* Internal struct-of-arrays storage for performance-critical operations.
+**Key design principle**
 
-**Validation and healing**
-
-* `validateModel(model, ctx)` returns a structured report of:
-
-  * Non-manifold edges.
-  * Cracks (edges with <2 or >2 incident faces in solids).
-  * Degenerate entities (zero-area faces, very short edges).
-* `healModel(model, ctx, options)` applies modest, deterministic healing:
-
-  * Merge vertices within tolerance.
-  * Remove edges/faces below size thresholds.
-  * Reorient shells if needed.
-
-SolidType aims for the **"moderate but explicit"** healing strategy found in industrial kernels: try small repairs but prefer clear failure over silent corruption.
+The kernel layer is an implementation detail. The app never imports from `kernel/` - all access goes through `SolidSession` in `api/`.
 
 ---
 
-### 3.4 `mesh` – Tessellation & Export
+### 3.4 Tessellation & Export
 
-**Responsibility**
+**Tessellation**
 
-* Convert BREP bodies into triangle meshes for:
+OCCT's `BRepMesh_IncrementalMesh` handles tessellation with quality controls:
 
-  * WebGL rendering (three.js).
-  * STL export.
+```ts
+session.tessellate(bodyId, 'low' | 'medium' | 'high');
+```
 
-**Approach**
+Quality presets control linear and angular deflection:
+* `low` - Fast, coarse mesh for preview
+* `medium` - Balanced quality for interactive use
+* `high` - Fine mesh for export and rendering
 
-* Per-face tessellation:
-
-  * Planar faces:
-
-    * Project boundary loops to 2D in plane coordinates.
-    * Triangulate 2D polygons (ear clipping or similar).
-    * Map resulting triangles back to 3D.
-  * Cylindrical / spherical faces:
-
-    * Parametric grid in `(u,v)`, resolution based on curvature and tolerance.
-* Per-body tessellation:
-
-  * Concatenate per-face meshes.
-  * Share vertices/normals where possible.
-
-**Output**
+**Output format**
 
 ```ts
 interface Mesh {
@@ -254,72 +283,56 @@ interface Mesh {
 }
 ```
 
-**STL Export**
+**Export formats**
 
-The `export/stl.ts` module provides STL file generation:
-
-```ts
-function writeStlBinary(mesh: Mesh): ArrayBuffer;
-function writeStlAscii(mesh: Mesh, name?: string): string;
-```
+* **STL** - Via `export/stl.ts` (binary and ASCII)
+* **STEP** - Via OCCT's STEPControl_Writer (native CAD exchange)
 
 ---
 
-### 3.5 `model` – Modeling Operators
+### 3.5 `model/` – Profiles & Planes
 
 **Responsibility**
 
-* Implement modeling operations on top of `geom` + `topo`:
+* Define datum planes for sketch placement.
+* Define sketch profiles for extrusion/revolution.
+* Convert between our 2D sketch representation and OCCT faces.
 
-  * Primitives (boxes, cylinders for tests).
-  * Sketch-based extrude (add/cut) with extent types.
-  * Sketch-based revolve (add/cut).
-  * Solid–solid booleans (union, subtract, intersect).
+**Datum planes**
 
-**Sketch planes & profiles**
+Standard planes and custom plane creation:
 
-* Planes:
+```ts
+// Standard planes
+XY_PLANE, YZ_PLANE, ZX_PLANE
 
-  * Fundamentals: global XY, YZ, ZX.
-  * Offsets from faces, custom datum planes.
-  * Face-derived planes (sketch on face).
-* Sketch profiles:
+// Custom planes
+session.createDatumPlane(origin, normal, xDir?);
+```
 
-  * Closed 2D loops (lines + arcs) on a plane.
-  * Converted to `SketchProfile` objects, validated for closure.
+**Sketch profiles**
 
-**Extrude & revolve**
+Closed 2D loops for modeling operations:
 
-Operations:
+```ts
+interface SketchProfile {
+  plane: DatumPlane;
+  loops: ProfileLoop[];  // First = outer, rest = holes
+}
+```
 
-* `extrude(profile, distance, direction, op)`:
+**Modeling operations (via OCCT)**
 
-  * Build top & bottom caps from profile.
-  * Sweep edges to form side faces.
-  * Build a new body (for `add`) or tool body (for `cut`).
-  * Extent types: `blind`, `throughAll`, `toFace`, `toVertex`.
-* `revolve(profile, axis, angle, op)`:
+All B-Rep operations are now handled by OpenCascade.js:
 
-  * Revolve edges around axis to create analytic surfaces of revolution.
-  * Construct faces & shells accordingly.
+* **Primitives**: `BRepPrimAPI_MakeBox`, `MakeCylinder`, `MakeSphere`
+* **Extrude**: `BRepPrimAPI_MakePrism` 
+* **Revolve**: `BRepPrimAPI_MakeRevol`
+* **Booleans**: `BRepAlgoAPI_Fuse`, `BRepAlgoAPI_Cut`, `BRepAlgoAPI_Common`
+* **Fillet**: `BRepFilletAPI_MakeFillet`
+* **Chamfer**: `BRepFilletAPI_MakeChamfer`
 
-Both operations allocate a `FeatureId` and register named subshapes with `naming` (see below).
-
-**Solid–solid booleans**
-
-SolidType goes directly for BREP booleans (no mesh booleans):
-
-* Intersect candidate faces (planar-only currently).
-* Build intersection curves/edges.
-* Classify faces by inside/outside tests using predicates.
-* Assemble result bodies by trimming and stitching.
-* Run validation + limited healing.
-
-Booleans are explicitly staged: start with **simple cases (e.g. convex boxes)**, then generalise.
-
-**Current limitations:**
-* Boolean operations currently only support planar faces.
-* Curved face support (cylinders, cones from revolves) is planned.
+This replaces our custom boolean implementation which had numerical stability issues with tilted geometry.
 
 ---
 
@@ -457,47 +470,91 @@ The solver is intended to run in a **worker** for responsive UI.
 
 ---
 
-## 4. Object-Oriented API (in `@solidtype/core/api`)
+## 4. Public API (in `@solidtype/core/api`)
 
 **Responsibility**
 
 * Provide an ergonomic, class-based API as the primary interface for applications.
-* Abstract away handles and low-level details for typical usage.
-* Delegate to the internal data-oriented modules for actual operations.
+* Completely hide the underlying OCCT implementation.
+* Provide clean TypeScript types for all operations.
 
-**Key Classes**
+**SolidSession - Main Entry Point**
 
 ```ts
 class SolidSession {
+  // Lifecycle
+  async init(): Promise<void>;  // Load OCCT WASM
+  dispose(): void;              // Free all resources
+  
+  // Primitives
+  createBox(width, height, depth, centered?): BodyId;
+  createCylinder(radius, height): BodyId;
+  createSphere(radius): BodyId;
+  
+  // Sketch-based operations
   createSketch(plane: DatumPlane): Sketch;
-  extrude(profile: SketchProfile, options: ExtrudeOptions): ExtrudeResult & { body?: Body };
-  revolve(profile: SketchProfile, options: RevolveOptions): RevolveResult & { body?: Body };
-  union(bodyA: Body, bodyB: Body): BooleanResult & { body?: Body };
-  subtract(bodyA: Body, bodyB: Body): BooleanResult & { body?: Body };
-  intersect(bodyA: Body, bodyB: Body): BooleanResult & { body?: Body };
+  extrude(profile, options): OperationResult<BodyId>;
+  revolve(profile, options): OperationResult<BodyId>;
+  
+  // Boolean operations
+  union(bodyA, bodyB): OperationResult<BodyId>;
+  subtract(bodyA, bodyB): OperationResult<BodyId>;
+  intersect(bodyA, bodyB): OperationResult<BodyId>;
+  
+  // Modifications
+  fillet(bodyId, options): OperationResult<void>;
+  chamfer(bodyId, distance): OperationResult<void>;
+  
+  // Query
+  tessellate(bodyId, quality?): Mesh;
+  getBoundingBox(bodyId): BoundingBox;
+  
+  // Import/Export
+  exportSTEP(bodyId): Uint8Array;
+  importSTEP(data): OperationResult<BodyId>;
 }
+```
 
-class Body {
-  getFaces(): Face[];
-  tessellate(options?): Mesh;
-  selectFaceByRay(ray: Ray): FaceSelectionResult | null;
-  resolve(ref: PersistentRef): Face | null;
-}
+**Sketch - 2D Constraint Solving (Pure TypeScript)**
 
+```ts
 class Sketch {
   addPoint(x: number, y: number): SketchPointId;
   addLine(start: SketchPointId, end: SketchPointId): SketchEntityId;
-  addArc(...): SketchEntityId;
+  addArc(start, end, center, ccw?): SketchEntityId;
+  addRectangle(x, y, width, height): { corners, sides };
   addConstraint(constraint: Constraint): void;
   solve(): SolveResult;
   toProfile(): SketchProfile | null;
 }
 ```
 
-The OO layer:
+**Opaque Handles**
 
-* Never stores raw BREP handles directly; it keeps IDs and delegates to internal APIs.
-* Provides the main host for **app-level behaviour** like scriptable models, simple history management, and selection tools.
+Bodies, faces, and edges are identified by opaque branded IDs:
+
+```ts
+type BodyId = number & { readonly __brand: 'BodyId' };
+type FaceId = number & { readonly __brand: 'FaceId' };
+type EdgeId = number & { readonly __brand: 'EdgeId' };
+```
+
+**Result Types**
+
+Operations return typed results:
+
+```ts
+type OperationResult<T> = 
+  | { success: true; value: T }
+  | { success: false; error: ModelingError };
+```
+
+**Why This Design?**
+
+* **Swappable implementation**: OCCT could be replaced without app changes.
+* **Clean types**: Simple TypeScript, not C++ conventions.
+* **Testable**: Kernel can be mocked for unit tests.
+* **Stable interface**: OCCT API changes don't break the app.
 
 ---
 

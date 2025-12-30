@@ -3,14 +3,37 @@
  * 
  * This module provides ergonomic class-based APIs for the SolidType CAD kernel:
  * - SolidSession - main entry point for modeling operations
- * - Body, Face, Edge - wrappers for topological entities
  * - Sketch - 2D sketch with constraint solving
- * - Integration with persistent naming via PersistentRef
+ * - BodyId, FaceId, EdgeId - opaque handles for topological entities
+ * 
+ * The underlying CAD kernel (OpenCascade.js) is completely hidden.
+ * All operations are done through SolidSession.
  */
 
-export * from './types.js';
-export * from './Face.js';
-export * from './Edge.js';
-export * from './Body.js';
-export * from './Sketch.js';
-export * from './SolidSession.js';
+// Main session API
+export { SolidSession } from './SolidSession.js';
+
+// Sketch API
+export { Sketch } from './Sketch.js';
+
+// OCCT initialization (for external initialization in browser/worker)
+export { setOC, initOCCT } from '../kernel/init.js';
+
+// Types
+export type {
+  Ray,
+  BodyId,
+  FaceId,
+  EdgeId,
+  Mesh,
+  BoundingBox,
+  OperationResult,
+  ModelingError,
+  ExtrudeOperation,
+  ExtrudeOptions,
+  RevolveOptions,
+  FilletOptions,
+} from './types.js';
+
+// Re-export tessellation quality for convenience
+export type { TessellationQuality } from '../kernel/tessellate.js';

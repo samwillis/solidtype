@@ -2,20 +2,23 @@
 
 ## 1. What SolidType Is
 
-SolidType is a **modern, history-capable, parametric CAD kernel written in pure TypeScript**, designed to prove that a world-class geometric kernel can live entirely in JS/TS ecosystems (browser + Node), without WASM or native code.
+SolidType is a **modern, history-capable, parametric CAD application** powered by OpenCascade.js (OCCT), designed to deliver a world-class CAD experience in the JS/TS ecosystem (browser + Node).
 
 At its core, SolidType is:
 
-* A **BREP-based modeling kernel** with multiple bodies per model.
-* A **2D sketch + 3D feature** system: sketches on planes, extrude/cut/revolve from profiles (sweeps later).
-* A platform for **persistent naming** and robust editing: change parameters and the model doesn’t fall apart.
-* A **research-grade playground** for:
+* A **parametric modeling system** using the battle-tested OpenCascade.js B-Rep kernel (WASM).
+* A **2D sketch + 3D feature** system: sketches on planes, extrude/cut/revolve from profiles.
+* A **pure TypeScript constraint solver** for interactive 2D sketching.
+* A platform for **AI-assisted modeling** through chat-based tool calling.
+* A foundation for **persistent naming** and robust editing.
 
-  * robust numeric techniques (tolerances, robust predicates),
-  * modern persistent naming strategies,
-  * and interactive constraint solving.
+**Why OpenCascade.js?**
 
-It’s explicitly **not** just a toy or teaching kernel: the design is aimed at being a credible route to a “real” kernel, even though the first versions are POC-level.
+After extensive development of a custom TypeScript B-Rep kernel, we made the strategic decision to integrate OpenCascade.js:
+
+* **Proven reliability**: OCCT has 30+ years of development, used by FreeCAD, KiCad, and commercial products.
+* **Numerical stability**: Our custom boolean operations had issues with tilted/angled geometry; OCCT handles all cases correctly.
+* **Focus on differentiators**: This frees us to focus on SolidType's unique value: AI integration, modern UX, and the 2D constraint solver.
 
 ---
 
@@ -69,23 +72,34 @@ It’s explicitly **not** just a toy or teaching kernel: the design is aimed at 
 
 ## 3. Architectural Layers & Packages
 
-SolidType uses a **small number of packages**, each roughly mapping to a conceptual layer:
+SolidType uses a **small number of packages**, each with clear responsibilities:
 
-1. `@solidtype/core` – the CAD kernel:
+1. `@solidtype/core` – the CAD kernel wrapper:
 
-   * **Primary API (Object-Oriented)**:
+   * **Public API** (`api/`):
      * `SolidSession` – main entry point for modeling operations.
-     * `Body`, `Face`, `Edge` – wrappers for topological entities.
      * `Sketch` – 2D sketch with constraint solving.
+     * `BodyId`, `FaceId`, `EdgeId` – opaque handles for topology.
    
-   * **Internal Modules** (data-oriented, for performance):
-     * `num` – numeric helpers, tolerances, basic predicates.
-     * `geom` – analytic curves/surfaces and evaluators.
-     * `topo` – BREP topology, validation, healing.
-     * `model` – modeling operators (extrude, revolve, booleans, primitives).
-     * `sketch` – sketch graph + constraints + numeric solver.
-     * `naming` – persistent naming, evolution graph, fingerprints.
-     * `mesh` – tessellation to triangle meshes.
+   * **Internal Kernel** (`kernel/` - not exported):
+     * Wraps OpenCascade.js (OCCT WASM)
+     * Handles memory management for OCCT objects
+     * Converts between our types and OCCT types
+   
+   * **Pure TypeScript Modules**:
+     * `sketch/` – 2D sketch entities + constraint solver.
+     * `naming/` – persistent naming (for future OCCT integration).
+     * `num/` – numeric helpers, tolerances.
+     * `geom/` – 2D curves for sketch construction.
+     * `model/` – datum planes, sketch profiles.
+     * `export/` – STL export.
+
+2. `@solidtype/app` – the CAD application:
+
+   * React-based UI with feature tree and properties panel.
+   * Three.js 3D viewer with sketch overlay.
+   * AI chat interface for modeling assistance.
+   * Yjs document model for undo/redo and collaboration.
 
 Everything is ESM-only, with **Vitest** for tests, **tsdown** for library builds, and **pnpm** for monorepo management.
 

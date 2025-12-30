@@ -1,6 +1,12 @@
-# KERNAL REFACTOR
+# KERNEL REFACTOR
 
-## Overview
+> ⚠️ **SUPERSEDED**: This document describes a custom TypeScript B-Rep kernel that was never completed.
+> The approach has been replaced by OpenCascade.js integration. See [`OCC-REFACTOR.md`](OCC-REFACTOR.md) for the current architecture.
+> This document is retained for historical reference only.
+
+---
+
+## Overview (Historical)
 
 This refactor is a deliberate “kernel reset” to get SolidType onto a real, robust B-Rep foundation. Today we have surfaces, topology, and tessellation that can make solids *look* right, but the kernel lacks the two things a production CAD kernel is built on: **UV-first trimming (p-curves)** and a **boundary-evaluation boolean pipeline**. Without those, curved faces can’t be trimmed reliably, booleans can’t split faces/edges correctly, and downstream operations become fragile.
 

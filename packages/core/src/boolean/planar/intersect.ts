@@ -979,11 +979,11 @@ function clipPolygonToPolygon(subject: Vec2[], clip: Vec2[]): Vec2[] {
  * Uses robust orientation predicates.
  * Returns positive if left (CCW), negative if right (CW), zero if collinear.
  */
-function isLeft(a: Vec2, b: Vec2, p: Vec2): number {
+function _isLeft(a: Vec2, b: Vec2, p: Vec2): number {
   return orient2DRobust(a, b, p);
 }
 
-function lineIntersect(a: Vec2, b: Vec2, p: Vec2, q: Vec2): Vec2 {
+function _lineIntersect(a: Vec2, b: Vec2, p: Vec2, q: Vec2): Vec2 {
   const s1x = b[0] - a[0];
   const s1y = b[1] - a[1];
   const s2x = q[0] - p[0];
@@ -993,3 +993,7 @@ function lineIntersect(a: Vec2, b: Vec2, p: Vec2, q: Vec2): Vec2 {
   const s = (-s1y * (a[0] - p[0]) + s1x * (a[1] - p[1])) / denom;
   return [p[0] + (s * s2x), p[1] + (s * s2y)];
 }
+
+// Suppress unused warnings for debugging utilities kept for future use
+void _isLeft;
+void _lineIntersect;
