@@ -6,7 +6,8 @@
  * Uses Tanstack Form with Zod validation for feature editing.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useForm } from '@tanstack/react-form';
 import { useDocument } from '../contexts/DocumentContext';
 import { useSelection } from '../contexts/SelectionContext';
@@ -14,6 +15,11 @@ import { useFeatureEdit } from '../contexts/FeatureEditContext';
 import { extrudeFormSchema, revolveFormSchema, type ExtrudeFormData, type RevolveFormData } from '../types/featureSchemas';
 import type { Feature, ExtrudeFeature, RevolveFeature, SketchFeature, PlaneFeature, OriginFeature, SketchLine } from '../types/document';
 import { useKernel } from '../contexts/KernelContext';
+import { useViewer } from '../contexts/ViewerContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { Tooltip } from '@base-ui/react';
+import AIPanel from './AIPanel';
+import { AIIcon, ChevronDownIcon } from './Icons';
 import './PropertiesPanel.css';
 
 // ============================================================================
@@ -289,9 +295,9 @@ interface PropertyGroupProps {
 }
 
 function PropertyGroup({ title, children }: PropertyGroupProps) {
+  // Don't render group title - make it more like Figma
   return (
     <div className="property-group">
-      <div className="property-group-title">{title}</div>
       {children}
     </div>
   );
@@ -1106,6 +1112,14 @@ const PropertiesPanel: React.FC = () => {
   const { doc, getFeatureById } = useDocument();
   const { selectedFeatureId, selectedFaces } = useSelection();
   const { editMode, updateFormData, acceptEdit, cancelEdit, isEditing } = useFeatureEdit();
+  const { state: viewerState, actions: viewerActions } = useViewer();
+  const { mode: themeMode, setMode: setThemeMode } = useTheme();
+  const [showAIChat, setShowAIChat] = useState(false);
+  const [showDisplayDropdown, setShowDisplayDropdown] = useState(false);
+  const displayDropdownRef = useRef<HTMLDivElement>(null);
+  const displayButtonRef = useRef<HTMLButtonElement>(null);
+  const displayDropdownContainerRef = useRef<HTMLDivElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; right: number } | null>(null);
   
   // Get axis candidates for revolve
   const axisCandidates = useMemo(() => {
@@ -1136,13 +1150,266 @@ const PropertiesPanel: React.FC = () => {
     }
   }, [effectiveFeature, doc]);
 
+  // Calculate dropdown position when it opens
+  useEffect(() => {
+    if (!showDisplayDropdown || !displayButtonRef.current) {
+      setDropdownPosition(null);
+      return;
+    }
+    
+    const updatePosition = () => {
+      if (displayButtonRef.current) {
+        const rect = displayButtonRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + 4,
+          right: window.innerWidth - rect.right,
+        });
+      }
+    };
+    
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [showDisplayDropdown]);
+
+  // Close display dropdown when clicking outside
+  useEffect(() => {
+    if (!showDisplayDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const isClickInsideDropdown = displayDropdownRef.current?.contains(target);
+      const isClickInsideButton = displayButtonRef.current?.contains(target);
+      const isClickInsideContainer = displayDropdownContainerRef.current?.contains(target);
+      
+      if (!isClickInsideDropdown && !isClickInsideButton && !isClickInsideContainer) {
+        setShowDisplayDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDisplayDropdown]);
+
+  // Render header with user, display dropdown, chat, and share buttons
+  const renderHeader = () => (
+    <Tooltip.Provider>
+      <div className="properties-panel-header">
+        <div className="properties-panel-header-left">
+          <Tooltip.Root>
+            <Tooltip.Trigger
+              delay={300}
+              className="properties-panel-header-icon-button"
+              onClick={() => {}}
+              render={<button aria-label="User" />}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Positioner side="bottom" sideOffset={6}>
+                <Tooltip.Popup className="properties-panel-header-tooltip">User</Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+          <div className="properties-panel-header-display-dropdown" ref={displayDropdownContainerRef}>
+            <Tooltip.Root>
+              <Tooltip.Trigger
+                delay={300}
+                ref={displayButtonRef}
+                className="properties-panel-header-icon-button"
+                onClick={() => setShowDisplayDropdown(!showDisplayDropdown)}
+                render={<button aria-label="Display Options" />}
+              >
+                {viewerState.projectionMode === 'perspective' ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M12 2l8 4v12l-8 4-8-4V6l8-4z" />
+                    <path d="M12 22V10M12 10L4 6M12 10l8-4" />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="4" y="4" width="16" height="16" />
+                    <line x1="4" y1="12" x2="20" y2="12" />
+                    <line x1="12" y1="4" x2="12" y2="20" />
+                  </svg>
+                )}
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Positioner side="bottom" sideOffset={6}>
+                  <Tooltip.Popup className="properties-panel-header-tooltip">Display Options</Tooltip.Popup>
+                </Tooltip.Positioner>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          </div>
+        {showDisplayDropdown && dropdownPosition && createPortal(
+          <div 
+            className="properties-panel-header-dropdown"
+            style={{
+              position: 'fixed',
+              top: `${dropdownPosition.top}px`,
+              right: `${dropdownPosition.right}px`,
+            }}
+            ref={displayDropdownRef}
+          >
+            <div className="properties-panel-header-dropdown-section">
+              <div className="properties-panel-header-dropdown-label">Projection</div>
+              <button
+                className={`properties-panel-header-dropdown-item ${viewerState.projectionMode === 'perspective' ? 'active' : ''}`}
+                onClick={() => {
+                  if (viewerState.projectionMode !== 'perspective') {
+                    viewerActions.toggleProjection();
+                  }
+                  setShowDisplayDropdown(false);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M12 2l8 4v12l-8 4-8-4V6l8-4z" />
+                  <path d="M12 22V10M12 10L4 6M12 10l8-4" />
+                </svg>
+                <span>Perspective</span>
+              </button>
+              <button
+                className={`properties-panel-header-dropdown-item ${viewerState.projectionMode === 'orthographic' ? 'active' : ''}`}
+                onClick={() => {
+                  if (viewerState.projectionMode !== 'orthographic') {
+                    viewerActions.toggleProjection();
+                  }
+                  setShowDisplayDropdown(false);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="4" y="4" width="16" height="16" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="12" y1="4" x2="12" y2="20" />
+                </svg>
+                <span>Orthographic</span>
+              </button>
+            </div>
+            <div className="properties-panel-header-dropdown-section">
+              <div className="properties-panel-header-dropdown-label">Display</div>
+              <button
+                className={`properties-panel-header-dropdown-item ${viewerState.displayMode === 'shaded' ? 'active' : ''}`}
+                onClick={() => {
+                  if (viewerState.displayMode !== 'shaded') {
+                    viewerActions.setDisplayMode('shaded');
+                  }
+                  setShowDisplayDropdown(false);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1">
+                  <path d="M12 3l9 5v8l-9 5-9-5V8l9-5z" />
+                </svg>
+                <span>Shaded</span>
+              </button>
+              <button
+                className={`properties-panel-header-dropdown-item ${viewerState.displayMode === 'wireframe' ? 'active' : ''}`}
+                onClick={() => {
+                  if (viewerState.displayMode !== 'wireframe') {
+                    viewerActions.setDisplayMode('wireframe');
+                  }
+                  setShowDisplayDropdown(false);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M12 3l9 5v8l-9 5-9-5V8l9-5z" />
+                  <path d="M12 21V12M3 8l9 4 9-4" />
+                </svg>
+                <span>Wireframe</span>
+              </button>
+            </div>
+            <div className="properties-panel-header-dropdown-section">
+              <div className="properties-panel-header-dropdown-label">Theme</div>
+              <button
+                className={`properties-panel-header-dropdown-item ${themeMode === 'light' ? 'active' : ''}`}
+                onClick={() => {
+                  setThemeMode('light');
+                  setShowDisplayDropdown(false);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                </svg>
+                <span>Light</span>
+              </button>
+              <button
+                className={`properties-panel-header-dropdown-item ${themeMode === 'dark' ? 'active' : ''}`}
+                onClick={() => {
+                  setThemeMode('dark');
+                  setShowDisplayDropdown(false);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+                <span>Dark</span>
+              </button>
+              <button
+                className={`properties-panel-header-dropdown-item ${themeMode === 'auto' ? 'active' : ''}`}
+                onClick={() => {
+                  setThemeMode('auto');
+                  setShowDisplayDropdown(false);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="2" y="3" width="20" height="18" rx="2" />
+                  <path d="M8 3v4M16 3v4M2 9h20" />
+                  <path d="M9 13h6M9 17h6" />
+                </svg>
+                <span>System</span>
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
+      </div>
+      <div className="properties-panel-header-right">
+        <Tooltip.Root>
+          <Tooltip.Trigger
+            delay={300}
+            className={`properties-panel-header-button properties-panel-header-chat ${showAIChat ? 'active' : ''}`}
+            onClick={() => setShowAIChat(!showAIChat)}
+            render={<button aria-label="AI Chat" />}
+          >
+            <AIIcon />
+            <span>Chat</span>
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Positioner side="bottom" sideOffset={6}>
+              <Tooltip.Popup className="properties-panel-header-tooltip">AI Chat</Tooltip.Popup>
+            </Tooltip.Positioner>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+        <Tooltip.Root>
+          <Tooltip.Trigger
+            delay={300}
+            className="properties-panel-header-button properties-panel-header-share"
+            onClick={() => {}}
+            render={<button aria-label="Share" />}
+          >
+            Share
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Positioner side="bottom" sideOffset={6}>
+              <Tooltip.Popup className="properties-panel-header-tooltip">Share</Tooltip.Popup>
+            </Tooltip.Positioner>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+      </div>
+    </div>
+    </Tooltip.Provider>
+  );
+
   // If in edit mode, show the feature creation form
   if (isEditing) {
-    const panelTitle = editMode.type === 'extrude' ? 'New Extrude' : editMode.type === 'revolve' ? 'New Revolve' : 'Edit Feature';
-    
     return (
-      <div className="properties-panel properties-panel-editing">
-        <div className="panel-header">{panelTitle}</div>
+      <div className="properties-panel properties-panel-floating properties-panel-editing">
+        {renderHeader()}
         <div className="properties-panel-content">
           {editMode.type === 'extrude' && (
             <ExtrudeEditForm 
@@ -1166,26 +1433,14 @@ const PropertiesPanel: React.FC = () => {
     );
   }
 
-  if (!effectiveFeature) {
-    return (
-      <div className="properties-panel">
-        <div className="panel-header">Properties</div>
-        <div className="properties-panel-content">
-          <div className="properties-empty">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-            <p className="empty-title">No selection</p>
-            <p className="empty-hint">Select to edit properties</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Panel is always visible - show empty state if no feature selected
 
   const renderProperties = () => {
+    // Don't show properties when no feature is selected
+    if (!effectiveFeature) {
+      return null;
+    }
+
     switch (effectiveFeature.type) {
       case 'origin':
         return <OriginProperties feature={effectiveFeature} onUpdate={handleUpdate} />;
@@ -1202,12 +1457,16 @@ const PropertiesPanel: React.FC = () => {
     }
   };
 
+  const content = showAIChat ? <AIPanel /> : renderProperties();
+  
   return (
-    <div className="properties-panel">
-      <div className="panel-header">Properties</div>
-      <div className="properties-panel-content">
-        {renderProperties()}
-      </div>
+    <div className="properties-panel properties-panel-floating">
+      {renderHeader()}
+      {content && (
+        <div className="properties-panel-content">
+          {content}
+        </div>
+      )}
     </div>
   );
 };

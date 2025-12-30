@@ -1,3 +1,5 @@
+@import '@fontsource/inter';
+
 *, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -5,7 +7,7 @@
 }
 
 :root {
-  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   --font-family-mono: 'SF Mono', Monaco, Menlo, 'Ubuntu Mono', Consolas, monospace;
 }
@@ -47,6 +49,7 @@
   --color-feature-boolean: #c586c0;
   --color-feature-primitive: #9cdcfe;
 }
+
 
 /* Light theme */
 [data-theme="light"] {

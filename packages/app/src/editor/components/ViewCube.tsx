@@ -366,8 +366,10 @@ const ViewCube: React.FC = () => {
 
   return (
     <>
-      <div ref={containerRef} className="view-cube" />
-      <div ref={tooltipRef} className="view-cube-tooltip" style={{ display: 'none' }} />
+      <div className="view-cube-container">
+        <div ref={containerRef} className="view-cube" />
+        <div ref={tooltipRef} className="view-cube-tooltip" style={{ display: 'none' }} />
+      </div>
     </>
   );
 };

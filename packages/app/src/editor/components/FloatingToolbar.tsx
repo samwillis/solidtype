@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Tooltip, Separator } from '@base-ui/react';
+import { Tooltip } from '@base-ui/react';
 import { useSketch } from '../contexts/SketchContext';
 import { useDocument } from '../contexts/DocumentContext';
 import { useSelection } from '../contexts/SelectionContext';
 import { useFeatureEdit } from '../contexts/FeatureEditContext';
 import { useKernel } from '../contexts/KernelContext';
+import { useViewer } from '../contexts/ViewerContext';
 import {
   SketchIcon,
   ExtrudeIcon,
@@ -23,27 +24,23 @@ import {
   ChevronDownIcon,
   UndoIcon,
   RedoIcon,
-  AIIcon,
   ExportIcon,
+  AIIcon,
+  NormalViewIcon,
+  CheckIcon,
+  CloseIcon,
 } from './Icons';
-import './Toolbar.css';
-import './ToolbarComponents.css';
+import './FloatingToolbar.css';
 
+interface FloatingToolbarProps {}
 
-
-
-
-interface ToolbarProps {
-  onToggleAIPanel?: () => void;
-  aiPanelVisible?: boolean;
-}
-
-const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) => {
+const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
   const { mode, startSketch, finishSketch, cancelSketch, addRectangle, setTool, canApplyConstraint, applyConstraint, clearSelection: clearSketchSelection } = useSketch();
   const { undo, redo, canUndo, canRedo, features, addBoolean } = useDocument();
   const { selectedFeatureId, selectFeature, clearSelection } = useSelection();
-  const { exportStl, exportJson, bodies } = useKernel();
+  const { exportStl, exportJson, bodies, sketchPlaneTransforms } = useKernel();
   const { startExtrudeEdit, startRevolveEdit, isEditing } = useFeatureEdit();
+  const { actions: viewerActions } = useViewer();
   const [constraintsDropdownOpen, setConstraintsDropdownOpen] = useState(false);
   const [booleanDropdownOpen, setBooleanDropdownOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -52,20 +49,16 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
   const booleanDropdownRef = React.useRef<HTMLDivElement>(null);
   
   // Toggle tool - clicking an active tool toggles it off
-  // When select is toggled off, user can rotate the view
   const toggleTool = useCallback((tool: 'select' | 'line' | 'arc' | 'circle' | 'rectangle') => {
     if (mode.activeTool === tool) {
-      // Clicking active tool again toggles it off (allows view rotation)
       setTool('none');
     } else {
       setTool(tool);
     }
   }, [mode.activeTool, setTool]);
 
-  // Check if we can export (have bodies to export)
   const canExport = bodies.length > 0 && !isExporting;
   
-  // Handle STL export (Phase 18)
   const handleExportStl = useCallback(async () => {
     if (!canExport) return;
     
@@ -73,7 +66,6 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     try {
       const result = await exportStl({ binary: true, name: 'model' });
       
-      // Download the file
       if (result instanceof ArrayBuffer) {
         const blob = new Blob([result], { type: 'model/stl' });
         const url = URL.createObjectURL(blob);
@@ -143,12 +135,10 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [booleanDropdownOpen]);
 
-  // Get available sketches for extrusion
   const sketches = useMemo(() => {
     return features.filter((f) => f.type === 'sketch');
   }, [features]);
 
-  // Check if a plane is selected (for starting sketch on selected plane)
   const selectedPlane = useMemo(() => {
     if (!selectedFeatureId) return null;
     const feature = features.find(f => f.id === selectedFeatureId);
@@ -158,19 +148,15 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     return null;
   }, [selectedFeatureId, features]);
   
-  // Check if a face is selected (Phase 15: sketch on face)
   const { selectedFaces } = useSelection();
   const selectedFaceRef = useMemo(() => {
     if (selectedFaces.length !== 1) return null;
     const face = selectedFaces[0];
-    // Create face reference in format expected by worker
     return `face:${face.featureId}:${face.faceIndex}`;
   }, [selectedFaces]);
   
-  // Effective plane/face reference for sketching
   const sketchPlaneRef = selectedPlane || selectedFaceRef;
 
-  // Check if a sketch is selected (for extrude/revolve)
   const selectedSketch = useMemo(() => {
     if (!selectedFeatureId) return null;
     const feature = features.find(f => f.id === selectedFeatureId);
@@ -180,29 +166,22 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     return null;
   }, [selectedFeatureId, features]);
 
-  // Keyboard shortcuts for sketch mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const modKey = isMac ? e.metaKey : e.ctrlKey;
       
-      // Cmd/Ctrl + Enter to accept sketch
       if (modKey && e.key === 'Enter' && mode.active) {
         e.preventDefault();
         finishSketch();
         return;
       }
       
-      // Escape behavior:
-      // - In sketch mode: clear selection and end draft line, NOT cancel sketch
-      // - Outside sketch mode: clear all selections
       if (e.key === 'Escape') {
         e.preventDefault();
         if (mode.active) {
-          // In sketch mode - just clear selection, don't cancel
           clearSketchSelection();
         } else {
-          // Clear selection from feature tree and 3D view
           selectFeature(null);
           clearSelection();
           clearSketchSelection();
@@ -216,20 +195,15 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
   }, [mode.active, finishSketch, cancelSketch, selectFeature, clearSelection, clearSketchSelection]);
 
   const handleNewSketch = () => {
-    // Plane must be selected (button should be disabled otherwise)
     if (!sketchPlaneRef) return;
     startSketch(sketchPlaneRef);
   };
 
   const handleAddRectangle = () => {
-    // Add a test rectangle at origin
     addRectangle(0, 0, 4, 3);
   };
 
-  // Check if sketch button should be enabled (only when plane or face is selected)
   const canStartSketch = sketchPlaneRef !== null;
-
-  // Check if extrude/revolve can be used (also disabled when already editing a feature)
   const canExtrude = !isEditing && (selectedSketch !== null || sketches.length === 1);
   const canRevolve = !isEditing && (selectedSketch !== null || sketches.length === 1);
 
@@ -240,24 +214,18 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
     }
   };
 
-  // Get all body-creating features (extrude, revolve) for boolean operations (Phase 17)
   const bodyFeatures = useMemo(() => {
     return features.filter(f => f.type === 'extrude' || f.type === 'revolve');
   }, [features]);
   
-  // Check if boolean operations are available (need at least 2 bodies)
   const canBoolean = !isEditing && bodyFeatures.length >= 2;
   
-  // Handle boolean operation
   const handleBoolean = (operation: 'union' | 'subtract' | 'intersect') => {
     if (bodyFeatures.length < 2) return;
     
-    // For now, use the last two body features
-    // In a more complete implementation, we'd let the user select bodies
     const target = bodyFeatures[bodyFeatures.length - 2];
     const tool = bodyFeatures[bodyFeatures.length - 1];
     
-    // Add boolean feature to document
     addBoolean(operation, target.id, tool.id);
     
     setBooleanDropdownOpen(false);
@@ -272,151 +240,126 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
 
   return (
     <Tooltip.Provider>
-      <div className="toolbar">
-        {/* Logo - Isometric cube inspired by SolidType branding */}
-        <div className="toolbar-logo">
-          <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
-            {/* Top face - blue with grid pattern */}
-            <path d="M16 4L28 10L16 16L4 10L16 4Z" fill="#3498db"/>
-            {/* Grid lines on top */}
-            <path d="M10 7L22 13M12 6L24 12M14 5L26 11" stroke="#2980b9" strokeWidth="0.5" opacity="0.6"/>
-            <path d="M22 7L10 13M20 6L8 12M18 5L6 11" stroke="#2980b9" strokeWidth="0.5" opacity="0.6"/>
-            {/* Left face - blue */}
-            <path d="M4 10L16 16V28L4 22V10Z" fill="#2980b9"/>
-            {/* Right face - orange */}
-            <path d="M28 10L16 16V28L28 22V10Z" fill="#e67e22"/>
-            {/* Code brackets on left face </> */}
-            <path d="M8 14L6 16.5L8 19" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-            <path d="M12 14L14 16.5L12 19" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-            <path d="M11 13.5L9 19.5" stroke="white" strokeWidth="1" strokeLinecap="round" fill="none"/>
-            {/* Code brackets on right face /> */}
-            <path d="M20 14L22 16.5L20 19" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-            <path d="M24 14L26 16.5L24 19" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-          </svg>
-          <span className="toolbar-logo-text"><span className="logo-solid">Solid</span><span className="logo-type">Type</span></span>
-        </div>
-
-        <Separator orientation="vertical" className="toolbar-separator" />
-
+      <div className="floating-toolbar">
         {/* Undo/Redo */}
-        <div className="toolbar-group">
+        <div className="floating-toolbar-group">
           <Tooltip.Root>
             <Tooltip.Trigger
               delay={300}
-              className={`toolbar-button ${!canUndo ? 'disabled' : ''}`}
+              className={`floating-toolbar-button ${!canUndo ? 'disabled' : ''}`}
               onClick={undo}
               render={<button aria-label="Undo" disabled={!canUndo} />}
             >
               <UndoIcon />
             </Tooltip.Trigger>
             <Tooltip.Portal>
-              <Tooltip.Positioner side="bottom" sideOffset={6}>
-                <Tooltip.Popup className="toolbar-tooltip">Undo</Tooltip.Popup>
+              <Tooltip.Positioner side="top" sideOffset={6}>
+                <Tooltip.Popup className="floating-toolbar-tooltip">Undo</Tooltip.Popup>
               </Tooltip.Positioner>
             </Tooltip.Portal>
           </Tooltip.Root>
           <Tooltip.Root>
             <Tooltip.Trigger
               delay={300}
-              className={`toolbar-button ${!canRedo ? 'disabled' : ''}`}
+              className={`floating-toolbar-button ${!canRedo ? 'disabled' : ''}`}
               onClick={redo}
               render={<button aria-label="Redo" disabled={!canRedo} />}
             >
               <RedoIcon />
             </Tooltip.Trigger>
             <Tooltip.Portal>
-              <Tooltip.Positioner side="bottom" sideOffset={6}>
-                <Tooltip.Popup className="toolbar-tooltip">Redo</Tooltip.Popup>
+              <Tooltip.Positioner side="top" sideOffset={6}>
+                <Tooltip.Popup className="floating-toolbar-tooltip">Redo</Tooltip.Popup>
               </Tooltip.Positioner>
             </Tooltip.Portal>
           </Tooltip.Root>
         </div>
 
-        <Separator orientation="vertical" className="toolbar-separator" />
+        <div className="floating-toolbar-separator" />
 
         {/* Sketch mode indicator and tools */}
         {mode.active ? (
-          <div className="toolbar-group">
+          <div className="floating-toolbar-group">
             <Tooltip.Root>
               <Tooltip.Trigger
                 delay={300}
-                className={`toolbar-button ${mode.activeTool === 'select' ? 'active' : ''}`}
+                className={`floating-toolbar-button ${mode.activeTool === 'select' ? 'active' : ''}`}
                 onClick={() => toggleTool('select')}
                 render={<button aria-label="Select" />}
               >
                 <SelectIcon />
               </Tooltip.Trigger>
               <Tooltip.Portal>
-                <Tooltip.Positioner side="bottom" sideOffset={6}>
-                  <Tooltip.Popup className="toolbar-tooltip">Select</Tooltip.Popup>
+                <Tooltip.Positioner side="top" sideOffset={6}>
+                  <Tooltip.Popup className="floating-toolbar-tooltip">Select</Tooltip.Popup>
                 </Tooltip.Positioner>
               </Tooltip.Portal>
             </Tooltip.Root>
             <Tooltip.Root>
               <Tooltip.Trigger
                 delay={300}
-                className={`toolbar-button ${mode.activeTool === 'line' ? 'active' : ''}`}
+                className={`floating-toolbar-button ${mode.activeTool === 'line' ? 'active' : ''}`}
                 onClick={() => toggleTool('line')}
                 render={<button aria-label="Line" />}
               >
                 <LineIcon />
               </Tooltip.Trigger>
               <Tooltip.Portal>
-                <Tooltip.Positioner side="bottom" sideOffset={6}>
-                  <Tooltip.Popup className="toolbar-tooltip">Line</Tooltip.Popup>
+                <Tooltip.Positioner side="top" sideOffset={6}>
+                  <Tooltip.Popup className="floating-toolbar-tooltip">Line</Tooltip.Popup>
                 </Tooltip.Positioner>
               </Tooltip.Portal>
             </Tooltip.Root>
             <Tooltip.Root>
               <Tooltip.Trigger
                 delay={300}
-                className={`toolbar-button ${mode.activeTool === 'arc' ? 'active' : ''}`}
+                className={`floating-toolbar-button ${mode.activeTool === 'arc' ? 'active' : ''}`}
                 onClick={() => toggleTool('arc')}
                 render={<button aria-label="Arc" />}
               >
                 <ArcIcon />
               </Tooltip.Trigger>
               <Tooltip.Portal>
-                <Tooltip.Positioner side="bottom" sideOffset={6}>
-                  <Tooltip.Popup className="toolbar-tooltip">Arc</Tooltip.Popup>
+                <Tooltip.Positioner side="top" sideOffset={6}>
+                  <Tooltip.Popup className="floating-toolbar-tooltip">Arc</Tooltip.Popup>
                 </Tooltip.Positioner>
               </Tooltip.Portal>
             </Tooltip.Root>
             <Tooltip.Root>
               <Tooltip.Trigger
                 delay={300}
-                className={`toolbar-button ${mode.activeTool === 'circle' ? 'active' : ''}`}
+                className={`floating-toolbar-button ${mode.activeTool === 'circle' ? 'active' : ''}`}
                 onClick={() => toggleTool('circle')}
                 render={<button aria-label="Circle" />}
               >
                 <CircleIcon />
               </Tooltip.Trigger>
               <Tooltip.Portal>
-                <Tooltip.Positioner side="bottom" sideOffset={6}>
-                  <Tooltip.Popup className="toolbar-tooltip">Circle</Tooltip.Popup>
+                <Tooltip.Positioner side="top" sideOffset={6}>
+                  <Tooltip.Popup className="floating-toolbar-tooltip">Circle</Tooltip.Popup>
                 </Tooltip.Positioner>
               </Tooltip.Portal>
             </Tooltip.Root>
             <Tooltip.Root>
               <Tooltip.Trigger
                 delay={300}
-                className="toolbar-button"
+                className="floating-toolbar-button"
                 onClick={handleAddRectangle}
                 render={<button aria-label="Rectangle" />}
               >
                 <RectangleIcon />
               </Tooltip.Trigger>
               <Tooltip.Portal>
-                <Tooltip.Positioner side="bottom" sideOffset={6}>
-                  <Tooltip.Popup className="toolbar-tooltip">Rectangle</Tooltip.Popup>
+                <Tooltip.Positioner side="top" sideOffset={6}>
+                  <Tooltip.Popup className="floating-toolbar-tooltip">Rectangle</Tooltip.Popup>
                 </Tooltip.Positioner>
               </Tooltip.Portal>
             </Tooltip.Root>
 
             {/* Constraints dropdown */}
-            <div className="toolbar-dropdown-container" ref={constraintsDropdownRef}>
+            <div className="floating-toolbar-dropdown-container" ref={constraintsDropdownRef}>
               <button
-                className={`toolbar-button toolbar-dropdown-button ${constraintsDropdownOpen ? 'active' : ''}`}
+                className={`floating-toolbar-button floating-toolbar-dropdown-button ${constraintsDropdownOpen ? 'active' : ''}`}
                 onClick={() => setConstraintsDropdownOpen(!constraintsDropdownOpen)}
                 aria-label="Constraints"
                 title="Constraints"
@@ -425,106 +368,170 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
                 <ChevronDownIcon />
               </button>
               {constraintsDropdownOpen && (
-                <div className="toolbar-dropdown-menu">
+                <div className="floating-toolbar-dropdown-menu">
                   <button
-                    className="toolbar-dropdown-item"
+                    className="floating-toolbar-dropdown-item"
                     onClick={() => { applyConstraint('horizontal'); setConstraintsDropdownOpen(false); }}
                     disabled={!canApplyConstraint('horizontal')}
                   >
-                    <span className="toolbar-dropdown-key">H</span> Horizontal
+                    <span className="floating-toolbar-dropdown-key">H</span> Horizontal
                   </button>
                   <button
-                    className="toolbar-dropdown-item"
+                    className="floating-toolbar-dropdown-item"
                     onClick={() => { applyConstraint('vertical'); setConstraintsDropdownOpen(false); }}
                     disabled={!canApplyConstraint('vertical')}
                   >
-                    <span className="toolbar-dropdown-key">V</span> Vertical
+                    <span className="floating-toolbar-dropdown-key">V</span> Vertical
                   </button>
                   <button
-                    className="toolbar-dropdown-item"
+                    className="floating-toolbar-dropdown-item"
                     onClick={() => { applyConstraint('coincident'); setConstraintsDropdownOpen(false); }}
                     disabled={!canApplyConstraint('coincident')}
                   >
-                    <span className="toolbar-dropdown-key">C</span> Coincident
+                    <span className="floating-toolbar-dropdown-key">C</span> Coincident
                   </button>
                   <button
-                    className="toolbar-dropdown-item"
+                    className="floating-toolbar-dropdown-item"
                     onClick={() => { applyConstraint('fixed'); setConstraintsDropdownOpen(false); }}
                     disabled={!canApplyConstraint('fixed')}
                   >
-                    <span className="toolbar-dropdown-key">F</span> Fixed
+                    <span className="floating-toolbar-dropdown-key">F</span> Fixed
                   </button>
                   <button
-                    className="toolbar-dropdown-item"
+                    className="floating-toolbar-dropdown-item"
                     onClick={() => { applyConstraint('distance'); setConstraintsDropdownOpen(false); }}
                     disabled={!canApplyConstraint('distance')}
                   >
-                    <span className="toolbar-dropdown-key">D</span> Distance
+                    <span className="floating-toolbar-dropdown-key">D</span> Distance
                   </button>
                   <button
-                    className="toolbar-dropdown-item"
+                    className="floating-toolbar-dropdown-item"
                     onClick={() => { applyConstraint('angle'); setConstraintsDropdownOpen(false); }}
                     disabled={!canApplyConstraint('angle')}
                   >
-                    <span className="toolbar-dropdown-key">∠</span> Angle
+                    <span className="floating-toolbar-dropdown-key">∠</span> Angle
                   </button>
-                  {/* Advanced constraints (Phase 19) */}
-                  <div className="toolbar-dropdown-separator" />
+                  <div className="floating-toolbar-dropdown-separator" />
                   <button
-                    className="toolbar-dropdown-item"
+                    className="floating-toolbar-dropdown-item"
                     onClick={() => { applyConstraint('parallel'); setConstraintsDropdownOpen(false); }}
                     disabled={!canApplyConstraint('parallel')}
                   >
-                    <span className="toolbar-dropdown-key">∥</span> Parallel
+                    <span className="floating-toolbar-dropdown-key">∥</span> Parallel
                   </button>
                   <button
-                    className="toolbar-dropdown-item"
+                    className="floating-toolbar-dropdown-item"
                     onClick={() => { applyConstraint('perpendicular'); setConstraintsDropdownOpen(false); }}
                     disabled={!canApplyConstraint('perpendicular')}
                   >
-                    <span className="toolbar-dropdown-key">⊥</span> Perpendicular
+                    <span className="floating-toolbar-dropdown-key">⊥</span> Perpendicular
                   </button>
                   <button
-                    className="toolbar-dropdown-item"
+                    className="floating-toolbar-dropdown-item"
                     onClick={() => { applyConstraint('equalLength'); setConstraintsDropdownOpen(false); }}
                     disabled={!canApplyConstraint('equalLength')}
                   >
-                    <span className="toolbar-dropdown-key">=</span> Equal Length
+                    <span className="floating-toolbar-dropdown-key">=</span> Equal Length
                   </button>
                   <button
-                    className="toolbar-dropdown-item"
+                    className="floating-toolbar-dropdown-item"
                     onClick={() => { applyConstraint('tangent'); setConstraintsDropdownOpen(false); }}
                     disabled={!canApplyConstraint('tangent')}
                   >
-                    <span className="toolbar-dropdown-key">⌒</span> Tangent
+                    <span className="floating-toolbar-dropdown-key">⌒</span> Tangent
                   </button>
                   <button
-                    className="toolbar-dropdown-item"
+                    className="floating-toolbar-dropdown-item"
                     onClick={() => { applyConstraint('symmetric'); setConstraintsDropdownOpen(false); }}
                     disabled={!canApplyConstraint('symmetric')}
                   >
-                    <span className="toolbar-dropdown-key">⇔</span> Symmetric
+                    <span className="floating-toolbar-dropdown-key">⇔</span> Symmetric
                   </button>
                 </div>
               )}
+            </div>
+
+            {/* Sketch mode actions: Normal to Sketch, Accept, Cancel */}
+            <div className="floating-toolbar-separator" />
+            <div className="floating-toolbar-group">
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  delay={300}
+                  className="floating-toolbar-button"
+                  onClick={() => {
+                    // Reset camera to sketch normal - get view for the sketch plane
+                    if (mode.sketchId && mode.planeId) {
+                      // Map plane IDs to view presets
+                      const planeViewMap: Record<string, string> = {
+                        'xy': 'top',
+                        'xz': 'front',
+                        'yz': 'right',
+                        'top': 'top',
+                        'front': 'front',
+                        'right': 'right',
+                      };
+                      const view = planeViewMap[mode.planeId] || 'top';
+                      viewerActions.setView(view as any);
+                    }
+                  }}
+                  render={<button aria-label="Normal to Sketch" />}
+                >
+                  <NormalViewIcon />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Positioner side="top" sideOffset={6}>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">View Normal to Sketch Plane</Tooltip.Popup>
+                  </Tooltip.Positioner>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  delay={300}
+                  className="floating-toolbar-button"
+                  onClick={finishSketch}
+                  render={<button aria-label="Accept Sketch" />}
+                >
+                  <CheckIcon />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Positioner side="top" sideOffset={6}>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">Accept Sketch (Ctrl+Enter)</Tooltip.Popup>
+                  </Tooltip.Positioner>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  delay={300}
+                  className="floating-toolbar-button"
+                  onClick={cancelSketch}
+                  render={<button aria-label="Cancel Sketch" />}
+                >
+                  <CloseIcon />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Positioner side="top" sideOffset={6}>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">Cancel Sketch</Tooltip.Popup>
+                  </Tooltip.Positioner>
+                </Tooltip.Portal>
+              </Tooltip.Root>
             </div>
           </div>
         ) : (
           <>
             {/* Feature mode: Sketch, Plane, Extrude, Revolve */}
-            <div className="toolbar-group">
+            <div className="floating-toolbar-group">
               <Tooltip.Root>
                 <Tooltip.Trigger
                   delay={300}
-                  className={`toolbar-button ${!canStartSketch ? 'disabled' : ''}`}
+                  className={`floating-toolbar-button ${!canStartSketch ? 'disabled' : ''}`}
                   onClick={handleNewSketch}
                   render={<button aria-label="New Sketch" disabled={!canStartSketch} />}
                 >
                   <SketchIcon />
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
-                  <Tooltip.Positioner side="bottom" sideOffset={6}>
-                    <Tooltip.Popup className="toolbar-tooltip">
+                  <Tooltip.Positioner side="top" sideOffset={6}>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">
                       {canStartSketch 
                         ? (selectedFaceRef 
                             ? `New Sketch on Face` 
@@ -537,35 +544,35 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
               <Tooltip.Root>
                 <Tooltip.Trigger
                   delay={300}
-                  className="toolbar-button disabled"
+                  className="floating-toolbar-button disabled"
                   render={<button aria-label="Plane" disabled />}
                 >
                   <PlaneIcon />
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
-                  <Tooltip.Positioner side="bottom" sideOffset={6}>
-                    <Tooltip.Popup className="toolbar-tooltip">Plane (coming soon)</Tooltip.Popup>
+                  <Tooltip.Positioner side="top" sideOffset={6}>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">Plane (coming soon)</Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
               </Tooltip.Root>
             </div>
             
-            <Separator orientation="vertical" className="toolbar-separator" />
+            <div className="floating-toolbar-separator" />
 
-            {/* Feature tools - only visible in feature mode */}
-            <div className="toolbar-group">
+            {/* Feature tools */}
+            <div className="floating-toolbar-group">
               <Tooltip.Root>
                 <Tooltip.Trigger
                   delay={300}
-                  className={`toolbar-button ${!canExtrude ? 'disabled' : ''}`}
+                  className={`floating-toolbar-button ${!canExtrude ? 'disabled' : ''}`}
                   onClick={handleExtrude}
                   render={<button aria-label="Extrude" disabled={!canExtrude} />}
                 >
                   <ExtrudeIcon />
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
-                  <Tooltip.Positioner side="bottom" sideOffset={6}>
-                    <Tooltip.Popup className="toolbar-tooltip">
+                  <Tooltip.Positioner side="top" sideOffset={6}>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">
                       {selectedSketch ? `Extrude ${selectedSketch.name || selectedSketch.id}` : 'Extrude (select a sketch)'}
                     </Tooltip.Popup>
                   </Tooltip.Positioner>
@@ -574,27 +581,27 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
               <Tooltip.Root>
                 <Tooltip.Trigger
                   delay={300}
-                  className={`toolbar-button ${!canRevolve ? 'disabled' : ''}`}
+                  className={`floating-toolbar-button ${!canRevolve ? 'disabled' : ''}`}
                   onClick={handleRevolve}
                   render={<button aria-label="Revolve" disabled={!canRevolve} />}
                 >
                   <RevolveIcon />
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
-                  <Tooltip.Positioner side="bottom" sideOffset={6}>
-                    <Tooltip.Popup className="toolbar-tooltip">
+                  <Tooltip.Positioner side="top" sideOffset={6}>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">
                       {selectedSketch ? `Revolve ${selectedSketch.name || selectedSketch.id}` : 'Revolve (select a sketch)'}
                     </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
               </Tooltip.Root>
 
-              {/* Boolean Operations Dropdown (Phase 17) */}
-              <div ref={booleanDropdownRef} className="toolbar-dropdown-wrapper">
+              {/* Boolean Operations Dropdown */}
+              <div ref={booleanDropdownRef} className="floating-toolbar-dropdown-wrapper">
                 <Tooltip.Root>
                   <Tooltip.Trigger
                     delay={300}
-                    className={`toolbar-button ${!canBoolean ? 'disabled' : ''} ${booleanDropdownOpen ? 'active' : ''}`}
+                    className={`floating-toolbar-button ${!canBoolean ? 'disabled' : ''} ${booleanDropdownOpen ? 'active' : ''}`}
                     onClick={() => canBoolean && setBooleanDropdownOpen(!booleanDropdownOpen)}
                     render={<button aria-label="Boolean" disabled={!canBoolean} />}
                   >
@@ -602,31 +609,31 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
                     <ChevronDownIcon />
                   </Tooltip.Trigger>
                   <Tooltip.Portal>
-                    <Tooltip.Positioner side="bottom" sideOffset={6}>
-                      <Tooltip.Popup className="toolbar-tooltip">
+                    <Tooltip.Positioner side="top" sideOffset={6}>
+                      <Tooltip.Popup className="floating-toolbar-tooltip">
                         Boolean Operations {canBoolean ? '' : '(need 2+ bodies)'}
                       </Tooltip.Popup>
                     </Tooltip.Positioner>
                   </Tooltip.Portal>
                 </Tooltip.Root>
                 {booleanDropdownOpen && (
-                  <div className="toolbar-dropdown">
+                  <div className="floating-toolbar-dropdown">
                     <button 
-                      className="toolbar-dropdown-item"
+                      className="floating-toolbar-dropdown-item"
                       onClick={() => handleBoolean('union')}
                     >
                       <UnionIcon />
                       <span>Union</span>
                     </button>
                     <button 
-                      className="toolbar-dropdown-item"
+                      className="floating-toolbar-dropdown-item"
                       onClick={() => handleBoolean('subtract')}
                     >
                       <SubtractIcon />
                       <span>Subtract</span>
                     </button>
                     <button 
-                      className="toolbar-dropdown-item"
+                      className="floating-toolbar-dropdown-item"
                       onClick={() => handleBoolean('intersect')}
                     >
                       <IntersectIcon />
@@ -639,66 +646,31 @@ const Toolbar: React.FC<ToolbarProps> = ({ onToggleAIPanel, aiPanelVisible }) =>
           </>
         )}
 
-        {/* Spacer to push right-side buttons to right */}
-        <div className="toolbar-spacer" />
+        <div className="floating-toolbar-separator" />
 
-        {/* Export STL (Phase 18) */}
-        <Tooltip.Root>
-          <Tooltip.Trigger
-            delay={300}
-            className={`toolbar-button ${!canExport ? 'disabled' : ''} ${isExporting ? 'loading' : ''}`}
-            onClick={handleExportStl}
-            render={<button aria-label="Export STL" disabled={!canExport} />}
-          >
-            <ExportIcon />
-          </Tooltip.Trigger>
-          <Tooltip.Portal>
-            <Tooltip.Positioner side="bottom" sideOffset={6}>
-              <Tooltip.Popup className="toolbar-tooltip">
-                {isExporting ? 'Exporting...' : (canExport ? 'Export STL' : 'Export STL (no bodies)')}
-              </Tooltip.Popup>
-            </Tooltip.Positioner>
-          </Tooltip.Portal>
-        </Tooltip.Root>
-        <Tooltip.Root>
-          <Tooltip.Trigger
-            delay={300}
-            className={`toolbar-button ${!canExport ? 'disabled' : ''} ${isExportingJson ? 'loading' : ''}`}
-            onClick={handleExportJson}
-            render={<button aria-label="Export JSON" disabled={!canExport} />}
-          >
-            <ExportIcon />
-          </Tooltip.Trigger>
-          <Tooltip.Portal>
-            <Tooltip.Positioner side="bottom" sideOffset={6}>
-              <Tooltip.Popup className="toolbar-tooltip">
-                {isExportingJson ? 'Exporting...' : (canExport ? 'Export JSON' : 'Export JSON (no bodies)')}
-              </Tooltip.Popup>
-            </Tooltip.Positioner>
-          </Tooltip.Portal>
-        </Tooltip.Root>
-
-        {/* AI Panel Toggle */}
-        <Tooltip.Root>
-          <Tooltip.Trigger
-            delay={300}
-            className={`toolbar-button toolbar-button-ai ${aiPanelVisible ? 'active' : ''}`}
-            onClick={onToggleAIPanel}
-            render={<button aria-label="Toggle AI Assistant" />}
-          >
-            <AIIcon />
-          </Tooltip.Trigger>
-          <Tooltip.Portal>
-            <Tooltip.Positioner side="bottom" sideOffset={6}>
-              <Tooltip.Popup className="toolbar-tooltip">
-                {aiPanelVisible ? 'Hide AI Assistant' : 'Show AI Assistant'}
-              </Tooltip.Popup>
-            </Tooltip.Positioner>
-          </Tooltip.Portal>
-        </Tooltip.Root>
+        {/* Export */}
+        <div className="floating-toolbar-group">
+          <Tooltip.Root>
+            <Tooltip.Trigger
+              delay={300}
+              className={`floating-toolbar-button ${!canExport ? 'disabled' : ''} ${isExporting ? 'loading' : ''}`}
+              onClick={handleExportStl}
+              render={<button aria-label="Export STL" disabled={!canExport} />}
+            >
+              <ExportIcon />
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Positioner side="top" sideOffset={6}>
+                <Tooltip.Popup className="floating-toolbar-tooltip">
+                  {isExporting ? 'Exporting...' : (canExport ? 'Export STL' : 'Export STL (no bodies)')}
+                </Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        </div>
       </div>
     </Tooltip.Provider>
   );
 };
 
-export default Toolbar;
+export default FloatingToolbar;

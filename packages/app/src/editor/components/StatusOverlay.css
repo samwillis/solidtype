@@ -1,0 +1,34 @@
+.status-overlay {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.status-overlay-item {
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  color: var(--color-text);
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.status-overlay-item.status-error {
+  color: #ff6b6b;
+}
+
+.status-overlay-item.status-solve {
+  font-family: var(--font-family-mono, monospace);
+  font-size: 10px;
+}
+
+.status-overlay-item.status-coordinates {
+  font-family: var(--font-family-mono, monospace);
+  font-size: 10px;
+  opacity: 0.9;
+}

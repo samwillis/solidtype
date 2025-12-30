@@ -6,10 +6,231 @@
   user-select: none;
 }
 
+.properties-panel-floating {
+  position: absolute;
+  top: 12px; /* 25% closer to top (was 16px, now 12px) */
+  right: 16px;
+  width: 224px; /* Reverted to original width */
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 80px);
+  height: auto;
+  background: rgba(37, 37, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 13px;
+  padding: 0; /* Padding moved to header */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden; /* Restore hidden since dropdown is portaled */
+  backdrop-filter: blur(8px);
+}
+
+[data-theme="light"] .properties-panel-floating {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.properties-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px; /* Padding moved here from panel */
+  flex-shrink: 0;
+}
+
+.properties-panel-header-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.properties-panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Reduced gap for tighter spacing like Figma */
+}
+
+.properties-panel-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.properties-panel-header-icon-button {
+  width: 28px; /* Consistent with other buttons */
+  height: 28px; /* Consistent with other buttons */
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--color-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+}
+
+.properties-panel-header-icon-button:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-icon-hover);
+}
+
+.properties-panel-header-icon-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.properties-panel-header-button {
+  height: 28px; /* Consistent button height */
+  padding: 0 12px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--color-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+  font-size: 11px; /* Smaller text */
+  white-space: nowrap;
+}
+
+.properties-panel-header-button:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-icon-hover);
+}
+
+.properties-panel-header-button.active {
+  background: var(--color-bg-active);
+  color: var(--color-accent);
+}
+
+.properties-panel-header-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.properties-panel-header-tooltip {
+  background: var(--color-bg-light);
+  color: var(--color-text);
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
+}
+
+.properties-panel-header-chat {
+  height: 28px; /* Consistent button height */
+  padding: 0 10px; /* Reduced padding */
+  border: 1px solid var(--color-border); /* Add border for clarity */
+  display: flex;
+  align-items: center;
+  gap: 4px; /* Reduced gap between icon and text */
+}
+
+.properties-panel-header-share {
+  background: var(--color-accent);
+  color: white;
+  font-weight: 500;
+}
+
+.properties-panel-header-share:hover {
+  background: var(--color-accent-hover, #1c8ae6);
+  color: white;
+}
+
+.properties-panel-header-display-dropdown {
+  position: relative;
+}
+
+.properties-panel-header-dropdown {
+  min-width: 180px;
+  background: #252526; /* Solid dark background */
+  border: 1px solid rgba(255, 255, 255, 0.15); /* Match toolbar border */
+  border-radius: 13px; /* Match toolbar border radius */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* Matching shadow */
+  padding: 8px; /* Match toolbar padding */
+}
+
+.properties-panel-header-dropdown-section {
+  margin-bottom: 8px;
+}
+
+.properties-panel-header-dropdown-section:last-child {
+  margin-bottom: 0;
+}
+
+.properties-panel-header-dropdown-label {
+  padding: 4px 8px 2px;
+  font-size: 10px; /* Smaller text */
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.properties-panel-header-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px; /* Tighter padding */
+  background: transparent;
+  border: none;
+  border-radius: 5px; /* Match button border radius */
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px; /* Smaller text */
+  text-align: left;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.properties-panel-header-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.properties-panel-header-dropdown-item.active {
+  background: var(--color-accent);
+  color: white;
+}
+
+.properties-panel-header-dropdown-item.active svg {
+  color: white;
+}
+
+.properties-panel-header-dropdown-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.7);
+  transition: color 0.15s ease;
+}
+
+[data-theme="light"] .properties-panel-header-dropdown-item svg {
+  color: rgba(255, 255, 255, 0.9);
+}
+
 .properties-panel-content {
   flex: 1;
   overflow: auto;
-  padding: 8px;
+  padding: 0; /* No padding - let child panels choose their own */
+  overflow-x: hidden; /* Prevent horizontal scroll, but allow vertical */
+}
+
+.properties-panel-content:not(:empty) {
+  border-top: 1px solid var(--color-border);
+}
+
+/* Edit forms need padding */
+.properties-panel-content form {
+  padding: 8px 0; /* Vertical padding for forms */
 }
 
 .properties-empty {
@@ -43,17 +264,21 @@
 
 /* Property Groups */
 .property-group {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  padding: 0 8px; /* Add padding since parent no longer has it */
+}
+
+.property-group:first-child {
+  padding-top: 8px; /* Add top padding to first group */
+}
+
+.property-group:last-child {
+  margin-bottom: 0;
+  padding-bottom: 8px; /* Add bottom padding to last group */
 }
 
 .property-group-title {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--color-text-muted);
-  padding: 0 4px;
-  margin-bottom: 6px;
+  display: none; /* Hide group titles for Figma-like appearance */
 }
 
 /* Property Rows */

@@ -8,7 +8,6 @@
 }
 
 .context-menu-positioner {
-  z-index: 10000;
   position: fixed;
   outline: none !important;
 }
@@ -21,12 +20,12 @@
 .context-menu {
   min-width: 180px;
   max-width: 280px;
-  background: var(--color-surface, #2d2d2d);
-  border: 1px solid var(--color-border, #3c3c3c);
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-  padding: 4px 0;
-  font-size: 13px;
+  background: #252526; /* Solid dark background */
+  border: 1px solid rgba(255, 255, 255, 0.15); /* Match toolbar border */
+  border-radius: 13px; /* Match toolbar border radius */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* Matching shadow */
+  padding: 8px; /* Match toolbar padding */
+  font-size: 11px; /* Smaller text */
   outline: none !important;
   font-family: inherit;
 }
@@ -34,28 +33,24 @@
 .context-menu:focus,
 .context-menu:focus-visible {
   outline: none !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-}
-
-[data-theme="light"] .context-menu {
-  background: var(--color-surface, #ffffff);
-  border-color: var(--color-border, #e0e0e0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .context-menu-item {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 8px 12px;
+  padding: 4px 8px; /* Tighter padding */
   border: none;
   background: transparent;
+  border-radius: 5px; /* Match button border radius */
   cursor: pointer;
   text-align: left;
-  color: var(--color-text, #cccccc);
+  color: rgba(255, 255, 255, 0.9);
   gap: 8px;
-  transition: background-color 0.1s ease;
+  transition: background-color 0.15s ease;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 11px; /* Smaller text */
   line-height: 1.4;
   outline: none !important;
 }
@@ -65,18 +60,9 @@
   outline: none !important;
 }
 
-[data-theme="light"] .context-menu-item {
-  color: var(--color-text, #333333);
-}
-
 .context-menu-item:hover:not([data-disabled]),
 .context-menu-item[data-highlighted] {
-  background: var(--color-hover, #3c3c3c);
-}
-
-[data-theme="light"] .context-menu-item:hover:not([data-disabled]),
-[data-theme="light"] .context-menu-item[data-highlighted] {
-  background: var(--color-hover, #e8e8e8);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .context-menu-item.disabled,
@@ -105,6 +91,12 @@
 .context-menu-icon svg {
   width: 14px;
   height: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  transition: color 0.15s ease;
+}
+
+[data-theme="light"] .context-menu-icon svg {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .context-menu-label {

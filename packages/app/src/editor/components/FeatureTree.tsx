@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { ContextMenu } from '@base-ui/react/context-menu';
+import { Collapsible } from '@base-ui/react/collapsible';
 import { useDocument } from '../contexts/DocumentContext';
 import { useKernel } from '../contexts/KernelContext';
 import { useSelection } from '../contexts/SelectionContext';
@@ -86,10 +87,10 @@ function featuresToTreeNodes(
     };
   });
 
-  // Create the part node with feature children
-  const partNode: TreeNode = {
-    id: 'part',
-    name: 'Part1',
+  // Create the features node with feature children
+  const featuresNode: TreeNode = {
+    id: 'features',
+    name: 'Features',
     type: 'part',
     expanded: true,
     children: featureNodes,
@@ -110,7 +111,7 @@ function featuresToTreeNodes(
     })),
   };
 
-  return [bodiesFolder, partNode];
+  return [bodiesFolder, featuresNode];
 }
 
 // Icons for each node type
@@ -201,18 +202,33 @@ const NodeIcon: React.FC<{ type: NodeType }> = ({ type }) => {
   }
 };
 
-// Expand/collapse chevron
+// Expand/collapse chevron for nested items
 const Chevron: React.FC<{ expanded: boolean }> = ({ expanded }) => (
   <svg
     className={`tree-chevron ${expanded ? 'expanded' : ''}`}
-    width="12"
-    height="12"
+    width="10" /* 20% smaller than 12px */
+    height="10" /* 20% smaller than 12px */
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
   >
     <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+
+// Chevron for section headers (using Collapsible state) - smaller and more subtle
+const SectionChevron: React.FC<{ open: boolean }> = ({ open }) => (
+  <svg
+    className={`feature-tree-section-chevron ${open ? 'expanded' : ''}`}
+    width="8"
+    height="8"
+    viewBox="0 0 10 10"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+  >
+    <path d="M3.5 9L7.5 5L3.5 1" stroke="currentColor" />
   </svg>
 );
 
@@ -316,6 +332,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   selectedId,
   rebuildGate,
   showGateAfter,
+  isInFeaturesSection,
   editingId,
   isDraggingGate,
   onToggleExpand,
@@ -372,7 +389,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   const itemContent = (
     <li
       className={`tree-item ${isSelected ? 'selected' : ''} ${node.suppressed ? 'suppressed' : ''} ${node.gated ? 'gated' : ''} ${isError ? 'error' : ''}`}
-      style={{ paddingLeft: `${8 + level * 16}px` }}
+      style={{ paddingLeft: `${4 + level * 16}px` }}
       onClick={() => !isEditing && onSelect(node.id)}
       onDoubleClick={() => onDoubleClick(node.id)}
       onMouseEnter={() => onHover(node.id)}
@@ -481,7 +498,8 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
                 expandedNodes={expandedNodes}
                 selectedId={selectedId}
                 rebuildGate={rebuildGate}
-                showGateAfter={node.type === 'part'}
+                showGateAfter={isInFeaturesSection}
+                isInFeaturesSection={isInFeaturesSection}
                 editingId={editingId}
                 isDraggingGate={isDraggingGate}
                 onToggleExpand={onToggleExpand}
@@ -496,8 +514,8 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
                 getContextMenuItems={getContextMenuItems}
               />
           ))}
-          {/* Show gate at end if no gate is set, otherwise show drop zone - only for part node */}
-          {node.type === 'part' && (
+          {/* Show gate at end if no gate is set, otherwise show drop zone - only for features section */}
+          {isInFeaturesSection && (
             rebuildGate === null ? (
               <RebuildGateBar
                 afterFeatureId={null}
@@ -559,26 +577,33 @@ const FeatureTree: React.FC = () => {
     );
   }, [features, rebuildGate, featureStatus, errorsByFeature, bodies]);
 
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => {
-    // Initially expand part and bodies folder
-    return new Set(['part', 'bodies']);
+  // Track expanded state for sections (using Collapsible's controlled state)
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(() => {
+    // Initially expand features and bodies folder
+    return new Set(['features', 'bodies']);
   });
 
-  const handleToggleExpand = useCallback((id: string) => {
-    setExpandedNodes((prev) => {
+  const handleSectionToggle = useCallback((id: string, open: boolean) => {
+    setExpandedSections((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
+      if (open) {
         next.add(id);
+      } else {
+        next.delete(id);
       }
       return next;
     });
   }, []);
 
+  // Keep expandedNodes for TreeNodeItem compatibility (for nested items)
+  const expandedNodes = useMemo(() => {
+    // For now, keep all nodes expanded - we can add nested collapse later if needed
+    return new Set<string>();
+  }, []);
+
   const handleSelect = useCallback((id: string) => {
     // Don't select folder nodes
-    if (id === 'part' || id === 'bodies') return;
+    if (id === 'features' || id === 'bodies') return;
     // Don't allow selection in sketch mode
     if (sketchMode.active) return;
     selectFeature(id);
@@ -586,7 +611,7 @@ const FeatureTree: React.FC = () => {
 
   const handleHover = useCallback((id: string | null) => {
     // Don't track hover for folder nodes
-    if (id === 'part' || id === 'bodies') {
+    if (id === 'features' || id === 'bodies') {
       setHoveredFeature(null);
       return;
     }
@@ -601,7 +626,7 @@ const FeatureTree: React.FC = () => {
     // Don't allow interaction in sketch mode
     if (sketchMode.active) return;
     // Don't allow renaming folders or system nodes
-    if (id === 'part' || id === 'bodies' || id === 'origin' || id === 'xy' || id === 'xz' || id === 'yz') return;
+    if (id === 'features' || id === 'bodies' || id === 'origin' || id === 'xy' || id === 'xz' || id === 'yz') return;
     
     // If double-clicking a sketch, edit it instead of renaming
     const feature = features.find(f => f.id === id);
@@ -640,7 +665,7 @@ const FeatureTree: React.FC = () => {
   // Build context menu items for a specific node
   const getContextMenuItems = useCallback((nodeId: string, nodeType: string): ContextMenuItem[] => {
     // Don't show context menu for folder nodes or when in sketch mode
-    if (nodeId === 'part' || nodeId === 'bodies') return [];
+    if (nodeId === 'features' || nodeId === 'bodies') return [];
     if (sketchMode.active) return [];
 
     const items: ContextMenuItem[] = [];
@@ -727,33 +752,73 @@ const FeatureTree: React.FC = () => {
 
   return (
     <div className={`feature-tree ${isDisabled ? 'disabled' : ''}`}>
-      <div className="panel-header">Features</div>
       <div className="feature-tree-content">
-        <ul className="tree-list">
-          {treeData.map((node) => (
-            <TreeNodeItem
+        {treeData.map((node) => {
+          const isOpen = expandedSections.has(node.id);
+          return (
+            <Collapsible.Root
               key={node.id}
-              node={node}
-              level={0}
-              expandedNodes={expandedNodes}
-              selectedId={selectedFeatureId}
-              rebuildGate={rebuildGate}
-              showGateAfter={false}
-              editingId={editingId}
-              isDraggingGate={isDraggingGate}
-              onToggleExpand={handleToggleExpand}
-              onSelect={handleSelect}
-              onHover={handleHover}
-              onGateDrop={handleGateDrop}
-              onGateDragStart={() => setIsDraggingGate(true)}
-              onGateDragEnd={() => setIsDraggingGate(false)}
-              onDoubleClick={handleDoubleClick}
-              onRename={handleRename}
-              onCancelRename={handleCancelRename}
-              getContextMenuItems={getContextMenuItems}
-            />
-          ))}
-        </ul>
+              className="feature-tree-section"
+              defaultOpen={isOpen}
+              onOpenChange={(open) => handleSectionToggle(node.id, open)}
+            >
+              <Collapsible.Trigger className="feature-tree-section-header">
+                <SectionChevron open={isOpen} />
+                <span className="feature-tree-section-title">{node.name}</span>
+              </Collapsible.Trigger>
+              <Collapsible.Panel className="feature-tree-section-panel">
+                <ul className="tree-list">
+                  {node.children && node.children.length > 0 ? (
+                    <>
+                      {node.children.map((child) => (
+                        <TreeNodeItem
+                          key={child.id}
+                          node={child}
+                          level={0}
+                          expandedNodes={expandedNodes}
+                          selectedId={selectedFeatureId}
+                          rebuildGate={rebuildGate}
+                          showGateAfter={node.id === 'features'}
+                          isInFeaturesSection={node.id === 'features'}
+                          editingId={editingId}
+                          isDraggingGate={isDraggingGate}
+                          onToggleExpand={() => {}} // Not used for top-level items
+                          onSelect={handleSelect}
+                          onHover={handleHover}
+                          onGateDrop={handleGateDrop}
+                          onGateDragStart={() => setIsDraggingGate(true)}
+                          onGateDragEnd={() => setIsDraggingGate(false)}
+                          onDoubleClick={handleDoubleClick}
+                          onRename={handleRename}
+                          onCancelRename={handleCancelRename}
+                          getContextMenuItems={getContextMenuItems}
+                        />
+                      ))}
+                      {/* Show gate at end if no gate is set, otherwise show drop zone - only for features section */}
+                      {node.id === 'features' && (
+                        rebuildGate === null ? (
+                          <RebuildGateBar
+                            afterFeatureId={null}
+                            onDragStart={() => setIsDraggingGate(true)}
+                            onDragEnd={() => setIsDraggingGate(false)}
+                          />
+                        ) : (
+                          <RebuildGateDropZone
+                            afterFeatureId={null}
+                            onDrop={handleGateDrop}
+                            isActive={isDraggingGate}
+                          />
+                        )
+                      )}
+                    </>
+                  ) : (
+                    <li className="feature-tree-empty-item">No items</li>
+                  )}
+                </ul>
+              </Collapsible.Panel>
+            </Collapsible.Root>
+          );
+        })}
       </div>
       
       {/* Delete Confirmation Dialog */}

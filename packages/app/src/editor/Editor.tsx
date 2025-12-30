@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import Toolbar from './components/Toolbar';
+import FloatingToolbar from './components/FloatingToolbar';
+import FloatingFeatureTreePanel from './components/FloatingFeatureTreePanel';
 import ViewCube from './components/ViewCube';
 import Viewer from './components/Viewer';
-import FeatureTree from './components/FeatureTree';
 import PropertiesPanel from './components/PropertiesPanel';
-import AIPanel from './components/AIPanel';
-import StatusBar from './components/StatusBar';
-import { ResizablePanel, ResizableSplit } from './components/ResizablePanel';
+import StatusOverlay from './components/StatusOverlay';
 import { DocumentProvider, useDocument } from './contexts/DocumentContext';
 import { KernelProvider } from './contexts/KernelContext';
 import { SketchProvider } from './contexts/SketchContext';
@@ -47,44 +45,30 @@ const EditorContent: React.FC = () => {
 
   return (
     <div className="app">
-      {/* Main toolbar */}
-      <Toolbar onToggleAIPanel={toggleAIPanel} aiPanelVisible={aiPanelVisible} />
-      
-      {/* Main content area */}
+      {/* Main content area - full screen viewer */}
       <div className="app-main">
-        {/* Left sidebar - Feature Tree + Properties with resizable split */}
-        <ResizablePanel defaultWidth={240} minWidth={180} maxWidth={400} side="left">
-          <ResizableSplit
-            defaultRatio={0.6}
-            minTopHeight={120}
-            minBottomHeight={120}
-            topChild={<FeatureTree />}
-            bottomChild={<PropertiesPanel />}
-          />
-        </ResizablePanel>
-        
-        {/* Center - Viewer with overlay controls */}
+        {/* Center - Viewer with floating overlays */}
         <main className="app-center">
           <div className="app-viewer">
             <Viewer />
+            
+            {/* Floating Feature Tree Panel (top left) */}
+            <FloatingFeatureTreePanel />
+            
+            {/* Floating Properties Panel (top right) - always visible */}
+            <PropertiesPanel />
+            
+            {/* Floating Toolbar (bottom center) */}
+            <FloatingToolbar />
+            
+            {/* Status Overlay (bottom left) */}
+            <StatusOverlay />
+            
+            {/* View Cube (bottom right) */}
             <ViewCube />
           </div>
         </main>
-        
-        {/* Right sidebar - AI Panel (toggleable) */}
-        <ResizablePanel 
-          defaultWidth={320} 
-          minWidth={280} 
-          maxWidth={600} 
-          side="right"
-          visible={aiPanelVisible}
-        >
-          <AIPanel />
-        </ResizablePanel>
       </div>
-      
-      {/* Status bar at bottom */}
-      <StatusBar />
     </div>
   );
 };

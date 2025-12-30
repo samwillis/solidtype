@@ -1,0 +1,108 @@
+.floating-feature-tree-panel {
+  position: absolute;
+  top: 12px; /* Match properties panel */
+  left: 16px;
+  width: 224px; /* Match properties panel width */
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 80px);
+  height: auto;
+  background: rgba(37, 37, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 13px;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  transition: opacity 0.2s ease, width 0.2s ease, max-height 0.2s ease;
+}
+
+.floating-feature-tree-panel.collapsed {
+  width: auto;
+  min-width: fit-content;
+}
+
+[data-theme="light"] .floating-feature-tree-panel {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.floating-feature-tree-panel.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.floating-feature-tree-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px; /* Match properties panel header padding */
+  flex-shrink: 0;
+}
+
+.floating-feature-tree-panel-logo {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--color-text);
+  user-select: none;
+  padding: 0 4px; /* Add horizontal padding */
+}
+
+.floating-feature-tree-panel-toggle {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--color-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+  flex-shrink: 0;
+}
+
+.floating-feature-tree-panel-toggle:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-icon-hover);
+}
+
+.floating-feature-tree-panel-toggle svg {
+  width: 12px;
+  height: 12px;
+}
+
+.floating-feature-tree-panel-content {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+  overflow-x: hidden;
+  transition: max-height 0.2s ease, opacity 0.2s ease;
+}
+
+.floating-feature-tree-panel-content:not(:empty) {
+  border-top: 1px solid var(--color-border);
+}
+
+.floating-feature-tree-panel.collapsed .floating-feature-tree-panel-content {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.floating-feature-tree-panel-content .feature-tree {
+  background: transparent;
+}
+
+.floating-feature-tree-panel-content .feature-tree-content {
+  overflow-y: auto;
+}
+
+.floating-feature-tree-panel-content .panel-header {
+  display: none;
+}

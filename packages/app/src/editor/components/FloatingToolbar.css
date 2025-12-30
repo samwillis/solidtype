@@ -1,0 +1,184 @@
+.floating-toolbar {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  background: rgba(37, 37, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 13px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  user-select: none;
+  backdrop-filter: blur(8px);
+}
+
+[data-theme="light"] .floating-toolbar {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.floating-toolbar-group {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.floating-toolbar-separator {
+  width: 1px;
+  height: 24px;
+  background: var(--color-border);
+  margin: 0 4px;
+}
+
+.floating-toolbar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; /* Consistent button size */
+  height: 28px; /* Consistent button size */
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--color-icon);
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.floating-toolbar-button:hover:not(.disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-icon-hover);
+}
+
+.floating-toolbar-button:active:not(.disabled) {
+  background: var(--color-bg-active);
+}
+
+.floating-toolbar-button.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.floating-toolbar-button.active {
+  background: var(--color-bg-hover);
+  color: var(--color-accent);
+  opacity: 0.85;
+}
+
+.floating-toolbar-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.floating-toolbar-tooltip {
+  background: var(--color-bg-light);
+  color: var(--color-text);
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .floating-toolbar-tooltip {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* Dropdown styles */
+.floating-toolbar-dropdown-container {
+  position: relative;
+}
+
+.floating-toolbar-dropdown-wrapper {
+  position: relative;
+}
+
+.floating-toolbar-dropdown-button {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+  width: auto;
+  border-radius: 5px; /* Match other buttons */
+}
+
+.floating-toolbar-dropdown-button svg:last-child {
+  opacity: 0.6;
+  width: 10px;
+  height: 10px;
+}
+
+.floating-toolbar-dropdown-menu,
+.floating-toolbar-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  min-width: 140px;
+  background: #252526; /* Solid dark background */
+  border: 1px solid rgba(255, 255, 255, 0.15); /* Match toolbar border */
+  border-radius: 13px; /* Match toolbar border radius */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* Matching shadow */
+  padding: 8px; /* Match toolbar padding */
+}
+
+.floating-toolbar-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px; /* Tighter padding */
+  background: transparent;
+  border: none;
+  border-radius: 5px; /* Match button border radius */
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px; /* Smaller text */
+  cursor: pointer;
+  text-align: left;
+}
+
+.floating-toolbar-dropdown-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.floating-toolbar-dropdown-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.floating-toolbar-dropdown-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.7);
+  transition: color 0.15s ease;
+}
+
+[data-theme="light"] .floating-toolbar-dropdown-item svg {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.floating-toolbar-dropdown-separator {
+  height: 1px;
+  background: var(--color-border, #3c3c3c);
+  margin: 4px 0;
+}
+
+.floating-toolbar-dropdown-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: var(--color-surface-alt, #383838);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Always dark mode - removed light theme overrides */

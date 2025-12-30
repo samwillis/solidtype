@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--color-bg);
+  background: transparent;
   user-select: none;
 }
 
@@ -149,25 +149,24 @@
   min-width: 200px;
   max-height: 300px;
   overflow-y: auto;
-  background: var(--color-bg-light);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 100;
+  background: #252526; /* Solid dark background */
+  border: 1px solid rgba(255, 255, 255, 0.15); /* Match toolbar border */
+  border-radius: 13px; /* Match toolbar border radius */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* Matching shadow */
+  padding: 8px; /* Match toolbar padding */
 }
 
-[data-theme="dark"] .ai-panel-history-dropdown {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
+/* Always dark mode - removed theme overrides */
 
 .ai-panel-history-header {
-  padding: 8px 12px;
+  padding: 4px 8px 2px;
   font-size: 10px;
   font-weight: 600;
-  color: var(--color-text-muted);
+  color: rgba(255, 255, 255, 0.6);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid var(--color-border);
+  letter-spacing: 0.3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 4px;
 }
 
 .ai-panel-history-item {
@@ -175,28 +174,29 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 8px 12px;
+  padding: 4px 8px; /* Tighter padding */
   background: transparent;
   border: none;
+  border-radius: 5px; /* Match button border radius */
   cursor: pointer;
-  color: var(--color-text);
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px; /* Smaller text */
   text-align: left;
 }
 
 .ai-panel-history-item:hover {
-  background: var(--color-bg-hover);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .ai-panel-history-date {
   font-size: 10px;
-  color: var(--color-text-muted);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .ai-panel-history-empty {
-  padding: 12px;
+  padding: 8px;
   font-size: 11px;
-  color: var(--color-text-muted);
+  color: rgba(255, 255, 255, 0.6);
   text-align: center;
 }
 
@@ -260,7 +260,7 @@
 
 /* Input area */
 .ai-panel-input-area {
-  padding: 8px 12px 12px;
+  padding: 8px; /* Consistent 8px padding */
   border-top: 1px solid var(--color-border);
   background: var(--color-bg);
 }

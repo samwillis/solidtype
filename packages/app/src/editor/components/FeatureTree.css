@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--color-bg-light);
+  background: transparent;
   user-select: none;
 }
 
@@ -14,7 +14,72 @@
 .feature-tree-content {
   flex: 1;
   overflow: auto;
-  padding: 4px 0;
+  padding: 0;
+}
+
+/* Section headers - styled like Figma's Pages/Layers */
+.feature-tree-section {
+  border-top: 1px solid var(--color-border);
+  margin-top: 4px;
+}
+
+.feature-tree-section:first-child {
+  border-top: none;
+  margin-top: 0;
+}
+
+.feature-tree-section-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text);
+  letter-spacing: 0.3px;
+  user-select: none;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.feature-tree-section-header:hover {
+  background: var(--color-bg-hover);
+}
+
+.feature-tree-section-panel {
+  overflow: hidden;
+  padding-bottom: 4px;
+}
+
+.feature-tree-section-title {
+  flex: 1;
+}
+
+.feature-tree-section-chevron {
+  flex-shrink: 0;
+  margin-right: 6px;
+  color: var(--color-text-secondary);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  opacity: 0;
+  width: 8px;
+  height: 8px;
+}
+
+.feature-tree-section-header:hover .feature-tree-section-chevron {
+  opacity: 1;
+}
+
+.feature-tree-section-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.feature-tree-empty-item {
+  padding: 6px 8px 6px 20px; /* Align with section header text (8px header padding + 6px chevron margin) */
+  font-size: 11px;
+  color: var(--color-text-muted);
+  list-style: none;
 }
 
 /* Tree list styles */
@@ -33,12 +98,21 @@
 .tree-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
+  gap: 8px; /* More spacing between icon and name */
+  padding: 3px 8px 3px 8px; /* Less padding on left */
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text);
-  min-height: 22px;
+  min-height: 20px;
+}
+
+/* Nested items are lighter - like Figma */
+.tree-children .tree-item {
+  color: var(--color-text-secondary);
+}
+
+.tree-children .tree-icon {
+  color: var(--color-text-secondary);
 }
 
 .tree-item:hover {
@@ -94,11 +168,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: 11px; /* 20% smaller than 14px */
+  height: 11px; /* 20% smaller than 14px */
   flex-shrink: 0;
   cursor: pointer;
   border-radius: 2px;
+  margin-right: 0;
 }
 
 .tree-expand-btn:hover {
@@ -106,9 +181,10 @@
 }
 
 .tree-expand-placeholder {
-  width: 14px;
-  height: 14px;
+  width: 8px;
+  height: 8px;
   flex-shrink: 0;
+  margin-right: 0;
 }
 
 /* Chevron icon */
@@ -124,21 +200,23 @@
 /* Tree node icons */
 .tree-icon {
   flex-shrink: 0;
-  color: var(--color-icon);
+  color: var(--color-text);
 }
 
-/* Icon colors by type */
-.tree-icon-bodies { color: #8b7355; }
-.tree-icon-body { color: #6b8e23; }
-.tree-icon-part { color: #4a90d9; }
-.tree-icon-origin { color: #e57373; }
-.tree-icon-plane { color: #7986cb; }
-.tree-icon-sketch { color: #4fc3f7; }
-.tree-icon-extrude { color: #81c784; }
-.tree-icon-revolve { color: #ffb74d; }
-.tree-icon-fillet { color: #ba68c8; }
-.tree-icon-chamfer { color: #9575cd; }
-.tree-icon-boolean { color: #4db6ac; }
+/* All icons use same color as font */
+.tree-icon-bodies,
+.tree-icon-body,
+.tree-icon-part,
+.tree-icon-origin,
+.tree-icon-plane,
+.tree-icon-sketch,
+.tree-icon-extrude,
+.tree-icon-revolve,
+.tree-icon-fillet,
+.tree-icon-chamfer,
+.tree-icon-boolean {
+  color: var(--color-text);
+}
 
 /* Node name */
 .tree-item-name {
@@ -162,23 +240,6 @@
   outline: none;
 }
 
-/* Empty state (kept for potential future use) */
-.feature-tree-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  padding: 16px;
-  text-align: center;
-}
-
-.feature-tree-empty svg {
-  color: var(--color-text-muted);
-  margin-bottom: 8px;
-  opacity: 0.5;
-}
-
 /* Rebuild Gate Bar - just a horizontal line showing current gate position */
 .rebuild-gate-bar {
   position: relative;
@@ -189,7 +250,6 @@
   align-items: center;
   padding: 0 8px;
   background: transparent;
-  z-index: 20;
   user-select: none;
   -webkit-user-drag: element;
 }
@@ -235,7 +295,6 @@
   right: 8px;
   top: -8px;
   height: 16px;
-  z-index: 10;
 }
 
 /* Show a simple line indicator when dragging over */

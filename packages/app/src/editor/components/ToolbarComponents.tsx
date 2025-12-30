@@ -71,24 +71,3 @@ export const ToolbarGroup: React.FC<ToolbarGroupProps> = ({ children, className 
   return <div className={`toolbar-group ${className}`}>{children}</div>;
 };
 
-// ============================================================================
-// FloatingToolbar - A floating toolbar overlay (like sketch toolbar)
-// ============================================================================
-
-interface FloatingToolbarProps {
-  children: React.ReactNode;
-  position?: 'bottom' | 'top';
-  className?: string;
-}
-
-export const FloatingToolbar: React.FC<FloatingToolbarProps> = ({ 
-  children, 
-  position = 'bottom',
-  className = '' 
-}) => {
-  return (
-    <div className={`floating-toolbar floating-toolbar-${position} ${className}`}>
-      {children}
-    </div>
-  );
-};

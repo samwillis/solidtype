@@ -22,8 +22,7 @@ import {
 import type { SketchLine, SketchConstraint, PlaneFeature, OriginFeature, SketchFeature } from '../types/document';
 // Use array-based SketchData for compatibility with existing code
 type SketchData = SketchDataArrays;
-import { ToolbarButton, ToolbarSeparator, FloatingToolbar } from './ToolbarComponents';
-import { NormalViewIcon, CheckIcon, CloseIcon } from './Icons';
+// Removed sketch toolbar - buttons moved to main FloatingToolbar
 import './ToolbarComponents.css';
 import './Viewer.css';
 
@@ -2252,29 +2251,6 @@ const Viewer: React.FC = () => {
       {/* Sketch mode overlays */}
       {sketchMode.active && (
         <>
-          {/* Sketch toolbar */}
-          <FloatingToolbar position="bottom">
-            <ToolbarButton
-              icon={<NormalViewIcon />}
-              label="Normal to Sketch"
-              tooltip="View Normal to Sketch Plane"
-              onClick={resetToSketchNormal}
-            />
-            <ToolbarSeparator />
-            <ToolbarButton
-              icon={<CheckIcon />}
-              label="Accept"
-              tooltip="Accept Sketch (Ctrl+Enter)"
-              onClick={finishSketch}
-            />
-            <ToolbarButton
-              icon={<CloseIcon />}
-              label="Cancel"
-              tooltip="Cancel Sketch"
-              onClick={cancelSketch}
-            />
-          </FloatingToolbar>
-
           {/* Dimensions panel */}
           {dimensionConstraints.length > 0 && (
             <div className="sketch-dimensions-panel">
