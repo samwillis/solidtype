@@ -201,6 +201,16 @@
 .tree-icon {
   flex-shrink: 0;
   color: var(--color-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.tree-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* All icons use same color as font */

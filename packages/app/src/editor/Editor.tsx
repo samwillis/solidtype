@@ -74,9 +74,9 @@ const EditorContent: React.FC = () => {
 };
 
 // Main Editor component wraps everything with providers
-export const Editor: React.FC = () => {
+export const Editor: React.FC<{ documentId?: string }> = ({ documentId }) => {
   return (
-    <DocumentProvider>
+    <DocumentProvider documentId={documentId}>
       <KernelProvider>
         <SelectionProvider>
           <SketchProvider>

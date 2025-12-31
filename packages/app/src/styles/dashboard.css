@@ -52,7 +52,7 @@
 }
 
 .dashboard-sidebar-header {
-  padding: 12px 16px;
+  padding: 8px 16px 8px 16px;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -63,14 +63,9 @@
   letter-spacing: -0.3px;
   color: var(--color-text);
   user-select: none;
-}
-
-.dashboard-logo .logo-solid {
-  color: var(--color-text);
-}
-
-.dashboard-logo .logo-type {
-  color: var(--color-text-secondary);
+  height: 28px;
+  margin-bottom: -4px;
+  margin-top: -2px;
 }
 
 .dashboard-sidebar-content {
@@ -171,8 +166,8 @@
 
 .dashboard-nav-item svg {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   color: var(--color-icon);
 }
 
@@ -237,8 +232,8 @@
 }
 
 .dashboard-workspace-create-btn svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
 .dashboard-workspace-projects {
@@ -313,8 +308,8 @@
 }
 
 .dashboard-create-dropdown-item svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   flex-shrink: 0;
   color: rgba(255, 255, 255, 0.7);
   transition: color 0.15s ease;
@@ -496,6 +491,90 @@
 .dashboard-view-toggle-btn svg {
   width: 16px;
   height: 16px;
+}
+
+/* Item cards (folders and documents) */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 24px;
+}
+
+.dashboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 24px;
+}
+
+.dashboard-item-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 56px;
+}
+
+.dashboard-item-card:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-item-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-icon);
+  background: var(--color-bg-light);
+  border-radius: 4px;
+}
+
+.dashboard-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dashboard-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-item-meta {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* List view specific styles */
+.dashboard-list .dashboard-item-card {
+  padding: 10px 12px;
+  min-height: 48px;
+}
+
+.dashboard-list .dashboard-item-icon {
+  width: 28px;
+  height: 28px;
 }
 
 
@@ -757,6 +836,164 @@
 }
 
 .dashboard-card-time {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* Branch Selector */
+.dashboard-branch-selector {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dashboard-view-branches-btn,
+.dashboard-create-branch-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+}
+
+.dashboard-view-branches-btn:hover,
+.dashboard-create-branch-btn:hover {
+  border-color: var(--color-border-light);
+  background: var(--color-bg-hover);
+  color: var(--color-icon-hover);
+}
+
+.dashboard-view-branches-btn svg,
+.dashboard-create-branch-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Create Menu Button */
+.dashboard-create-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.dashboard-create-menu-btn:hover {
+  border-color: var(--color-border-light);
+  background: var(--color-bg-hover);
+}
+
+.dashboard-create-menu-btn svg {
+  width: 14px;
+  height: 14px;
+  color: var(--color-icon);
+}
+
+/* Branch Visualization Dialog */
+.branch-visualization-dialog {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 400px;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.branch-visualization-dialog-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 16px 0;
+}
+
+.branch-visualization-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* List View */
+.dashboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dashboard-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.dashboard-list-item:hover {
+  background: var(--color-bg-hover);
+}
+
+.dashboard-list-item-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.dashboard-list-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dashboard-list-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-list-item-path {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-list-item-meta {
+  flex-shrink: 0;
+}
+
+.dashboard-list-item-time {
   font-size: 11px;
   color: var(--color-text-muted);
 }

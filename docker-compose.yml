@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: solidtype
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-solidtype}
+      POSTGRES_DB: solidtype
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres.conf:/etc/postgresql/postgresql.conf:ro
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+    ports:
+      - "54321:5432"  # Host port 54321 → Container port 5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U solidtype"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  electric:
+    image: electricsql/electric:canary
+    environment:
+      # Database connection - Electric reads from Postgres logical replication
+      DATABASE_URL: postgresql://solidtype:${POSTGRES_PASSWORD:-solidtype}@postgres:5432/solidtype?sslmode=disable
+      # Electric Cloud credentials (optional - for cloud deployments)
+      # SOURCE_ID: ${ELECTRIC_SOURCE_ID}
+      # SOURCE_SECRET: ${ELECTRIC_SOURCE_SECRET}
+      # Security: In production, use proxy authentication instead of insecure mode
+      ELECTRIC_INSECURE: "true"
+      ELECTRIC_FEATURE_FLAGS: "allow_subqueries"
+    ports:
+      - "3100:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Durable Streams server for Yjs document persistence
+  # Uses @durable-streams/server with file-backed LMDB storage
+  durable-streams:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      DURABLE_STREAMS_PORT: "3200"
+      DURABLE_STREAMS_DATA_DIR: "/data"
+      DURABLE_STREAMS_HOST: "0.0.0.0"
+    command: >
+      sh -c "npm init -y >/dev/null 2>&1 &&
+             npm install @durable-streams/server@0.1.3 --save >/dev/null 2>&1 &&
+             node --input-type=module -e '
+               import(\"@durable-streams/server\").then(async mod => {
+                 const { DurableStreamTestServer } = mod;
+                 const server = new DurableStreamTestServer({
+                   dataDir: process.env.DURABLE_STREAMS_DATA_DIR || \"/data\",
+                   port: parseInt(process.env.DURABLE_STREAMS_PORT || \"3200\"),
+                   host: process.env.DURABLE_STREAMS_HOST || \"0.0.0.0\",
+                 });
+                 const url = await server.start();
+                 console.log(\"Durable Streams server running at\", url);
+                 
+                 // Keep process alive
+                 process.on(\"SIGTERM\", async () => {
+                   await server.stop();
+                   process.exit(0);
+                 });
+               }).catch(err => {
+                 console.error(\"Failed to start Durable Streams server:\", err);
+                 process.exit(1);
+               });
+             '"
+    volumes:
+      - durable_streams_data:/data
+    ports:
+      - "3200:3200"
+
+volumes:
+  postgres_data:
+  durable_streams_data:

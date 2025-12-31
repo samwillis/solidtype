@@ -58,6 +58,8 @@ export const branchSchema = z.object({
 
 export const documentSchema = z.object({
   id: z.string().uuid(),
+  base_document_id: z.string().uuid().nullable(), // For branching: tracks sibling documents across branches
+  project_id: z.string().uuid(),
   branch_id: z.string().uuid(),
   name: z.string(),
   folder_id: z.string().uuid().nullable(),

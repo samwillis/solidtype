@@ -1,0 +1,257 @@
+/**
+ * Shared styles for create dialogs
+ */
+
+.create-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+}
+
+.create-dialog-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(37, 37, 38, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 13px;
+  padding: 24px;
+  min-width: 400px;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  pointer-events: auto; /* Ensure dialog content can receive pointer events */
+}
+
+[data-theme="light"] .create-dialog-popup {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.create-dialog-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text, rgba(255, 255, 255, 0.9));
+  margin: 0 0 8px 0;
+}
+
+.create-dialog-description {
+  font-size: 13px;
+  color: var(--color-text-secondary, rgba(255, 255, 255, 0.7));
+  margin: 0 0 20px 0;
+  line-height: 1.5;
+}
+
+.create-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.create-dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.create-dialog-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text, rgba(255, 255, 255, 0.9));
+}
+
+.create-dialog-required {
+  color: var(--color-danger, #e74c3c);
+}
+
+.create-dialog-input,
+.create-dialog-textarea {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  font-size: 14px;
+  color: var(--color-text, rgba(255, 255, 255, 0.9));
+  transition: all 0.1s ease;
+}
+
+[data-theme="light"] .create-dialog-input,
+[data-theme="light"] .create-dialog-textarea {
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: var(--color-text, rgba(0, 0, 0, 0.9));
+}
+
+.create-dialog-input:focus,
+.create-dialog-textarea:focus {
+  outline: none;
+  border-color: var(--color-accent, #0078d4);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="light"] .create-dialog-input:focus,
+[data-theme="light"] .create-dialog-textarea:focus {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.create-dialog-input:disabled,
+.create-dialog-textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.create-dialog-textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.create-dialog-error {
+  font-size: 12px;
+  color: var(--color-danger, #e74c3c);
+  margin-top: 4px;
+}
+
+.create-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.create-dialog-button {
+  padding: 8px 16px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  border: none;
+}
+
+.create-dialog-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.create-dialog-button-cancel {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--color-text, rgba(255, 255, 255, 0.9));
+}
+
+[data-theme="light"] .create-dialog-button-cancel {
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: var(--color-text, rgba(0, 0, 0, 0.9));
+}
+
+.create-dialog-button-cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"] .create-dialog-button-cancel:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.create-dialog-button-submit {
+  background: var(--color-accent, #0078d4);
+  color: white;
+}
+
+.create-dialog-button-submit:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+/* Select styles */
+.create-dialog-select-trigger {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  font-size: 14px;
+  color: var(--color-text, rgba(255, 255, 255, 0.9));
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: all 0.1s ease;
+}
+
+[data-theme="light"] .create-dialog-select-trigger {
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: var(--color-text, rgba(0, 0, 0, 0.9));
+}
+
+.create-dialog-select-trigger:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+[data-theme="light"] .create-dialog-select-trigger:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+.create-dialog-select-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.create-dialog-select-trigger:focus-visible {
+  outline: none;
+  border-color: var(--color-accent, #0078d4);
+}
+
+.create-dialog-select-backdrop {
+  z-index: 1000;
+}
+
+/* Select Positioner - ensures proper stacking */
+.create-dialog-select-positioner {
+  z-index: 1001 !important;
+}
+
+.create-dialog-select-popup {
+  background: rgba(37, 37, 38, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  padding: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+  max-height: 200px;
+  overflow-y: auto;
+  /* Ensure select popup appears above dialog (dialog z-index is 1000) */
+  z-index: 1001 !important;
+  position: relative;
+}
+
+[data-theme="light"] .create-dialog-select-popup {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.create-dialog-select-option {
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--color-text, rgba(255, 255, 255, 0.9));
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.1s ease;
+}
+
+.create-dialog-select-option:hover,
+.create-dialog-select-option[data-highlighted] {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"] .create-dialog-select-option:hover,
+[data-theme="light"] .create-dialog-select-option[data-highlighted] {
+  background: rgba(0, 0, 0, 0.1);
+}

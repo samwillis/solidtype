@@ -1,0 +1,71 @@
+/**
+ * Folder Breadcrumbs Styles
+ */
+
+.folder-breadcrumbs {
+  display: flex;
+  align-items: center;
+  padding: 8px 24px;
+  background: var(--color-bg-light);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.folder-breadcrumbs-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.folder-breadcrumbs-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.folder-breadcrumbs-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.folder-breadcrumbs-link:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+}
+
+.folder-breadcrumbs-link svg {
+  flex-shrink: 0;
+  color: var(--color-icon);
+}
+
+.folder-breadcrumbs-separator {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.folder-breadcrumbs-current {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.folder-breadcrumbs-current svg {
+  flex-shrink: 0;
+  color: var(--color-icon-hover);
+}

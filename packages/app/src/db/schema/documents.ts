@@ -24,6 +24,11 @@ export const documentTypeEnum = pgEnum('document_type', [
 export const documents = pgTable('documents', {
   id: uuid('id').primaryKey().defaultRandom(),
   
+  // For branching: tracks sibling documents across branches.
+  // When first created, baseDocumentId = id. When copied to a branch, 
+  // the new doc gets a new id but keeps the same baseDocumentId.
+  baseDocumentId: uuid('base_document_id'),
+  
   // Denormalized: both project_id and branch_id for easy filtering
   projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
   branchId: uuid('branch_id').notNull().references(() => branches.id, { onDelete: 'cascade' }),

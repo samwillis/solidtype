@@ -12,6 +12,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { db, pool } from './db';
+import { requireAuth } from './auth-middleware';
 import { 
   workspaces, 
   workspaceMembers, 
@@ -432,6 +433,19 @@ export const updateBranchMutation = createServerFn({ method: 'POST' })
 export const deleteBranchMutation = createServerFn({ method: 'POST' })
   .inputValidator((d: { branchId: string }) => d)
   .handler(async ({ data }) => {
+    // Check if branch is main - cannot delete main branch
+    const branch = await db.query.branches.findFirst({
+      where: eq(branches.id, data.branchId),
+    });
+    
+    if (!branch) {
+      throw new Error('Branch not found');
+    }
+    
+    if (branch.isMain) {
+      throw new Error('Cannot delete main branch');
+    }
+    
     await db
       .delete(branches)
       .where(eq(branches.id, data.branchId));
@@ -443,14 +457,30 @@ export const deleteBranchMutation = createServerFn({ method: 'POST' })
 // Document mutations
 export const createDocumentMutation = createServerFn({ method: 'POST' })
   .inputValidator((d: { document: any }) => d)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, request }) => {
+    const session = await requireAuth(request);
+    
+    // Generate durableStreamId: "project/{projectId}/doc/{documentId}/branch/{branchId}"
+    // We'll use a placeholder for documentId, then update after creation
     const [created] = await db
       .insert(documents)
-      .values(data.document)
+      .values({
+        ...data.document,
+        createdBy: session.user.id, // Override with session user ID for security
+        durableStreamId: null, // Will be set after creation
+      })
+      .returning();
+    
+    // Update with generated durableStreamId
+    const durableStreamId = `project/${created.projectId}/doc/${created.id}/branch/${created.branchId}`;
+    const [updated] = await db
+      .update(documents)
+      .set({ durableStreamId })
+      .where(eq(documents.id, created.id))
       .returning();
     
     const txid = await getCurrentTxid();
-    return { data: created, txid };
+    return { data: updated, txid };
   });
 
 export const updateDocumentMutation = createServerFn({ method: 'POST' })
@@ -484,10 +514,15 @@ export const deleteDocumentMutation = createServerFn({ method: 'POST' })
 // Folder mutations
 export const createFolderMutation = createServerFn({ method: 'POST' })
   .inputValidator((d: { folder: any }) => d)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, request }) => {
+    const session = await requireAuth(request);
+    
     const [created] = await db
       .insert(folders)
-      .values(data.folder)
+      .values({
+        ...data.folder,
+        createdBy: session.user.id, // Override with session user ID for security
+      })
       .returning();
     
     const txid = await getCurrentTxid();
@@ -521,10 +556,15 @@ export const deleteFolderMutation = createServerFn({ method: 'POST' })
 // Workspace mutations
 export const createWorkspaceMutation = createServerFn({ method: 'POST' })
   .inputValidator((d: { workspace: any }) => d)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, request }) => {
+    const session = await requireAuth(request);
+    
     const [created] = await db
       .insert(workspaces)
-      .values(data.workspace)
+      .values({
+        ...data.workspace,
+        createdBy: session.user.id, // Override with session user ID for security
+      })
       .returning();
     
     const txid = await getCurrentTxid();
@@ -558,11 +598,39 @@ export const deleteWorkspaceMutation = createServerFn({ method: 'POST' })
 // Project mutations
 export const createProjectMutation = createServerFn({ method: 'POST' })
   .inputValidator((d: { project: any }) => d)
-  .handler(async ({ data }) => {
-    const [created] = await db
-      .insert(projects)
-      .values(data.project)
-      .returning();
+  .handler(async ({ data, request }) => {
+    const session = await requireAuth(request);
+    
+    // Create project, project member, and main branch in a transaction
+    const [created] = await db.transaction(async (tx) => {
+      // Create project
+      const [project] = await tx
+        .insert(projects)
+        .values({
+          ...data.project,
+          createdBy: session.user.id, // Override with session user ID for security
+        })
+        .returning();
+      
+      // Add creator as project owner (required for Electric sync access)
+      await tx.insert(projectMembers).values({
+        projectId: project.id,
+        userId: session.user.id,
+        role: 'owner',
+        canEdit: true,
+      });
+      
+      // Automatically create "main" branch
+      await tx.insert(branches).values({
+        projectId: project.id,
+        name: 'main',
+        isMain: true,
+        createdBy: session.user.id,
+        ownerId: session.user.id,
+      });
+      
+      return [project];
+    });
     
     const txid = await getCurrentTxid();
     return { data: created, txid };
@@ -590,4 +658,162 @@ export const deleteProjectMutation = createServerFn({ method: 'POST' })
     
     const txid = await getCurrentTxid();
     return { data: { id: data.projectId }, txid };
+  });
+
+/**
+ * Create a new branch with copied content from parent branch.
+ * This copies all folders and documents from the parent branch.
+ * Documents keep the same baseDocumentId for tracking across branches.
+ */
+export const createBranchWithContentMutation = createServerFn({ method: 'POST' })
+  .inputValidator((d: { projectId: string; parentBranchId: string; name: string; description: string | null }) => d)
+  .handler(async ({ data, request }) => {
+    const session = await requireAuth(request);
+    
+    // Create branch and copy content in a transaction
+    const result = await db.transaction(async (tx) => {
+      // Create the new branch
+      const [newBranch] = await tx
+        .insert(branches)
+        .values({
+          projectId: data.projectId,
+          name: data.name,
+          description: data.description,
+          isMain: false,
+          parentBranchId: data.parentBranchId,
+          forkedAt: new Date(),
+          createdBy: session.user.id,
+          ownerId: session.user.id,
+        })
+        .returning();
+      
+      // Get all folders from parent branch
+      const parentFolders = await tx
+        .select()
+        .from(folders)
+        .where(eq(folders.branchId, data.parentBranchId));
+      
+      // Create mapping from old folder IDs to new folder IDs
+      const folderIdMapping = new Map<string, string>();
+      
+      // Copy folders (need to handle hierarchy - copy root folders first, then children)
+      const rootFolders = parentFolders.filter(f => f.parentId === null);
+      const childFolders = parentFolders.filter(f => f.parentId !== null);
+      
+      // Copy root folders first
+      for (const folder of rootFolders) {
+        const [newFolder] = await tx
+          .insert(folders)
+          .values({
+            projectId: data.projectId,
+            branchId: newBranch.id,
+            parentId: null,
+            name: folder.name,
+            sortOrder: folder.sortOrder,
+            createdBy: session.user.id,
+          })
+          .returning();
+        folderIdMapping.set(folder.id, newFolder.id);
+      }
+      
+      // Copy child folders (simple approach - may need multiple passes for deep hierarchies)
+      // For now, we'll do a simple single-pass approach
+      for (const folder of childFolders) {
+        const newParentId = folder.parentId ? folderIdMapping.get(folder.parentId) : null;
+        const [newFolder] = await tx
+          .insert(folders)
+          .values({
+            projectId: data.projectId,
+            branchId: newBranch.id,
+            parentId: newParentId,
+            name: folder.name,
+            sortOrder: folder.sortOrder,
+            createdBy: session.user.id,
+          })
+          .returning();
+        folderIdMapping.set(folder.id, newFolder.id);
+      }
+      
+      // Get all documents from parent branch (excluding deleted ones)
+      const parentDocuments = await tx
+        .select()
+        .from(documents)
+        .where(
+          and(
+            eq(documents.branchId, data.parentBranchId),
+            eq(documents.isDeleted, false)
+          )
+        );
+      
+      // Copy documents with the same baseDocumentId
+      for (const doc of parentDocuments) {
+        const newFolderId = doc.folderId ? folderIdMapping.get(doc.folderId) : null;
+        const baseDocId = doc.baseDocumentId || doc.id; // Use existing baseDocumentId or the document's own ID
+        
+        await tx
+          .insert(documents)
+          .values({
+            projectId: data.projectId,
+            branchId: newBranch.id,
+            baseDocumentId: baseDocId,
+            folderId: newFolderId,
+            name: doc.name,
+            type: doc.type,
+            // Note: durableStreamId will be null - Yjs stream forking is not yet implemented
+            durableStreamId: null,
+            featureCount: doc.featureCount,
+            sortOrder: doc.sortOrder,
+            createdBy: session.user.id,
+          });
+      }
+      
+      return { branch: newBranch };
+    });
+    
+    const txid = await getCurrentTxid();
+    return { data: result, txid };
+  });
+
+// Helper functions for fetching data for dialogs
+export const getBranchesForProject = createServerFn({ method: 'POST' })
+  .inputValidator((d: { projectId: string }) => d)
+  .handler(async ({ data, request }) => {
+    const session = await requireAuth(request);
+    
+    const projectBranches = await db
+      .select()
+      .from(branches)
+      .where(eq(branches.projectId, data.projectId))
+      .orderBy(branches.isMain, 'desc')
+      .orderBy(branches.createdAt, 'desc');
+    
+    return { data: projectBranches };
+  });
+
+export const getFoldersForBranch = createServerFn({ method: 'POST' })
+  .inputValidator((d: { projectId: string; branchId: string; parentId?: string | null }) => d)
+  .handler(async ({ data, request }) => {
+    const session = await requireAuth(request);
+    
+    const conditions = [
+      eq(folders.projectId, data.projectId),
+      eq(folders.branchId, data.branchId),
+    ];
+    
+    if (data.parentId !== undefined) {
+      if (data.parentId === null) {
+        conditions.push(eq(folders.parentId, null as any));
+      } else {
+        conditions.push(eq(folders.parentId, data.parentId));
+      }
+    }
+    
+    const branchFolders = await db
+      .select()
+      .from(folders)
+      .where(and(...conditions))
+      .orderBy(folders.sortOrder)
+      .orderBy(folders.name);
+    
+    return { data: branchFolders };
   });

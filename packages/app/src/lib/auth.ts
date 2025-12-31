@@ -12,7 +12,7 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 import { db } from './db';
-import { workspaces, workspaceMembers } from '../db/schema';
+import { workspaces, workspaceMembers, projects, branches } from '../db/schema';
 import { user, session, account, verification } from '../db/schema/better-auth';
 
 /**
@@ -93,6 +93,44 @@ async function createPersonalWorkspace(userId: string, userName?: string | null)
   }
 }
 
+/**
+ * Creates a "My first project" for a new user in their personal workspace
+ */
+async function createFirstProject(workspaceId: string, userId: string) {
+  try {
+    // Create project and main branch in a transaction
+    const [project] = await db.transaction(async (tx) => {
+      // Create project
+      const [createdProject] = await tx
+        .insert(projects)
+        .values({
+          workspaceId: workspaceId,
+          name: 'My first project',
+          description: 'Welcome to SolidType! This is your first project.',
+          createdBy: userId,
+        })
+        .returning();
+      
+      // Automatically create "main" branch
+      await tx.insert(branches).values({
+        projectId: createdProject.id,
+        name: 'main',
+        isMain: true,
+        createdBy: userId,
+        ownerId: userId,
+      });
+      
+      return [createdProject];
+    });
+
+    return project;
+  } catch (error) {
+    // Log error but don't fail user creation
+    console.error('Failed to create first project:', error);
+    // Don't throw - this is optional and shouldn't block user signup
+  }
+}
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: 'pg',
@@ -108,16 +146,21 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
-  databaseHooks: {
-    user: {
-      create: {
-        after: async (user) => {
-          // Create a personal workspace for the new user
-          await createPersonalWorkspace(user.id, user.name);
+      databaseHooks: {
+        user: {
+          create: {
+            after: async (user) => {
+              // Create a personal workspace for the new user
+              const workspace = await createPersonalWorkspace(user.id, user.name);
+              
+              // Create "My first project" in the personal workspace
+              if (workspace) {
+                await createFirstProject(workspace.id, user.id);
+              }
+            },
+          },
         },
       },
-    },
-  },
   socialProviders: {
     // GitHub OAuth (optional)
     ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET ? {

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 565 506" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <g transform="matrix(1,0,0,1,-2.10725,-2667.86)">
+        <g id="Colour-Icon-Bold" serif:id="Colour Icon Bold" transform="matrix(0.224493,0,0,0.751392,-4.65375,2135.5)">
+            <rect x="30.117" y="708.503" width="2516.55" height="672.767" style="fill:none;"/>
+            <g id="Bold" transform="matrix(4.45447,0,0,1.33086,-859.077,-1677.85)">
+                <g transform="matrix(9.54834,0,0,9.54834,-8177.42,-13465.3)">
+                    <text x="875.306px" y="1643.35px" style="font-family:'3DIsometric-Bold', '3D Isometric', fantasy;font-weight:700;font-size:50px;fill:rgb(240,74,0);">S</text>
+                </g>
+                <g transform="matrix(-9.54834,0,0,9.54834,9141.63,-13465.3)">
+                    <text x="875.306px" y="1643.35px" style="font-family:'3DIsometric-Bold', '3D Isometric', fantasy;font-weight:700;font-size:50px;fill:rgb(240,74,0);">T</text>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

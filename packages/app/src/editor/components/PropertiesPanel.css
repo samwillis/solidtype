@@ -212,8 +212,8 @@
 }
 
 .properties-panel-header-dropdown-item svg {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   flex-shrink: 0;
   color: rgba(255, 255, 255, 0.7);
   transition: color 0.15s ease;

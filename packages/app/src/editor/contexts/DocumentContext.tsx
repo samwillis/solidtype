@@ -74,9 +74,10 @@ const DocumentContext = createContext<DocumentContextValue | null>(null);
 
 interface DocumentProviderProps {
   children: React.ReactNode;
+  documentId?: string; // Optional: if provided, load document from database
 }
 
-export function DocumentProvider({ children }: DocumentProviderProps) {
+export function DocumentProvider({ children, documentId }: DocumentProviderProps) {
   // Create the document once
   const doc = useMemo(() => createDocument(), []);
   
