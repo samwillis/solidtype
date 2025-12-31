@@ -5,7 +5,7 @@
 .home {
   min-height: 100vh;
   display: block;
-  background: var(--color-bg);
+  background: var(--home-background);
   position: relative;
 }
 
@@ -99,26 +99,6 @@
   transform: translateY(0);
 }
 
-/* Centered logo */
-.home-logo-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 4rem 2rem 2rem;
-}
-
-.home-logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-}
-
-.home-logo img {
-  height: 80px;
-  width: auto;
-}
-
 /* Main content */
 .home-main {
   display: block;
@@ -128,9 +108,27 @@
 .home-hero {
   padding: 2rem 2rem 4rem;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg);
+  background: var(--home-background);
+}
+
+.home-hero-image-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: -80px auto -40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.home-hero-image {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .home-hero-content {
@@ -216,7 +214,7 @@
 /* Features section */
 .home-features {
   padding: 5rem 2rem;
-  background: var(--color-bg-light);
+  background: var(--home-background);
 }
 
 .home-features-grid {
@@ -233,6 +231,11 @@
   border: 1px solid var(--color-border);
   border-radius: 8px;
   transition: all 0.15s ease;
+}
+
+[data-theme="dark"] .home-feature {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .home-feature:hover {
@@ -273,8 +276,7 @@
 /* CTA section */
 .home-cta-section {
   padding: 5rem 2rem;
-  background: var(--color-bg);
-  border-top: 1px solid var(--color-border);
+  background: var(--home-background);
 }
 
 .home-cta-content {
@@ -327,7 +329,7 @@
 /* Footer */
 .home-footer {
   border-top: 1px solid var(--color-border);
-  background: var(--color-surface);
+  background: var(--home-background);
   padding: 2rem;
 }
 
@@ -364,12 +366,8 @@
     padding: 0.5rem 1rem;
   }
 
-  .home-logo-container {
-    padding: 3rem 1rem 1.5rem;
-  }
-
-  .home-logo img {
-    height: 60px;
+  .home-hero-image-container {
+    margin-bottom: 2rem;
   }
 
   .home-hero {

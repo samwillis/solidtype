@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useSession } from '~/lib/auth-client';
 import { ThemeToggle } from '~/components/ThemeToggle';
+import { useTheme } from '~/editor/contexts/ThemeContext';
 import '~/styles/home.css';
-import logo from '../../../../artwork/colour-logo-bold.svg';
+import heroImage from '../../../../artwork/hero.jpg';
+import heroDarkImage from '../../../../artwork/hero-dark.jpg';
 
 export const Route = createFileRoute('/')({
   ssr: false, // Client-only: user-facing route
@@ -11,6 +13,8 @@ export const Route = createFileRoute('/')({
 
 function Home() {
   const { data: session } = useSession();
+  const { theme } = useTheme();
+  const currentHeroImage = theme === 'dark' ? heroDarkImage : heroImage;
 
   return (
     <div className="home">
@@ -32,18 +36,14 @@ function Home() {
         )}
       </div>
 
-      <div className="home-logo-container">
-        <Link to="/" className="home-logo">
-          <img src={logo} alt="SolidType" />
-        </Link>
-      </div>
-
       <main className="home-main">
         <section className="home-hero">
+          <div className="home-hero-image-container">
+            <img src={currentHeroImage} alt="SolidType" className="home-hero-image" />
+          </div>
           <div className="home-hero-content">
             <h1 className="home-hero-title">
-              Modern CAD,<br />
-              Built for the Web
+              Modern CAD, Built for the Web
             </h1>
             <p className="home-hero-subtitle">
               A world-class parametric CAD application powered by OpenCascade.js.

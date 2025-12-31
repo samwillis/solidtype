@@ -5,7 +5,10 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { signUp, signIn } from '../lib/auth-client';
+import { ThemeToggle } from '../components/ThemeToggle';
 import '../styles/auth.css';
+import '../styles/home.css';
+import logo from '../../../../artwork/colour-logo-bold.svg';
 
 export const Route = createFileRoute('/signup')({
   component: SignupPage,
@@ -45,7 +48,13 @@ function SignupPage() {
 
   return (
     <div className="auth-page">
+      <div className="auth-top-actions">
+        <ThemeToggle />
+      </div>
       <div className="auth-container">
+        <div className="auth-logo-container">
+          <img src={logo} alt="SolidType" className="auth-logo" />
+        </div>
         <div className="auth-header">
           <h1>Create an account</h1>
           <p>Start designing with SolidType</p>

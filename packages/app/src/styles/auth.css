@@ -7,8 +7,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg);
+  background: var(--home-background);
   padding: 1rem;
+  position: relative;
+}
+
+.auth-top-actions {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .auth-container {
@@ -19,6 +30,26 @@
   border-radius: 8px;
   padding: 2.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .auth-container {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.auth-logo-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 2rem;
+  width: 100%;
+}
+
+.auth-logo {
+  max-width: 100%;
+  height: auto;
+  width: auto;
+  max-height: 60px;
 }
 
 .auth-header {

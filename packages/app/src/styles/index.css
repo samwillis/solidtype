@@ -14,6 +14,7 @@
 
 /* Dark theme (default) */
 :root, [data-theme="dark"] {
+  --home-background: #010103;
   --color-bg: #1e1e1e;
   --color-bg-light: #252526;
   --color-bg-lighter: #2d2d2d;
@@ -59,6 +60,7 @@
 
 /* Light theme */
 [data-theme="light"] {
+  --home-background: #FDFAF8;
   --color-bg: #f3f3f3;
   --color-bg-light: #ffffff;
   --color-bg-lighter: #f8f8f8;
