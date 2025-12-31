@@ -93,7 +93,7 @@
   --color-icon: #424242;
   --color-icon-hover: #000000;
   
-  --color-viewer-bg: #e8e8e8;
+  --color-viewer-bg: #FDFAF8;
   
   /* Feature icon colors */
   --color-feature-sketch: #0066cc;
@@ -107,13 +107,18 @@ html, body {
   min-height: 100vh;
   width: 100vw;
   overflow-x: hidden;
-  overflow-y: scroll !important; /* Always show scrollbar and prevent Base UI from disabling it */
+  overflow-y: auto;
   font-family: var(--font-family);
   font-size: 13px;
   color: var(--color-text);
   background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Homepage: always show scrollbar to prevent layout shift when dropdowns open */
+body:has(.home) {
+  overflow-y: scroll !important;
 }
 
 #root {

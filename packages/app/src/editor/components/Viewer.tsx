@@ -448,9 +448,18 @@ const Viewer: React.FC = () => {
   // Update scene background when theme changes
   useEffect(() => {
     if (sceneRef.current) {
-      const bgColor = theme === 'dark' ? 0x1a1a1a : 0xe8e8e8;
-      sceneRef.current.background = new THREE.Color(bgColor);
-      needsRenderRef.current = true;
+      // Get background color from CSS variable (use requestAnimationFrame to ensure CSS has updated)
+      requestAnimationFrame(() => {
+        if (!sceneRef.current) return;
+        const viewerBgColor = getComputedStyle(document.documentElement).getPropertyValue('--color-viewer-bg').trim();
+        const bgColor = viewerBgColor ? parseHexColor(viewerBgColor, theme === 'dark' ? 0x1a1a1a : 0xFDFAF8) : (theme === 'dark' ? 0x1a1a1a : 0xFDFAF8);
+        sceneRef.current.background = new THREE.Color(bgColor);
+        needsRenderRef.current = true;
+        // Force a render immediately to update the background
+        if (rendererRef.current && cameraRef.current) {
+          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        }
+      });
     }
   }, [theme]);
 
@@ -1599,7 +1608,8 @@ const Viewer: React.FC = () => {
 
     // Scene setup
     const scene = new THREE.Scene();
-    const initialBgColor = theme === 'dark' ? 0x1a1a1a : 0xe8e8e8;
+    // Use theme value directly - #FDFAF8 for light, #1a1a1a for dark
+    const initialBgColor = theme === 'dark' ? 0x1a1a1a : 0xFDFAF8;
     scene.background = new THREE.Color(initialBgColor);
     sceneRef.current = scene;
 

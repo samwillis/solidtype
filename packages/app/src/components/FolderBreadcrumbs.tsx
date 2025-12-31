@@ -7,7 +7,7 @@
 
 import React, { useMemo } from 'react';
 import { useLiveQuery } from '@tanstack/react-db';
-import { LuHome, LuChevronRight, LuFolder } from 'react-icons/lu';
+import { LuHouse, LuChevronRight, LuFolder } from 'react-icons/lu';
 import { foldersCollection, type Folder } from '../lib/electric-collections';
 import './FolderBreadcrumbs.css';
 

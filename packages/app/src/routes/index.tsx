@@ -2,9 +2,14 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useSession } from '~/lib/auth-client';
 import { ThemeToggle } from '~/components/ThemeToggle';
 import { useTheme } from '~/editor/contexts/ThemeContext';
+import { LuGithub } from 'react-icons/lu';
 import '~/styles/home.css';
 import heroImage from '../../../../artwork/hero.jpg';
 import heroDarkImage from '../../../../artwork/hero-dark.jpg';
+import electricDarkLogo from '../../../../artwork/showcase/electric-dark.svg';
+import electricLightLogo from '../../../../artwork/showcase/electric-light.svg';
+import durableStreamsLogo from '../../../../artwork/showcase/durable-streams.png';
+import tanstackLogo from '../../../../artwork/showcase/tanstack-100.png';
 
 export const Route = createFileRoute('/')({
   ssr: false, // Client-only: user-facing route
@@ -20,6 +25,15 @@ function Home() {
     <div className="home">
       <div className="home-top-actions">
         <ThemeToggle />
+        <a 
+          href="https://github.com/samwillis/solidtype" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="home-top-github"
+          aria-label="GitHub"
+        >
+          <LuGithub />
+        </a>
         {session?.user ? (
           <Link to="/dashboard" className="home-top-button">
             Go to Dashboard
@@ -34,7 +48,7 @@ function Home() {
             </Link>
           </>
         )}
-      </div>
+        </div>
 
       <main className="home-main">
         <section className="home-hero">
@@ -46,7 +60,7 @@ function Home() {
               Modern CAD, Built for the Web
             </h1>
             <p className="home-hero-subtitle">
-              A world-class parametric CAD application powered by OpenCascade.js.
+              A web-based parametric CAD application powered by OpenCascade.js.
               Create complex 3D models with 2D sketches, constraints, and AI assistance—all in your browser.
             </p>
             <div className="home-hero-actions">
@@ -56,6 +70,15 @@ function Home() {
               <Link to="/dashboard" className="home-cta-secondary">
                 View dashboard
               </Link>
+              <a 
+                href="https://github.com/samwillis/solidtype" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="home-cta-secondary home-cta-github"
+              >
+                <LuGithub />
+                <span>View on GitHub</span>
+              </a>
             </div>
           </div>
         </section>
@@ -129,7 +152,7 @@ function Home() {
               </p>
             </div>
 
-            <div className="home-feature">
+          <div className="home-feature">
               <div className="home-feature-icon">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 2L2 7l10 5 10-5-10-5z" />
@@ -144,15 +167,65 @@ function Home() {
           </div>
         </section>
 
+        <section className="home-showcase">
+          <div className="home-showcase-content">
+            <h2 className="home-showcase-title">Demo Showcase</h2>
+            <p className="home-showcase-description">
+              SolidType is an open-source project and a comprehensive demonstration of modern sync technologies. 
+              This project showcases how to build a production-ready collaborative application using Electric + Durable Streams for different data types.
+            </p>
+            <div className="home-showcase-tech">
+              <a href="https://electric-sql.com" target="_blank" rel="noopener noreferrer" className="home-showcase-tech-item">
+                <div className="home-showcase-logo">
+                  <img 
+                    src={theme === 'dark' ? electricDarkLogo : electricLightLogo} 
+                    alt="Electric SQL" 
+                    className="home-showcase-logo-img"
+                    style={{ width: '200px', height: '60px' }}
+                  />
+                </div>
+                <h3>Electric SQL</h3>
+                <p>Real-time Postgres sync for structured metadata with live queries and optimistic mutations</p>
+              </a>
+              <a href="https://github.com/durable-streams/durable-streams" target="_blank" rel="noopener noreferrer" className="home-showcase-tech-item">
+                <div className="home-showcase-logo">
+                  <img 
+                    src={durableStreamsLogo} 
+                    alt="Durable Streams" 
+                    className="home-showcase-logo-img home-showcase-logo-durable"
+                    style={{ width: '60px', height: '60px' }}
+                  />
+                </div>
+                <h3>Durable Streams</h3>
+                <p>Append-only streams for Yjs document persistence with conflict-free merging</p>
+              </a>
+              <a href="https://tanstack.com/db" target="_blank" rel="noopener noreferrer" className="home-showcase-tech-item">
+                <div className="home-showcase-logo">
+                  <img 
+                    src={tanstackLogo} 
+                    alt="TanStack DB" 
+                    className="home-showcase-logo-img"
+                    style={{ width: '60px', height: '60px' }}
+                  />
+                </div>
+                <h3>TanStack DB</h3>
+                <p>Client-side embedded database with live queries powered by Electric SQL</p>
+              </a>
+            </div>
+          </div>
+        </section>
+
         <section className="home-cta-section">
           <div className="home-cta-content">
             <h2 className="home-cta-title">Ready to start designing?</h2>
             <p className="home-cta-subtitle">
               Join SolidType and experience modern CAD design in your browser.
             </p>
-            <Link to="/signup" className="home-cta-large">
-              Get started free
-            </Link>
+            <div className="home-cta-actions">
+              <Link to="/signup" className="home-cta-large">
+                Get started free
+              </Link>
+            </div>
           </div>
         </section>
       </main>
@@ -160,7 +233,17 @@ function Home() {
       <footer className="home-footer">
         <div className="home-footer-content">
           <p className="home-footer-text">
-            Built with TypeScript, React, and OpenCascade.js
+            SolidType is an open-source, modern, history-capable, parametric CAD application.
+            Built with TypeScript, React, OpenCascade.js, Electric SQL, and Durable Streams.
+          </p>
+          <p className="home-footer-links">
+            This project serves as a production reference implementation for Electric SQL and Durable Streams, 
+            demonstrating how to build collaborative applications with local-first architecture.
+          </p>
+          <p className="home-footer-links">
+            <a href="https://github.com/samwillis/solidtype" target="_blank" rel="noopener noreferrer" className="home-footer-link">
+              View on GitHub
+            </a>
           </p>
         </div>
       </footer>

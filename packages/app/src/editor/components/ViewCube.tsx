@@ -93,12 +93,13 @@ const ViewCube: React.FC = () => {
   const createCube = useCallback((isDark: boolean) => {
     const group = new THREE.Group();
     
-    const faceColor = isDark ? 0x3c3c3c : 0xe8e8e8;
-    const edgeColor = isDark ? 0x505050 : 0xc8c8c8;
-    const cornerColor = isDark ? 0x606060 : 0xb8b8b8;
+    // Less grey = lighter in dark mode (higher values), darker in light mode (lower values)
+    const faceColor = isDark ? 0x505050 : 0xc0c0c0;
+    const edgeColor = isDark ? 0x404040 : 0xd0d0d0;
+    const cornerColor = isDark ? 0x303030 : 0xe0e0e0;
     const textColor = isDark ? '#ffffff' : '#222222';
-    const faceBackground = isDark ? '#3c3c3c' : '#e8e8e8';
-    const hoverColor = 0x0078d4;
+    const faceBackground = isDark ? '#505050' : '#c0c0c0';
+    const hoverColor = 0xF04A00; // International Orange accent color
     
     const cubeSize = 1;
     const edgeSize = 0.15;

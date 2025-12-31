@@ -12,7 +12,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useMemo, useEffect } from 'react';
 import { useSession } from '../../../../../lib/auth-client';
 import { useLiveQuery, createCollection, liveQueryCollectionOptions, eq } from '@tanstack/react-db';
-import { LuGitBranch, LuChevronDown, LuLayoutGrid, LuList, LuFolder, LuFileText, LuGitNetwork } from 'react-icons/lu';
+import { LuGitBranch, LuChevronDown, LuLayoutGrid, LuList, LuFolder, LuFileText, LuGitBranch as LuGitNetwork } from 'react-icons/lu';
 import { 
   projectsCollection, 
   branchesCollection, 
