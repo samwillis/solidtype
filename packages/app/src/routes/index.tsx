@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { useEffect } from 'react';
 import { useSession } from '~/lib/auth-client';
 import { ThemeToggle } from '~/components/ThemeToggle';
 import { useTheme } from '~/editor/contexts/ThemeContext';
@@ -20,6 +21,34 @@ function Home() {
   const { data: session } = useSession();
   const { theme } = useTheme();
   const currentHeroImage = theme === 'dark' ? heroDarkImage : heroImage;
+
+  // Add Google Fonts for Caveat
+  useEffect(() => {
+    // Preconnect to Google Fonts
+    const preconnect1 = document.createElement('link');
+    preconnect1.rel = 'preconnect';
+    preconnect1.href = 'https://fonts.googleapis.com';
+    document.head.appendChild(preconnect1);
+
+    const preconnect2 = document.createElement('link');
+    preconnect2.rel = 'preconnect';
+    preconnect2.href = 'https://fonts.gstatic.com';
+    preconnect2.crossOrigin = 'anonymous';
+    document.head.appendChild(preconnect2);
+
+    // Add Caveat font
+    const fontLink = document.createElement('link');
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&display=swap';
+    fontLink.rel = 'stylesheet';
+    document.head.appendChild(fontLink);
+
+    // Cleanup on unmount
+    return () => {
+      document.head.removeChild(preconnect1);
+      document.head.removeChild(preconnect2);
+      document.head.removeChild(fontLink);
+    };
+  }, []);
 
   return (
     <div className="home">
@@ -56,6 +85,7 @@ function Home() {
             <img src={currentHeroImage} alt="SolidType" className="home-hero-image" />
           </div>
           <div className="home-hero-content">
+            <div className="home-hero-alpha-badge">Very Alpha!</div>
             <h1 className="home-hero-title">
               Modern CAD, Built for the Web
             </h1>

@@ -161,6 +161,23 @@
 .home-hero-content {
   max-width: 900px;
   text-align: center;
+  position: relative;
+}
+
+.home-hero-alpha-badge {
+  font-family: "Caveat", cursive;
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-style: normal;
+  font-size: clamp(1.5rem, 4vw, 3.25rem);
+  color: var(--color-accent);
+  transform: rotate(5deg);
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  line-height: 1;
+  position: absolute;
+  top: calc(clamp(1.5rem, 4vw, 3.25rem) * -1);
+  right: -10px;
 }
 
 .home-hero-title {
