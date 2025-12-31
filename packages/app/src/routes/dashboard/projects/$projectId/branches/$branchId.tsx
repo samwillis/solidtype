@@ -222,6 +222,9 @@ function BranchView() {
               </button>
             </div>
 
+            {/* Separator */}
+            <div className="dashboard-header-separator" />
+
             {/* Sort and Filter */}
             <div className="dashboard-sort-filter">
               <Select.Root

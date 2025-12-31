@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, Link } from '@tanstack/react-router';
 import { Menu } from '@base-ui/react/menu';
 import { useLiveQuery, createCollection, liveQueryCollectionOptions } from '@tanstack/react-db';
 import { LuLayoutGrid, LuClock, LuPlus, LuFolder, LuFileText } from 'react-icons/lu';
@@ -83,7 +83,9 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     <>
       <aside className="dashboard-sidebar">
         <div className="dashboard-sidebar-header">
-          <img src={logo} alt="SolidType" className="dashboard-logo" />
+          <Link to="/" className="dashboard-logo-link">
+            <img src={logo} alt="SolidType" className="dashboard-logo" />
+          </Link>
         </div>
         
         <div className="dashboard-sidebar-content">
@@ -265,7 +267,6 @@ function WorkspaceSection({
               className={`dashboard-nav-item dashboard-project-item ${activeSection === `project-${project.id}` ? 'active' : ''}`}
               onClick={() => onProjectClick(project.id)}
             >
-              <LuLayoutGrid />
               <span>{project.name}</span>
             </button>
           ))}

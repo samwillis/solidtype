@@ -56,14 +56,16 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+.dashboard-logo-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .dashboard-logo {
-  font-family: 'Inter', sans-serif;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.3px;
-  color: var(--color-text);
-  user-select: none;
   height: 28px;
+  width: auto;
+  user-select: none;
   margin-bottom: -4px;
   margin-top: -2px;
 }
@@ -74,7 +76,7 @@
   flex-direction: column;
   overflow: hidden;
   overflow-x: hidden;
-  padding: 8px;
+  padding: 12px 8px;
   min-width: 0;
 }
 
@@ -240,8 +242,6 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-left: 8px;
-  padding-left: 20px; /* Indent projects under workspace */
 }
 
 .dashboard-project-item {
@@ -374,24 +374,23 @@
 }
 
 .dashboard-select-trigger:hover {
-  border: 1px solid rgba(0, 0, 0, 0.15); /* Lighter border on hover for visibility */
-  background: var(--color-hover);
+  border-color: var(--color-accent);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
 }
 
 .dashboard-select-trigger[data-state="open"] {
-  border: 1px solid rgba(0, 0, 0, 0.15); /* Lighter border when open/active */
+  border-color: var(--color-accent);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
 }
 
 .dashboard-select-trigger[data-focus-visible] {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
-  border: 1px solid rgba(0, 0, 0, 0.15); /* Lighter border on focus */
-}
-
-[data-theme="light"] .dashboard-select-trigger:hover,
-[data-theme="light"] .dashboard-select-trigger[data-state="open"],
-[data-theme="light"] .dashboard-select-trigger[data-focus-visible] {
-  border: 1px solid rgba(0, 0, 0, 0.15); /* Same lighter border in light mode */
+  border-color: var(--color-accent);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
 }
 
 .dashboard-select-trigger svg {
@@ -399,7 +398,13 @@
   width: 12px;
   height: 12px;
   color: var(--color-text-muted);
-  transition: transform 0.2s ease;
+  transition: all 0.2s ease;
+}
+
+.dashboard-select-trigger:hover svg,
+.dashboard-select-trigger[data-state="open"] svg,
+.dashboard-select-trigger[data-focus-visible] svg {
+  color: var(--color-accent);
 }
 
 .dashboard-select-trigger[data-state="open"] svg {
@@ -840,6 +845,15 @@
   color: var(--color-text-muted);
 }
 
+/* Header Separator */
+.dashboard-header-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
 /* Branch Selector */
 .dashboard-branch-selector {
   display: flex;
@@ -849,9 +863,10 @@
 
 .dashboard-view-branches-btn,
 .dashboard-create-branch-btn {
-  width: 30px;
-  height: 30px;
-  padding: 0;
+  /* Match height with .dashboard-select-trigger (padding: 6px 10px + 12px font) */
+  width: auto;
+  height: auto;
+  padding: 6px 8px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-surface);
@@ -861,19 +876,26 @@
   align-items: center;
   justify-content: center;
   transition: all 0.1s ease;
+  flex-shrink: 0;
 }
 
 .dashboard-view-branches-btn:hover,
 .dashboard-create-branch-btn:hover {
-  border-color: var(--color-border-light);
-  background: var(--color-bg-hover);
-  color: var(--color-icon-hover);
+  border-color: var(--color-accent);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
 }
 
 .dashboard-view-branches-btn svg,
 .dashboard-create-branch-btn svg {
   width: 14px;
   height: 14px;
+  transition: color 0.1s ease;
+}
+
+.dashboard-view-branches-btn:hover svg,
+.dashboard-create-branch-btn:hover svg {
+  color: var(--color-accent);
 }
 
 /* Create Menu Button */
@@ -905,29 +927,50 @@
 
 /* Branch Visualization Dialog */
 .branch-visualization-dialog {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 20px;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(37, 37, 38, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 13px;
+  padding: 24px;
   min-width: 400px;
-  max-width: 600px;
+  max-width: 500px;
   max-height: 80vh;
   overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+}
+
+[data-theme="light"] .branch-visualization-dialog {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
 .branch-visualization-dialog-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-text, rgba(255, 255, 255, 0.9));
   margin: 0 0 16px 0;
+}
+
+[data-theme="light"] .branch-visualization-dialog-title {
+  color: var(--color-text, rgba(0, 0, 0, 0.9));
 }
 
 .branch-visualization-dialog-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"] .branch-visualization-dialog-actions {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 /* List View */

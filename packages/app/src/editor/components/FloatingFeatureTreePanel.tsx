@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import { useSketch } from '../contexts/SketchContext';
 import FeatureTree from './FeatureTree';
 import './FloatingFeatureTreePanel.css';
+import logo from '../../../../../artwork/colour-icon-bold.svg';
 
 const FloatingFeatureTreePanel: React.FC = () => {
   const { mode: sketchMode } = useSketch();
@@ -12,9 +14,9 @@ const FloatingFeatureTreePanel: React.FC = () => {
   return (
     <div className={`floating-feature-tree-panel ${isDisabled ? 'disabled' : ''} ${isExpanded ? 'expanded' : 'collapsed'}`}>
       <div className="floating-feature-tree-panel-header">
-        <div className="floating-feature-tree-panel-logo">
-          <span className="logo-solid">Solid</span><span className="logo-type">Type</span>
-        </div>
+        <Link to="/" className="floating-feature-tree-panel-logo">
+          <img src={logo} alt="SolidType" className="floating-feature-tree-logo" />
+        </Link>
         <button
           className="floating-feature-tree-panel-toggle"
           onClick={() => setIsExpanded(!isExpanded)}

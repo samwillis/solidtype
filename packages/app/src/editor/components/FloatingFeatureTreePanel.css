@@ -42,13 +42,15 @@
 }
 
 .floating-feature-tree-panel-logo {
-  font-family: 'Inter', sans-serif;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.3px;
-  color: var(--color-text);
-  user-select: none;
-  padding: 0 4px; /* Add horizontal padding */
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  text-decoration: none;
+}
+
+.floating-feature-tree-logo {
+  height: 24px;
+  width: auto;
 }
 
 .floating-feature-tree-panel-toggle {
