@@ -7,19 +7,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%);
+  background: var(--color-bg);
   padding: 1rem;
 }
 
 .auth-container {
   width: 100%;
   max-width: 400px;
-  background: rgba(30, 30, 50, 0.9);
-  border: 1px solid rgba(100, 100, 140, 0.3);
-  border-radius: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
   padding: 2.5rem;
-  backdrop-filter: blur(20px);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .auth-header {
@@ -30,13 +29,13 @@
 .auth-header h1 {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #f0f0ff;
+  color: var(--color-text);
   margin: 0 0 0.5rem 0;
   letter-spacing: -0.02em;
 }
 
 .auth-header p {
-  color: #9090b0;
+  color: var(--color-text-secondary);
   margin: 0;
   font-size: 0.95rem;
 }
@@ -56,59 +55,62 @@
 .auth-field label {
   font-size: 0.875rem;
   font-weight: 500;
-  color: #d0d0e0;
+  color: var(--color-text);
 }
 
 .auth-field input {
   padding: 0.75rem 1rem;
-  background: rgba(20, 20, 40, 0.8);
-  border: 1px solid rgba(100, 100, 140, 0.3);
-  border-radius: 8px;
-  color: #f0f0ff;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
   font-size: 1rem;
-  transition: all 0.2s ease;
+  font-family: inherit;
+  transition: border-color 0.1s ease;
 }
 
 .auth-field input::placeholder {
-  color: #606080;
+  color: var(--color-text-muted);
 }
 
 .auth-field input:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-bg);
 }
 
 .auth-hint {
   font-size: 0.75rem;
-  color: #808090;
+  color: var(--color-text-muted);
 }
 
 .auth-error {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  background: rgba(231, 76, 60, 0.15);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+  color: var(--color-danger);
   padding: 0.75rem 1rem;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 0.875rem;
 }
 
 .auth-submit {
   margin-top: 0.5rem;
   padding: 0.875rem 1.5rem;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: var(--color-accent);
   border: none;
-  border-radius: 8px;
-  color: white;
+  border-radius: 6px;
+  color: var(--color-accent-text);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
 }
 
 .auth-submit:hover:not(:disabled) {
+  background: var(--color-accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 8px 24px rgba(240, 74, 0, 0.3);
 }
 
 .auth-submit:active:not(:disabled) {
@@ -126,20 +128,20 @@
 }
 
 .auth-footer p {
-  color: #9090b0;
+  color: var(--color-text-secondary);
   margin: 0;
   font-size: 0.875rem;
 }
 
 .auth-link {
-  color: #818cf8;
+  color: var(--color-accent);
   text-decoration: none;
   font-weight: 500;
-  transition: color 0.2s ease;
+  transition: color 0.15s ease;
 }
 
 .auth-link:hover {
-  color: #a5b4fc;
+  color: var(--color-accent-hover);
   text-decoration: underline;
 }
 
@@ -154,12 +156,12 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: rgba(100, 100, 140, 0.3);
+  background: var(--color-border);
 }
 
 .auth-divider span {
   padding: 0 1rem;
-  color: #808090;
+  color: var(--color-text-muted);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -177,19 +179,21 @@
   justify-content: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  background: rgba(40, 40, 60, 0.6);
-  border: 1px solid rgba(100, 100, 140, 0.3);
-  border-radius: 8px;
-  color: #d0d0e0;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
+  font-family: inherit;
 }
 
 .auth-social-btn:hover {
-  background: rgba(50, 50, 70, 0.8);
-  border-color: rgba(100, 100, 140, 0.5);
+  background: var(--color-accent-bg);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .auth-social-btn svg {

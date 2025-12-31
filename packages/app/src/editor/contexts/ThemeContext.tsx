@@ -69,15 +69,49 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // Listen for storage events from other tabs
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'solidtype-theme-mode' && e.newValue) {
+        const newMode = e.newValue as ThemeMode;
+        if (newMode === 'light' || newMode === 'dark' || newMode === 'auto') {
+          setModeState(newMode);
+        }
+      }
+    };
+
+    // Listen for custom theme change events (for same-tab sync)
+    const handleThemeChange = (e: CustomEvent<string>) => {
+      const newMode = e.detail as ThemeMode;
+      if (newMode === 'light' || newMode === 'dark' || newMode === 'auto') {
+        setModeState(newMode);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('solidtype-theme-change' as any, handleThemeChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('solidtype-theme-change' as any, handleThemeChange);
+    };
+  }, []);
+
   const setMode = useCallback((newMode: ThemeMode) => {
     setModeState(newMode);
     localStorage.setItem('solidtype-theme-mode', newMode);
+    // Dispatch custom event for same-tab sync (storage event only fires in other tabs)
+    window.dispatchEvent(new CustomEvent('solidtype-theme-change', { detail: newMode }));
   }, []);
 
   const cycleMode = useCallback(() => {
     setModeState((prev) => {
       const next = prev === 'auto' ? 'light' : prev === 'light' ? 'dark' : 'auto';
       localStorage.setItem('solidtype-theme-mode', next);
+      // Dispatch custom event for same-tab sync
+      window.dispatchEvent(new CustomEvent('solidtype-theme-change', { detail: next }));
       return next;
     });
   }, []);

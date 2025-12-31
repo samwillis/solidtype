@@ -102,9 +102,10 @@
 }
 
 html, body {
-  height: 100vh;
+  min-height: 100vh;
   width: 100vw;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: scroll !important; /* Always show scrollbar and prevent Base UI from disabling it */
   font-family: var(--font-family);
   font-size: 13px;
   color: var(--color-text);
@@ -114,7 +115,7 @@ html, body {
 }
 
 #root {
-  height: 100vh;
+  min-height: 100vh;
   width: 100vw;
 }
 
