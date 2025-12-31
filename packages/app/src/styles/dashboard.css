@@ -155,11 +155,11 @@
 }
 
 .dashboard-nav-item:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-accent-bg);
 }
 
 .dashboard-nav-item.active {
-  background: var(--color-bg-active);
+  background: var(--color-accent-bg-hover);
   color: var(--color-text);
   font-weight: 500;
 }
@@ -172,7 +172,7 @@
 }
 
 .dashboard-nav-item.active svg {
-  color: var(--color-icon-hover);
+  color: var(--color-accent);
 }
 
 .dashboard-nav-separator {
@@ -227,8 +227,8 @@
 }
 
 .dashboard-workspace-create-btn:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-icon-hover);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
 }
 
 .dashboard-workspace-create-btn svg {
@@ -295,7 +295,7 @@
 }
 
 .dashboard-create-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-accent-bg);
 }
 
 .dashboard-create-dropdown-item.active {
@@ -426,10 +426,10 @@
   outline: none;
 }
 
-/* Slightly lighter hover/active states for better visibility on gray background */
+/* Hover/active states using accent color */
 .dashboard-select-option:hover,
 .dashboard-select-option[data-highlighted] {
-  background: rgba(255, 255, 255, 0.15); /* Slightly lighter: was 0.1 */
+  background: var(--color-accent-bg);
 }
 
 .dashboard-select-option[data-selected] {
@@ -472,15 +472,15 @@
 }
 
 .dashboard-view-toggle-btn:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-icon);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
 }
 
 .dashboard-view-toggle-btn[data-state="on"],
 .dashboard-view-toggle-btn[aria-pressed="true"],
 .dashboard-view-toggle-btn[data-pressed="true"] {
-  background: var(--color-bg-active);
-  color: var(--color-icon-hover);
+  background: var(--color-accent-bg-hover);
+  color: var(--color-accent);
 }
 
 .dashboard-view-toggle-btn[data-focus-visible] {
@@ -522,10 +522,10 @@
 }
 
 .dashboard-item-card:hover {
-  background: var(--color-bg-hover);
-  border-color: var(--color-border-hover);
+  background: var(--color-accent-bg);
+  border-color: var(--color-accent);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(240, 74, 0, 0.2);
 }
 
 .dashboard-item-icon {
@@ -595,7 +595,7 @@
 }
 
 .dashboard-user-button:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-accent-bg);
 }
 
 .dashboard-user-avatar {
@@ -682,7 +682,7 @@
 }
 
 .dashboard-user-menu-item:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-accent-bg);
 }
 
 /* Content area */
@@ -756,8 +756,8 @@
 }
 
 .dashboard-card:hover {
-  border-color: var(--color-border-light);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-color: var(--color-accent);
+  box-shadow: 0 2px 8px rgba(240, 74, 0, 0.15);
   transform: translateY(-1px);
 }
 
@@ -893,8 +893,8 @@
 }
 
 .dashboard-create-menu-btn:hover {
-  border-color: var(--color-border-light);
-  background: var(--color-bg-hover);
+  border-color: var(--color-accent);
+  background: var(--color-accent-bg);
 }
 
 .dashboard-create-menu-btn svg {
@@ -949,7 +949,7 @@
 }
 
 .dashboard-list-item:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-accent-bg);
 }
 
 .dashboard-list-item-icon {

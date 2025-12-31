@@ -45,7 +45,7 @@
 }
 
 .feature-tree-section-header:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-accent-bg);
 }
 
 .feature-tree-section-panel {
@@ -116,11 +116,11 @@
 }
 
 .tree-item:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-accent-bg);
 }
 
 .tree-item.selected {
-  background: var(--color-bg-active);
+  background: var(--color-accent-bg-hover);
 }
 
 .tree-item.suppressed {
@@ -159,8 +159,8 @@
 }
 
 .tree-item.drag-over {
-  background: var(--color-bg-active);
-  outline: 1px dashed var(--color-primary);
+  background: var(--color-accent-bg-hover);
+  outline: 1px dashed var(--color-accent);
 }
 
 /* Expand/collapse button */
@@ -177,7 +177,7 @@
 }
 
 .tree-expand-btn:hover {
-  background: var(--color-bg-active);
+  background: var(--color-accent-bg-hover);
 }
 
 .tree-expand-placeholder {

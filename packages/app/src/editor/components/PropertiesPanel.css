@@ -73,8 +73,8 @@
 }
 
 .properties-panel-header-icon-button:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-icon-hover);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
 }
 
 .properties-panel-header-icon-button svg {
@@ -99,12 +99,12 @@
 }
 
 .properties-panel-header-button:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-icon-hover);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
 }
 
 .properties-panel-header-button.active {
-  background: var(--color-bg-active);
+  background: var(--color-accent-bg-hover);
   color: var(--color-accent);
 }
 
@@ -141,7 +141,7 @@
 }
 
 .properties-panel-header-share:hover {
-  background: var(--color-accent-hover, #1c8ae6);
+  background: var(--color-accent-hover);
   color: white;
 }
 
@@ -198,7 +198,7 @@
 }
 
 .properties-panel-header-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-accent-bg);
 }
 
 .properties-panel-header-dropdown-item.active,

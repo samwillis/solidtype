@@ -23,12 +23,12 @@
 }
 
 .toolbar-button:hover:not(.disabled) {
-  background: var(--color-bg-hover);
-  color: var(--color-icon-hover);
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
 }
 
 .toolbar-button:active:not(.disabled) {
-  background: var(--color-bg-active);
+  background: var(--color-accent-bg-hover);
 }
 
 .toolbar-button.disabled {
@@ -37,7 +37,7 @@
 }
 
 .toolbar-button.active {
-  background: var(--color-bg-hover);
+  background: var(--color-accent-bg-hover);
   color: var(--color-accent);
   opacity: 0.85;
 }
