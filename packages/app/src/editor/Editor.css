@@ -60,8 +60,8 @@
 /* User Presence container */
 .user-presence-container {
   position: absolute;
-  top: 12px;
-  right: 300px; /* Offset from properties panel */
+  top: 19px;
+  right: 250px; /* Offset from properties panel */
   z-index: 100;
 }
 

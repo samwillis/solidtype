@@ -255,7 +255,7 @@
 
 .dashboard-workspace-empty {
   padding: 6px 10px;
-  margin: 0 4px 0 28px; /* Match project item indentation */
+  margin: 0 4px 0 4px; /* Match project item indentation */
   font-size: 11px;
   color: var(--color-text-muted);
 }

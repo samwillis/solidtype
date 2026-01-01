@@ -4,16 +4,25 @@
  * Allows workspace admins to manage workspace settings
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useForm } from "@tanstack/react-form";
 import { Dialog } from "@base-ui/react/dialog";
 import { useSession } from "../../lib/auth-client";
 import { useLiveQuery } from "@tanstack/react-db";
 import { workspacesCollection } from "../../lib/electric-collections";
-import { updateWorkspaceMutation, deleteWorkspaceMutation } from "../../lib/server-functions";
+import {
+  updateWorkspaceMutation,
+  deleteWorkspaceMutation,
+  listWorkspaceMembersMutation,
+  addWorkspaceMemberMutation,
+  updateWorkspaceMemberRoleMutation,
+  removeWorkspaceMemberMutation,
+} from "../../lib/server-functions";
 import { useNavigate } from "@tanstack/react-router";
-import { LuTrash2, LuUserPlus, LuSettings } from "react-icons/lu";
+import { LuTrash2, LuUserPlus, LuSettings, LuShield, LuUser, LuCrown, LuX } from "react-icons/lu";
 import { z } from "zod";
+import { Avatar } from "../Avatar";
+import { InviteMemberDialog } from "./InviteMemberDialog";
 import "./CreateDialog.css";
 import "./WorkspaceSettingsDialog.css";
 
@@ -21,6 +30,15 @@ const workspaceSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
   description: z.string().max(500, "Description must be less than 500 characters").optional(),
 });
+
+interface WorkspaceMember {
+  userId: string;
+  role: "owner" | "admin" | "member";
+  joinedAt: Date;
+  userName: string;
+  userEmail: string;
+  userImage: string | null;
+}
 
 interface WorkspaceSettingsDialogProps {
   open: boolean;
@@ -39,10 +57,40 @@ export const WorkspaceSettingsDialog: React.FC<WorkspaceSettingsDialogProps> = (
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState<string | null>(null);
+  const [memberActionLoading, setMemberActionLoading] = useState<string | null>(null);
 
   // Load workspace data
   const { data: allWorkspaces } = useLiveQuery(() => workspacesCollection);
   const workspace = allWorkspaces?.find((w) => w.id === workspaceId);
+
+  // Current user's role in this workspace
+  const currentUserRole = members.find((m) => m.userId === session?.user?.id)?.role;
+  const canManageMembers = currentUserRole === "owner" || currentUserRole === "admin";
+
+  // Load members when members tab is active
+  const loadMembers = useCallback(async () => {
+    if (!workspaceId) return;
+    setMembersLoading(true);
+    setMembersError(null);
+    try {
+      const result = await listWorkspaceMembersMutation({ data: { workspaceId } });
+      setMembers(result.members as WorkspaceMember[]);
+    } catch (err) {
+      setMembersError(err instanceof Error ? err.message : "Failed to load members");
+    } finally {
+      setMembersLoading(false);
+    }
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (open && activeTab === "members") {
+      loadMembers();
+    }
+  }, [open, activeTab, loadMembers]);
 
   const form = useForm({
     defaultValues: {
@@ -96,6 +144,56 @@ export const WorkspaceSettingsDialog: React.FC<WorkspaceSettingsDialogProps> = (
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleInviteMember = async (email: string, role: string) => {
+    await addWorkspaceMemberMutation({
+      data: {
+        workspaceId,
+        email,
+        role: role as "admin" | "member",
+      },
+    });
+    await loadMembers();
+  };
+
+  const handleUpdateMemberRole = async (userId: string, newRole: "admin" | "member") => {
+    setMemberActionLoading(userId);
+    try {
+      await updateWorkspaceMemberRoleMutation({
+        data: { workspaceId, userId, role: newRole },
+      });
+      await loadMembers();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update role");
+    } finally {
+      setMemberActionLoading(null);
+    }
+  };
+
+  const handleRemoveMember = async (userId: string, userName: string) => {
+    if (!confirm(`Remove ${userName} from this workspace?`)) return;
+
+    setMemberActionLoading(userId);
+    try {
+      await removeWorkspaceMemberMutation({ data: { workspaceId, userId } });
+      await loadMembers();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to remove member");
+    } finally {
+      setMemberActionLoading(null);
+    }
+  };
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case "owner":
+        return <LuCrown size={14} className="member-role-icon member-role-owner" />;
+      case "admin":
+        return <LuShield size={14} className="member-role-icon member-role-admin" />;
+      default:
+        return <LuUser size={14} className="member-role-icon member-role-member" />;
     }
   };
 
@@ -220,16 +318,83 @@ export const WorkspaceSettingsDialog: React.FC<WorkspaceSettingsDialogProps> = (
             {/* Members Tab */}
             {activeTab === "members" && (
               <div className="settings-section">
-                <div className="settings-members-list">
-                  <p className="settings-empty">Member management coming soon</p>
-                  <p className="settings-hint">
-                    You&apos;ll be able to invite users, manage roles, and remove members.
-                  </p>
-                </div>
-                <button className="settings-button settings-button-secondary" disabled>
-                  <LuUserPlus size={16} />
-                  <span>Invite Member</span>
-                </button>
+                {membersLoading ? (
+                  <div className="settings-loading">Loading members...</div>
+                ) : membersError ? (
+                  <div className="settings-error">{membersError}</div>
+                ) : (
+                  <div className="settings-members-list">
+                    {members.map((member) => (
+                      <div key={member.userId} className="settings-member-item">
+                        <Avatar
+                          user={{
+                            id: member.userId,
+                            name: member.userName,
+                            email: member.userEmail,
+                          }}
+                          size={32}
+                          fontSize={12}
+                        />
+                        <div className="settings-member-info">
+                          <div className="settings-member-name">
+                            {member.userName}
+                            {member.userId === session?.user?.id && (
+                              <span className="settings-member-you">(you)</span>
+                            )}
+                          </div>
+                          <div className="settings-member-email">{member.userEmail}</div>
+                        </div>
+                        <div className="settings-member-role">
+                          {getRoleIcon(member.role)}
+                          {member.role === "owner" ? (
+                            <span className="settings-role-label">Owner</span>
+                          ) : canManageMembers && member.userId !== session?.user?.id ? (
+                            <select
+                              value={member.role}
+                              onChange={(e) =>
+                                handleUpdateMemberRole(
+                                  member.userId,
+                                  e.target.value as "admin" | "member"
+                                )
+                              }
+                              className="settings-role-select"
+                              disabled={memberActionLoading === member.userId}
+                            >
+                              <option value="admin">Admin</option>
+                              <option value="member">Member</option>
+                            </select>
+                          ) : (
+                            <span className="settings-role-label">
+                              {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+                            </span>
+                          )}
+                        </div>
+                        {canManageMembers &&
+                          member.role !== "owner" &&
+                          member.userId !== session?.user?.id && (
+                            <button
+                              className="settings-member-remove"
+                              onClick={() => handleRemoveMember(member.userId, member.userName)}
+                              disabled={memberActionLoading === member.userId}
+                              title="Remove member"
+                            >
+                              <LuX size={16} />
+                            </button>
+                          )}
+                      </div>
+                    ))}
+                    {members.length === 0 && <p className="settings-empty">No members found</p>}
+                  </div>
+                )}
+                {canManageMembers && (
+                  <button
+                    className="settings-button settings-button-secondary"
+                    onClick={() => setShowInviteDialog(true)}
+                  >
+                    <LuUserPlus size={16} />
+                    <span>Invite Member</span>
+                  </button>
+                )}
               </div>
             )}
 
@@ -276,6 +441,14 @@ export const WorkspaceSettingsDialog: React.FC<WorkspaceSettingsDialogProps> = (
           </div>
         </Dialog.Popup>
       </Dialog.Portal>
+
+      <InviteMemberDialog
+        open={showInviteDialog}
+        onOpenChange={setShowInviteDialog}
+        entityType="workspace"
+        entityName={workspace?.name || "Workspace"}
+        onInvite={handleInviteMember}
+      />
     </Dialog.Root>
   );
 };

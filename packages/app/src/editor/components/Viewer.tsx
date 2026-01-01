@@ -11,6 +11,9 @@ import { useSelection } from "../contexts/SelectionContext";
 import { useSketch } from "../contexts/SketchContext";
 import { useDocument } from "../contexts/DocumentContext";
 import { useRaycast } from "../hooks/useRaycast";
+import { UserCursors3D } from "./UserCursors3D";
+import { UserCursor2D } from "./UserCursor2D";
+import { useFollowing } from "../../hooks/useFollowing";
 import {
   findFeature,
   getSketchDataAsArrays,
@@ -172,7 +175,7 @@ const Viewer: React.FC = () => {
     clearSelection: clearSketchSelection,
     deleteSelectedItems,
   } = useSketch();
-  const { doc, features, units } = useDocument();
+  const { doc, features, units, awareness } = useDocument();
 
   // Sketch editing state
   const [tempStartPoint, setTempStartPoint] = useState<{
@@ -212,6 +215,44 @@ const Viewer: React.FC = () => {
     sketchModeRef.current = sketchMode;
   }, [sketchMode]);
 
+  // Callback to apply followed user's camera to our viewer
+  const handleFollowCameraChange = useCallback(
+    (camera: {
+      cameraPosition: [number, number, number];
+      cameraTarget: [number, number, number];
+      cameraUp: [number, number, number];
+      zoom: number;
+    }) => {
+      if (!cameraRef.current) return;
+
+      const cam = cameraRef.current;
+      cam.position.set(...camera.cameraPosition);
+      cam.up.set(...camera.cameraUp);
+      targetRef.current.set(...camera.cameraTarget);
+      cam.lookAt(targetRef.current);
+      needsRenderRef.current = true;
+    },
+    []
+  );
+
+  // User following for collaborative cursors and camera sync
+  const { connectedUsers, followingUserId } = useFollowing({
+    awareness,
+    onCameraChange: handleFollowCameraChange,
+  });
+
+  // Get the user we're following (if any)
+  const followedUser = followingUserId
+    ? (connectedUsers.find((u) => u.user.id === followingUserId) ?? null)
+    : null;
+
+  // Ref to track the last cursor position for awareness broadcast
+  const lastCursorRef = useRef<{
+    position: [number, number, number];
+    normal: [number, number, number] | undefined;
+    visible: boolean;
+  } | null>(null);
+
   // Raycast hook for 3D selection
   const { raycast, getFaceId } = useRaycast({
     camera: cameraRef,
@@ -237,6 +278,86 @@ const Viewer: React.FC = () => {
   const requestRender = useCallback(() => {
     needsRenderRef.current = true;
   }, []);
+
+  // Broadcast cursor position to awareness when being followed
+  // Uses a ref to avoid triggering re-renders on every mouse move
+  const awarenessRef = useRef(awareness);
+  awarenessRef.current = awareness;
+
+  const broadcastCursor = useCallback(
+    (hit: { point: THREE.Vector3; normal: THREE.Vector3 | null } | null) => {
+      if (!awarenessRef.current) {
+        return;
+      }
+
+      if (!hit) {
+        // Clear 3D cursor if not over model
+        if (lastCursorRef.current?.visible) {
+          awarenessRef.current.updateCursor3D({ position: [0, 0, 0], visible: false });
+          lastCursorRef.current = { position: [0, 0, 0], normal: undefined, visible: false };
+        }
+        return;
+      }
+
+      const newPos: [number, number, number] = [hit.point.x, hit.point.y, hit.point.z];
+      const newNormal: [number, number, number] | undefined = hit.normal
+        ? [hit.normal.x, hit.normal.y, hit.normal.z]
+        : undefined;
+
+      // Only update if position changed significantly (1mm threshold)
+      const last = lastCursorRef.current;
+      if (
+        last &&
+        last.visible &&
+        Math.abs(last.position[0] - newPos[0]) < 1 &&
+        Math.abs(last.position[1] - newPos[1]) < 1 &&
+        Math.abs(last.position[2] - newPos[2]) < 1
+      ) {
+        return;
+      }
+
+      lastCursorRef.current = { position: newPos, normal: newNormal, visible: true };
+      awarenessRef.current.updateCursor3D({ position: newPos, normal: newNormal, visible: true });
+    },
+    []
+  );
+
+  // Ref for broadcastCursor to use in event handlers
+  const broadcastCursorRef = useRef(broadcastCursor);
+  broadcastCursorRef.current = broadcastCursor;
+
+  // Broadcast camera state to awareness (for following)
+  const broadcastCamera = useCallback(() => {
+    if (!awarenessRef.current || !cameraRef.current) return;
+
+    const camera = cameraRef.current;
+    const target = targetRef.current;
+
+    const viewerState = {
+      cameraPosition: [camera.position.x, camera.position.y, camera.position.z] as [
+        number,
+        number,
+        number,
+      ],
+      cameraTarget: [target.x, target.y, target.z] as [number, number, number],
+      cameraUp: [camera.up.x, camera.up.y, camera.up.z] as [number, number, number],
+      zoom: camera.position.distanceTo(target),
+    };
+
+    awarenessRef.current.updateViewerState(viewerState);
+  }, []);
+
+  // Ref for broadcastCamera to use in event handlers
+  const broadcastCameraRef = useRef(broadcastCamera);
+  broadcastCameraRef.current = broadcastCamera;
+
+  // Broadcast initial camera state when scene is ready
+  // This ensures followers can see the camera state even if the user hasn't moved yet
+  useEffect(() => {
+    if (sceneReady && cameraRef.current) {
+      broadcastCameraRef.current();
+    }
+  }, [sceneReady]);
 
   // Update camera projection
   const updateCamera = useCallback((projection: ProjectionMode) => {
@@ -1953,6 +2074,8 @@ const Viewer: React.FC = () => {
         currentCamera.position.copy(targetRef.current).add(offset);
         currentCamera.lookAt(targetRef.current);
         needsRenderRef.current = true;
+        // Broadcast camera state for following users
+        broadcastCameraRef.current();
       } else if (isPanning) {
         // Pan the camera and target
         const panSpeed = 0.01;
@@ -1972,6 +2095,8 @@ const Viewer: React.FC = () => {
         targetRef.current.add(panOffset);
         currentCamera.lookAt(targetRef.current);
         needsRenderRef.current = true;
+        // Broadcast camera state for following users
+        broadcastCameraRef.current();
       }
 
       previousMousePosition = { x: e.clientX, y: e.clientY };
@@ -2008,6 +2133,9 @@ const Viewer: React.FC = () => {
         currentCamera.bottom = -frustumSize;
         currentCamera.updateProjectionMatrix();
       }
+
+      // Broadcast camera state for following users
+      broadcastCameraRef.current();
 
       needsRenderRef.current = true;
     };
@@ -2058,11 +2186,21 @@ const Viewer: React.FC = () => {
       }
     };
 
-    // Hover handler for 3D highlighting
+    // Hover handler for 3D highlighting and cursor broadcasting
     const onHover = (e: MouseEvent) => {
       // Skip hover if dragging
       if (isDragging) {
         setHoverRef.current(null);
+        broadcastCursorRef.current(null);
+        // Still broadcast 2D cursor when dragging
+        if (awarenessRef.current && containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect();
+          awarenessRef.current.updateCursor2D({
+            x: (e.clientX - rect.left) / rect.width,
+            y: (e.clientY - rect.top) / rect.height,
+            visible: true,
+          });
+        }
         return;
       }
 
@@ -2076,8 +2214,24 @@ const Viewer: React.FC = () => {
           index: faceId,
           featureId: hit.featureId,
         });
+        // Broadcast 3D cursor position for collaborative cursors
+        broadcastCursorRef.current(hit);
+        // Clear 2D cursor when over model (3D cursor takes over)
+        if (awarenessRef.current) {
+          awarenessRef.current.updateCursor2D({ x: 0, y: 0, visible: false });
+        }
       } else {
         setHoverRef.current(null);
+        broadcastCursorRef.current(null);
+        // Broadcast 2D cursor when not over model
+        if (awarenessRef.current && containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect();
+          awarenessRef.current.updateCursor2D({
+            x: (e.clientX - rect.left) / rect.width,
+            y: (e.clientY - rect.top) / rect.height,
+            visible: true,
+          });
+        }
       }
     };
 
@@ -2447,6 +2601,15 @@ const Viewer: React.FC = () => {
 
   return (
     <div ref={containerRef} className="viewer-container">
+      {/* Collaborative 3D cursors */}
+      <UserCursors3D
+        scene={sceneRef.current}
+        connectedUsers={connectedUsers}
+        requestRender={requestRender}
+      />
+      {/* 2D cursor overlay for followed user when not over model */}
+      <UserCursor2D followedUser={followedUser} containerRef={containerRef} />
+
       {/* Sketch mode overlays */}
       {sketchMode.active && (
         <>

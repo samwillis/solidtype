@@ -20,7 +20,7 @@ const EditorContent: React.FC = () => {
   const { undo, redo, canUndo, canRedo, awareness, isCloudDocument } = useDocument();
 
   // Following hook for user presence
-  const { connectedUsers, followingUserId, followUser, stopFollowing } = useFollowing({
+  const { connectedUsers, followers, followingUserId, followUser, stopFollowing } = useFollowing({
     awareness,
   });
 
@@ -62,11 +62,12 @@ const EditorContent: React.FC = () => {
             <PropertiesPanel />
 
             {/* User Presence (top right, below properties panel) - only for cloud documents */}
-            {isCloudDocument && connectedUsers.length > 0 && (
+            {isCloudDocument && (connectedUsers.length > 0 || followers.length > 0) && (
               <div className="user-presence-container">
                 <UserPresence
                   connectedUsers={connectedUsers}
                   followingUserId={followingUserId}
+                  followers={followers}
                   onFollowUser={followUser}
                   onStopFollowing={stopFollowing}
                 />

@@ -37,7 +37,7 @@
   font-size: 18px;
   font-weight: 600;
   color: var(--color-text, rgba(255, 255, 255, 0.9));
-  margin: 0 0 8px 0;
+  margin: 0 0 20px 0;
 }
 
 .create-dialog-description {
@@ -254,4 +254,55 @@
 [data-theme="light"] .create-dialog-select-option:hover,
 [data-theme="light"] .create-dialog-select-option[data-highlighted] {
   background: rgba(0, 0, 0, 0.1);
+}
+
+/* Native select element */
+.create-dialog-select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  font-size: 14px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.create-dialog-select:hover:not(:disabled) {
+  border-color: var(--color-primary);
+}
+
+.create-dialog-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), 0.2);
+}
+
+.create-dialog-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Checkbox label */
+.create-dialog-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.create-dialog-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.create-dialog-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
 }

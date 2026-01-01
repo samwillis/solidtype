@@ -3,6 +3,7 @@
  *
  * Displays avatars of connected users in a document.
  * Allows clicking on a user to follow their view.
+ * Shows when other users are following you.
  */
 
 import React from "react";
@@ -17,6 +18,8 @@ interface UserPresenceProps {
   connectedUsers: UserAwarenessState[];
   /** Currently following user ID */
   followingUserId: string | null;
+  /** Users who are following the current user */
+  followers?: UserAwarenessState[];
   /** Callback to start following a user */
   onFollowUser: (userId: string) => void;
   /** Callback to stop following */
@@ -28,16 +31,18 @@ interface UserPresenceProps {
 export const UserPresence: React.FC<UserPresenceProps> = ({
   connectedUsers,
   followingUserId,
+  followers = [],
   onFollowUser,
   onStopFollowing,
   maxAvatars = 5,
 }) => {
-  if (connectedUsers.length === 0) {
+  if (connectedUsers.length === 0 && followers.length === 0) {
     return null;
   }
 
   const visibleUsers = connectedUsers.slice(0, maxAvatars);
   const hiddenCount = connectedUsers.length - maxAvatars;
+  const followerIds = new Set(followers.map((f) => f.user.id));
 
   const handleClick = (userId: string) => {
     if (followingUserId === userId) {
@@ -50,16 +55,48 @@ export const UserPresence: React.FC<UserPresenceProps> = ({
   return (
     <div className="user-presence">
       <Tooltip.Provider>
+        {/* Followers indicator */}
+        {followers.length > 0 && (
+          <Tooltip.Root>
+            <Tooltip.Trigger
+              className="user-presence-followers-badge"
+              render={<div aria-label={`${followers.length} following you`} />}
+            >
+              <LuEye size={12} />
+              <span className="user-presence-followers-count">{followers.length}</span>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Positioner side="bottom" sideOffset={6}>
+                <Tooltip.Popup className="user-presence-tooltip">
+                  <div className="user-presence-tooltip-header">Following you</div>
+                  {followers.map((follower) => (
+                    <div key={follower.user.id} className="user-presence-tooltip-user">
+                      <span
+                        className="user-presence-tooltip-dot"
+                        style={{ backgroundColor: follower.user.color }}
+                      />
+                      {follower.user.name}
+                    </div>
+                  ))}
+                </Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        )}
+
         {visibleUsers.map((userState) => {
           const isFollowing = followingUserId === userState.user.id;
+          const isFollowingMe = followerIds.has(userState.user.id);
 
           return (
             <Tooltip.Root key={userState.user.id}>
               <Tooltip.Trigger
-                className={`user-presence-avatar-wrapper ${isFollowing ? "following" : ""}`}
+                className={`user-presence-avatar-wrapper ${isFollowing ? "following" : ""} ${isFollowingMe ? "following-me" : ""}`}
                 onClick={() => handleClick(userState.user.id)}
                 render={
-                  <button aria-label={`${userState.user.name}${isFollowing ? " (following)" : ""}`} />
+                  <button
+                    aria-label={`${userState.user.name}${isFollowing ? " (following)" : ""}${isFollowingMe ? " (following you)" : ""}`}
+                  />
                 }
               >
                 <Avatar
@@ -77,11 +114,19 @@ export const UserPresence: React.FC<UserPresenceProps> = ({
                     <LuEye size={10} />
                   </span>
                 )}
+                {isFollowingMe && !isFollowing && (
+                  <span className="user-presence-following-me-indicator">
+                    <LuEye size={10} />
+                  </span>
+                )}
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Positioner side="bottom" sideOffset={6}>
                   <Tooltip.Popup className="user-presence-tooltip">
                     <div className="user-presence-tooltip-name">{userState.user.name}</div>
+                    {isFollowingMe && (
+                      <div className="user-presence-tooltip-following-me">Following you</div>
+                    )}
                     <div className="user-presence-tooltip-action">
                       {isFollowing ? (
                         <>

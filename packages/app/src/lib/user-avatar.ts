@@ -5,34 +5,24 @@
  */
 
 /**
- * Generate a consistent color from a string (username or email)
- * Uses a simple hash to create a hex color
+ * Generate a consistent color from a user ID.
+ * Uses the same algorithm everywhere to ensure colors match across users' views.
+ *
+ * IMPORTANT: Always use the user ID, not email or name, to ensure consistency.
  */
-export function generateAvatarColor(str: string): string {
+export function generateAvatarColor(userId: string): string {
+  // Hash the user ID to get a consistent hue
   let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
+  for (let i = 0; i < userId.length; i++) {
+    hash = (hash << 5) - hash + userId.charCodeAt(i);
     hash = hash & hash; // Convert to 32-bit integer
   }
 
-  // Generate RGB values from hash
-  const r = (hash & 0xff0000) >> 16;
-  const g = (hash & 0x00ff00) >> 8;
-  const b = hash & 0x0000ff;
+  // Use the hash to generate a hue (0-360)
+  const hue = Math.abs(hash) % 360;
 
-  // Ensure minimum brightness for readability
-  const minBrightness = 100;
-  const adjustedR = Math.max(r, minBrightness);
-  const adjustedG = Math.max(g, minBrightness);
-  const adjustedB = Math.max(b, minBrightness);
-
-  // Convert to hex
-  const toHex = (n: number) => {
-    const hex = n.toString(16);
-    return hex.length === 1 ? "0" + hex : hex;
-  };
-
-  return `#${toHex(adjustedR)}${toHex(adjustedG)}${toHex(adjustedB)}`;
+  // Return a saturated, bright color in HSL format
+  return `hsl(${hue}, 70%, 50%)`;
 }
 
 /**

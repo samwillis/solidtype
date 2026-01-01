@@ -105,24 +105,30 @@ export const workspacesProxy = createElectricProxy("workspaces", (userId) => {
 
 /**
  * Proxy for branches
- * Shape: branches where user has access via project membership
+ * Shape: branches where user has access via workspace membership (or direct project membership)
  */
 export const branchesProxy = createElectricProxy("branches", (userId) => {
   return {
-    where: `project_id IN (SELECT project_id FROM project_members WHERE user_id = $1)`,
+    where: `project_id IN (
+      SELECT id FROM projects 
+      WHERE workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $1)
+    )`,
     params: [userId],
   };
 });
 
 /**
  * Proxy for documents
- * Shape: documents where user has access via project membership
+ * Shape: documents where user has access via workspace membership
  */
 export const documentsProxy = createElectricProxy("documents", (userId) => {
   return {
     where: `is_deleted = false AND branch_id IN (
         SELECT id FROM branches 
-        WHERE project_id IN (SELECT project_id FROM project_members WHERE user_id = $1)
+        WHERE project_id IN (
+          SELECT id FROM projects 
+          WHERE workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $1)
+        )
       )`,
     params: [userId],
   };
@@ -143,13 +149,16 @@ export const projectsProxy = createElectricProxy("projects", (userId) => {
 
 /**
  * Proxy for folders
- * Shape: folders where user has access via project membership
+ * Shape: folders where user has access via workspace membership
  */
 export const foldersProxy = createElectricProxy("folders", (userId) => {
   return {
     where: `branch_id IN (
         SELECT id FROM branches 
-        WHERE project_id IN (SELECT project_id FROM project_members WHERE user_id = $1)
+        WHERE project_id IN (
+          SELECT id FROM projects 
+          WHERE workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = $1)
+        )
       )`,
     params: [userId],
   };

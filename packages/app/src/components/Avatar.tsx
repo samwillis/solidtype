@@ -49,7 +49,8 @@ export function Avatar({
   title,
 }: AvatarProps) {
   const initials = getInitials(user.name, user.email);
-  const backgroundColor = user.color || generateAvatarColor(user.email || user.id);
+  // Always use user.id for color generation to ensure consistency across all users' views
+  const backgroundColor = user.color || generateAvatarColor(user.id);
   const computedFontSize = fontSize ?? Math.round(size * 0.45);
 
   const avatarStyle: React.CSSProperties = {
@@ -66,7 +67,9 @@ export function Avatar({
     fontWeight: 500,
     color: "white",
     cursor: onClick ? "pointer" : "default",
-    border: highlighted ? `2px solid ${highlightColor || backgroundColor}` : "2px solid transparent",
+    border: highlighted
+      ? `2px solid ${highlightColor || backgroundColor}`
+      : "2px solid transparent",
     boxSizing: "border-box",
     transition: "border-color 0.15s ease, transform 0.15s ease",
     ...style,

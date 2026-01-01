@@ -14,23 +14,34 @@ interface UserPresenceProps {
 }
 
 export function UserPresence({ awareness, onCameraChange }: UserPresenceProps) {
-  const { connectedUsers, followingUserId, followUser, stopFollowing } = useFollowing({
+  const { connectedUsers, followers, followingUserId, followUser, stopFollowing } = useFollowing({
     awareness,
     onCameraChange,
   });
 
-  if (connectedUsers.length === 0) {
+  if (connectedUsers.length === 0 && followers.length === 0) {
     return null;
   }
 
   return (
     <div className="user-presence">
+      {/* Show followers indicator if someone is following us */}
+      {followers.length > 0 && (
+        <div className="user-presence-followers" title={getFollowersTooltip(followers)}>
+          <EyeIcon />
+          <span className="followers-count">{followers.length}</span>
+        </div>
+      )}
+
+      {/* Show connected users */}
       {connectedUsers.map((userState) => {
         const isFollowing = followingUserId === userState.user.id;
+        const isFollowingUs = followers.some((f) => f.user.id === userState.user.id);
+
         return (
           <div
             key={userState.user.id}
-            className={`user-presence-item ${isFollowing ? "following" : ""}`}
+            className={`user-presence-item ${isFollowing ? "following" : ""} ${isFollowingUs ? "following-us" : ""}`}
           >
             <Avatar
               user={{
@@ -42,10 +53,15 @@ export function UserPresence({ awareness, onCameraChange }: UserPresenceProps) {
               highlighted={isFollowing}
               highlightColor={userState.user.color}
               onClick={() => (isFollowing ? stopFollowing() : followUser(userState.user.id))}
-              title={`${userState.user.name}${isFollowing ? " (following)" : ""}`}
+              title={getUserTooltip(userState, isFollowing, isFollowingUs)}
             />
             {isFollowing && (
               <span className="following-indicator">
+                <EyeIcon />
+              </span>
+            )}
+            {isFollowingUs && !isFollowing && (
+              <span className="following-us-indicator">
                 <EyeIcon />
               </span>
             )}
@@ -54,6 +70,28 @@ export function UserPresence({ awareness, onCameraChange }: UserPresenceProps) {
       })}
     </div>
   );
+}
+
+function getUserTooltip(
+  userState: UserAwarenessState,
+  isFollowing: boolean,
+  isFollowingUs: boolean
+): string {
+  let tooltip = userState.user.name;
+  if (isFollowing) tooltip += " (you are following)";
+  if (isFollowingUs) tooltip += " (following you)";
+  return tooltip;
+}
+
+function getFollowersTooltip(followers: UserAwarenessState[]): string {
+  if (followers.length === 1) {
+    return `${followers[0].user.name} is following you`;
+  }
+  const names = followers.map((f) => f.user.name);
+  if (followers.length === 2) {
+    return `${names.join(" and ")} are following you`;
+  }
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} are following you`;
 }
 
 function EyeIcon() {

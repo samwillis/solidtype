@@ -4,7 +4,7 @@
 
 ## Summary
 
-Phase 27 is now **~98% complete**. All major infrastructure is in place including document loading from Durable Streams, branching UI, merge functionality, and presence components. UserPresence is now wired into the Editor. The system is ready for integration testing.
+Phase 27 is now **~99% complete**. All major infrastructure is in place including document loading from Durable Streams, branching UI, merge functionality, presence components, and **full member management UI**. Users can now invite collaborators by email, manage roles, and remove members from workspaces and projects. The system is ready for integration testing with multiple users.
 
 ---
 
@@ -33,7 +33,7 @@ Phase 27 is now **~98% complete**. All major infrastructure is in place includin
 - ✅ Delete dialogs and functionality (`DeleteConfirmDialog.tsx`)
 - ✅ Move dialog for documents/folders (`MoveDialog.tsx`)
 - ✅ **Edit dialogs with name/description editing** (`WorkspaceSettingsDialog.tsx`, `ProjectSettingsDialog.tsx`)
-- ⚠️ Permission/member management UI has UI stubs, needs backend integration
+- ✅ **Member management** - Full UI for inviting, removing, and role management
 
 ---
 
@@ -143,7 +143,7 @@ Phase 27 is now **~98% complete**. All major infrastructure is in place includin
 
 ### Medium Priority
 
-1. **Member management UI** - Add/remove members with roles (UI stubs exist)
+1. ~~**Member management UI**~~ - ✅ DONE
 2. **UserCursors3D component** - 3D cursor display for viewer (spec exists, needs implementation)
 
 ### Lower Priority
@@ -165,19 +165,21 @@ Phase 27 is now **~98% complete**. All major infrastructure is in place includin
 
 ### Key Files
 
-| File                                       | Purpose                             |
-| ------------------------------------------ | ----------------------------------- |
-| `lib/server-functions.ts`                  | All CRUD operations including merge |
-| `lib/electric-collections.ts`              | TanStack DB + Electric collections  |
-| `lib/vendor/y-durable-streams/provider.ts` | Yjs sync provider                   |
-| `lib/yjs-sync.ts`                          | High-level Yjs sync helpers         |
-| `lib/awareness-provider.ts`                | Presence/awareness wrapper          |
-| `editor/contexts/DocumentContext.tsx`      | Document loading with cloud sync    |
-| `routes/api/docs/$docId/stream.ts`         | Durable Streams proxy for docs      |
-| `routes/api/docs/$docId/awareness.ts`      | Durable Streams proxy for awareness |
-| `components/dialogs/MergeBranchDialog.tsx` | Branch merge UI                     |
-| `components/UserPresence.tsx`              | Presence avatars component          |
-| `editor/components/SketchCursors.tsx`      | 2D sketch cursors                   |
+| File                                        | Purpose                             |
+| ------------------------------------------- | ----------------------------------- |
+| `lib/server-functions.ts`                   | All CRUD operations including merge |
+| `lib/electric-collections.ts`               | TanStack DB + Electric collections  |
+| `lib/vendor/y-durable-streams/provider.ts`  | Yjs sync provider                   |
+| `lib/yjs-sync.ts`                           | High-level Yjs sync helpers         |
+| `lib/awareness-provider.ts`                 | Presence/awareness wrapper          |
+| `editor/contexts/DocumentContext.tsx`       | Document loading with cloud sync    |
+| `routes/api/docs/$docId/stream.ts`          | Durable Streams proxy for docs      |
+| `routes/api/docs/$docId/awareness.ts`       | Durable Streams proxy for awareness |
+| `components/dialogs/MergeBranchDialog.tsx`  | Branch merge UI                     |
+| `components/UserPresence.tsx`               | Presence avatars component          |
+| `editor/components/SketchCursors.tsx`       | 2D sketch cursors                   |
+| `components/dialogs/InviteMemberDialog.tsx` | Invite members by email             |
+| `components/Avatar.tsx`                     | Reusable avatar component           |
 
 ### API Routes Structure
 
@@ -201,9 +203,9 @@ Phase 27 is now **~98% complete**. All major infrastructure is in place includin
 | Task                         | Effort    | Status  |
 | ---------------------------- | --------- | ------- |
 | Wire UserPresence to Editor  | 1 hour    | ✅ Done |
+| Member management UI/Backend | 2-3 hours | ✅ Done |
 | Integration testing          | 2-3 hours | Pending |
-| Member management backend    | 4-6 hours | Future  |
 | UserCursors3D implementation | 2-3 hours | Future  |
 
 **Minimum for fully working system: ~2-3 hours (testing)**
-**Full feature complete: ~9-12 hours**
+**Full feature complete: ~5-6 hours**

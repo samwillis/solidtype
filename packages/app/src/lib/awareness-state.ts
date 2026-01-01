@@ -19,7 +19,29 @@ export interface UserAwarenessState {
     branchId: string;
   };
 
+  // Following state - who this user is following (if anyone)
+  following?: {
+    userId: string;
+  };
+
+  // 3D cursor position (world coordinates)
+  // Sent to all users so everyone can see each other's cursors
+  cursor3D?: {
+    position: [number, number, number];
+    normal?: [number, number, number]; // Surface normal at cursor position
+    visible: boolean; // Whether cursor is over the model
+  };
+
+  // 2D cursor position (normalized screen coordinates 0-1)
+  // Used when user is not hovering over the 3D model
+  cursor2D?: {
+    x: number; // 0-1, left to right
+    y: number; // 0-1, top to bottom
+    visible: boolean;
+  };
+
   // 3D Viewer state (when in document)
+  // Only sent when at least one user is following this user
   viewer?: {
     // Camera position and orientation
     cameraPosition: [number, number, number];
@@ -46,20 +68,6 @@ export interface UserAwarenessState {
   lastUpdated: number;
 }
 
-/**
- * Generate a consistent color for a user based on their ID
- */
-export function generateUserColor(userId: string): string {
-  // Hash the user ID to get a consistent hue
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = (hash << 5) - hash + userId.charCodeAt(i);
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-
-  // Use the hash to generate a hue (0-360)
-  const hue = Math.abs(hash) % 360;
-
-  // Return a saturated, bright color
-  return `hsl(${hue}, 70%, 60%)`;
-}
+// Re-export generateAvatarColor as generateUserColor for backwards compatibility
+// Uses the same algorithm as user-avatar.ts to ensure consistent colors
+export { generateAvatarColor as generateUserColor } from "./user-avatar";

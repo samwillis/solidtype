@@ -12,7 +12,12 @@ export class SolidTypeAwareness {
   private awareness: Awareness;
   private localState: UserAwarenessState;
   private listeners: Set<(users: UserAwarenessState[]) => void> = new Set();
+  private followersListeners: Set<(followers: UserAwarenessState[]) => void> = new Set();
   private userId: string;
+
+  // Cached state for conditional broadcasting
+  private pendingViewerState: UserAwarenessState["viewer"] | undefined;
+  private pendingCursor3D: UserAwarenessState["cursor3D"] | undefined;
 
   /**
    * Create a SolidType awareness wrapper.
@@ -50,6 +55,9 @@ export class SolidTypeAwareness {
     // Forward awareness changes to listeners
     this.awareness.on("change", () => {
       this.notifyListeners();
+      this.notifyFollowersListeners();
+      // Check if we need to start/stop broadcasting camera/cursor
+      this.updateBroadcastState();
     });
   }
 
@@ -71,14 +79,22 @@ export class SolidTypeAwareness {
 
   /**
    * Update viewer state (called on camera change)
+   * This is cached and only sent when someone is following us
    */
   updateViewerState(viewer: UserAwarenessState["viewer"]) {
-    this.localState = {
-      ...this.localState,
-      viewer,
-      lastUpdated: Date.now(),
-    };
-    this.awareness.setLocalState(this.localState);
+    this.pendingViewerState = viewer;
+
+    const followersCount = this.getFollowers().length;
+
+    // Only broadcast if we have followers
+    if (followersCount > 0) {
+      this.localState = {
+        ...this.localState,
+        viewer,
+        lastUpdated: Date.now(),
+      };
+      this.awareness.setLocalState(this.localState);
+    }
   }
 
   /**
@@ -115,6 +131,131 @@ export class SolidTypeAwareness {
       lastUpdated: Date.now(),
     };
     this.awareness.setLocalState(this.localState);
+  }
+
+  /**
+   * Start following a user
+   */
+  startFollowing(userId: string) {
+    this.localState = {
+      ...this.localState,
+      following: { userId },
+      lastUpdated: Date.now(),
+    };
+    this.awareness.setLocalState(this.localState);
+  }
+
+  /**
+   * Stop following
+   */
+  stopFollowing() {
+    this.localState = {
+      ...this.localState,
+      following: undefined,
+      lastUpdated: Date.now(),
+    };
+    this.awareness.setLocalState(this.localState);
+  }
+
+  /**
+   * Update 3D cursor position
+   * Always broadcast so all users can see each other's cursors
+   */
+  updateCursor3D(cursor: UserAwarenessState["cursor3D"]) {
+    this.pendingCursor3D = cursor;
+    this.localState = {
+      ...this.localState,
+      cursor3D: cursor,
+      lastUpdated: Date.now(),
+    };
+    this.awareness.setLocalState(this.localState);
+  }
+
+  /**
+   * Update 2D cursor position (screen coordinates, for when not over 3D model)
+   * Always broadcast so followers can see cursor position
+   */
+  updateCursor2D(cursor: UserAwarenessState["cursor2D"]) {
+    this.localState = {
+      ...this.localState,
+      cursor2D: cursor,
+      lastUpdated: Date.now(),
+    };
+    this.awareness.setLocalState(this.localState);
+  }
+
+  /**
+   * Check if we have followers and update broadcast state accordingly
+   */
+  private updateBroadcastState() {
+    const hasFollowers = this.getFollowers().length > 0;
+
+    if (hasFollowers) {
+      // Always broadcast pending state when we have followers
+      // This ensures new followers immediately get the camera state
+      let needsUpdate = false;
+
+      if (this.pendingViewerState) {
+        // Always update viewer state from pending when we have followers
+        this.localState.viewer = this.pendingViewerState;
+        needsUpdate = true;
+      }
+      if (this.pendingCursor3D) {
+        this.localState.cursor3D = this.pendingCursor3D;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        this.localState.lastUpdated = Date.now();
+        this.awareness.setLocalState(this.localState);
+      }
+    } else {
+      // Stop broadcasting viewer if no followers (but keep cursor for everyone)
+      if (this.localState.viewer) {
+        this.localState = {
+          ...this.localState,
+          viewer: undefined,
+          lastUpdated: Date.now(),
+        };
+        this.awareness.setLocalState(this.localState);
+      }
+    }
+  }
+
+  /**
+   * Get users who are following the local user
+   */
+  getFollowers(): UserAwarenessState[] {
+    const followers: UserAwarenessState[] = [];
+
+    this.awareness.getStates().forEach((state) => {
+      if (!state) return;
+      const userState = state as UserAwarenessState;
+
+      // Check if this user is following us
+      if (userState.following?.userId === this.userId) {
+        followers.push(userState);
+      }
+    });
+
+    return followers;
+  }
+
+  /**
+   * Subscribe to followers changes
+   */
+  onFollowersChange(callback: (followers: UserAwarenessState[]) => void): () => void {
+    this.followersListeners.add(callback);
+    return () => {
+      this.followersListeners.delete(callback);
+    };
+  }
+
+  private notifyFollowersListeners() {
+    const followers = this.getFollowers();
+    for (const listener of this.followersListeners) {
+      listener(followers);
+    }
   }
 
   /**
