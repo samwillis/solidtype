@@ -190,6 +190,25 @@
 }
 
 .home-hero-subtitle {
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  max-width: 700px;
+  margin: 0 auto 1.5rem;
+}
+
+.home-hero-subtitle a {
+  color: var(--color-accent);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.home-hero-subtitle a:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+.home-hero-strap {
   font-size: clamp(1rem, 2vw, 1.25rem);
   line-height: 1.6;
   color: var(--color-text-secondary);

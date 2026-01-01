@@ -25,6 +25,27 @@ import {
 import { eq, and } from 'drizzle-orm';
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Normalize a nullable UUID field value.
+ * Converts empty strings, undefined, and whitespace-only strings to undefined.
+ * Using undefined (not null) causes Drizzle to omit the field from the insert,
+ * which allows the database to use its default (NULL) for nullable columns.
+ */
+function normalizeNullableUuid(value: string | null | undefined): string | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+  }
+  return undefined;
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -460,22 +481,39 @@ export const createDocumentMutation = createServerFn({ method: 'POST' })
   .handler(async ({ data, request }) => {
     const session = await requireAuth(request);
     
-    // Generate durableStreamId: "project/{projectId}/doc/{documentId}/branch/{branchId}"
-    // We'll use a placeholder for documentId, then update after creation
+    // Normalize nullable fields: convert empty strings to undefined so Drizzle omits them
+    // This allows the database to use NULL defaults for nullable columns
+    const normalizedDocument: any = {
+      projectId: data.document.projectId,
+      branchId: data.document.branchId,
+      name: data.document.name,
+      type: data.document.type,
+      featureCount: data.document.featureCount ?? 0,
+      sortOrder: data.document.sortOrder ?? 0,
+      createdBy: session.user.id, // Override with session user ID for security
+    };
+    
+    // Only include folderId if it's a valid UUID (not empty/null/undefined)
+    const folderId = normalizeNullableUuid(data.document.folderId);
+    if (folderId !== undefined) {
+      normalizedDocument.folderId = folderId;
+    }
+    
+    // Insert document (durableStreamId and baseDocumentId will be set after creation)
     const [created] = await db
       .insert(documents)
-      .values({
-        ...data.document,
-        createdBy: session.user.id, // Override with session user ID for security
-        durableStreamId: null, // Will be set after creation
-      })
+      .values(normalizedDocument)
       .returning();
     
-    // Update with generated durableStreamId
+    // Set baseDocumentId = id for new documents (as per schema comment)
+    // Generate durableStreamId: "project/{projectId}/doc/{documentId}/branch/{branchId}"
     const durableStreamId = `project/${created.projectId}/doc/${created.id}/branch/${created.branchId}`;
     const [updated] = await db
       .update(documents)
-      .set({ durableStreamId })
+      .set({ 
+        durableStreamId,
+        baseDocumentId: created.id,
+      })
       .where(eq(documents.id, created.id))
       .returning();
     

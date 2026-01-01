@@ -79,18 +79,25 @@ export const CreateDocumentDialog: React.FC<CreateDocumentDialogProps> = ({
 
       setIsSubmitting(true);
       try {
+        // Build document object, only including folderId if it's a valid non-empty value
+        const documentData: any = {
+          projectId: value.projectId,
+          branchId: value.branchId,
+          name: value.name,
+          type: value.type,
+          featureCount: 0,
+          sortOrder: 0,
+          createdBy: session.user.id,
+        };
+        
+        // Only include folderId if it's a valid non-empty string
+        if (value.folderId && typeof value.folderId === 'string' && value.folderId.trim() !== '') {
+          documentData.folderId = value.folderId.trim();
+        }
+        
         await createDocumentMutation({
           data: {
-            document: {
-              projectId: value.projectId,
-              branchId: value.branchId,
-              folderId: value.folderId || null,
-              name: value.name,
-              type: value.type,
-              featureCount: 0,
-              sortOrder: 0,
-              createdBy: session.user.id,
-            },
+            document: documentData,
           },
         });
 

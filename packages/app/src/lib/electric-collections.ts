@@ -62,8 +62,10 @@ export const documentSchema = z.object({
   project_id: z.string().uuid(),
   branch_id: z.string().uuid(),
   name: z.string(),
+  type: z.enum(['part', 'assembly', 'drawing', 'sketch', 'file', 'notes']), // document_type enum
   folder_id: z.string().uuid().nullable(),
   sort_order: z.number(),
+  feature_count: z.number().nullable(), // Feature count for quick display
   durable_stream_id: z.string().nullable(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
@@ -206,7 +208,23 @@ export const documentsCollection = createCollection(
     },
     onInsert: async ({ transaction }) => {
       const newDoc = transaction.mutations[0].modified;
-      const { txid } = await createDocumentMutation({ data: { document: newDoc } });
+      // Normalize empty strings to undefined for nullable fields
+      // The mutation handler also normalizes, but we do it here for defense in depth
+      const normalizedDoc: any = {
+        ...newDoc,
+      };
+      
+      // Remove folderId if it's empty/null/undefined
+      if (!newDoc.folderId || (typeof newDoc.folderId === 'string' && newDoc.folderId.trim() === '')) {
+        delete normalizedDoc.folderId;
+      }
+      
+      // Remove durableStreamId if it's empty/null/undefined (will be set after creation)
+      if (!newDoc.durableStreamId || (typeof newDoc.durableStreamId === 'string' && newDoc.durableStreamId.trim() === '')) {
+        delete normalizedDoc.durableStreamId;
+      }
+      
+      const { txid } = await createDocumentMutation({ data: { document: normalizedDoc } });
       return { txid };
     },
     onUpdate: async ({ transaction }) => {
