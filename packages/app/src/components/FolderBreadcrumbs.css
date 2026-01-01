@@ -6,8 +6,7 @@
   display: flex;
   align-items: center;
   padding: 8px 24px;
-  background: var(--color-bg-light);
-  border-bottom: 1px solid var(--color-border);
+  background: transparent;
 }
 
 .folder-breadcrumbs-list {
@@ -29,10 +28,10 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
   color: var(--color-text-secondary);
   font-size: 12px;
   font-family: inherit;
@@ -41,7 +40,7 @@
 }
 
 .folder-breadcrumbs-link:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-accent-bg);
   color: var(--color-text);
 }
 
@@ -59,7 +58,10 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
   color: var(--color-text);
   font-size: 12px;
   font-weight: 500;

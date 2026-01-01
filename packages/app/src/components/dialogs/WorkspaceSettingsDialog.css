@@ -1,0 +1,15 @@
+.workspace-settings-dialog {
+  /* Extends create-dialog-popup */
+  min-width: 400px;
+  max-width: 500px;
+}
+
+.workspace-settings-dialog-content {
+  padding: 24px;
+}
+
+.workspace-settings-coming-soon {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  margin: 0;
+}

@@ -62,7 +62,7 @@ export const FolderBreadcrumbs: React.FC<FolderBreadcrumbsProps> = ({
             onClick={() => onNavigate(null)}
             type="button"
           >
-            <LuHome size={14} />
+            <LuHouse size={14} />
             <span>Root</span>
           </button>
         </li>

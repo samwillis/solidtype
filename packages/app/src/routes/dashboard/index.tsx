@@ -18,9 +18,17 @@ import '../../styles/dashboard.css';
 
 export const Route = createFileRoute('/dashboard/')({
   ssr: false, // Client-only: uses Electric collections and browser APIs
-  loader: async () => {
-    // Create live query collections and preload them
-    const orderedWorkspacesCollection = createCollection(
+  component: DashboardIndexPage,
+});
+
+function DashboardIndexPage() {
+  const navigate = useNavigate();
+  const [sortBy, setSortBy] = useState('last-modified');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // Query workspaces
+  const { data: workspaces, isLoading: workspacesLoading } = useLiveQuery(() => {
+    return createCollection(
       liveQueryCollectionOptions({
         query: (q) =>
           q
@@ -28,43 +36,32 @@ export const Route = createFileRoute('/dashboard/')({
             .orderBy(({ workspaces: w }) => w.created_at, 'desc'),
       })
     );
-
-    const allProjectsCollection = createCollection(
+  });
+  
+  // Query projects with dynamic sorting
+  const { data: allProjects, isLoading: projectsLoading } = useLiveQuery(() => {
+    return createCollection(
       liveQueryCollectionOptions({
-        query: (q) =>
-          q
-            .from({ projects: projectsCollection })
-            .orderBy(({ projects: p }) => p.updated_at, 'desc'),
+        query: (q) => {
+          let query = q.from({ projects: projectsCollection });
+          
+          // Apply sorting based on sortBy state
+          if (sortBy === 'name') {
+            query = query.orderBy(({ projects: p }) => p.name, 'asc');
+          } else if (sortBy === 'created') {
+            query = query.orderBy(({ projects: p }) => p.created_at, 'desc');
+          } else {
+            // Default: last-modified
+            query = query.orderBy(({ projects: p }) => p.updated_at, 'desc');
+          }
+          
+          return query;
+        },
       })
     );
-    
-    await orderedWorkspacesCollection.preload();
-    await allProjectsCollection.preload();
-    
-    return { 
-      workspacesCollection: orderedWorkspacesCollection,
-      projectsCollection: allProjectsCollection,
-    };
-  },
-  component: DashboardIndexPage,
-});
+  }, [sortBy]);
 
-function DashboardIndexPage() {
-  const navigate = useNavigate();
-  const { workspacesCollection: orderedWorkspacesCollection, projectsCollection: allProjectsCollection } = Route.useLoaderData();
-  const [sortBy, setSortBy] = useState('last-modified');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  
-  // Query workspaces and projects
-  const { data: workspaces, isLoading: workspacesLoading } = useLiveQuery(
-    () => orderedWorkspacesCollection
-  );
-  
-  const { data: allProjects, isLoading: projectsLoading } = useLiveQuery(
-    () => allProjectsCollection
-  );
-
-  // Get all projects for the recents view
+  // Get all projects for display
   const displayedProjects = allProjects || [];
 
   return (
@@ -138,9 +135,35 @@ function DashboardIndexPage() {
             <p className="dashboard-empty-hint">Create your first project to get started</p>
           </div>
         ) : (
-          <div className="dashboard-grid">
+          <div className={`dashboard-${viewMode === 'grid' ? 'grid' : 'list'}`}>
             {displayedProjects.map((project) => {
               const workspace = workspaces?.find(w => w.id === project.workspace_id);
+              
+              if (viewMode === 'list') {
+                return (
+                  <div
+                    key={project.id}
+                    className="dashboard-list-item"
+                    onClick={() => navigate({ to: `/dashboard/projects/${project.id}` })}
+                  >
+                    <div className="dashboard-list-item-icon">
+                      <LuFileText size={20} />
+                    </div>
+                    <div className="dashboard-list-item-content">
+                      <div className="dashboard-list-item-name">{project.name}</div>
+                      {workspace && (
+                        <div className="dashboard-list-item-path">{workspace.name}</div>
+                      )}
+                    </div>
+                    <div className="dashboard-list-item-meta">
+                      <span className="dashboard-list-item-time">
+                        {formatTimeAgo(project.updated_at)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+              
               return (
                 <div
                   key={project.id}
@@ -157,10 +180,12 @@ function DashboardIndexPage() {
                   <div className="dashboard-card-content">
                     <div className="dashboard-card-header">
                       <h3 className="dashboard-card-title">{project.name}</h3>
-                      {workspace && (
-                        <span className="dashboard-card-workspace">{workspace.name}</span>
-                      )}
                     </div>
+                    {workspace && (
+                      <div className="dashboard-card-workspace-row">
+                        <span className="dashboard-card-workspace">{workspace.name}</span>
+                      </div>
+                    )}
                     {project.description && (
                       <p className="dashboard-card-description">{project.description}</p>
                     )}

@@ -1,0 +1,126 @@
+.project-settings-dialog {
+  /* Extends create-dialog-popup */
+  min-width: 500px;
+  max-width: 600px;
+}
+
+.project-settings-dialog-content {
+  padding: 24px;
+}
+
+.project-settings-section {
+  margin-bottom: 32px;
+}
+
+.project-settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.project-settings-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 16px 0;
+}
+
+.project-settings-members-list {
+  margin-bottom: 12px;
+}
+
+.project-settings-member-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.project-settings-member-item:last-child {
+  border-bottom: none;
+}
+
+.project-settings-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.project-settings-member-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.project-settings-member-role {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-transform: capitalize;
+}
+
+.project-settings-empty {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  margin: 0;
+  padding: 8px 0;
+}
+
+.project-settings-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.project-settings-button:hover:not(:disabled) {
+  background: var(--color-accent-bg);
+}
+
+.project-settings-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.project-settings-button-secondary {
+  background: var(--color-surface);
+}
+
+.project-settings-button-danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.project-settings-button-danger:hover:not(:disabled) {
+  background: var(--color-danger);
+  color: white;
+}
+
+.project-settings-danger-zone {
+  border-top: 1px solid var(--color-border);
+  padding-top: 24px;
+}
+
+.project-settings-delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-settings-delete-warning {
+  font-size: 14px;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.project-settings-delete-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

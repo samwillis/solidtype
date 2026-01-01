@@ -9,11 +9,10 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from '@tanstack/react-router';
 import { Menu } from '@base-ui/react/menu';
 import { useLiveQuery, createCollection, liveQueryCollectionOptions } from '@tanstack/react-db';
-import { LuLayoutGrid, LuClock, LuPlus, LuFolder, LuFileText } from 'react-icons/lu';
+import { LuLayoutGrid, LuClock, LuEllipsis, LuSettings } from 'react-icons/lu';
 import { workspacesCollection, projectsCollection } from '../lib/electric-collections';
 import { CreateProjectDialog } from './dialogs/CreateProjectDialog';
-import { CreateDocumentDialog } from './dialogs/CreateDocumentDialog';
-import { CreateFolderDialog } from './dialogs/CreateFolderDialog';
+import { WorkspaceSettingsDialog } from './dialogs/WorkspaceSettingsDialog';
 import '../styles/dashboard.css';
 import logo from '../../../../artwork/colour-icon-bold.svg';
 
@@ -28,16 +27,12 @@ interface DashboardSidebarProps {
 export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   activeSection,
   onSectionChange,
-  currentProjectId,
-  currentBranchId,
-  currentFolderId,
 }) => {
   const navigate = useNavigate();
   
   // Dialog state
   const [showCreateProject, setShowCreateProject] = useState(false);
-  const [showCreateDocument, setShowCreateDocument] = useState(false);
-  const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [showWorkspaceSettings, setShowWorkspaceSettings] = useState(false);
   const [selectedWorkspaceForCreate, setSelectedWorkspaceForCreate] = useState<string | undefined>();
   
   // Query workspaces and projects
@@ -135,13 +130,9 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                         setSelectedWorkspaceForCreate(workspace.id);
                         setShowCreateProject(true);
                       }}
-                      onCreateDocument={() => {
+                      onOpenWorkspaceSettings={() => {
                         setSelectedWorkspaceForCreate(workspace.id);
-                        setShowCreateDocument(true);
-                      }}
-                      onCreateFolder={() => {
-                        setSelectedWorkspaceForCreate(workspace.id);
-                        setShowCreateFolder(true);
+                        setShowWorkspaceSettings(true);
                       }}
                     />
                   );
@@ -161,25 +152,10 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           setSelectedWorkspaceForCreate(undefined);
         }}
       />
-      <CreateDocumentDialog
-        open={showCreateDocument}
-        onOpenChange={setShowCreateDocument}
-        preselectedProjectId={currentProjectId}
-        preselectedBranchId={currentBranchId}
-        preselectedFolderId={currentFolderId}
-        onSuccess={() => {
-          setSelectedWorkspaceForCreate(undefined);
-        }}
-      />
-      <CreateFolderDialog
-        open={showCreateFolder}
-        onOpenChange={setShowCreateFolder}
-        preselectedProjectId={currentProjectId}
-        preselectedBranchId={currentBranchId}
-        preselectedParentFolderId={currentFolderId}
-        onSuccess={() => {
-          setSelectedWorkspaceForCreate(undefined);
-        }}
+      <WorkspaceSettingsDialog
+        open={showWorkspaceSettings}
+        onOpenChange={setShowWorkspaceSettings}
+        workspaceId={selectedWorkspaceForCreate}
       />
     </>
   );
@@ -207,8 +183,7 @@ interface WorkspaceSectionProps {
   activeSection: string;
   onProjectClick: (projectId: string) => void;
   onCreateProject: () => void;
-  onCreateDocument: () => void;
-  onCreateFolder: () => void;
+  onOpenWorkspaceSettings: () => void;
 }
 
 function WorkspaceSection({ 
@@ -217,16 +192,15 @@ function WorkspaceSection({
   activeSection, 
   onProjectClick,
   onCreateProject,
-  onCreateDocument,
-  onCreateFolder,
+  onOpenWorkspaceSettings,
 }: WorkspaceSectionProps) {
   return (
     <div className="dashboard-workspace-section">
       <div className="dashboard-workspace-header">
         <span className="dashboard-workspace-name">{workspace.name}</span>
         <Menu.Root>
-          <Menu.Trigger className="dashboard-workspace-create-btn" aria-label="Create">
-            <LuPlus />
+          <Menu.Trigger className="dashboard-workspace-menu-btn" aria-label="Workspace options">
+            <LuEllipsis />
           </Menu.Trigger>
           <Menu.Portal>
             <Menu.Positioner sideOffset={4}>
@@ -237,21 +211,14 @@ function WorkspaceSection({
                     onClick={() => onCreateProject()}
                   >
                     <LuLayoutGrid />
-                    <span>Project</span>
+                    <span>New Project</span>
                   </Menu.Item>
                   <Menu.Item
                     className="dashboard-create-dropdown-item"
-                    onClick={() => onCreateDocument()}
+                    onClick={() => onOpenWorkspaceSettings()}
                   >
-                    <LuFileText />
-                    <span>Document</span>
-                  </Menu.Item>
-                  <Menu.Item
-                    className="dashboard-create-dropdown-item"
-                    onClick={() => onCreateFolder()}
-                  >
-                    <LuFolder />
-                    <span>Folder</span>
+                    <LuSettings />
+                    <span>Workspace Settings</span>
                   </Menu.Item>
                 </Menu.Group>
               </Menu.Popup>

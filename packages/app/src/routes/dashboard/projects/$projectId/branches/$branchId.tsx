@@ -11,21 +11,26 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useMemo, useEffect } from 'react';
 import { useSession } from '../../../../../lib/auth-client';
-import { useLiveQuery, createCollection, liveQueryCollectionOptions, eq } from '@tanstack/react-db';
-import { LuGitBranch, LuChevronDown, LuLayoutGrid, LuList, LuFolder, LuFileText, LuGitBranch as LuGitNetwork } from 'react-icons/lu';
+import { useLiveQuery, createCollection, liveQueryCollectionOptions, eq, and, isNull } from '@tanstack/react-db';
+import { LuGitBranch, LuChevronDown, LuLayoutGrid, LuList, LuFolder, LuFileText, LuGitBranch as LuGitNetwork, LuSettings, LuEllipsis, LuTrash2, LuMove } from 'react-icons/lu';
 import { 
   projectsCollection, 
   branchesCollection, 
   foldersCollection, 
   documentsCollection 
 } from '../../../../../lib/electric-collections';
+import { deleteDocumentMutation, deleteFolderMutation } from '../../../../../lib/server-functions';
 import { Select } from '@base-ui/react/select';
 import { ToggleGroup } from '@base-ui/react/toggle-group';
 import { Toggle } from '@base-ui/react/toggle';
 import { Dialog } from '@base-ui/react/dialog';
+import { Menu } from '@base-ui/react/menu';
 import { BranchVisualization } from '../../../../../components/BranchVisualization';
 import { FolderBreadcrumbs } from '../../../../../components/FolderBreadcrumbs';
 import DashboardPropertiesPanel from '../../../../../components/DashboardPropertiesPanel';
+import { ProjectSettingsDialog } from '../../../../../components/dialogs/ProjectSettingsDialog';
+import { MoveDialog } from '../../../../../components/dialogs/MoveDialog';
+import { DeleteConfirmDialog } from '../../../../../components/dialogs/DeleteConfirmDialog';
 import '../../../../../styles/dashboard.css';
 
 // Format time ago helper
@@ -81,8 +86,46 @@ function BranchView() {
   const [sortBy, setSortBy] = useState('last-modified');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
-  // Dialog state (only branch visualization is handled locally)
+  // Dialog state
   const [showBranchVisualization, setShowBranchVisualization] = useState(false);
+  const [showProjectSettings, setShowProjectSettings] = useState(false);
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [moveItem, setMoveItem] = useState<{ id: string; type: 'document' | 'folder'; name: string; folderId: string | null } | null>(null);
+  const [deleteItem, setDeleteItem] = useState<{ id: string; type: 'document' | 'folder'; name: string } | null>(null);
+  
+  // Handle delete document/folder
+  const handleDeleteDocument = async () => {
+    if (!deleteItem || deleteItem.type !== 'document') return;
+    try {
+      await deleteDocumentMutation({ data: { documentId: deleteItem.id } });
+      setDeleteItem(null);
+    } catch (error) {
+      console.error('Failed to delete document:', error);
+      alert('Failed to delete document. Please try again.');
+      throw error; // Re-throw so dialog can handle it
+    }
+  };
+  
+  const handleDeleteFolder = async () => {
+    if (!deleteItem || deleteItem.type !== 'folder') return;
+    try {
+      await deleteFolderMutation({ data: { folderId: deleteItem.id } });
+      setDeleteItem(null);
+    } catch (error) {
+      console.error('Failed to delete folder:', error);
+      alert('Failed to delete folder. Please try again.');
+      throw error; // Re-throw so dialog can handle it
+    }
+  };
+  
+  const handleDelete = async () => {
+    if (deleteItem?.type === 'document') {
+      await handleDeleteDocument();
+    } else if (deleteItem?.type === 'folder') {
+      await handleDeleteFolder();
+    }
+  };
 
   // Load project and branches
   const { data: projects, isLoading: projectsLoading } = useLiveQuery(() => projectsCollection);
@@ -95,36 +138,104 @@ function BranchView() {
     setCurrentFolderId(null);
   }, [branchId]);
 
-  // Load folders and documents for current branch
-  const { data: allFolders, isLoading: foldersLoading } = useLiveQuery(() => foldersCollection);
-  const { data: allDocuments, isLoading: documentsLoading } = useLiveQuery(() => documentsCollection);
+  // Load folders for current branch with filtering and sorting
+  const { data: branchFolders, isLoading: foldersLoading } = useLiveQuery(() => {
+    if (!currentBranch) return null;
+    
+    return createCollection(
+      liveQueryCollectionOptions({
+        query: (q) => {
+          let query = q.from({ folders: foldersCollection });
+          
+          // Apply filtering
+          if (currentFolderId === null) {
+            query = query.where(({ folders: f }) => 
+              and(
+                eq(f.branch_id, currentBranch.id),
+                isNull(f.parent_id)
+              )
+            );
+          } else {
+            query = query.where(({ folders: f }) => 
+              and(
+                eq(f.branch_id, currentBranch.id),
+                eq(f.parent_id, currentFolderId)
+              )
+            );
+          }
+          
+          // Apply sorting
+          if (sortBy === 'name') {
+            query = query.orderBy(({ folders: f }) => f.name, 'asc');
+          } else if (sortBy === 'created') {
+            query = query.orderBy(({ folders: f }) => f.created_at, 'desc');
+          } else {
+            // Default: last-modified
+            query = query.orderBy(({ folders: f }) => f.updated_at, 'desc');
+          }
+          
+          return query;
+        },
+      })
+    );
+  }, [currentBranch, currentFolderId, sortBy]);
+
+  // Load documents for current branch with filtering and sorting
+  const { data: branchDocuments, isLoading: documentsLoading } = useLiveQuery(() => {
+    if (!currentBranch) return null;
+    
+    return createCollection(
+      liveQueryCollectionOptions({
+        query: (q) => {
+          let query = q.from({ documents: documentsCollection });
+          
+          // Apply filtering
+          if (currentFolderId === null) {
+            query = query.where(({ documents: d }) => 
+              and(
+                eq(d.project_id, projectId),
+                eq(d.branch_id, currentBranch.id),
+                eq(d.is_deleted, false),
+                isNull(d.folder_id)
+              )
+            );
+          } else {
+            query = query.where(({ documents: d }) => 
+              and(
+                eq(d.project_id, projectId),
+                eq(d.branch_id, currentBranch.id),
+                eq(d.is_deleted, false),
+                eq(d.folder_id, currentFolderId)
+              )
+            );
+          }
+          
+          // Apply sorting
+          if (sortBy === 'name') {
+            query = query.orderBy(({ documents: d }) => d.name, 'asc');
+          } else if (sortBy === 'created') {
+            query = query.orderBy(({ documents: d }) => d.created_at, 'desc');
+          } else {
+            // Default: last-modified
+            query = query.orderBy(({ documents: d }) => d.updated_at, 'desc');
+          }
+          
+          return query;
+        },
+      })
+    );
+  }, [currentBranch, projectId, currentFolderId, sortBy]);
   
   const isLoading = projectsLoading || branchesLoading || foldersLoading || documentsLoading;
 
-  // Get folders for current location (respecting parent_id)
-  const branchFolders = useMemo(() => {
-    if (!currentBranch || !allFolders) return [];
-    return allFolders.filter(
-      (f) => f.branch_id === currentBranch.id && f.parent_id === currentFolderId
-    );
-  }, [currentBranch, allFolders, currentFolderId]);
-
-  // Get documents for current location (respecting folder_id)
-  const branchDocuments = useMemo(() => {
-    if (!currentBranch || !allDocuments) return [];
-    return allDocuments.filter(
-      (d) => d.project_id === projectId && d.branch_id === currentBranch.id && !d.is_deleted && d.folder_id === currentFolderId
-    );
-  }, [currentBranch, allDocuments, projectId, currentFolderId]);
-
   // Filter folders and documents based on fileFilter
   const filteredFolders = useMemo(() => {
-    if (fileFilter === 'documents') return [];
+    if (fileFilter === 'documents' || !branchFolders) return [];
     return branchFolders;
   }, [branchFolders, fileFilter]);
 
   const filteredDocuments = useMemo(() => {
-    if (fileFilter === 'folders') return [];
+    if (fileFilter === 'folders' || !branchDocuments) return [];
     return branchDocuments;
   }, [branchDocuments, fileFilter]);
 
@@ -175,7 +286,17 @@ function BranchView() {
       <main className="dashboard-main">
         {/* Header */}
         <header className="dashboard-content-header">
-          <h1 className="dashboard-content-title">{project.name}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h1 className="dashboard-content-title">{project.name}</h1>
+            <button
+              className="dashboard-project-settings-btn"
+              onClick={() => setShowProjectSettings(true)}
+              title="Project Settings"
+              aria-label="Project Settings"
+            >
+              <LuSettings size={16} />
+            </button>
+          </div>
           
           <div className="dashboard-content-header-actions">
             {/* Branch Selector with View All button */}
@@ -318,15 +439,67 @@ function BranchView() {
                 <div
                   key={folder.id}
                   className="dashboard-item-card"
-                  onClick={() => handleFolderClick(folder.id)}
                 >
-                  <div className="dashboard-item-icon">
-                    <LuFolder size={24} />
+                  <div 
+                    className="dashboard-item-card-main"
+                    onClick={() => handleFolderClick(folder.id)}
+                  >
+                    <div className="dashboard-item-icon">
+                      <LuFolder size={24} />
+                    </div>
+                    <div className="dashboard-item-content">
+                      <h3 className="dashboard-item-title">{folder.name}</h3>
+                      <span className="dashboard-item-meta">Folder</span>
+                    </div>
                   </div>
-                  <div className="dashboard-item-content">
-                    <h3 className="dashboard-item-title">{folder.name}</h3>
-                    <span className="dashboard-item-meta">Folder</span>
-                  </div>
+                  <Menu.Root>
+                    <Menu.Trigger
+                      className="dashboard-item-menu-btn"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label="Folder options"
+                    >
+                      <LuEllipsis size={16} />
+                    </Menu.Trigger>
+                    <Menu.Portal>
+                      <Menu.Positioner sideOffset={4}>
+                        <Menu.Popup className="dashboard-item-menu-popup">
+                          <Menu.Group>
+                            <Menu.Item
+                              className="dashboard-item-menu-item"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMoveItem({
+                                  id: folder.id,
+                                  type: 'folder',
+                                  name: folder.name,
+                                  folderId: folder.parent_id,
+                                });
+                                setShowMoveDialog(true);
+                              }}
+                            >
+                              <LuMove size={16} />
+                              <span>Move</span>
+                            </Menu.Item>
+                            <Menu.Item
+                              className="dashboard-item-menu-item dashboard-item-menu-item-danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteItem({
+                                  id: folder.id,
+                                  type: 'folder',
+                                  name: folder.name,
+                                });
+                                setShowDeleteDialog(true);
+                              }}
+                            >
+                              <LuTrash2 size={16} />
+                              <span>Delete</span>
+                            </Menu.Item>
+                          </Menu.Group>
+                        </Menu.Popup>
+                      </Menu.Positioner>
+                    </Menu.Portal>
+                  </Menu.Root>
                 </div>
               ))}
               
@@ -335,19 +508,71 @@ function BranchView() {
                 <div
                   key={document.id}
                   className="dashboard-item-card"
-                  onClick={() => {
-                    navigate({ to: '/editor', search: { documentId: document.id } });
-                  }}
                 >
-                  <div className="dashboard-item-icon">
-                    <LuFileText size={24} />
+                  <div 
+                    className="dashboard-item-card-main"
+                    onClick={() => {
+                      navigate({ to: '/editor', search: { documentId: document.id } });
+                    }}
+                  >
+                    <div className="dashboard-item-icon">
+                      <LuFileText size={24} />
+                    </div>
+                    <div className="dashboard-item-content">
+                      <h3 className="dashboard-item-title">{document.name}</h3>
+                      <span className="dashboard-item-meta">
+                        Updated {formatTimeAgo(document.updated_at)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="dashboard-item-content">
-                    <h3 className="dashboard-item-title">{document.name}</h3>
-                    <span className="dashboard-item-meta">
-                      Updated {formatTimeAgo(document.updated_at)}
-                    </span>
-                  </div>
+                  <Menu.Root>
+                    <Menu.Trigger
+                      className="dashboard-item-menu-btn"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label="Document options"
+                    >
+                      <LuEllipsis size={16} />
+                    </Menu.Trigger>
+                    <Menu.Portal>
+                      <Menu.Positioner sideOffset={4}>
+                        <Menu.Popup className="dashboard-item-menu-popup">
+                          <Menu.Group>
+                            <Menu.Item
+                              className="dashboard-item-menu-item"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMoveItem({
+                                  id: document.id,
+                                  type: 'document',
+                                  name: document.name,
+                                  folderId: document.folder_id,
+                                });
+                                setShowMoveDialog(true);
+                              }}
+                            >
+                              <LuMove size={16} />
+                              <span>Move</span>
+                            </Menu.Item>
+                            <Menu.Item
+                              className="dashboard-item-menu-item dashboard-item-menu-item-danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteItem({
+                                  id: document.id,
+                                  type: 'document',
+                                  name: document.name,
+                                });
+                                setShowDeleteDialog(true);
+                              }}
+                            >
+                              <LuTrash2 size={16} />
+                              <span>Delete</span>
+                            </Menu.Item>
+                          </Menu.Group>
+                        </Menu.Popup>
+                      </Menu.Positioner>
+                    </Menu.Portal>
+                  </Menu.Root>
                 </div>
               ))}
             </div>
@@ -389,6 +614,45 @@ function BranchView() {
           </Dialog.Popup>
         </Dialog.Portal>
       </Dialog.Root>
+      
+      {/* Project Settings Dialog */}
+      <ProjectSettingsDialog
+        open={showProjectSettings}
+        onOpenChange={setShowProjectSettings}
+        projectId={projectId}
+      />
+      
+      {/* Move Dialog */}
+      {moveItem && (
+        <MoveDialog
+          open={showMoveDialog}
+          onOpenChange={setShowMoveDialog}
+          branchId={branchId}
+          itemId={moveItem.id}
+          itemType={moveItem.type}
+          itemName={moveItem.name}
+          currentFolderId={moveItem.folderId}
+          onSuccess={() => {
+            setMoveItem(null);
+          }}
+        />
+      )}
+      
+      {/* Delete Confirmation Dialog */}
+      {deleteItem && (
+        <DeleteConfirmDialog
+          open={showDeleteDialog}
+          onOpenChange={(open) => {
+            setShowDeleteDialog(open);
+            if (!open) {
+              setDeleteItem(null);
+            }
+          }}
+          itemType={deleteItem.type}
+          itemName={deleteItem.name}
+          onConfirm={handleDelete}
+        />
+      )}
     </>
   );
 }

@@ -5,3 +5,19 @@
 .dashboard-properties-panel.properties-panel-floating {
   width: 244px; /* 20px wider than editor version (224px) */
 }
+
+.properties-panel-user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.properties-panel-user-avatar:hover {
+  opacity: 0.9;
+  transform: scale(1.05);
+}

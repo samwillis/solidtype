@@ -583,12 +583,23 @@ export const updateFolderMutation = createServerFn({ method: 'POST' })
 export const deleteFolderMutation = createServerFn({ method: 'POST' })
   .inputValidator((d: { folderId: string }) => d)
   .handler(async ({ data }) => {
+    const folderId = data.folderId;
+    
+    // Verify folder exists before deleting
+    const folder = await db.query.folders.findFirst({
+      where: eq(folders.id, folderId),
+    });
+    
+    if (!folder) {
+      throw new Error('Folder not found');
+    }
+    
     await db
       .delete(folders)
-      .where(eq(folders.id, data.folderId));
+      .where(eq(folders.id, folderId));
     
     const txid = await getCurrentTxid();
-    return { data: { id: data.folderId }, txid };
+    return { data: { id: folderId }, txid };
   });
 
 // Workspace mutations

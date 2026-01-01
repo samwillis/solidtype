@@ -9,7 +9,9 @@ import React, { useState } from 'react';
 import { useTheme } from '../editor/contexts/ThemeContext';
 import { Tooltip } from '@base-ui/react';
 import { Menu } from '@base-ui/react/menu';
-import { LuUser, LuSun, LuMoon, LuMonitor, LuChevronDown, LuFolder, LuLayoutGrid, LuGitBranch, LuFileText } from 'react-icons/lu';
+import { LuSun, LuMoon, LuMonitor, LuChevronDown, LuFolder, LuLayoutGrid, LuGitBranch, LuFileText } from 'react-icons/lu';
+import { useSession } from '../lib/auth-client';
+import { generateAvatarColor, getInitials } from '../lib/user-avatar';
 import AIPanel from '../editor/components/AIPanel';
 import { AIIcon } from '../editor/components/Icons';
 import { CreateWorkspaceDialog } from './dialogs/CreateWorkspaceDialog';
@@ -17,6 +19,7 @@ import { CreateProjectDialog } from './dialogs/CreateProjectDialog';
 import { CreateDocumentDialog } from './dialogs/CreateDocumentDialog';
 import { CreateFolderDialog } from './dialogs/CreateFolderDialog';
 import { CreateBranchDialog } from './dialogs/CreateBranchDialog';
+import { UserProfileDialog } from './dialogs/UserProfileDialog';
 import '../editor/components/PropertiesPanel.css';
 import './DashboardPropertiesPanel.css';
 
@@ -35,12 +38,18 @@ const DashboardPropertiesPanel: React.FC<DashboardPropertiesPanelProps> = ({
   currentFolderId,
 }) => {
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
+  const { data: session } = useSession();
   const [showAIChat, setShowAIChat] = useState(false);
+  const [showUserProfile, setShowUserProfile] = useState(false);
   const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [showCreateDocument, setShowCreateDocument] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showCreateBranch, setShowCreateBranch] = useState(false);
+  
+  const user = session?.user;
+  const userInitials = user ? getInitials(user.name, user.email) : '?';
+  const userAvatarColor = user ? generateAvatarColor(user.email || user.id) : '#888888';
 
   const ThemeIcon = () => {
     if (themeMode === 'light') {
@@ -59,15 +68,18 @@ const DashboardPropertiesPanel: React.FC<DashboardPropertiesPanelProps> = ({
           <Tooltip.Root>
             <Tooltip.Trigger
               delay={300}
-              className="properties-panel-header-icon-button"
-              onClick={() => {}}
-              render={<button aria-label="User" />}
+              className="properties-panel-header-icon-button properties-panel-user-avatar"
+              onClick={() => setShowUserProfile(true)}
+              render={<button aria-label="User Profile" />}
+              style={{ backgroundColor: userAvatarColor, padding: 0 }}
             >
-              <LuUser size={16} />
+              <span style={{ fontSize: '11px', fontWeight: 500, color: 'white' }}>
+                {userInitials}
+              </span>
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Positioner side="bottom" sideOffset={6}>
-                <Tooltip.Popup className="properties-panel-header-tooltip">User</Tooltip.Popup>
+                <Tooltip.Popup className="properties-panel-header-tooltip">User Profile</Tooltip.Popup>
               </Tooltip.Positioner>
             </Tooltip.Portal>
           </Tooltip.Root>
@@ -233,6 +245,10 @@ const DashboardPropertiesPanel: React.FC<DashboardPropertiesPanelProps> = ({
           parentBranchId={currentBranchId}
         />
       )}
+      <UserProfileDialog
+        open={showUserProfile}
+        onOpenChange={setShowUserProfile}
+      />
     </>
   );
 };

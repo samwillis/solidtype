@@ -12,7 +12,7 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { tanstackStartCookies } from 'better-auth/tanstack-start';
 import { db } from './db';
-import { workspaces, workspaceMembers, projects, branches } from '../db/schema';
+import { workspaces, workspaceMembers, projects, branches, projectMembers } from '../db/schema';
 import { user, session, account, verification } from '../db/schema/better-auth';
 
 /**
@@ -98,7 +98,7 @@ async function createPersonalWorkspace(userId: string, userName?: string | null)
  */
 async function createFirstProject(workspaceId: string, userId: string) {
   try {
-    // Create project and main branch in a transaction
+    // Create project, project member, and main branch in a transaction
     const [project] = await db.transaction(async (tx) => {
       // Create project
       const [createdProject] = await tx
@@ -111,10 +111,19 @@ async function createFirstProject(workspaceId: string, userId: string) {
         })
         .returning();
       
+      // Add creator as project owner (required for Electric sync access)
+      await tx.insert(projectMembers).values({
+        projectId: createdProject.id,
+        userId: userId,
+        role: 'owner',
+        canEdit: true,
+      });
+      
       // Automatically create "main" branch
       await tx.insert(branches).values({
         projectId: createdProject.id,
         name: 'main',
+        description: 'Main branch',
         isMain: true,
         createdBy: userId,
         ownerId: userId,
