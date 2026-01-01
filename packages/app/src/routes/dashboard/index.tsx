@@ -1,31 +1,31 @@
 /**
  * Dashboard index page - shows all projects
- * 
+ *
  * Uses TanStack DB with Electric collections for real-time sync.
  * Redesigned to match Figma's clean, minimalist style.
  */
 
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
-import { useLiveQuery, createCollection, liveQueryCollectionOptions } from '@tanstack/react-db';
-import { LuChevronDown, LuLayoutGrid, LuList, LuFileText } from 'react-icons/lu';
-import { workspacesCollection, projectsCollection } from '../../lib/electric-collections';
-import DashboardPropertiesPanel from '../../components/DashboardPropertiesPanel';
-import { Select } from '@base-ui/react/select';
-import { ToggleGroup } from '@base-ui/react/toggle-group';
-import { Toggle } from '@base-ui/react/toggle';
-import '../../styles/dashboard.css';
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { useLiveQuery, createCollection, liveQueryCollectionOptions } from "@tanstack/react-db";
+import { LuChevronDown, LuLayoutGrid, LuList, LuFileText } from "react-icons/lu";
+import { workspacesCollection, projectsCollection } from "../../lib/electric-collections";
+import DashboardPropertiesPanel from "../../components/DashboardPropertiesPanel";
+import { Select } from "@base-ui/react/select";
+import { ToggleGroup } from "@base-ui/react/toggle-group";
+import { Toggle } from "@base-ui/react/toggle";
+import "../../styles/dashboard.css";
 
-export const Route = createFileRoute('/dashboard/')({
+export const Route = createFileRoute("/dashboard/")({
   ssr: false, // Client-only: uses Electric collections and browser APIs
   component: DashboardIndexPage,
 });
 
 function DashboardIndexPage() {
   const navigate = useNavigate();
-  const [sortBy, setSortBy] = useState('last-modified');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  
+  const [sortBy, setSortBy] = useState("last-modified");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+
   // Query workspaces
   const { data: workspaces, isLoading: workspacesLoading } = useLiveQuery(() => {
     return createCollection(
@@ -33,28 +33,28 @@ function DashboardIndexPage() {
         query: (q) =>
           q
             .from({ workspaces: workspacesCollection })
-            .orderBy(({ workspaces: w }) => w.created_at, 'desc'),
+            .orderBy(({ workspaces: w }) => w.created_at, "desc"),
       })
     );
   });
-  
+
   // Query projects with dynamic sorting
   const { data: allProjects, isLoading: projectsLoading } = useLiveQuery(() => {
     return createCollection(
       liveQueryCollectionOptions({
         query: (q) => {
           let query = q.from({ projects: projectsCollection });
-          
+
           // Apply sorting based on sortBy state
-          if (sortBy === 'name') {
-            query = query.orderBy(({ projects: p }) => p.name, 'asc');
-          } else if (sortBy === 'created') {
-            query = query.orderBy(({ projects: p }) => p.created_at, 'desc');
+          if (sortBy === "name") {
+            query = query.orderBy(({ projects: p }) => p.name, "asc");
+          } else if (sortBy === "created") {
+            query = query.orderBy(({ projects: p }) => p.created_at, "desc");
           } else {
             // Default: last-modified
-            query = query.orderBy(({ projects: p }) => p.updated_at, 'desc');
+            query = query.orderBy(({ projects: p }) => p.updated_at, "desc");
           }
-          
+
           return query;
         },
       })
@@ -69,24 +69,34 @@ function DashboardIndexPage() {
       {/* Header */}
       <header className="dashboard-content-header">
         <h1 className="dashboard-content-title">All Projects</h1>
-        
+
         <div className="dashboard-content-header-actions">
           {/* Sort and View Controls */}
           <div className="dashboard-sort-filter">
             <Select.Root
               value={sortBy}
-              onValueChange={(value) => setSortBy(value || 'last-modified')}
+              onValueChange={(value) => setSortBy(value || "last-modified")}
             >
               <Select.Trigger className="dashboard-select-trigger">
-                {sortBy === 'last-modified' ? 'Last modified' : sortBy === 'name' ? 'Name' : 'Created'}
+                {sortBy === "last-modified"
+                  ? "Last modified"
+                  : sortBy === "name"
+                    ? "Name"
+                    : "Created"}
                 <LuChevronDown size={12} />
               </Select.Trigger>
               <Select.Portal>
                 <Select.Positioner>
                   <Select.Popup className="dashboard-select-popup">
-                    <Select.Item value="last-modified" className="dashboard-select-option">Last modified</Select.Item>
-                    <Select.Item value="name" className="dashboard-select-option">Name</Select.Item>
-                    <Select.Item value="created" className="dashboard-select-option">Created</Select.Item>
+                    <Select.Item value="last-modified" className="dashboard-select-option">
+                      Last modified
+                    </Select.Item>
+                    <Select.Item value="name" className="dashboard-select-option">
+                      Name
+                    </Select.Item>
+                    <Select.Item value="created" className="dashboard-select-option">
+                      Created
+                    </Select.Item>
                   </Select.Popup>
                 </Select.Positioner>
               </Select.Portal>
@@ -97,24 +107,16 @@ function DashboardIndexPage() {
               value={[viewMode]}
               onValueChange={(groupValue) => {
                 if (groupValue && groupValue.length > 0) {
-                  setViewMode(groupValue[0] as 'grid' | 'list');
+                  setViewMode(groupValue[0] as "grid" | "list");
                 }
               }}
               className="dashboard-view-toggle"
               aria-label="View mode"
             >
-              <Toggle
-                value="grid"
-                className="dashboard-view-toggle-btn"
-                aria-label="Grid view"
-              >
+              <Toggle value="grid" className="dashboard-view-toggle-btn" aria-label="Grid view">
                 <LuLayoutGrid size={16} />
               </Toggle>
-              <Toggle
-                value="list"
-                className="dashboard-view-toggle-btn"
-                aria-label="List view"
-              >
+              <Toggle value="list" className="dashboard-view-toggle-btn" aria-label="List view">
                 <LuList size={16} />
               </Toggle>
             </ToggleGroup>
@@ -135,11 +137,11 @@ function DashboardIndexPage() {
             <p className="dashboard-empty-hint">Create your first project to get started</p>
           </div>
         ) : (
-          <div className={`dashboard-${viewMode === 'grid' ? 'grid' : 'list'}`}>
+          <div className={`dashboard-${viewMode === "grid" ? "grid" : "list"}`}>
             {displayedProjects.map((project) => {
-              const workspace = workspaces?.find(w => w.id === project.workspace_id);
-              
-              if (viewMode === 'list') {
+              const workspace = workspaces?.find((w) => w.id === project.workspace_id);
+
+              if (viewMode === "list") {
                 return (
                   <div
                     key={project.id}
@@ -163,13 +165,13 @@ function DashboardIndexPage() {
                   </div>
                 );
               }
-              
+
               return (
                 <div
                   key={project.id}
                   className="dashboard-card"
                   onClick={() => navigate({ to: `/dashboard/projects/${project.id}` })}
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: "pointer" }}
                 >
                   <div className="dashboard-card-thumbnail">
                     {/* Placeholder thumbnail - could show project preview */}
@@ -216,10 +218,10 @@ function formatTimeAgo(dateString: string): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'just now';
+  if (diffMins < 1) return "just now";
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 7) return `${diffDays}d ago`;
-  
+
   return date.toLocaleDateString();
 }

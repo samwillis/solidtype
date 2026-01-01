@@ -1,13 +1,13 @@
 /**
  * Modeling operation types
- * 
+ *
  * Provides robust error handling types for modeling operations.
  * All high-level modeling operations should return ModelingResult<T>
  * to clearly communicate success/failure and provide diagnostics.
  */
 
-import type { ValidationReport, ValidationIssue } from '../topo/validate.js';
-import type { HealingResult } from '../topo/heal.js';
+import type { ValidationReport, ValidationIssue } from "../topo/validate.js";
+import type { HealingResult } from "../topo/heal.js";
 
 // ============================================================================
 // Operation Types
@@ -17,14 +17,14 @@ import type { HealingResult } from '../topo/heal.js';
  * Type of modeling operation that produced an error
  */
 export type ModelingOperationType =
-  | 'extrude'
-  | 'revolve'
-  | 'boolean'
-  | 'primitive'
-  | 'heal'
-  | 'validate'
-  | 'sketch'
-  | 'unknown';
+  | `extrude`
+  | `revolve`
+  | `boolean`
+  | `primitive`
+  | `heal`
+  | `validate`
+  | `sketch`
+  | `unknown`;
 
 // ============================================================================
 // Error Types
@@ -34,13 +34,13 @@ export type ModelingOperationType =
  * Error category for modeling failures
  */
 export type ModelingErrorCategory =
-  | 'invalidInput'     // Bad input parameters
-  | 'geometryError'    // Geometry computation failed
-  | 'topologyError'    // Topology construction failed
-  | 'validationError'  // Result failed validation
-  | 'healingError'     // Healing could not fix issues
-  | 'unsupported'      // Operation not supported for this case
-  | 'internal';        // Internal error (bug)
+  | `invalidInput` // Bad input parameters
+  | `geometryError` // Geometry computation failed
+  | `topologyError` // Topology construction failed
+  | `validationError` // Result failed validation
+  | `healingError` // Healing could not fix issues
+  | `unsupported` // Operation not supported for this case
+  | `internal`; // Internal error (bug)
 
 /**
  * Hint for UI to help users understand and fix errors
@@ -80,10 +80,10 @@ export interface ModelingError {
 
 /**
  * Result of a modeling operation
- * 
+ *
  * This is the standard return type for all high-level modeling operations.
  * It follows the discriminated union pattern for type-safe error handling.
- * 
+ *
  * Usage:
  * ```ts
  * const result = extrude(model, profile, options);
@@ -148,7 +148,7 @@ export function invalidInputError(
   operation: ModelingOperationType,
   hints?: ModelingHint[]
 ): ModelingError {
-  return createModelingError('invalidInput', message, operation, { hints });
+  return createModelingError(`invalidInput`, message, operation, { hints });
 }
 
 /**
@@ -159,7 +159,7 @@ export function geometryError(
   operation: ModelingOperationType,
   hints?: ModelingHint[]
 ): ModelingError {
-  return createModelingError('geometryError', message, operation, { hints });
+  return createModelingError(`geometryError`, message, operation, { hints });
 }
 
 /**
@@ -171,7 +171,7 @@ export function topologyError(
   validationReport?: ValidationReport,
   hints?: ModelingHint[]
 ): ModelingError {
-  return createModelingError('topologyError', message, operation, {
+  return createModelingError(`topologyError`, message, operation, {
     validationReport,
     hints,
   });
@@ -186,7 +186,7 @@ export function validationError(
   validationReport: ValidationReport,
   hints?: ModelingHint[]
 ): ModelingError {
-  return createModelingError('validationError', message, operation, {
+  return createModelingError(`validationError`, message, operation, {
     validationReport,
     hints,
   });
@@ -201,7 +201,7 @@ export function healingError(
   healingResult: HealingResult,
   hints?: ModelingHint[]
 ): ModelingError {
-  return createModelingError('healingError', message, operation, {
+  return createModelingError(`healingError`, message, operation, {
     healingResult,
     hints,
   });
@@ -215,7 +215,7 @@ export function unsupportedError(
   operation: ModelingOperationType,
   hints?: ModelingHint[]
 ): ModelingError {
-  return createModelingError('unsupported', message, operation, { hints });
+  return createModelingError(`unsupported`, message, operation, { hints });
 }
 
 // ============================================================================
@@ -225,24 +225,25 @@ export function unsupportedError(
 /**
  * Check if a result is successful
  */
-export function isSuccess<T>(result: ModelingResult<T>): result is { ok: true; value: T; warnings?: string[] } {
+export function isSuccess<T>(
+  result: ModelingResult<T>
+): result is { ok: true; value: T; warnings?: string[] } {
   return result.ok;
 }
 
 /**
  * Check if a result is a failure
  */
-export function isFailure<T>(result: ModelingResult<T>): result is { ok: false; error: ModelingError } {
+export function isFailure<T>(
+  result: ModelingResult<T>
+): result is { ok: false; error: ModelingError } {
   return !result.ok;
 }
 
 /**
  * Map over a successful result
  */
-export function mapResult<T, U>(
-  result: ModelingResult<T>,
-  fn: (value: T) => U
-): ModelingResult<U> {
+export function mapResult<T, U>(result: ModelingResult<T>, fn: (value: T) => U): ModelingResult<U> {
   if (result.ok) {
     return { ok: true, value: fn(result.value), warnings: result.warnings };
   }
@@ -295,7 +296,7 @@ export function unwrapOr<T>(result: ModelingResult<T>, defaultValue: T): T {
  */
 export function hintsFromValidation(report: ValidationReport): ModelingHint[] {
   const hints: ModelingHint[] = [];
-  
+
   // Group issues by kind
   const issuesByKind = new Map<string, ValidationIssue[]>();
   for (const issue of report.issues) {
@@ -303,44 +304,44 @@ export function hintsFromValidation(report: ValidationReport): ModelingHint[] {
     existing.push(issue);
     issuesByKind.set(issue.kind, existing);
   }
-  
+
   // Create hints for common issues
-  if (issuesByKind.has('zeroLengthEdge') || issuesByKind.has('shortEdge')) {
+  if (issuesByKind.has(`zeroLengthEdge`) || issuesByKind.has(`shortEdge`)) {
     hints.push({
-      summary: 'Some edges are very short or zero-length',
-      suggestion: 'Try increasing the extrusion distance or adjusting sketch dimensions',
-      relatedParameters: ['distance', 'sketchDimensions'],
+      summary: `Some edges are very short or zero-length`,
+      suggestion: `Try increasing the extrusion distance or adjusting sketch dimensions`,
+      relatedParameters: [`distance`, `sketchDimensions`],
     });
   }
-  
-  if (issuesByKind.has('zeroAreaFace') || issuesByKind.has('sliverFace')) {
+
+  if (issuesByKind.has(`zeroAreaFace`) || issuesByKind.has(`sliverFace`)) {
     hints.push({
-      summary: 'Some faces have very small or zero area',
-      suggestion: 'Check that profile edges are not collinear or nearly collinear',
-      relatedParameters: ['profile'],
+      summary: `Some faces have very small or zero area`,
+      suggestion: `Check that profile edges are not collinear or nearly collinear`,
+      relatedParameters: [`profile`],
     });
   }
-  
-  if (issuesByKind.has('nonManifoldEdge')) {
+
+  if (issuesByKind.has(`nonManifoldEdge`)) {
     hints.push({
-      summary: 'Model has non-manifold edges (more than 2 faces sharing an edge)',
-      suggestion: 'This may indicate self-intersection. Try adjusting the geometry to avoid overlaps',
+      summary: `Model has non-manifold edges (more than 2 faces sharing an edge)`,
+      suggestion: `This may indicate self-intersection. Try adjusting the geometry to avoid overlaps`,
     });
   }
-  
-  if (issuesByKind.has('boundaryEdge') || issuesByKind.has('crack')) {
+
+  if (issuesByKind.has(`boundaryEdge`) || issuesByKind.has(`crack`)) {
     hints.push({
-      summary: 'Model has cracks or unclosed boundaries',
-      suggestion: 'Ensure the profile is closed and try using the healing operations',
+      summary: `Model has cracks or unclosed boundaries`,
+      suggestion: `Ensure the profile is closed and try using the healing operations`,
     });
   }
-  
-  if (issuesByKind.has('duplicateVertex')) {
+
+  if (issuesByKind.has(`duplicateVertex`)) {
     hints.push({
-      summary: 'Some vertices are nearly coincident',
-      suggestion: 'Try running the healing operation to merge duplicate vertices',
+      summary: `Some vertices are nearly coincident`,
+      suggestion: `Try running the healing operation to merge duplicate vertices`,
     });
   }
-  
+
   return hints;
 }

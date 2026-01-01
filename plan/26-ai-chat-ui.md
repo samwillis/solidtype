@@ -60,31 +60,31 @@ export function AIPanel() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [pendingChanges, setPendingChanges] = useState<AIChange[] | null>(null);
-  
+
   const { doc } = useDocument();
   const { selection } = useSelection();
-  
+
   const handleSubmit = async () => {
     if (!input.trim() || loading) return;
-    
+
     const userMessage = input.trim();
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setLoading(true);
-    
+
     try {
       // Assemble context
       const context = await assembleAIContext(doc, selection, renderer);
-      
+
       // Send to AI
       const response = await processUserMessage(userMessage, context);
-      
+
       // Add assistant message
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: response.message 
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: response.message
       }]);
-      
+
       // If changes proposed, set pending
       if (response.changes) {
         setPendingChanges(response.changes);
@@ -98,14 +98,14 @@ export function AIPanel() {
       setLoading(false);
     }
   };
-  
+
   const handleApplyChanges = async () => {
     if (!pendingChanges) return;
-    
+
     setLoading(true);
-    
+
     const result = await applyAIChangesWithRecovery(pendingChanges, doc);
-    
+
     if (result.ok) {
       setMessages(prev => [...prev, {
         role: 'system',
@@ -118,24 +118,24 @@ export function AIPanel() {
         content: `Failed to apply changes: ${result.message}`,
       }]);
     }
-    
+
     setPendingChanges(null);
     setLoading(false);
   };
-  
+
   return (
     <div className="ai-panel">
       <div className="ai-panel-header">
         <h3>AI Assistant</h3>
       </div>
-      
+
       <div className="ai-panel-messages">
         {messages.map((msg, i) => (
           <ChatMessage key={i} message={msg} />
         ))}
-        
+
         {loading && <LoadingIndicator />}
-        
+
         {pendingChanges && (
           <PendingChangesCard
             changes={pendingChanges}
@@ -144,7 +144,7 @@ export function AIPanel() {
           />
         )}
       </div>
-      
+
       <div className="ai-panel-input">
         <textarea
           value={input}
@@ -178,7 +178,7 @@ function ChatMessage({ message }: { message: ChatMessage }) {
       </div>
       <div className="message-content">
         <Markdown>{message.content}</Markdown>
-        
+
         {message.canUndo && (
           <button className="undo-button" onClick={handleUndo}>
             Undo
@@ -197,7 +197,7 @@ function PendingChangesCard({ changes, onApply, onReject }) {
   return (
     <div className="pending-changes">
       <h4>Proposed Changes</h4>
-      
+
       <ul className="changes-list">
         {changes.map((change, i) => (
           <li key={i} className={`change-item ${change.type}`}>
@@ -205,7 +205,7 @@ function PendingChangesCard({ changes, onApply, onReject }) {
           </li>
         ))}
       </ul>
-      
+
       <div className="changes-actions">
         <button onClick={onReject} className="reject-btn">
           Reject
@@ -296,7 +296,7 @@ function ErrorMessage({ error }: { error: AIError }) {
       <div className="error-content">
         <strong>{error.title || 'Error'}</strong>
         <p>{error.message}</p>
-        
+
         {error.suggestions && (
           <ul className="error-suggestions">
             {error.suggestions.map((s, i) => (
@@ -319,23 +319,23 @@ async function sendWithRetry(
   maxRetries = 2
 ): Promise<AIResponse> {
   let lastError: Error | null = null;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await processUserMessage(message, context);
     } catch (error) {
       lastError = error;
-      
+
       // Don't retry on validation errors
-      if (error.type === 'validation') throw error;
-      
+      if (error.type === "validation") throw error;
+
       // Wait before retry
       if (attempt < maxRetries) {
         await sleep(1000 * (attempt + 1));
       }
     }
   }
-  
+
   throw lastError;
 }
 ```
@@ -400,9 +400,15 @@ async function sendWithRetry(
   padding-left: 20px;
 }
 
-.change-item.add { color: var(--success-color); }
-.change-item.remove { color: var(--error-color); }
-.change-item.modify { color: var(--info-color); }
+.change-item.add {
+  color: var(--success-color);
+}
+.change-item.remove {
+  color: var(--error-color);
+}
+.change-item.modify {
+  color: var(--info-color);
+}
 
 .ai-panel-input {
   display: flex;
@@ -432,11 +438,11 @@ async function sendWithRetry(
 // Test message handling
 test('handleSubmit adds user message', async () => {
   const { getByPlaceholder, getByText } = render(<AIPanel />);
-  
+
   const input = getByPlaceholder('Type a message...');
   fireEvent.change(input, { target: { value: 'Make it taller' } });
   fireEvent.submit(input);
-  
+
   expect(getByText('Make it taller')).toBeInTheDocument();
 });
 
@@ -445,11 +451,11 @@ test('PendingChangesCard displays changes', () => {
   const changes = [
     { type: 'modify', featureId: 'e1', attributes: { distance: '20' } },
   ];
-  
+
   const { getByText } = render(
     <PendingChangesCard changes={changes} onApply={jest.fn()} onReject={jest.fn()} />
   );
-  
+
   expect(getByText(/Modify e1/)).toBeInTheDocument();
 });
 ```

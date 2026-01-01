@@ -9,6 +9,7 @@
 ## Implementation Notes
 
 ### What's Done:
+
 - Distance constraints (2 points or 1 line) with visual annotations
 - Angle constraints (2 lines) with visual annotations
 - **Visual dimension annotations** on sketch in 3D view (SolidWorks-style):
@@ -23,6 +24,7 @@
 - Delete button on each dimension in panel
 
 ### Visual Style:
+
 - Distance dimensions: Green (`#00aa00`) with extension lines
 - Angle dimensions: Orange (`#aa5500`) arc indicator
 - Labels are CSS2DObjects (always face camera)
@@ -88,16 +90,16 @@
 // packages/app/src/types/document.ts (SketchConstraint union)
 export interface DistanceConstraint {
   id: string;
-  type: 'distance';
+  type: "distance";
   points: [string, string];
-  value: number;         // Distance in model units
+  value: number; // Distance in model units
 }
 
 export interface AngleConstraint {
   id: string;
-  type: 'angle';
+  type: "angle";
   lines: [string, string];
-  value: number;         // Angle in degrees
+  value: number; // Angle in degrees
 }
 
 export type DimensionConstraint = DistanceConstraint | AngleConstraint;
@@ -122,9 +124,9 @@ interface DimensionDisplayProps {
 export function DimensionDisplay({ constraint, points, entities, onEdit }) {
   const [editing, setEditing] = useState(false);
   const [inputValue, setInputValue] = useState(String(constraint.value));
-  
+
   const position = calculateDimensionPosition(constraint, points, entities);
-  
+
   const handleSubmit = () => {
     const value = parseFloat(inputValue);
     if (!isNaN(value) && value > 0) {
@@ -132,12 +134,12 @@ export function DimensionDisplay({ constraint, points, entities, onEdit }) {
     }
     setEditing(false);
   };
-  
+
   return (
     <g transform={`translate(${position.x}, ${position.y})`}>
       {/* Dimension lines and arrows */}
       <DimensionLines constraint={constraint} points={points} />
-      
+
       {/* Value display/input */}
       {editing ? (
         <foreignObject width="60" height="24" x="-30" y="-12">
@@ -173,25 +175,25 @@ function DistanceDimensionLines({ p1, p2, offset = 10 }) {
   // Calculate extension lines and dimension line
   const direction = normalize({ x: p2.x - p1.x, y: p2.y - p1.y });
   const perpendicular = { x: -direction.y, y: direction.x };
-  
+
   // Extension lines
   const ext1Start = p1;
-  const ext1End = { 
-    x: p1.x + perpendicular.x * offset, 
-    y: p1.y + perpendicular.y * offset 
+  const ext1End = {
+    x: p1.x + perpendicular.x * offset,
+    y: p1.y + perpendicular.y * offset
   };
   const ext2Start = p2;
-  const ext2End = { 
-    x: p2.x + perpendicular.x * offset, 
-    y: p2.y + perpendicular.y * offset 
+  const ext2End = {
+    x: p2.x + perpendicular.x * offset,
+    y: p2.y + perpendicular.y * offset
   };
-  
+
   return (
     <>
       {/* Extension lines */}
       <line x1={ext1Start.x} y1={ext1Start.y} x2={ext1End.x} y2={ext1End.y} />
       <line x1={ext2Start.x} y1={ext2Start.y} x2={ext2End.x} y2={ext2End.y} />
-      
+
       {/* Dimension line with arrows */}
       <line x1={ext1End.x} y1={ext1End.y} x2={ext2End.x} y2={ext2End.y} />
       <Arrow at={ext1End} direction={direction} />
@@ -207,11 +209,11 @@ function DistanceDimensionLines({ p1, p2, offset = 10 }) {
 function AngleDimensionArc({ line1, line2, radius = 20 }) {
   // Find intersection point of two lines
   const intersection = lineIntersection(line1, line2);
-  
+
   // Calculate start and end angles
   const angle1 = Math.atan2(line1.dy, line1.dx);
   const angle2 = Math.atan2(line2.dy, line2.dx);
-  
+
   return (
     <path d={describeArc(intersection, radius, angle1, angle2)} />
   );
@@ -246,7 +248,7 @@ function AngleDimensionArc({ line1, line2, radius = 20 }) {
 Already implemented in kernel as `distance()`:
 
 ```typescript
-import { distance } from '@solidtype/core';
+import { distance } from "@solidtype/core";
 
 // Add distance constraint
 sketch.addConstraint(distance(p1, p2, 25)); // 25 units
@@ -257,14 +259,16 @@ sketch.addConstraint(distance(p1, p2, 25)); // 25 units
 Already implemented as `angle()`:
 
 ```typescript
-import { angle } from '@solidtype/core';
+import { angle } from "@solidtype/core";
 
 // Add angle between two lines
-sketch.addConstraint(angle(
-  [p1, p2],  // First line points
-  [p3, p4],  // Second line points
-  45         // Degrees
-));
+sketch.addConstraint(
+  angle(
+    [p1, p2], // First line points
+    [p3, p4], // Second line points
+    45 // Degrees
+  )
+);
 ```
 
 ### Updating Constraint Values
@@ -276,8 +280,8 @@ When user edits a dimension:
 function updateDimensionValue(sketchId: string, constraintId: string, value: number) {
   const sketch = findSketchFeature(doc, sketchId);
   const constraints = getConstraints(sketch);
-  
-  const constraint = constraints.find(c => c.id === constraintId);
+
+  const constraint = constraints.find((c) => c.id === constraintId);
   if (constraint) {
     constraint.value = value;
     setConstraints(sketch, constraints);
@@ -292,12 +296,12 @@ function updateDimensionValue(sketchId: string, constraintId: string, value: num
 
 ### Dimension Colors
 
-| State | Color | Meaning |
-|-------|-------|---------|
-| Satisfied | Black/Dark | Constraint is met |
-| Editing | Blue | User is editing this dimension |
-| Error | Red | Value cannot be achieved |
-| Reference | Gray | Not driving (just measuring) |
+| State     | Color      | Meaning                        |
+| --------- | ---------- | ------------------------------ |
+| Satisfied | Black/Dark | Constraint is met              |
+| Editing   | Blue       | User is editing this dimension |
+| Error     | Red        | Value cannot be achieved       |
+| Reference | Gray       | Not driving (just measuring)   |
 
 ### Dimension Placement
 
@@ -313,15 +317,15 @@ function updateDimensionValue(sketchId: string, constraintId: string, value: num
 
 ```typescript
 // Test distance constraint
-test('distance constraint sets point distance', () => {
+test("distance constraint sets point distance", () => {
   const sketch = new SketchModel();
   const p1 = sketch.addPoint(0, 0, { fixed: true });
   const p2 = sketch.addPoint(10, 0);
-  
+
   sketch.addConstraint(distance(p1, p2, 25));
   const result = solveSketch(sketch);
-  
-  expect(result.status).toBe('solved');
+
+  expect(result.status).toBe("solved");
   const finalDist = Math.hypot(
     sketch.getPoint(p2).x - sketch.getPoint(p1).x,
     sketch.getPoint(p2).y - sketch.getPoint(p1).y
@@ -330,7 +334,7 @@ test('distance constraint sets point distance', () => {
 });
 
 // Test angle constraint
-test('angle constraint sets line angle', () => {
+test("angle constraint sets line angle", () => {
   // Similar test for angle between lines
 });
 ```

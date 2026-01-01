@@ -27,23 +27,25 @@ This directory contains source code from open-source CAD kernels for reference w
 
 **Key directories to study**:
 
-| Path | Purpose |
-|------|---------|
-| `src/IntTools/` | Surface-surface intersection algorithms |
-| `src/BOPAlgo/` | Boolean operation algorithms (PaveFiller, Builder) |
-| `src/ShapeAnalysis/` | SameParameter/SameRange validation |
-| `src/ShapeFix/` | Shape healing algorithms |
-| `src/BRepBuilderAPI/` | High-level B-Rep construction APIs |
-| `src/Geom/` | Curve and surface geometry |
-| `src/TopoDS/` | Topology data structures |
+| Path                  | Purpose                                            |
+| --------------------- | -------------------------------------------------- |
+| `src/IntTools/`       | Surface-surface intersection algorithms            |
+| `src/BOPAlgo/`        | Boolean operation algorithms (PaveFiller, Builder) |
+| `src/ShapeAnalysis/`  | SameParameter/SameRange validation                 |
+| `src/ShapeFix/`       | Shape healing algorithms                           |
+| `src/BRepBuilderAPI/` | High-level B-Rep construction APIs                 |
+| `src/Geom/`           | Curve and surface geometry                         |
+| `src/TopoDS/`         | Topology data structures                           |
 
 **When to reference**:
+
 - Implementing boolean operations (imprint, classify, stitch)
 - SameParameter validation and healing
 - P-curve and UV-trimming logic
 - Understanding production B-Rep patterns
 
 **Key files for booleans**:
+
 - `src/BOPAlgo/BOPAlgo_PaveFiller.cxx` - Face-face intersection and imprinting
 - `src/BOPAlgo/BOPAlgo_Builder.cxx` - Boolean result construction
 - `src/IntTools/IntTools_FaceFace.cxx` - Surface intersection
@@ -58,21 +60,23 @@ This directory contains source code from open-source CAD kernels for reference w
 
 **Key directories to study**:
 
-| Path | Purpose |
-|------|---------|
-| `Arrangement_on_surface_2/` | 2D planar arrangements (DCEL) |
-| `Nef_2/` | 2D Boolean operations |
-| `Nef_3/` | 3D Boolean operations with exact arithmetic |
-| `Surface_mesh/` | Half-edge mesh data structure |
-| `Polygon_mesh_processing/` | Mesh boolean operations |
+| Path                        | Purpose                                     |
+| --------------------------- | ------------------------------------------- |
+| `Arrangement_on_surface_2/` | 2D planar arrangements (DCEL)               |
+| `Nef_2/`                    | 2D Boolean operations                       |
+| `Nef_3/`                    | 3D Boolean operations with exact arithmetic |
+| `Surface_mesh/`             | Half-edge mesh data structure               |
+| `Polygon_mesh_processing/`  | Mesh boolean operations                     |
 
 **When to reference**:
+
 - **DCEL implementation** for planar arrangements (`Arrangement_on_surface_2`)
 - Robust geometric predicates
 - Proper handling of degenerate cases
 - 2D polygon operations
 
 **Key files for planar arrangements**:
+
 - `Arrangement_on_surface_2/include/CGAL/Arr_dcel_base.h` - DCEL structure
 - `Arrangement_on_surface_2/include/CGAL/Arrangement_2.h` - Main arrangement class
 - `Arrangement_on_surface_2/include/CGAL/Arr_naive_point_location.h` - Point location
@@ -87,19 +91,21 @@ This directory contains source code from open-source CAD kernels for reference w
 
 **Key directories to study**:
 
-| Path | Purpose |
-|------|---------|
-| `src/Mod/Part/App/TopoShape*.cpp` | Toponaming implementation |
+| Path                               | Purpose                               |
+| ---------------------------------- | ------------------------------------- |
+| `src/Mod/Part/App/TopoShape*.cpp`  | Toponaming implementation             |
 | `src/Mod/Part/App/TopoShapeEx.cpp` | Extended shape operations with naming |
-| `src/App/PropertyLinks.cpp` | Persistent reference storage |
+| `src/App/PropertyLinks.cpp`        | Persistent reference storage          |
 
 **When to reference**:
+
 - Implementing persistent naming (`naming/` module)
 - Understanding shape evolution graphs
 - Reference resolution after topology changes
 - Feature-based modeling with stable references
 
 **Key concepts**:
+
 - "Mapped element" system for tracking face/edge identity
 - Hash-based geometry fingerprinting
 - Parent-child shape relationships
@@ -114,19 +120,21 @@ This directory contains source code from open-source CAD kernels for reference w
 
 **Key directories to study**:
 
-| Path | Purpose |
-|------|---------|
-| `crates/fj-core/src/` | Core kernel implementation (topology, geometry, operations) |
-| `crates/fj-math/src/` | Math primitives (vectors, points) |
-| `crates/fj-interop/src/` | Mesh generation and export |
+| Path                     | Purpose                                                     |
+| ------------------------ | ----------------------------------------------------------- |
+| `crates/fj-core/src/`    | Core kernel implementation (topology, geometry, operations) |
+| `crates/fj-math/src/`    | Math primitives (vectors, points)                           |
+| `crates/fj-interop/src/` | Mesh generation and export                                  |
 
 **When to reference**:
+
 - Modern B-Rep design patterns
 - Clean separation of concerns
 - API design for a modern kernel
 - Tessellation approaches
 
 **Why it's useful**:
+
 - Written by a single developer with excellent blog posts explaining decisions
 - Very readable, well-documented code
 - Similar "from scratch" approach to SolidType
@@ -141,6 +149,7 @@ This directory contains source code from open-source CAD kernels for reference w
 2. **Understand, don't copy**: Study the algorithms and patterns, then implement in TypeScript following SolidType's architecture.
 
 3. **Credit**: If you adapt a specific algorithm, add a comment like:
+
    ```typescript
    // Algorithm adapted from CGAL Arrangement_on_surface_2
    // See: refs/cgal/Arrangement_on_surface_2/...
@@ -152,16 +161,16 @@ This directory contains source code from open-source CAD kernels for reference w
 
 ## Key Cross-Reference Table
 
-| SolidType Module | OCCT Reference | CGAL Reference | Fornjot Reference |
-|------------------|----------------|----------------|-------------------|
-| `boolean/planar/dcel.ts` | `BOPAlgo_PaveFiller` | `Arr_dcel_base.h` | - |
-| `boolean/planar/classify.ts` | `BOPAlgo_Tools` | `Polygon_mesh_processing` | - |
-| `boolean/planar/stitch.ts` | `BOPAlgo_Builder` | - | - |
-| `topo/validate.ts` | `ShapeAnalysis_*` | - | `fj-core/validation/` |
-| `topo/heal.ts` | `ShapeFix_*` | - | - |
-| `naming/` | - | - | - (use FreeCAD) |
-| `geom/surface.ts` | `Geom_*Surface` | `Surface_mesh` | `fj-math` |
-| `num/predicates.ts` | - | `Kernel/predicates` | - |
+| SolidType Module             | OCCT Reference       | CGAL Reference            | Fornjot Reference     |
+| ---------------------------- | -------------------- | ------------------------- | --------------------- |
+| `boolean/planar/dcel.ts`     | `BOPAlgo_PaveFiller` | `Arr_dcel_base.h`         | -                     |
+| `boolean/planar/classify.ts` | `BOPAlgo_Tools`      | `Polygon_mesh_processing` | -                     |
+| `boolean/planar/stitch.ts`   | `BOPAlgo_Builder`    | -                         | -                     |
+| `topo/validate.ts`           | `ShapeAnalysis_*`    | -                         | `fj-core/validation/` |
+| `topo/heal.ts`               | `ShapeFix_*`         | -                         | -                     |
+| `naming/`                    | -                    | -                         | - (use FreeCAD)       |
+| `geom/surface.ts`            | `Geom_*Surface`      | `Surface_mesh`            | `fj-math`             |
+| `num/predicates.ts`          | -                    | `Kernel/predicates`       | -                     |
 
 ---
 
@@ -179,8 +188,9 @@ rm -rf occt cgal freecad fornjot
 ## Disk Space
 
 Approximate sizes after extraction:
+
 - OCCT: ~285 MB
-- CGAL: ~320 MB  
+- CGAL: ~320 MB
 - FreeCAD: ~560 MB
 - Fornjot: ~20 MB
 

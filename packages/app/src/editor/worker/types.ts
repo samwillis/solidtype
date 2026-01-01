@@ -7,48 +7,48 @@
 // ============================================================================
 
 export interface InitSyncMessage {
-  type: 'init-sync';
+  type: "init-sync";
   port: MessagePort;
 }
 
 export interface YjsInitMessage {
-  type: 'yjs-init';
+  type: "yjs-init";
   data: Uint8Array;
 }
 
 export interface YjsUpdateMessage {
-  type: 'yjs-update';
+  type: "yjs-update";
   data: Uint8Array;
 }
 
 export interface PreviewExtrudeMessage {
-  type: 'preview-extrude';
+  type: "preview-extrude";
   sketchId: string;
   distance: number;
-  direction: 'normal' | 'reverse';
-  op: 'add' | 'cut';
+  direction: "normal" | "reverse";
+  op: "add" | "cut";
 }
 
 export interface PreviewRevolveMessage {
-  type: 'preview-revolve';
+  type: "preview-revolve";
   sketchId: string;
   axis: string;
   angle: number;
-  op: 'add' | 'cut';
+  op: "add" | "cut";
 }
 
 export interface ClearPreviewMessage {
-  type: 'clear-preview';
+  type: "clear-preview";
 }
 
 export interface ExportStlMessage {
-  type: 'export-stl';
+  type: "export-stl";
   binary?: boolean;
   name?: string;
 }
 
 export interface ExportJsonMessage {
-  type: 'export-json';
+  type: "export-json";
 }
 
 export type MainToWorkerMessage =
@@ -66,22 +66,22 @@ export type MainToWorkerMessage =
 // ============================================================================
 
 export interface ReadyMessage {
-  type: 'ready';
+  type: "ready";
 }
 
 export interface RebuildStartMessage {
-  type: 'rebuild-start';
+  type: "rebuild-start";
 }
 
 export interface RebuildCompleteMessage {
-  type: 'rebuild-complete';
+  type: "rebuild-complete";
   bodies: BodyInfo[];
   featureStatus: Record<string, FeatureStatus>;
   errors: BuildError[];
 }
 
 export interface MeshMessage {
-  type: 'mesh';
+  type: "mesh";
   bodyId: string;
   mesh: TransferableMesh;
   /** Body color (hex string like "#6699cc") */
@@ -101,7 +101,7 @@ export interface PlaneTransform {
 }
 
 export interface SketchSolvedMessage {
-  type: 'sketch-solved';
+  type: "sketch-solved";
   sketchId: string;
   points: Array<{ id: string; x: number; y: number }>;
   status: string;
@@ -117,17 +117,17 @@ export interface SketchSolvedMessage {
 }
 
 export interface PreviewErrorMessage {
-  type: 'preview-error';
+  type: "preview-error";
   message: string;
 }
 
 export interface ErrorMessage {
-  type: 'error';
+  type: "error";
   message: string;
 }
 
 export interface StlExportedMessage {
-  type: 'stl-exported';
+  type: "stl-exported";
   /** Binary STL data (if binary format) */
   buffer?: ArrayBuffer;
   /** ASCII STL content (if ASCII format) */
@@ -135,7 +135,7 @@ export interface StlExportedMessage {
 }
 
 export interface JsonExportedMessage {
-  type: 'json-exported';
+  type: "json-exported";
   content: string;
 }
 
@@ -154,11 +154,16 @@ export type WorkerToMainMessage =
 // Shared Types
 // ============================================================================
 
-export type FeatureStatus = 'computed' | 'error' | 'suppressed' | 'gated';
+export type FeatureStatus = "computed" | "error" | "suppressed" | "gated";
 
 export interface BuildError {
   featureId: string;
-  code: 'NO_CLOSED_PROFILE' | 'SELF_INTERSECTING' | 'INVALID_REFERENCE' | 'BUILD_ERROR' | 'SKETCH_NOT_FOUND';
+  code:
+    | "NO_CLOSED_PROFILE"
+    | "SELF_INTERSECTING"
+    | "INVALID_REFERENCE"
+    | "BUILD_ERROR"
+    | "SKETCH_NOT_FOUND";
   message: string;
 }
 
@@ -182,14 +187,14 @@ export interface TransferableMesh {
 
 /** Request to resolve a persistent reference */
 export interface ResolveRefMessage {
-  type: 'resolve-ref';
+  type: "resolve-ref";
   ref: string;
   requestId: string;
 }
 
 /** Response for resolved reference */
 export interface ResolveRefResultMessage {
-  type: 'resolve-ref-result';
+  type: "resolve-ref-result";
   requestId: string;
   result: { faceId: number; bodyId: string } | null;
 }

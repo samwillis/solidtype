@@ -1,15 +1,15 @@
 /**
  * Kernel Web Worker
- * 
+ *
  * Runs the CAD kernel in a separate thread and syncs with the Yjs document.
  * Uses Y.Map/Y.Array model (no XML). See DOCUMENT-MODEL.md.
- * 
+ *
  * Updated to use the new OCCT-based SolidSession API.
  */
 
 /// <reference lib="webworker" />
 
-import * as Y from 'yjs';
+import * as Y from "yjs";
 import {
   SolidSession,
   setOC,
@@ -37,10 +37,10 @@ import {
   symmetric,
   exportMeshesToStl,
   type Mesh,
-} from '@solidtype/core';
+} from "@solidtype/core";
 
 // Browser-specific OpenCascade.js initialization with static imports
-import { initOCCTBrowser } from './occt-init';
+import { initOCCTBrowser } from "./occt-init";
 import type {
   MainToWorkerMessage,
   WorkerToMainMessage,
@@ -48,7 +48,7 @@ import type {
   BodyInfo,
   BuildError,
   FeatureStatus,
-} from './types';
+} from "./types";
 import {
   getRoot,
   getMeta as _getMeta,
@@ -57,25 +57,25 @@ import {
   getFeatureOrder,
   mapToObject,
   getSortedKeys as _getSortedKeys,
-} from '../document/yjs';
-import type { SketchPlaneRef, DatumPlaneRole } from '../document/schema';
+} from "../document/yjs";
+import type { SketchPlaneRef, DatumPlaneRole } from "../document/schema";
 
 // Declare self as a worker global scope
 declare const self: DedicatedWorkerGlobalScope;
 
 // Global error handler for the worker
 self.onerror = (event) => {
-  console.error('[Worker] Unhandled error:', event);
+  console.error("[Worker] Unhandled error:", event);
   return false;
 };
 
 self.onunhandledrejection = (event) => {
-  console.error('[Worker] Unhandled promise rejection:', event.reason);
+  console.error("[Worker] Unhandled promise rejection:", event.reason);
 };
 
-console.log('[Worker] Kernel worker starting...');
-const WORKER_BUILD_TAG = 'occt-refactor-2025-01-30';
-console.log('[Worker] Build tag:', WORKER_BUILD_TAG);
+console.log("[Worker] Kernel worker starting...");
+const WORKER_BUILD_TAG = "occt-refactor-2025-01-30";
+console.log("[Worker] Build tag:", WORKER_BUILD_TAG);
 
 // ============================================================================
 // Worker State
@@ -103,12 +103,12 @@ const bodyMap = new Map<string, BodyEntry>();
 
 /** Default body colors - cycle through these for new bodies */
 const DEFAULT_BODY_COLORS = [
-  '#6699cc', // blue-gray
-  '#99cc99', // green
-  '#cc9999', // red
-  '#cccc99', // yellow
-  '#cc99cc', // purple
-  '#99cccc', // cyan
+  "#6699cc", // blue-gray
+  "#99cc99", // green
+  "#cc9999", // red
+  "#cccc99", // yellow
+  "#cc99cc", // purple
+  "#99cccc", // cyan
 ];
 
 let bodyColorIndex = 0;
@@ -134,28 +134,28 @@ async function initializeSession(): Promise<SolidSession> {
   if (session && session.isInitialized()) {
     return session;
   }
-  
+
   if (initializationPromise) {
     await initializationPromise;
     return session!;
   }
-  
+
   initializationPromise = (async () => {
     // Initialize OpenCascade.js using browser-specific static imports
     // This uses Vite-compatible imports from occt-init.ts
-    console.log('[Worker] Initializing OpenCascade.js...');
+    console.log("[Worker] Initializing OpenCascade.js...");
     const oc = await initOCCTBrowser();
-    
+
     // Set the OC instance in the core package so SolidSession can use it
     setOC(oc);
-    console.log('[Worker] OpenCascade.js initialized and set in core');
-    
+    console.log("[Worker] OpenCascade.js initialized and set in core");
+
     // Create and initialize the session
     session = new SolidSession();
     await session.init();
-    console.log('[Worker] OCCT session initialized');
+    console.log("[Worker] OCCT session initialized");
   })();
-  
+
   await initializationPromise;
   return session!;
 }
@@ -168,20 +168,20 @@ let observersSetUp = false;
 
 function setupObservers(): void {
   if (observersSetUp || !doc) return;
-  
+
   const root = getRoot(doc);
-  const featuresById = root.get('featuresById') as Y.Map<Y.Map<unknown>> | undefined;
-  const featureOrder = root.get('featureOrder') as Y.Array<string> | undefined;
-  const state = root.get('state') as Y.Map<unknown> | undefined;
-  
+  const featuresById = root.get("featuresById") as Y.Map<Y.Map<unknown>> | undefined;
+  const featureOrder = root.get("featureOrder") as Y.Array<string> | undefined;
+  const state = root.get("state") as Y.Map<unknown> | undefined;
+
   // Only set up observers once all required fields exist
   if (!featuresById || !featureOrder || !state) {
-    console.log('[Worker] Document structure not ready yet, waiting for sync...');
+    console.log("[Worker] Document structure not ready yet, waiting for sync...");
     return;
   }
-  
+
   observersSetUp = true;
-  console.log('[Worker] Setting up Yjs observers');
+  console.log("[Worker] Setting up Yjs observers");
 
   // Observe feature changes
   featuresById.observeDeep(() => {
@@ -196,7 +196,7 @@ function setupObservers(): void {
   state.observe(() => {
     scheduleRebuild();
   });
-  
+
   // Trigger initial rebuild
   scheduleRebuild();
 }
@@ -209,9 +209,9 @@ function setupYjsSync(port: MessagePort): void {
   port.onmessage = (event) => {
     const { type, data } = event.data;
 
-    if (type === 'yjs-init' || type === 'yjs-update') {
-      Y.applyUpdate(doc!, new Uint8Array(data), 'main');
-      
+    if (type === "yjs-init" || type === "yjs-update") {
+      Y.applyUpdate(doc!, new Uint8Array(data), "main");
+
       // Try to set up observers after each update (will only succeed once structure exists)
       if (!observersSetUp) {
         setupObservers();
@@ -220,8 +220,8 @@ function setupYjsSync(port: MessagePort): void {
   };
 
   // Signal ready and trigger initial rebuild
-  console.log('[Worker] Yjs sync setup complete, signaling ready');
-  self.postMessage({ type: 'ready' } as WorkerToMainMessage);
+  console.log("[Worker] Yjs sync setup complete, signaling ready");
+  self.postMessage({ type: "ready" } as WorkerToMainMessage);
 
   // Trigger an initial rebuild now that we have data
   scheduleRebuild();
@@ -264,7 +264,7 @@ function findDatumPlaneByRole(
 ): string | null {
   let foundId: string | null = null;
   featuresById.forEach((featureMap, id) => {
-    if (featureMap.get('type') === 'plane' && featureMap.get('role') === role) {
+    if (featureMap.get("type") === "plane" && featureMap.get("role") === role) {
       foundId = id;
     }
   });
@@ -276,9 +276,9 @@ function findDatumPlaneByRole(
  */
 function buildDatumPlaneCache(featuresById: Y.Map<Y.Map<unknown>>): void {
   datumPlaneCache = {
-    xy: findDatumPlaneByRole(featuresById, 'xy'),
-    xz: findDatumPlaneByRole(featuresById, 'xz'),
-    yz: findDatumPlaneByRole(featuresById, 'yz'),
+    xy: findDatumPlaneByRole(featuresById, "xy"),
+    xz: findDatumPlaneByRole(featuresById, "xz"),
+    yz: findDatumPlaneByRole(featuresById, "yz"),
   };
   void datumPlaneCache; // suppress unused read warning - cache for future use
 }
@@ -287,18 +287,18 @@ function buildDatumPlaneCache(featuresById: Y.Map<Y.Map<unknown>>): void {
  * Get DatumPlane from a plane feature map
  */
 function getDatumPlaneFromFeature(featureMap: Y.Map<unknown>): DatumPlane | null {
-  const type = featureMap.get('type');
-  if (type !== 'plane') return null;
+  const type = featureMap.get("type");
+  if (type !== "plane") return null;
 
-  const role = featureMap.get('role') as DatumPlaneRole | undefined;
-  const normal = featureMap.get('normal') as [number, number, number];
-  const origin = featureMap.get('origin') as [number, number, number];
-  const xDir = featureMap.get('xDir') as [number, number, number];
+  const role = featureMap.get("role") as DatumPlaneRole | undefined;
+  const normal = featureMap.get("normal") as [number, number, number];
+  const origin = featureMap.get("origin") as [number, number, number];
+  const xDir = featureMap.get("xDir") as [number, number, number];
 
   // For datum planes with standard roles, use predefined planes
-  if (role === 'xy') return XY_PLANE;
-  if (role === 'xz') return ZX_PLANE;
-  if (role === 'yz') return YZ_PLANE;
+  if (role === "xy") return XY_PLANE;
+  if (role === "xz") return ZX_PLANE;
+  if (role === "yz") return YZ_PLANE;
 
   // For custom planes, create from vectors
   const yDir = [
@@ -307,8 +307,8 @@ function getDatumPlaneFromFeature(featureMap: Y.Map<unknown>): DatumPlane | null
     normal[0] * xDir[1] - normal[1] * xDir[0],
   ] as [number, number, number];
 
-  return createDatumPlane('custom', {
-    kind: 'plane',
+  return createDatumPlane("custom", {
+    kind: "plane",
     origin,
     normal,
     xDir,
@@ -324,16 +324,16 @@ function getSketchPlane(
   planeRef: SketchPlaneRef,
   featuresById: Y.Map<Y.Map<unknown>>
 ): DatumPlane | null {
-  if (planeRef.kind === 'planeFeatureId') {
+  if (planeRef.kind === "planeFeatureId") {
     const planeFeature = featuresById.get(planeRef.ref);
     if (!planeFeature) return null;
     return getDatumPlaneFromFeature(planeFeature);
   }
 
-  if (planeRef.kind === 'faceRef') {
+  if (planeRef.kind === "faceRef") {
     // TODO: Implement face selection in OCCT API
     // For now, face references are not supported
-    console.warn('[Worker] Face references are not yet supported in the OCCT API');
+    console.warn("[Worker] Face references are not yet supported in the OCCT API");
     return null;
   }
 
@@ -345,27 +345,33 @@ function getSketchPlane(
 // ============================================================================
 
 interface SketchData {
-  pointsById: Record<string, { 
-    id: string; 
-    x: number; 
-    y: number; 
-    fixed?: boolean;
-    attachedTo?: string;
-    param?: number;
-  }>;
-  entitiesById: Record<string, { 
-    id: string; 
-    type: string; 
-    start?: string; 
-    end?: string; 
-    center?: string; 
-    ccw?: boolean;
-  }>;
+  pointsById: Record<
+    string,
+    {
+      id: string;
+      x: number;
+      y: number;
+      fixed?: boolean;
+      attachedTo?: string;
+      param?: number;
+    }
+  >;
+  entitiesById: Record<
+    string,
+    {
+      id: string;
+      type: string;
+      start?: string;
+      end?: string;
+      center?: string;
+      ccw?: boolean;
+    }
+  >;
   constraintsById: Record<string, any>;
 }
 
 function parseSketchData(sketchMap: Y.Map<unknown>): SketchData {
-  const dataMap = sketchMap.get('data') as Y.Map<unknown> | undefined;
+  const dataMap = sketchMap.get("data") as Y.Map<unknown> | undefined;
 
   if (!dataMap) {
     return { pointsById: {}, entitiesById: {}, constraintsById: {} };
@@ -375,21 +381,21 @@ function parseSketchData(sketchMap: Y.Map<unknown>): SketchData {
   const entitiesById: Record<string, any> = {};
   const constraintsById: Record<string, any> = {};
 
-  const pointsMap = dataMap.get('pointsById') as Y.Map<Y.Map<unknown>> | undefined;
+  const pointsMap = dataMap.get("pointsById") as Y.Map<Y.Map<unknown>> | undefined;
   if (pointsMap) {
     pointsMap.forEach((pointMap, id) => {
       pointsById[id] = mapToObject(pointMap);
     });
   }
 
-  const entitiesMap = dataMap.get('entitiesById') as Y.Map<Y.Map<unknown>> | undefined;
+  const entitiesMap = dataMap.get("entitiesById") as Y.Map<Y.Map<unknown>> | undefined;
   if (entitiesMap) {
     entitiesMap.forEach((entityMap, id) => {
       entitiesById[id] = mapToObject(entityMap);
     });
   }
 
-  const constraintsMap = dataMap.get('constraintsById') as Y.Map<Y.Map<unknown>> | undefined;
+  const constraintsMap = dataMap.get("constraintsById") as Y.Map<Y.Map<unknown>> | undefined;
   if (constraintsMap) {
     constraintsMap.forEach((constraintMap, id) => {
       constraintsById[id] = mapToObject(constraintMap);
@@ -416,23 +422,23 @@ function calculateExtrudeDistance(
   direction: number,
   _sketchPlane?: DatumPlane
 ): number {
-  const extent = (featureMap.get('extent') as string) || 'blind';
-  const baseDistance = (featureMap.get('distance') as number) || 10;
+  const extent = (featureMap.get("extent") as string) || "blind";
+  const baseDistance = (featureMap.get("distance") as number) || 10;
 
   switch (extent) {
-    case 'blind':
+    case "blind":
       return baseDistance * direction;
 
-    case 'throughAll':
+    case "throughAll":
       return 1000 * direction;
 
-    case 'toFace': {
+    case "toFace": {
       // TODO: Implement toFace extent in OCCT API
-      console.warn('[Worker] toFace extent is not yet supported in the OCCT API');
+      console.warn("[Worker] toFace extent is not yet supported in the OCCT API");
       return baseDistance * direction;
     }
 
-    case 'toVertex':
+    case "toVertex":
       return baseDistance * direction;
 
     default:
@@ -445,8 +451,8 @@ function interpretSketch(
   sketchMap: Y.Map<unknown>,
   featuresById: Y.Map<Y.Map<unknown>>
 ): void {
-  const id = sketchMap.get('id') as string;
-  const planeRef = sketchMap.get('plane') as SketchPlaneRef;
+  const id = sketchMap.get("id") as string;
+  const planeRef = sketchMap.get("plane") as SketchPlaneRef;
 
   const plane = getSketchPlane(planeRef, featuresById);
   if (!plane) {
@@ -475,7 +481,7 @@ function interpretSketch(
   const sortedEntityIds = Object.keys(data.entitiesById).sort();
   for (const entityId of sortedEntityIds) {
     const entity = data.entitiesById[entityId];
-    if (entity.type === 'line' && entity.start && entity.end) {
+    if (entity.type === "line" && entity.start && entity.end) {
       const startId = pointIdMap.get(entity.start);
       const endId = pointIdMap.get(entity.end);
       if (startId !== undefined && endId !== undefined) {
@@ -483,7 +489,7 @@ function interpretSketch(
         entityIdMap.set(entity.id, eid);
       }
     }
-    if (entity.type === 'arc' && entity.start && entity.end && entity.center) {
+    if (entity.type === "arc" && entity.start && entity.end && entity.center) {
       const startId = pointIdMap.get(entity.start);
       const endId = pointIdMap.get(entity.end);
       const centerId = pointIdMap.get(entity.center);
@@ -498,10 +504,10 @@ function interpretSketch(
   const sortedConstraintIds = Object.keys(data.constraintsById).sort();
   for (const constraintId of sortedConstraintIds) {
     const c = data.constraintsById[constraintId];
-    if (!c || typeof c !== 'object') continue;
+    if (!c || typeof c !== "object") continue;
 
     switch (c.type) {
-      case 'coincident': {
+      case "coincident": {
         const [a, b] = c.points ?? [];
         const p1 = pointIdMap.get(a);
         const p2 = pointIdMap.get(b);
@@ -510,7 +516,7 @@ function interpretSketch(
         }
         break;
       }
-      case 'horizontal': {
+      case "horizontal": {
         const [a, b] = c.points ?? [];
         const p1 = pointIdMap.get(a);
         const p2 = pointIdMap.get(b);
@@ -519,7 +525,7 @@ function interpretSketch(
         }
         break;
       }
-      case 'vertical': {
+      case "vertical": {
         const [a, b] = c.points ?? [];
         const p1 = pointIdMap.get(a);
         const p2 = pointIdMap.get(b);
@@ -528,7 +534,7 @@ function interpretSketch(
         }
         break;
       }
-      case 'fixed': {
+      case "fixed": {
         const pointId = c.point;
         const pid = pointIdMap.get(pointId);
         const p = data.pointsById[pointId];
@@ -537,27 +543,27 @@ function interpretSketch(
         }
         break;
       }
-      case 'distance': {
+      case "distance": {
         const [a, b] = c.points ?? [];
         const p1 = pointIdMap.get(a);
         const p2 = pointIdMap.get(b);
-        const val = typeof c.value === 'number' ? c.value : Number(c.value);
+        const val = typeof c.value === "number" ? c.value : Number(c.value);
         if (p1 !== undefined && p2 !== undefined && Number.isFinite(val)) {
           sketch.addConstraint(distance(p1, p2, val));
         }
         break;
       }
-      case 'angle': {
+      case "angle": {
         const [l1, l2] = c.lines ?? [];
         const e1 = entityIdMap.get(l1);
         const e2 = entityIdMap.get(l2);
-        const valDeg = typeof c.value === 'number' ? c.value : Number(c.value);
+        const valDeg = typeof c.value === "number" ? c.value : Number(c.value);
         if (e1 !== undefined && e2 !== undefined && Number.isFinite(valDeg)) {
           sketch.addConstraint(angle(e1, e2, (valDeg * Math.PI) / 180));
         }
         break;
       }
-      case 'parallel': {
+      case "parallel": {
         const [l1, l2] = c.lines ?? [];
         const e1 = entityIdMap.get(l1);
         const e2 = entityIdMap.get(l2);
@@ -566,7 +572,7 @@ function interpretSketch(
         }
         break;
       }
-      case 'perpendicular': {
+      case "perpendicular": {
         const [l1, l2] = c.lines ?? [];
         const e1 = entityIdMap.get(l1);
         const e2 = entityIdMap.get(l2);
@@ -575,7 +581,7 @@ function interpretSketch(
         }
         break;
       }
-      case 'equalLength': {
+      case "equalLength": {
         const [l1, l2] = c.lines ?? [];
         const e1 = entityIdMap.get(l1);
         const e2 = entityIdMap.get(l2);
@@ -584,15 +590,15 @@ function interpretSketch(
         }
         break;
       }
-      case 'tangent': {
+      case "tangent": {
         const lineId = entityIdMap.get(c.line);
         const arcId = entityIdMap.get(c.arc);
         if (lineId !== undefined && arcId !== undefined) {
-          sketch.addConstraint(tangent(lineId, arcId, 'end', 'start'));
+          sketch.addConstraint(tangent(lineId, arcId, "end", "start"));
         }
         break;
       }
-      case 'symmetric': {
+      case "symmetric": {
         const [pt1, pt2] = c.points ?? [];
         const p1 = pointIdMap.get(pt1);
         const p2 = pointIdMap.get(pt2);
@@ -638,7 +644,7 @@ function interpretSketch(
   const { origin, xDir, yDir, normal } = plane.surface;
   const pointsArray = Object.values(data.pointsById);
   self.postMessage({
-    type: 'sketch-solved',
+    type: "sketch-solved",
     sketchId: id,
     points: maxDelta > 1e-9 ? pointsArray.map((p) => ({ id: p.id, x: p.x, y: p.y })) : [],
     status: solveResult.status,
@@ -671,16 +677,16 @@ function interpretExtrude(
   featureId: string,
   _featuresById: Y.Map<Y.Map<unknown>>
 ): FeatureInterpretResult {
-  const sketchId = featureMap.get('sketch') as string;
-  const op = (featureMap.get('op') as string) || 'add';
-  const direction = (featureMap.get('direction') as string) || 'normal';
-  const mergeScope = (featureMap.get('mergeScope') as string) || 'auto';
-  const targetBodies = (featureMap.get('targetBodies') as string[]) || [];
-  const resultBodyName = (featureMap.get('resultBodyName') as string) || '';
-  const resultBodyColor = (featureMap.get('resultBodyColor') as string) || '';
+  const sketchId = featureMap.get("sketch") as string;
+  const op = (featureMap.get("op") as string) || "add";
+  const direction = (featureMap.get("direction") as string) || "normal";
+  const mergeScope = (featureMap.get("mergeScope") as string) || "auto";
+  const targetBodies = (featureMap.get("targetBodies") as string[]) || [];
+  const resultBodyName = (featureMap.get("resultBodyName") as string) || "";
+  const resultBodyColor = (featureMap.get("resultBodyColor") as string) || "";
 
   if (!sketchId) {
-    throw new Error('Extrude requires a sketch reference');
+    throw new Error("Extrude requires a sketch reference");
   }
 
   const sketchInfo = sketchCache.get(sketchId);
@@ -704,14 +710,14 @@ function interpretExtrude(
   const sortedEntityIds = Object.keys(sketchInfo.data.entitiesById).sort();
   for (const eid of sortedEntityIds) {
     const entity = sketchInfo.data.entitiesById[eid];
-    if (entity.type === 'line' && entity.start && entity.end) {
+    if (entity.type === "line" && entity.start && entity.end) {
       const startId = pointIdMap.get(entity.start);
       const endId = pointIdMap.get(entity.end);
       if (startId !== undefined && endId !== undefined) {
         sketch.addLine(startId, endId);
       }
     }
-    if (entity.type === 'arc' && entity.start && entity.end && entity.center) {
+    if (entity.type === "arc" && entity.start && entity.end && entity.center) {
       const startId = pointIdMap.get(entity.start);
       const endId = pointIdMap.get(entity.end);
       const centerId = pointIdMap.get(entity.center);
@@ -723,33 +729,33 @@ function interpretExtrude(
 
   const profile = sketch.toProfile();
   if (!profile) {
-    throw new Error('Sketch does not contain a closed profile');
+    throw new Error("Sketch does not contain a closed profile");
   }
 
-  const dirMultiplier = direction === 'reverse' ? -1 : 1;
+  const dirMultiplier = direction === "reverse" ? -1 : 1;
   const finalDistance = calculateExtrudeDistance(featureMap, dirMultiplier, sketchInfo.plane);
 
   // Extrude to create new body
   const result = currentSession.extrude(profile, {
-    operation: 'new',
+    operation: "new",
     distance: finalDistance,
   });
 
   if (!result.success) {
-    throw new Error(result.error?.message || 'Extrude failed');
+    throw new Error(result.error?.message || "Extrude failed");
   }
 
   const extrudedBodyId = result.value;
 
   // Handle cut operation
-  if (op === 'cut') {
-    console.log('[Worker] Extrude CUT operation');
-    
+  if (op === "cut") {
+    console.log("[Worker] Extrude CUT operation");
+
     let anySuccess = false;
     let lastError: string | undefined;
     for (const [existingId, entry] of bodyMap) {
       console.log(`[Worker] Subtracting from body ${existingId}`);
-      
+
       const boolResult = currentSession.subtract(entry.bodyId, extrudedBodyId);
       console.log(`[Worker] Subtract result: success=${boolResult.success}`);
       if (boolResult.success) {
@@ -761,10 +767,10 @@ function interpretExtrude(
         console.error(`[Worker] Boolean subtract failed: ${lastError}`);
       }
     }
-    
+
     // Delete the tool body
     currentSession.deleteBody(extrudedBodyId);
-    
+
     if (!anySuccess && bodyMap.size > 0 && lastError) {
       throw new Error(`Cut operation failed: ${lastError}`);
     }
@@ -772,10 +778,10 @@ function interpretExtrude(
   }
 
   // Handle add operation with merge logic
-  let finalBodyName = resultBodyName || `Body${bodyMap.size + 1}`;
-  let finalBodyColor = resultBodyColor || getNextBodyColor();
+  const finalBodyName = resultBodyName || `Body${bodyMap.size + 1}`;
+  const finalBodyColor = resultBodyColor || getNextBodyColor();
 
-  if (mergeScope === 'new' || bodyMap.size === 0) {
+  if (mergeScope === "new" || bodyMap.size === 0) {
     return {
       bodyId: extrudedBodyId,
       bodyEntryId: featureId,
@@ -784,7 +790,7 @@ function interpretExtrude(
     };
   }
 
-  if (mergeScope === 'specific' && targetBodies.length > 0) {
+  if (mergeScope === "specific" && targetBodies.length > 0) {
     let currentBodyId = extrudedBodyId;
     let mergedIntoId: string | null = null;
     let mergedEntry: BodyEntry | null = null;
@@ -829,7 +835,7 @@ function interpretExtrude(
   }
 
   // mergeScope === 'auto'
-  console.log('[Worker] Extrude ADD with auto merge');
+  console.log("[Worker] Extrude ADD with auto merge");
   let currentBodyId = extrudedBodyId;
   let mergedIntoId: string | null = null;
   let mergedEntry: BodyEntry | null = null;
@@ -854,7 +860,9 @@ function interpretExtrude(
       }
     } else if (unionResult.error) {
       // Log warning but continue - bodies will remain separate
-      console.warn(`[Worker] Union failed (bodies will remain separate): ${unionResult.error.message}`);
+      console.warn(
+        `[Worker] Union failed (bodies will remain separate): ${unionResult.error.message}`
+      );
       mergeWarnings.push(`Union with existing body failed: ${unionResult.error.message}`);
     }
   }
@@ -872,7 +880,9 @@ function interpretExtrude(
 
   // No successful merge - return as separate body
   if (mergeWarnings.length > 0) {
-    console.warn(`[Worker] Creating separate body due to merge failures: ${mergeWarnings.join('; ')}`);
+    console.warn(
+      `[Worker] Creating separate body due to merge failures: ${mergeWarnings.join("; ")}`
+    );
   }
   return {
     bodyId: currentBodyId,
@@ -888,20 +898,20 @@ function interpretRevolve(
   featureId: string,
   _featuresById: Y.Map<Y.Map<unknown>>
 ): FeatureInterpretResult {
-  const sketchId = featureMap.get('sketch') as string;
-  const axisId = (featureMap.get('axis') as string) || '';
-  const angleDeg = (featureMap.get('angle') as number) || 360;
-  const op = (featureMap.get('op') as string) || 'add';
-  const mergeScope = (featureMap.get('mergeScope') as string) || 'auto';
-  const targetBodies = (featureMap.get('targetBodies') as string[]) || [];
-  const resultBodyName = (featureMap.get('resultBodyName') as string) || '';
-  const resultBodyColor = (featureMap.get('resultBodyColor') as string) || '';
+  const sketchId = featureMap.get("sketch") as string;
+  const axisId = (featureMap.get("axis") as string) || "";
+  const angleDeg = (featureMap.get("angle") as number) || 360;
+  const op = (featureMap.get("op") as string) || "add";
+  const mergeScope = (featureMap.get("mergeScope") as string) || "auto";
+  const targetBodies = (featureMap.get("targetBodies") as string[]) || [];
+  const resultBodyName = (featureMap.get("resultBodyName") as string) || "";
+  const resultBodyColor = (featureMap.get("resultBodyColor") as string) || "";
 
   if (!sketchId) {
-    throw new Error('Revolve requires a sketch reference');
+    throw new Error("Revolve requires a sketch reference");
   }
   if (!axisId) {
-    throw new Error('Revolve requires an axis line selection');
+    throw new Error("Revolve requires an axis line selection");
   }
 
   const sketchInfo = sketchCache.get(sketchId);
@@ -910,14 +920,14 @@ function interpretRevolve(
   }
 
   const axisEntity = sketchInfo.data.entitiesById[axisId];
-  if (!axisEntity || axisEntity.type !== 'line' || !axisEntity.start || !axisEntity.end) {
-    throw new Error('Invalid axis selection');
+  if (!axisEntity || axisEntity.type !== "line" || !axisEntity.start || !axisEntity.end) {
+    throw new Error("Invalid axis selection");
   }
 
   const axisStart2d = sketchInfo.data.pointsById[axisEntity.start];
   const axisEnd2d = sketchInfo.data.pointsById[axisEntity.end];
   if (!axisStart2d || !axisEnd2d) {
-    throw new Error('Axis references missing sketch points');
+    throw new Error("Axis references missing sketch points");
   }
 
   const sketch = currentSession.createSketch(sketchInfo.plane);
@@ -934,7 +944,7 @@ function interpretRevolve(
   const sortedEntityIds = Object.keys(sketchInfo.data.entitiesById).sort();
   for (const eid of sortedEntityIds) {
     const entity = sketchInfo.data.entitiesById[eid];
-    if (entity.type === 'line' && entity.start && entity.end) {
+    if (entity.type === "line" && entity.start && entity.end) {
       const startId = pointIdMap.get(entity.start);
       const endId = pointIdMap.get(entity.end);
       if (startId !== undefined && endId !== undefined) {
@@ -943,7 +953,7 @@ function interpretRevolve(
         entityIdMap.set(entity.id, kernelEid);
       }
     }
-    if (entity.type === 'arc' && entity.start && entity.end && entity.center) {
+    if (entity.type === "arc" && entity.start && entity.end && entity.center) {
       const startId = pointIdMap.get(entity.start);
       const endId = pointIdMap.get(entity.end);
       const centerId = pointIdMap.get(entity.center);
@@ -963,7 +973,7 @@ function interpretRevolve(
 
   const profile = sketch.getCoreSketch().toProfile(profileEntityIds);
   if (!profile) {
-    throw new Error('Sketch does not contain a closed profile');
+    throw new Error("Sketch does not contain a closed profile");
   }
 
   const axisStartWorld = planeToWorld(sketchInfo.plane, axisStart2d.x, axisStart2d.y);
@@ -971,19 +981,19 @@ function interpretRevolve(
   const axisDir = sub3(axisEndWorld, axisStartWorld);
 
   const result = currentSession.revolve(profile, {
-    operation: 'new',
+    operation: "new",
     axis: { origin: axisStartWorld, direction: axisDir },
     angleDegrees: angleDeg,
   });
 
   if (!result.success) {
-    throw new Error(result.error?.message || 'Revolve failed');
+    throw new Error(result.error?.message || "Revolve failed");
   }
 
   const revolvedBodyId = result.value;
 
   // Handle cut operation
-  if (op === 'cut') {
+  if (op === "cut") {
     for (const [existingId, entry] of bodyMap) {
       const boolResult = currentSession.subtract(entry.bodyId, revolvedBodyId);
       if (boolResult.success) {
@@ -995,10 +1005,10 @@ function interpretRevolve(
   }
 
   // Handle add (same merge logic as extrude)
-  let finalBodyName = resultBodyName || `Body${bodyMap.size + 1}`;
-  let finalBodyColor = resultBodyColor || getNextBodyColor();
+  const finalBodyName = resultBodyName || `Body${bodyMap.size + 1}`;
+  const finalBodyColor = resultBodyColor || getNextBodyColor();
 
-  if (mergeScope === 'new' || bodyMap.size === 0) {
+  if (mergeScope === "new" || bodyMap.size === 0) {
     return {
       bodyId: revolvedBodyId,
       bodyEntryId: featureId,
@@ -1007,7 +1017,7 @@ function interpretRevolve(
     };
   }
 
-  if (mergeScope === 'specific' && targetBodies.length > 0) {
+  if (mergeScope === "specific" && targetBodies.length > 0) {
     let currentBodyId = revolvedBodyId;
     let mergedIntoId: string | null = null;
     let mergedEntry: BodyEntry | null = null;
@@ -1094,12 +1104,12 @@ function interpretBoolean(
   currentSession: SolidSession,
   featureMap: Y.Map<unknown>
 ): FeatureInterpretResult {
-  const operation = (featureMap.get('operation') as string) || 'union';
-  const targetId = featureMap.get('target') as string;
-  const toolId = featureMap.get('tool') as string;
+  const operation = (featureMap.get("operation") as string) || "union";
+  const targetId = featureMap.get("target") as string;
+  const toolId = featureMap.get("tool") as string;
 
   if (!targetId || !toolId) {
-    throw new Error('Boolean requires target and tool body references');
+    throw new Error("Boolean requires target and tool body references");
   }
 
   const targetEntry = bodyMap.get(targetId);
@@ -1114,13 +1124,13 @@ function interpretBoolean(
 
   let result: OperationResult<BodyId>;
   switch (operation) {
-    case 'union':
+    case "union":
       result = currentSession.union(targetEntry.bodyId, toolEntry.bodyId);
       break;
-    case 'subtract':
+    case "subtract":
       result = currentSession.subtract(targetEntry.bodyId, toolEntry.bodyId);
       break;
-    case 'intersect':
+    case "intersect":
       result = currentSession.intersect(targetEntry.bodyId, toolEntry.bodyId);
       break;
     default:
@@ -1128,7 +1138,7 @@ function interpretBoolean(
   }
 
   if (!result.success) {
-    throw new Error(result.error?.message || 'Boolean operation failed');
+    throw new Error(result.error?.message || "Boolean operation failed");
   }
 
   // Delete old bodies and update map
@@ -1156,19 +1166,19 @@ async function performRebuild(): Promise<void> {
   const featuresById = getFeaturesById(root);
   const featureOrder = getFeatureOrder(root);
   const state = getState(root);
-  const rebuildGate = state.get('rebuildGate') as string | null;
+  const rebuildGate = state.get("rebuildGate") as string | null;
 
-  self.postMessage({ type: 'rebuild-start' } as WorkerToMainMessage);
+  self.postMessage({ type: "rebuild-start" } as WorkerToMainMessage);
 
   try {
     // Initialize session (async)
     const currentSession = await initializeSession();
-    
+
     // Clear previous state
     currentSession.dispose();
     session = new SolidSession();
     await session.init();
-    
+
     bodyMap.clear();
     sketchCache.clear();
     resetBodyColorIndex();
@@ -1187,17 +1197,17 @@ async function performRebuild(): Promise<void> {
       const featureMap = featuresById.get(id);
       if (!featureMap) continue;
 
-      const type = featureMap.get('type') as string;
-      const suppressed = featureMap.get('suppressed') === true;
+      const type = featureMap.get("type") as string;
+      const suppressed = featureMap.get("suppressed") === true;
 
       // Check if we've passed the rebuild gate
       if (reachedGate) {
-        featureStatus[id] = 'gated';
+        featureStatus[id] = "gated";
         continue;
       }
 
       if (suppressed) {
-        featureStatus[id] = 'suppressed';
+        featureStatus[id] = "suppressed";
         continue;
       }
 
@@ -1205,19 +1215,19 @@ async function performRebuild(): Promise<void> {
         let result: FeatureInterpretResult | null = null;
 
         switch (type) {
-          case 'origin':
-          case 'plane':
-            featureStatus[id] = 'computed';
+          case "origin":
+          case "plane":
+            featureStatus[id] = "computed";
             break;
 
-          case 'sketch':
+          case "sketch":
             interpretSketch(session!, featureMap, featuresById);
-            featureStatus[id] = 'computed';
+            featureStatus[id] = "computed";
             break;
 
-          case 'extrude':
+          case "extrude":
             result = interpretExtrude(session!, featureMap, id, featuresById);
-            featureStatus[id] = 'computed';
+            featureStatus[id] = "computed";
 
             // Check for bodyId !== null (not just truthy) because bodyId can be 0
             if (result.bodyId !== null && result.bodyEntryId !== null) {
@@ -1231,9 +1241,9 @@ async function performRebuild(): Promise<void> {
             }
             break;
 
-          case 'revolve':
+          case "revolve":
             result = interpretRevolve(session!, featureMap, id, featuresById);
-            featureStatus[id] = 'computed';
+            featureStatus[id] = "computed";
 
             // Check for bodyId !== null (not just truthy) because bodyId can be 0
             if (result.bodyId !== null && result.bodyEntryId !== null) {
@@ -1247,22 +1257,22 @@ async function performRebuild(): Promise<void> {
             }
             break;
 
-          case 'boolean':
+          case "boolean":
             result = interpretBoolean(session!, featureMap);
-            featureStatus[id] = 'computed';
+            featureStatus[id] = "computed";
             break;
 
           default:
-            featureStatus[id] = 'computed';
+            featureStatus[id] = "computed";
             break;
         }
       } catch (err) {
         errors.push({
           featureId: id,
-          code: 'BUILD_ERROR',
+          code: "BUILD_ERROR",
           message: err instanceof Error ? err.message : String(err),
         });
-        featureStatus[id] = 'error';
+        featureStatus[id] = "error";
       }
 
       if (rebuildGate && id === rebuildGate) {
@@ -1282,7 +1292,7 @@ async function performRebuild(): Promise<void> {
     }
 
     self.postMessage({
-      type: 'rebuild-complete',
+      type: "rebuild-complete",
       bodies,
       featureStatus,
       errors,
@@ -1293,25 +1303,32 @@ async function performRebuild(): Promise<void> {
       sendMesh(session!, featureId, entry.bodyId, entry.color);
     }
   } catch (err) {
-    console.error('[Worker] Rebuild failed:', err);
+    console.error("[Worker] Rebuild failed:", err);
     self.postMessage({
-      type: 'error',
+      type: "error",
       message: err instanceof Error ? err.message : String(err),
     } as WorkerToMainMessage);
   }
 }
 
-function sendMesh(currentSession: SolidSession, featureId: string, bodyId: BodyId, color?: string): void {
+function sendMesh(
+  currentSession: SolidSession,
+  featureId: string,
+  bodyId: BodyId,
+  color?: string
+): void {
   try {
     console.log(`[Worker] sendMesh for ${featureId}`);
-    
+
     const mesh = currentSession.tessellate(bodyId);
-    
+
     const positions = new Float32Array(mesh.positions);
     const normals = new Float32Array(mesh.normals);
     const indices = new Uint32Array(mesh.indices);
-    
-    console.log(`[Worker] Mesh stats: ${positions.length / 3} vertices, ${indices.length / 3} triangles`);
+
+    console.log(
+      `[Worker] Mesh stats: ${positions.length / 3} vertices, ${indices.length / 3} triangles`
+    );
 
     const transferableMesh: TransferableMesh = {
       positions,
@@ -1321,7 +1338,7 @@ function sendMesh(currentSession: SolidSession, featureId: string, bodyId: BodyI
 
     self.postMessage(
       {
-        type: 'mesh',
+        type: "mesh",
         bodyId: featureId,
         mesh: transferableMesh,
         color,
@@ -1329,7 +1346,7 @@ function sendMesh(currentSession: SolidSession, featureId: string, bodyId: BodyI
       { transfer: [positions.buffer, normals.buffer, indices.buffer] }
     );
   } catch (err) {
-    console.error('Failed to tessellate body:', err);
+    console.error("Failed to tessellate body:", err);
   }
 }
 
@@ -1345,7 +1362,7 @@ async function performPreviewExtrude(
 ): Promise<BodyId | null> {
   const previewSession = new SolidSession();
   await previewSession.init();
-  
+
   const sketchInfo = sketchCache.get(sketchId);
   if (!sketchInfo) {
     throw new Error(`Sketch not found: ${sketchId}`);
@@ -1362,14 +1379,14 @@ async function performPreviewExtrude(
 
   for (const [, entity] of Object.entries(sketchInfo.data.entitiesById)) {
     const e = entity as any;
-    if (e.type === 'line' && e.start && e.end) {
+    if (e.type === "line" && e.start && e.end) {
       const startId = pointIdMap.get(e.start);
       const endId = pointIdMap.get(e.end);
       if (startId !== undefined && endId !== undefined) {
         sketch.addLine(startId, endId);
       }
     }
-    if (e.type === 'arc' && e.start && e.end && e.center) {
+    if (e.type === "arc" && e.start && e.end && e.center) {
       const startId = pointIdMap.get(e.start);
       const endId = pointIdMap.get(e.end);
       const centerId = pointIdMap.get(e.center);
@@ -1381,19 +1398,19 @@ async function performPreviewExtrude(
 
   const profile = sketch.toProfile();
   if (!profile) {
-    throw new Error('Sketch does not contain a closed profile');
+    throw new Error("Sketch does not contain a closed profile");
   }
 
-  const dirMultiplier = direction === 'reverse' ? -1 : 1;
+  const dirMultiplier = direction === "reverse" ? -1 : 1;
   const finalDistance = distance * dirMultiplier;
 
   const result = previewSession.extrude(profile, {
-    operation: 'new',
+    operation: "new",
     distance: finalDistance,
   });
 
   if (!result.success) {
-    throw new Error(result.error?.message || 'Extrude failed');
+    throw new Error(result.error?.message || "Extrude failed");
   }
 
   // Tessellate and send mesh
@@ -1410,7 +1427,7 @@ async function performPreviewExtrude(
 
   self.postMessage(
     {
-      type: 'mesh',
+      type: "mesh",
       bodyId: `__preview_extrude_${_op}`,
       mesh: transferableMesh,
     } as WorkerToMainMessage,
@@ -1429,21 +1446,21 @@ async function performPreviewRevolve(
 ): Promise<BodyId | null> {
   const previewSession = new SolidSession();
   await previewSession.init();
-  
+
   const sketchInfo = sketchCache.get(sketchId);
   if (!sketchInfo) {
     throw new Error(`Sketch not found: ${sketchId}`);
   }
 
   const axisEntity = sketchInfo.data.entitiesById[axisId];
-  if (!axisEntity || axisEntity.type !== 'line' || !axisEntity.start || !axisEntity.end) {
-    throw new Error('Invalid axis selection');
+  if (!axisEntity || axisEntity.type !== "line" || !axisEntity.start || !axisEntity.end) {
+    throw new Error("Invalid axis selection");
   }
 
   const axisStart2d = sketchInfo.data.pointsById[axisEntity.start];
   const axisEnd2d = sketchInfo.data.pointsById[axisEntity.end];
   if (!axisStart2d || !axisEnd2d) {
-    throw new Error('Axis references missing sketch points');
+    throw new Error("Axis references missing sketch points");
   }
 
   const sketch = previewSession.createSketch(sketchInfo.plane);
@@ -1458,7 +1475,7 @@ async function performPreviewRevolve(
 
   for (const [, entity] of Object.entries(sketchInfo.data.entitiesById)) {
     const e = entity as any;
-    if (e.type === 'line' && e.start && e.end) {
+    if (e.type === "line" && e.start && e.end) {
       const startId = pointIdMap.get(e.start);
       const endId = pointIdMap.get(e.end);
       if (startId !== undefined && endId !== undefined) {
@@ -1467,7 +1484,7 @@ async function performPreviewRevolve(
         entityIdMap.set(e.id, kernelEid);
       }
     }
-    if (e.type === 'arc' && e.start && e.end && e.center) {
+    if (e.type === "arc" && e.start && e.end && e.center) {
       const startId = pointIdMap.get(e.start);
       const endId = pointIdMap.get(e.end);
       const centerId = pointIdMap.get(e.center);
@@ -1487,7 +1504,7 @@ async function performPreviewRevolve(
 
   const profile = sketch.getCoreSketch().toProfile(profileEntityIds);
   if (!profile) {
-    throw new Error('Sketch does not contain a closed profile');
+    throw new Error("Sketch does not contain a closed profile");
   }
 
   const axisStartWorld = planeToWorld(sketchInfo.plane, axisStart2d.x, axisStart2d.y);
@@ -1495,13 +1512,13 @@ async function performPreviewRevolve(
   const axisDir = sub3(axisEndWorld, axisStartWorld);
 
   const result = previewSession.revolve(profile, {
-    operation: 'new',
+    operation: "new",
     axis: { origin: axisStartWorld, direction: axisDir },
     angleDegrees: angleDeg,
   });
 
   if (!result.success) {
-    throw new Error(result.error?.message || 'Revolve failed');
+    throw new Error(result.error?.message || "Revolve failed");
   }
 
   // Tessellate and send mesh
@@ -1518,7 +1535,7 @@ async function performPreviewRevolve(
 
   self.postMessage(
     {
-      type: 'mesh',
+      type: "mesh",
       bodyId: `__preview_revolve_${_op}`,
       mesh: transferableMesh,
     } as WorkerToMainMessage,
@@ -1537,23 +1554,23 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
   const { type } = event.data;
 
   switch (type) {
-    case 'init-sync':
+    case "init-sync":
       setupYjsSync(event.data.port);
       break;
 
-    case 'yjs-init':
-    case 'yjs-update':
+    case "yjs-init":
+    case "yjs-update":
       if (syncPort && doc) {
-        Y.applyUpdate(doc, new Uint8Array(event.data.data), 'main');
+        Y.applyUpdate(doc, new Uint8Array(event.data.data), "main");
       }
       break;
 
-    case 'clear-preview':
+    case "clear-preview":
       break;
 
-    case 'preview-extrude': {
+    case "preview-extrude": {
       try {
-        if (!doc) throw new Error('Worker not ready');
+        if (!doc) throw new Error("Worker not ready");
         const { sketchId, distance, direction, op } = event.data;
 
         // Ensure we have sketch data
@@ -1573,16 +1590,16 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         await performPreviewExtrude(sketchId, distance, direction, op);
       } catch (err) {
         self.postMessage({
-          type: 'preview-error',
+          type: "preview-error",
           message: err instanceof Error ? err.message : String(err),
         } as WorkerToMainMessage);
       }
       break;
     }
 
-    case 'preview-revolve': {
+    case "preview-revolve": {
       try {
-        if (!doc) throw new Error('Worker not ready');
+        if (!doc) throw new Error("Worker not ready");
         const { sketchId, axis, angle, op } = event.data;
 
         const root = getRoot(doc);
@@ -1601,19 +1618,19 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         await performPreviewRevolve(sketchId, axis, angle, op);
       } catch (err) {
         self.postMessage({
-          type: 'preview-error',
+          type: "preview-error",
           message: err instanceof Error ? err.message : String(err),
         } as WorkerToMainMessage);
       }
       break;
     }
 
-    case 'export-stl': {
+    case "export-stl": {
       try {
-        const { binary = true, name = 'model' } = event.data;
+        const { binary = true, name = "model" } = event.data;
 
         if (!session) {
-          throw new Error('No session available');
+          throw new Error("No session available");
         }
 
         // Collect meshes from all bodies
@@ -1624,39 +1641,39 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         }
 
         if (meshes.length === 0) {
-          throw new Error('No bodies to export');
+          throw new Error("No bodies to export");
         }
 
         const result = exportMeshesToStl(meshes, { binary, name });
 
         if (binary && result instanceof ArrayBuffer) {
-          self.postMessage({ type: 'stl-exported', buffer: result } as WorkerToMainMessage, [
+          self.postMessage({ type: "stl-exported", buffer: result } as WorkerToMainMessage, [
             result,
           ]);
-        } else if (typeof result === 'string') {
-          self.postMessage({ type: 'stl-exported', content: result } as WorkerToMainMessage);
+        } else if (typeof result === "string") {
+          self.postMessage({ type: "stl-exported", content: result } as WorkerToMainMessage);
         }
       } catch (err) {
         self.postMessage({
-          type: 'error',
+          type: "error",
           message: err instanceof Error ? err.message : String(err),
         } as WorkerToMainMessage);
       }
       break;
     }
 
-    case 'export-json': {
+    case "export-json": {
       try {
         if (!doc) {
-          throw new Error('Worker not ready');
+          throw new Error("Worker not ready");
         }
         const root = getRoot(doc);
         const json = mapToObject(root);
         const content = JSON.stringify(json, null, 2);
-        self.postMessage({ type: 'json-exported', content } as WorkerToMainMessage);
+        self.postMessage({ type: "json-exported", content } as WorkerToMainMessage);
       } catch (err) {
         self.postMessage({
-          type: 'error',
+          type: "error",
           message: err instanceof Error ? err.message : String(err),
         } as WorkerToMainMessage);
       }

@@ -1,18 +1,18 @@
 /**
  * Sketch Types
- * 
+ *
  * This module defines the core types for the 2D sketch representation.
  * Sketches live on planes and contain points, entities (lines/arcs),
  * and constraints that define their geometry.
- * 
+ *
  * Design influences:
  * - Siemens D-Cubed 2D DCM constraint system
  * - Parametric CAD sketch systems (SolidWorks, Fusion 360)
  */
 
-import type { Vec2 } from '../num/vec2.js';
-import type { PersistentRef } from '../naming/types.js';
-import type { DatumPlane } from '../model/planes.js';
+import type { Vec2 } from "../num/vec2.js";
+import type { PersistentRef } from "../naming/types.js";
+import type { DatumPlane } from "../model/planes.js";
 
 // ============================================================================
 // Branded IDs
@@ -21,22 +21,22 @@ import type { DatumPlane } from '../model/planes.js';
 /**
  * Unique identifier for a sketch
  */
-export type SketchId = number & { __brand: 'SketchId' };
+export type SketchId = number & { __brand: `SketchId` };
 
 /**
  * Unique identifier for a sketch point
  */
-export type SketchPointId = number & { __brand: 'SketchPointId' };
+export type SketchPointId = number & { __brand: `SketchPointId` };
 
 /**
  * Unique identifier for a sketch entity (line, arc, etc.)
  */
-export type SketchEntityId = number & { __brand: 'SketchEntityId' };
+export type SketchEntityId = number & { __brand: `SketchEntityId` };
 
 /**
  * Unique identifier for a constraint
  */
-export type ConstraintId = number & { __brand: 'ConstraintId' };
+export type ConstraintId = number & { __brand: `ConstraintId` };
 
 /**
  * Cast a number to a SketchId
@@ -76,7 +76,7 @@ export function asConstraintId(id: number): ConstraintId {
 
 /**
  * A point in a sketch
- * 
+ *
  * Points are the fundamental unknowns in the constraint solver.
  * Their (x, y) coordinates are variables that the solver adjusts
  * to satisfy constraints.
@@ -118,15 +118,15 @@ export function setSketchPointPosition(point: SketchPoint, pos: Vec2): void {
 /**
  * Type tag for sketch entity kinds
  */
-export type SketchEntityKind = 'line' | 'arc';
+export type SketchEntityKind = `line` | `arc`;
 
 /**
  * A line entity in a sketch
- * 
+ *
  * Defined by two points (start and end).
  */
 export interface SketchLine {
-  kind: 'line';
+  kind: `line`;
   /** Unique identifier */
   id: SketchEntityId;
   /** Start point ID */
@@ -139,12 +139,12 @@ export interface SketchLine {
 
 /**
  * An arc entity in a sketch
- * 
+ *
  * Defined by three points: start, end, and center.
  * The radius is implicit from center to start (and center to end should match).
  */
 export interface SketchArc {
-  kind: 'arc';
+  kind: `arc`;
   /** Unique identifier */
   id: SketchEntityId;
   /** Start point ID */
@@ -168,7 +168,7 @@ export type SketchEntity = SketchLine | SketchArc;
  * Get all point IDs referenced by an entity
  */
 export function getEntityPointIds(entity: SketchEntity): SketchPointId[] {
-  if (entity.kind === 'line') {
+  if (entity.kind === `line`) {
     return [entity.start, entity.end];
   } else {
     return [entity.start, entity.end, entity.center];
@@ -181,7 +181,7 @@ export function getEntityPointIds(entity: SketchEntity): SketchPointId[] {
 
 /**
  * A 2D sketch on a plane
- * 
+ *
  * Contains:
  * - Reference to the plane it lives on
  * - A set of points (unknowns for the solver)
@@ -237,7 +237,7 @@ export function getAllSketchEntities(sketch: Sketch): SketchEntity[] {
  * Get all non-fixed points (the free variables for the solver)
  */
 export function getFreePoints(sketch: Sketch): SketchPoint[] {
-  return getAllSketchPoints(sketch).filter(p => !p.fixed);
+  return getAllSketchPoints(sketch).filter((p) => !p.fixed);
 }
 
 /**
@@ -255,14 +255,14 @@ export function countBaseDOF(sketch: Sketch): number {
 /**
  * Status of a solve operation
  */
-export type SolveStatus = 
-  | 'success'           // Converged to a solution
-  | 'converged'         // Same as success
-  | 'under_constrained' // More DOF than constraints
-  | 'over_constrained'  // More constraints than DOF
-  | 'not_converged'     // Failed to converge within iterations
-  | 'invalid_sketch'    // Sketch has structural issues
-  | 'singular';         // Jacobian is singular
+export type SolveStatus =
+  | `success` // Converged to a solution
+  | `converged` // Same as success
+  | `under_constrained` // More DOF than constraints
+  | `over_constrained` // More constraints than DOF
+  | `not_converged` // Failed to converge within iterations
+  | `invalid_sketch` // Sketch has structural issues
+  | `singular`; // Jacobian is singular
 
 /**
  * Result of a solve operation
@@ -303,7 +303,7 @@ export interface SolveOptions {
 /**
  * Default solve options
  */
-export const DEFAULT_SOLVE_OPTIONS: Required<Omit<SolveOptions, 'drivenPoints' | 'verbose'>> = {
+export const DEFAULT_SOLVE_OPTIONS: Required<Omit<SolveOptions, `drivenPoints` | `verbose`>> = {
   maxIterations: 100,
   tolerance: 1e-10,
   lambda: 1e-3,

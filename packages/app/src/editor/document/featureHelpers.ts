@@ -4,9 +4,9 @@
  * Uses Y.Map-based model (no XML). See DOCUMENT-MODEL.md.
  */
 
-import * as Y from 'yjs';
-import type { SolidTypeDoc } from './createDocument';
-import { parsePlaneRef } from './createDocument';
+import * as Y from "yjs";
+import type { SolidTypeDoc } from "./createDocument";
+import { parsePlaneRef } from "./createDocument";
 import {
   uuid,
   createFeatureMap,
@@ -16,7 +16,7 @@ import {
   getEntitiesById,
   getConstraintsById,
   sketchDataMapToObject,
-} from './yjs';
+} from "./yjs";
 import type {
   Feature,
   SketchFeature,
@@ -32,13 +32,13 @@ import type {
   SketchConstraint,
   SketchPlaneRef,
   DatumPlaneRole,
-} from './schema';
+} from "./schema";
 
 // ============================================================================
 // Type for constraint creation (no id yet)
 // ============================================================================
 
-type WithoutId<T> = T extends { id: string } ? Omit<T, 'id'> : never;
+type WithoutId<T> = T extends { id: string } ? Omit<T, "id"> : never;
 export type NewSketchConstraint = WithoutId<SketchConstraint>;
 
 // ============================================================================
@@ -83,11 +83,7 @@ export function getFeaturesArray(doc: SolidTypeDoc): Y.Map<unknown>[] {
 /**
  * Create a new sketch feature
  */
-export function addSketchFeature(
-  doc: SolidTypeDoc,
-  planeIdOrRole: string,
-  name?: string
-): string {
+export function addSketchFeature(doc: SolidTypeDoc, planeIdOrRole: string, name?: string): string {
   const id = uuid();
 
   // Parse the plane reference
@@ -104,7 +100,7 @@ export function addSketchFeature(
     // Set all properties
     setMapProperties(sketch, {
       id,
-      type: 'sketch',
+      type: "sketch",
       name: name ?? `Sketch${doc.featureOrder.length}`,
       plane: planeRef,
       visible: false,
@@ -124,13 +120,13 @@ export function addSketchFeature(
 export interface ExtrudeFeatureOptions {
   sketchId: string;
   distance?: number;
-  op?: 'add' | 'cut';
-  direction?: 'normal' | 'reverse';
-  extent?: 'blind' | 'toFace' | 'toVertex' | 'throughAll';
+  op?: "add" | "cut";
+  direction?: "normal" | "reverse";
+  extent?: "blind" | "toFace" | "toVertex" | "throughAll";
   extentRef?: string;
   name?: string;
   // Multi-body merge options
-  mergeScope?: 'auto' | 'new' | 'specific';
+  mergeScope?: "auto" | "new" | "specific";
   targetBodies?: string[];
   resultBodyName?: string;
   resultBodyColor?: string;
@@ -143,18 +139,18 @@ export function addExtrudeFeature(
   doc: SolidTypeDoc,
   sketchIdOrOptions: string | ExtrudeFeatureOptions,
   distance?: number,
-  op: 'add' | 'cut' = 'add',
-  direction: 'normal' | 'reverse' = 'normal',
+  op: "add" | "cut" = "add",
+  direction: "normal" | "reverse" = "normal",
   name?: string
 ): string {
   // Support both old and new API
   const options: ExtrudeFeatureOptions =
-    typeof sketchIdOrOptions === 'string'
+    typeof sketchIdOrOptions === "string"
       ? { sketchId: sketchIdOrOptions, distance, op, direction, name }
       : sketchIdOrOptions;
 
   const id = uuid();
-  const extent = options.extent ?? 'blind';
+  const extent = options.extent ?? "blind";
 
   doc.ydoc.transact(() => {
     const extrude = createFeatureMap();
@@ -162,17 +158,17 @@ export function addExtrudeFeature(
 
     const props: Record<string, unknown> = {
       id,
-      type: 'extrude',
+      type: "extrude",
       name: options.name ?? `Extrude${doc.featureOrder.length}`,
       sketch: options.sketchId,
-      op: options.op ?? 'add',
-      direction: options.direction ?? 'normal',
+      op: options.op ?? "add",
+      direction: options.direction ?? "normal",
       extent,
     };
 
-    if (extent === 'blind') {
+    if (extent === "blind") {
       props.distance = options.distance ?? 10;
-    } else if (extent === 'toFace' || extent === 'toVertex') {
+    } else if (extent === "toFace" || extent === "toVertex") {
       if (options.extentRef) {
         props.extentRef = options.extentRef;
       }
@@ -208,10 +204,10 @@ export interface RevolveFeatureOptions {
   sketchId: string;
   axis: string;
   angle?: number;
-  op?: 'add' | 'cut';
+  op?: "add" | "cut";
   name?: string;
   // Multi-body merge options
-  mergeScope?: 'auto' | 'new' | 'specific';
+  mergeScope?: "auto" | "new" | "specific";
   targetBodies?: string[];
   resultBodyName?: string;
   resultBodyColor?: string;
@@ -225,12 +221,12 @@ export function addRevolveFeature(
   sketchIdOrOptions: string | RevolveFeatureOptions,
   axis?: string,
   angle: number = 360,
-  op: 'add' | 'cut' = 'add',
+  op: "add" | "cut" = "add",
   name?: string
 ): string {
   // Support both old and new API
   const options: RevolveFeatureOptions =
-    typeof sketchIdOrOptions === 'string'
+    typeof sketchIdOrOptions === "string"
       ? { sketchId: sketchIdOrOptions, axis: axis!, angle, op, name }
       : sketchIdOrOptions;
 
@@ -242,12 +238,12 @@ export function addRevolveFeature(
 
     const props: Record<string, unknown> = {
       id,
-      type: 'revolve',
+      type: "revolve",
       name: options.name ?? `Revolve${doc.featureOrder.length}`,
       sketch: options.sketchId,
       axis: options.axis,
       angle: options.angle ?? 360,
-      op: options.op ?? 'add',
+      op: options.op ?? "add",
     };
 
     // Multi-body merge options
@@ -275,7 +271,7 @@ export function addRevolveFeature(
  * Options for creating a boolean feature
  */
 export interface BooleanFeatureOptions {
-  operation: 'union' | 'subtract' | 'intersect';
+  operation: "union" | "subtract" | "intersect";
   target: string;
   tool: string;
   name?: string;
@@ -284,21 +280,17 @@ export interface BooleanFeatureOptions {
 /**
  * Create a new boolean feature
  */
-export function addBooleanFeature(
-  doc: SolidTypeDoc,
-  options: BooleanFeatureOptions
-): string {
+export function addBooleanFeature(doc: SolidTypeDoc, options: BooleanFeatureOptions): string {
   const id = uuid();
 
   doc.ydoc.transact(() => {
     const boolean = createFeatureMap();
     doc.featuresById.set(id, boolean);
 
-    const opName =
-      options.operation.charAt(0).toUpperCase() + options.operation.slice(1);
+    const opName = options.operation.charAt(0).toUpperCase() + options.operation.slice(1);
     setMapProperties(boolean, {
       id,
-      type: 'boolean',
+      type: "boolean",
       name: options.name ?? `${opName}${doc.featureOrder.length}`,
       operation: options.operation,
       target: options.target,
@@ -319,7 +311,7 @@ export function addBooleanFeature(
  * Get sketch data from a sketch feature map
  */
 export function getSketchData(sketchMap: Y.Map<unknown>): SketchData {
-  const dataMap = sketchMap.get('data') as Y.Map<unknown> | undefined;
+  const dataMap = sketchMap.get("data") as Y.Map<unknown> | undefined;
 
   if (!dataMap) {
     return {
@@ -329,8 +321,7 @@ export function getSketchData(sketchMap: Y.Map<unknown>): SketchData {
     };
   }
 
-  const { pointsById, entitiesById, constraintsById } =
-    sketchDataMapToObject(dataMap);
+  const { pointsById, entitiesById, constraintsById } = sketchDataMapToObject(dataMap);
 
   return {
     pointsById: pointsById as Record<string, SketchPoint>,
@@ -367,7 +358,7 @@ export function sketchDataFromArrays(arrays: SketchDataArrays): SketchData {
   const pointsById: Record<string, SketchPoint> = {};
   const entitiesById: Record<string, SketchEntity> = {};
   const constraintsById: Record<string, SketchConstraint> = {};
-  
+
   for (const point of arrays.points) {
     pointsById[point.id] = point;
   }
@@ -377,7 +368,7 @@ export function sketchDataFromArrays(arrays: SketchDataArrays): SketchData {
   for (const constraint of arrays.constraints) {
     constraintsById[constraint.id] = constraint;
   }
-  
+
   return { pointsById, entitiesById, constraintsById };
 }
 
@@ -392,7 +383,7 @@ export function addPointToSketch(
 ): string {
   const id = uuid();
 
-  const dataMap = sketchMap.get('data') as Y.Map<unknown>;
+  const dataMap = sketchMap.get("data") as Y.Map<unknown>;
   const pointsById = getPointsById(dataMap);
 
   // Create point map and integrate first
@@ -400,11 +391,11 @@ export function addPointToSketch(
   pointsById.set(id, point);
 
   // Set properties after integration
-  point.set('id', id);
-  point.set('x', x);
-  point.set('y', y);
+  point.set("id", id);
+  point.set("x", x);
+  point.set("y", y);
   if (fixed !== undefined) {
-    point.set('fixed', fixed);
+    point.set("fixed", fixed);
   }
 
   return id;
@@ -413,23 +404,19 @@ export function addPointToSketch(
 /**
  * Add a line to a sketch
  */
-export function addLineToSketch(
-  sketchMap: Y.Map<unknown>,
-  startId: string,
-  endId: string
-): string {
+export function addLineToSketch(sketchMap: Y.Map<unknown>, startId: string, endId: string): string {
   const id = uuid();
 
-  const dataMap = sketchMap.get('data') as Y.Map<unknown>;
+  const dataMap = sketchMap.get("data") as Y.Map<unknown>;
   const entitiesById = getEntitiesById(dataMap);
 
   const line = new Y.Map();
   entitiesById.set(id, line);
 
-  line.set('id', id);
-  line.set('type', 'line');
-  line.set('start', startId);
-  line.set('end', endId);
+  line.set("id", id);
+  line.set("type", "line");
+  line.set("start", startId);
+  line.set("end", endId);
 
   return id;
 }
@@ -446,18 +433,18 @@ export function addArcToSketch(
 ): string {
   const id = uuid();
 
-  const dataMap = sketchMap.get('data') as Y.Map<unknown>;
+  const dataMap = sketchMap.get("data") as Y.Map<unknown>;
   const entitiesById = getEntitiesById(dataMap);
 
   const arc = new Y.Map();
   entitiesById.set(id, arc);
 
-  arc.set('id', id);
-  arc.set('type', 'arc');
-  arc.set('start', startId);
-  arc.set('end', endId);
-  arc.set('center', centerId);
-  arc.set('ccw', ccw);
+  arc.set("id", id);
+  arc.set("type", "arc");
+  arc.set("start", startId);
+  arc.set("end", endId);
+  arc.set("center", centerId);
+  arc.set("ccw", ccw);
 
   return id;
 }
@@ -471,45 +458,45 @@ export function addConstraintToSketch(
 ): string {
   const id = uuid();
 
-  const dataMap = sketchMap.get('data') as Y.Map<unknown>;
+  const dataMap = sketchMap.get("data") as Y.Map<unknown>;
   const constraintsById = getConstraintsById(dataMap);
 
   const constraintMap = new Y.Map();
   constraintsById.set(id, constraintMap);
 
-  constraintMap.set('id', id);
-  constraintMap.set('type', constraint.type);
+  constraintMap.set("id", id);
+  constraintMap.set("type", constraint.type);
 
   // Set constraint-specific properties
-  if ('points' in constraint) {
-    constraintMap.set('points', constraint.points);
+  if ("points" in constraint) {
+    constraintMap.set("points", constraint.points);
   }
-  if ('point' in constraint) {
-    constraintMap.set('point', constraint.point);
+  if ("point" in constraint) {
+    constraintMap.set("point", constraint.point);
   }
-  if ('lines' in constraint) {
-    constraintMap.set('lines', constraint.lines);
+  if ("lines" in constraint) {
+    constraintMap.set("lines", constraint.lines);
   }
-  if ('value' in constraint) {
-    constraintMap.set('value', constraint.value);
+  if ("value" in constraint) {
+    constraintMap.set("value", constraint.value);
   }
-  if ('offsetX' in constraint) {
-    constraintMap.set('offsetX', constraint.offsetX);
+  if ("offsetX" in constraint) {
+    constraintMap.set("offsetX", constraint.offsetX);
   }
-  if ('offsetY' in constraint) {
-    constraintMap.set('offsetY', constraint.offsetY);
+  if ("offsetY" in constraint) {
+    constraintMap.set("offsetY", constraint.offsetY);
   }
-  if ('line' in constraint) {
-    constraintMap.set('line', constraint.line);
+  if ("line" in constraint) {
+    constraintMap.set("line", constraint.line);
   }
-  if ('arc' in constraint) {
-    constraintMap.set('arc', constraint.arc);
+  if ("arc" in constraint) {
+    constraintMap.set("arc", constraint.arc);
   }
-  if ('connectionPoint' in constraint) {
-    constraintMap.set('connectionPoint', constraint.connectionPoint);
+  if ("connectionPoint" in constraint) {
+    constraintMap.set("connectionPoint", constraint.connectionPoint);
   }
-  if ('axis' in constraint) {
-    constraintMap.set('axis', constraint.axis);
+  if ("axis" in constraint) {
+    constraintMap.set("axis", constraint.axis);
   }
 
   return id;
@@ -524,13 +511,13 @@ export function updatePointPosition(
   x: number,
   y: number
 ): void {
-  const dataMap = sketchMap.get('data') as Y.Map<unknown>;
+  const dataMap = sketchMap.get("data") as Y.Map<unknown>;
   const pointsById = getPointsById(dataMap);
   const point = pointsById.get(pointId);
 
   if (point) {
-    point.set('x', x);
-    point.set('y', y);
+    point.set("x", x);
+    point.set("y", y);
   }
 }
 
@@ -542,14 +529,14 @@ export function updateSketchPointPositions(
   sketchMap: Y.Map<unknown>,
   updates: Array<{ id: string; x: number; y: number }>
 ): void {
-  const dataMap = sketchMap.get('data') as Y.Map<unknown>;
+  const dataMap = sketchMap.get("data") as Y.Map<unknown>;
   const pointsById = getPointsById(dataMap);
 
   for (const { id, x, y } of updates) {
     const point = pointsById.get(id);
     if (point) {
-      point.set('x', x);
-      point.set('y', y);
+      point.set("x", x);
+      point.set("y", y);
     }
   }
 }
@@ -565,7 +552,7 @@ export function setSketchData(
     constraints: SketchConstraint[];
   }
 ): void {
-  const dataMap = sketchMap.get('data') as Y.Map<unknown>;
+  const dataMap = sketchMap.get("data") as Y.Map<unknown>;
 
   // Clear existing data
   const pointsById = getPointsById(dataMap);
@@ -580,17 +567,17 @@ export function setSketchData(
   for (const point of data.points) {
     const pointMap = new Y.Map();
     pointsById.set(point.id, pointMap);
-    pointMap.set('id', point.id);
-    pointMap.set('x', point.x);
-    pointMap.set('y', point.y);
+    pointMap.set("id", point.id);
+    pointMap.set("x", point.x);
+    pointMap.set("y", point.y);
     if (point.fixed !== undefined) {
-      pointMap.set('fixed', point.fixed);
+      pointMap.set("fixed", point.fixed);
     }
     if (point.attachedTo !== undefined) {
-      pointMap.set('attachedTo', point.attachedTo);
+      pointMap.set("attachedTo", point.attachedTo);
     }
     if (point.param !== undefined) {
-      pointMap.set('param', point.param);
+      pointMap.set("param", point.param);
     }
   }
 
@@ -598,17 +585,17 @@ export function setSketchData(
   for (const entity of data.entities) {
     const entityMap = new Y.Map();
     entitiesById.set(entity.id, entityMap);
-    entityMap.set('id', entity.id);
-    entityMap.set('type', entity.type);
+    entityMap.set("id", entity.id);
+    entityMap.set("type", entity.type);
 
-    if (entity.type === 'line') {
-      entityMap.set('start', entity.start);
-      entityMap.set('end', entity.end);
-    } else if (entity.type === 'arc') {
-      entityMap.set('start', entity.start);
-      entityMap.set('end', entity.end);
-      entityMap.set('center', entity.center);
-      entityMap.set('ccw', entity.ccw);
+    if (entity.type === "line") {
+      entityMap.set("start", entity.start);
+      entityMap.set("end", entity.end);
+    } else if (entity.type === "arc") {
+      entityMap.set("start", entity.start);
+      entityMap.set("end", entity.end);
+      entityMap.set("center", entity.center);
+      entityMap.set("ccw", entity.ccw);
     }
   }
 
@@ -616,12 +603,12 @@ export function setSketchData(
   for (const constraint of data.constraints) {
     const constraintMap = new Y.Map();
     constraintsById.set(constraint.id, constraintMap);
-    constraintMap.set('id', constraint.id);
-    constraintMap.set('type', constraint.type);
+    constraintMap.set("id", constraint.id);
+    constraintMap.set("type", constraint.type);
 
     // Set all other properties from the constraint
     for (const [key, value] of Object.entries(constraint)) {
-      if (key !== 'id' && key !== 'type' && value !== undefined) {
+      if (key !== "id" && key !== "type" && value !== undefined) {
         constraintMap.set(key, value);
       }
     }
@@ -636,40 +623,40 @@ export function setSketchData(
  * Parse a feature map into a Feature object
  */
 export function parseFeature(featureMap: Y.Map<unknown>): Feature | null {
-  const type = featureMap.get('type') as string;
-  const id = featureMap.get('id') as string;
+  const type = featureMap.get("type") as string;
+  const id = featureMap.get("id") as string;
 
   if (!id || !type) return null;
 
-  const name = featureMap.get('name') as string | undefined;
-  const suppressed = featureMap.get('suppressed') as boolean | undefined;
+  const name = featureMap.get("name") as string | undefined;
+  const suppressed = featureMap.get("suppressed") as boolean | undefined;
 
   switch (type) {
-    case 'origin':
+    case "origin":
       return {
-        type: 'origin',
+        type: "origin",
         id,
         name,
         suppressed,
-        visible: featureMap.get('visible') as boolean | undefined,
+        visible: featureMap.get("visible") as boolean | undefined,
       } as OriginFeature;
 
-    case 'plane': {
-      const role = featureMap.get('role') as DatumPlaneRole | undefined;
+    case "plane": {
+      const role = featureMap.get("role") as DatumPlaneRole | undefined;
       const base = {
-        type: 'plane' as const,
+        type: "plane" as const,
         id,
         name,
         suppressed,
-        normal: featureMap.get('normal') as [number, number, number],
-        origin: featureMap.get('origin') as [number, number, number],
-        xDir: featureMap.get('xDir') as [number, number, number],
-        visible: featureMap.get('visible') as boolean | undefined,
-        width: featureMap.get('width') as number | undefined,
-        height: featureMap.get('height') as number | undefined,
-        offsetX: featureMap.get('offsetX') as number | undefined,
-        offsetY: featureMap.get('offsetY') as number | undefined,
-        color: featureMap.get('color') as string | undefined,
+        normal: featureMap.get("normal") as [number, number, number],
+        origin: featureMap.get("origin") as [number, number, number],
+        xDir: featureMap.get("xDir") as [number, number, number],
+        visible: featureMap.get("visible") as boolean | undefined,
+        width: featureMap.get("width") as number | undefined,
+        height: featureMap.get("height") as number | undefined,
+        offsetX: featureMap.get("offsetX") as number | undefined,
+        offsetY: featureMap.get("offsetY") as number | undefined,
+        color: featureMap.get("color") as string | undefined,
       };
 
       if (role) {
@@ -678,75 +665,79 @@ export function parseFeature(featureMap: Y.Map<unknown>): Feature | null {
       return base as PlaneFeature;
     }
 
-    case 'sketch': {
-      const planeValue = featureMap.get('plane');
+    case "sketch": {
+      const planeValue = featureMap.get("plane");
       let plane: SketchPlaneRef;
 
-      if (typeof planeValue === 'object' && planeValue !== null) {
+      if (typeof planeValue === "object" && planeValue !== null) {
         plane = planeValue as SketchPlaneRef;
       } else {
         // Legacy support - shouldn't happen with new docs
-        plane = { kind: 'custom', ref: String(planeValue) };
+        plane = { kind: "custom", ref: String(planeValue) };
       }
 
       return {
-        type: 'sketch',
+        type: "sketch",
         id,
         name,
         suppressed,
         plane,
-        visible: featureMap.get('visible') as boolean | undefined,
+        visible: featureMap.get("visible") as boolean | undefined,
         data: getSketchData(featureMap),
       } as SketchFeature;
     }
 
-    case 'extrude': {
-      const targetBodies = featureMap.get('targetBodies') as string[] | undefined;
+    case "extrude": {
+      const targetBodies = featureMap.get("targetBodies") as string[] | undefined;
       return {
-        type: 'extrude',
+        type: "extrude",
         id,
         name,
         suppressed,
-        sketch: featureMap.get('sketch') as string,
-        op: (featureMap.get('op') ?? 'add') as 'add' | 'cut',
-        direction: (featureMap.get('direction') ?? 'normal') as 'normal' | 'reverse',
-        extent: (featureMap.get('extent') ?? 'blind') as 'blind' | 'toFace' | 'toVertex' | 'throughAll',
-        distance: featureMap.get('distance') as number | undefined,
-        extentRef: featureMap.get('extentRef') as string | undefined,
-        mergeScope: featureMap.get('mergeScope') as 'auto' | 'new' | 'specific' | undefined,
+        sketch: featureMap.get("sketch") as string,
+        op: (featureMap.get("op") ?? "add") as "add" | "cut",
+        direction: (featureMap.get("direction") ?? "normal") as "normal" | "reverse",
+        extent: (featureMap.get("extent") ?? "blind") as
+          | "blind"
+          | "toFace"
+          | "toVertex"
+          | "throughAll",
+        distance: featureMap.get("distance") as number | undefined,
+        extentRef: featureMap.get("extentRef") as string | undefined,
+        mergeScope: featureMap.get("mergeScope") as "auto" | "new" | "specific" | undefined,
         targetBodies,
-        resultBodyName: featureMap.get('resultBodyName') as string | undefined,
-        resultBodyColor: featureMap.get('resultBodyColor') as string | undefined,
+        resultBodyName: featureMap.get("resultBodyName") as string | undefined,
+        resultBodyColor: featureMap.get("resultBodyColor") as string | undefined,
       } as ExtrudeFeature;
     }
 
-    case 'revolve': {
-      const targetBodies = featureMap.get('targetBodies') as string[] | undefined;
+    case "revolve": {
+      const targetBodies = featureMap.get("targetBodies") as string[] | undefined;
       return {
-        type: 'revolve',
+        type: "revolve",
         id,
         name,
         suppressed,
-        sketch: featureMap.get('sketch') as string,
-        axis: featureMap.get('axis') as string,
-        angle: (featureMap.get('angle') ?? 360) as number,
-        op: (featureMap.get('op') ?? 'add') as 'add' | 'cut',
-        mergeScope: featureMap.get('mergeScope') as 'auto' | 'new' | 'specific' | undefined,
+        sketch: featureMap.get("sketch") as string,
+        axis: featureMap.get("axis") as string,
+        angle: (featureMap.get("angle") ?? 360) as number,
+        op: (featureMap.get("op") ?? "add") as "add" | "cut",
+        mergeScope: featureMap.get("mergeScope") as "auto" | "new" | "specific" | undefined,
         targetBodies,
-        resultBodyName: featureMap.get('resultBodyName') as string | undefined,
-        resultBodyColor: featureMap.get('resultBodyColor') as string | undefined,
+        resultBodyName: featureMap.get("resultBodyName") as string | undefined,
+        resultBodyColor: featureMap.get("resultBodyColor") as string | undefined,
       } as RevolveFeature;
     }
 
-    case 'boolean':
+    case "boolean":
       return {
-        type: 'boolean',
+        type: "boolean",
         id,
         name,
         suppressed,
-        operation: (featureMap.get('operation') ?? 'union') as 'union' | 'subtract' | 'intersect',
-        target: featureMap.get('target') as string,
-        tool: featureMap.get('tool') as string,
+        operation: (featureMap.get("operation") ?? "union") as "union" | "subtract" | "intersect",
+        target: featureMap.get("target") as string,
+        tool: featureMap.get("tool") as string,
       } as BooleanFeature;
 
     default:
@@ -783,11 +774,11 @@ export function deleteFeature(doc: SolidTypeDoc, id: string): boolean {
   const feature = doc.featuresById.get(id);
   if (!feature) return false;
 
-  const type = feature.get('type');
-  const role = feature.get('role');
+  const type = feature.get("type");
+  const role = feature.get("role");
 
   // Don't allow deleting origin or datum planes
-  if (type === 'origin' || (type === 'plane' && role)) {
+  if (type === "origin" || (type === "plane" && role)) {
     return false;
   }
 
@@ -809,14 +800,10 @@ export function deleteFeature(doc: SolidTypeDoc, id: string): boolean {
 /**
  * Rename a feature
  */
-export function renameFeature(
-  doc: SolidTypeDoc,
-  id: string,
-  name: string
-): boolean {
+export function renameFeature(doc: SolidTypeDoc, id: string, name: string): boolean {
   const feature = doc.featuresById.get(id);
   if (!feature) return false;
 
-  feature.set('name', name);
+  feature.set("name", name);
   return true;
 }

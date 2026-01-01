@@ -23,6 +23,7 @@ Everything we build should move toward these goals:
 ### 1. Robust Parametric Model
 
 A solid CAD kernel + app that reliably:
+
 - Creates geometry from sketches and features
 - Edits parameters without breaking the model
 - Rebuilds the entire feature tree deterministically
@@ -31,6 +32,7 @@ A solid CAD kernel + app that reliably:
 ### 2. AI-Assisted Editing
 
 Natural language interaction for modifying models:
+
 - AI understands the document structure (Yjs XML DOM)
 - AI can read, propose changes, and apply them via diff
 - AI has tools to resolve naming/selection challenges
@@ -92,6 +94,7 @@ The entire document state lives in a Yjs `Y.Doc`:
 - **`state`** (Y.Map) - Editing state including rebuild gate position
 
 This enables:
+
 - Real-time collaboration via Yjs providers
 - Undo/redo via Yjs UndoManager
 - AI integration via XML serialization/diffing
@@ -99,6 +102,7 @@ This enables:
 ### Kernel in Web Worker
 
 The CAD kernel runs in a Web Worker to:
+
 - Keep the UI responsive during heavy operations
 - Allow incremental rebuild without blocking
 - Transfer mesh data via transferable ArrayBuffers
@@ -106,6 +110,7 @@ The CAD kernel runs in a Web Worker to:
 ### Point-and-Click Interface
 
 This is NOT a code-first CAD tool. Users interact through:
+
 - Feature tree for organization and navigation
 - 3D viewer for visualization and selection
 - 2D sketch canvas for drawing
@@ -141,11 +146,11 @@ When in doubt, prefer a **correct but slow** implementation over a **fast but fr
 
 If you make **architectural or plan changes**, you MUST update the documentation:
 
-| Change Type | Update |
-|-------------|--------|
+| Change Type                                  | Update                                |
+| -------------------------------------------- | ------------------------------------- |
 | New modules, changed APIs, package structure | [`ARCHITECTURE.md`](/ARCHITECTURE.md) |
-| Vision, goals, technical approach | [`OVERVIEW.md`](/OVERVIEW.md) |
-| Implementation plan, phase structure | `/plan/*` documents |
+| Vision, goals, technical approach            | [`OVERVIEW.md`](/OVERVIEW.md)         |
+| Implementation plan, phase structure         | `/plan/*` documents                   |
 
 The docs are the **source of truth**. If code conflicts with docs, either fix the code or update the docs—never leave them out of sync.
 
@@ -158,6 +163,7 @@ Each phase delivers a **small, complete workflow** rather than building entire s
 ```
 
 This means:
+
 - Users get working features faster
 - Architecture is validated incrementally
 - Each phase is independently testable
@@ -165,12 +171,14 @@ This means:
 ### Constraints After Features
 
 We prove the sketch → feature flow works before adding constraint solving:
+
 - Phase 03-06: Basic sketching and modeling with direct manipulation
 - Phase 07-08: Add constraints after extrude/revolve work
 
 ### Selection Before References
 
 Selection in 3D view is foundational to geometry references:
+
 - Phase 11: Basic face/edge selection
 - Phase 14-16: Use selection for extrude extents, sketch-on-face, etc.
 
@@ -178,18 +186,18 @@ Selection in 3D view is foundational to geometry references:
 
 ## Phase Overview
 
-| Phases | Focus | Key Deliverables |
-|--------|-------|------------------|
-| 01-02 | Foundation | Yjs document model, kernel-viewer wiring |
-| 03-06 | Basic Modeling | Line sketches, extrude add/cut, revolve |
-| 07-08 | Constraints | Basic constraints, dimensions UI |
-| 09-10 | Curved Geometry | Arcs in sketches, curved profiles |
-| 11-13 | 3D Interaction | Selection, rebuild gate, properties |
-| 14-16 | Geometry References | Extrude extents, sketch-on-face, external refs |
-| 17-18 | Boolean & Export | Explicit booleans, STL export |
-| 19 | Advanced Constraints | Parallel, perpendicular, tangent |
-| 20-22 | Advanced Modeling | Fillet, chamfer, sweep, loft, patterns |
-| 23-26 | AI Integration | Context assembly, tools, diff/apply, chat UI |
+| Phases | Focus                | Key Deliverables                               |
+| ------ | -------------------- | ---------------------------------------------- |
+| 01-02  | Foundation           | Yjs document model, kernel-viewer wiring       |
+| 03-06  | Basic Modeling       | Line sketches, extrude add/cut, revolve        |
+| 07-08  | Constraints          | Basic constraints, dimensions UI               |
+| 09-10  | Curved Geometry      | Arcs in sketches, curved profiles              |
+| 11-13  | 3D Interaction       | Selection, rebuild gate, properties            |
+| 14-16  | Geometry References  | Extrude extents, sketch-on-face, external refs |
+| 17-18  | Boolean & Export     | Explicit booleans, STL export                  |
+| 19     | Advanced Constraints | Parallel, perpendicular, tangent               |
+| 20-22  | Advanced Modeling    | Fillet, chamfer, sweep, loft, patterns         |
+| 23-26  | AI Integration       | Context assembly, tools, diff/apply, chat UI   |
 
 ---
 
@@ -198,6 +206,7 @@ Selection in 3D view is foundational to geometry references:
 ### Kernel (@solidtype/core)
 
 Already implemented:
+
 - `num/` - Vectors, matrices, tolerances, predicates, root finding
 - `geom/` - 2D/3D curves, surfaces, intersection
 - `topo/` - TopoModel BREP representation, validation, healing
@@ -210,6 +219,7 @@ Already implemented:
 ### App (@solidtype/app)
 
 Already implemented:
+
 - React + Three.js viewer (showing a static cube)
 - Feature tree (with mock data)
 - Properties panel (placeholder)
@@ -236,15 +246,15 @@ A phase is complete when:
 
 These decisions are **locked** to prevent schema migrations:
 
-| Decision | Value | See |
-|----------|-------|-----|
-| Vector serialization | Comma-separated strings (`"0,0,1"`) | [01-document-model.md](01-document-model.md) |
-| Complex data | JSON in attributes (for sketch lists: `points`/`entities`/`constraints`) | [01-document-model.md](01-document-model.md) |
-| Feature IDs | Type prefix + counter (`s1`, `e1`) | [01-document-model.md](01-document-model.md) |
-| Persistent refs | `type:featureId:selector` | [appendix/naming-strategy.md](appendix/naming-strategy.md) |
-| Build errors | Transient (not stored in Yjs) | [01-document-model.md](01-document-model.md) |
-| Rebuild strategy | Full rebuild initially, incremental later | [02-kernel-viewer-wiring.md](02-kernel-viewer-wiring.md) |
-| OffscreenCanvas | After Phase 11 or when face count > 500 | [02-kernel-viewer-wiring.md](02-kernel-viewer-wiring.md) |
+| Decision             | Value                                                                    | See                                                        |
+| -------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| Vector serialization | Comma-separated strings (`"0,0,1"`)                                      | [01-document-model.md](01-document-model.md)               |
+| Complex data         | JSON in attributes (for sketch lists: `points`/`entities`/`constraints`) | [01-document-model.md](01-document-model.md)               |
+| Feature IDs          | Type prefix + counter (`s1`, `e1`)                                       | [01-document-model.md](01-document-model.md)               |
+| Persistent refs      | `type:featureId:selector`                                                | [appendix/naming-strategy.md](appendix/naming-strategy.md) |
+| Build errors         | Transient (not stored in Yjs)                                            | [01-document-model.md](01-document-model.md)               |
+| Rebuild strategy     | Full rebuild initially, incremental later                                | [02-kernel-viewer-wiring.md](02-kernel-viewer-wiring.md)   |
+| OffscreenCanvas      | After Phase 11 or when face count > 500                                  | [02-kernel-viewer-wiring.md](02-kernel-viewer-wiring.md)   |
 
 **AI integration (Phases 23-26) requires all of these to be stable before starting.**
 
@@ -253,10 +263,12 @@ These decisions are **locked** to prevent schema migrations:
 ## Related Documents
 
 ### Foundation
+
 - [OVERVIEW.md](/OVERVIEW.md) - **Read first** - Foundational vision and technical approach
 - [ARCHITECTURE.md](/ARCHITECTURE.md) - Package structure and layer responsibilities
 
 ### Plan Documents
+
 - [01-document-model.md](01-document-model.md) - Yjs schema details
 - [appendix/kernel-improvements.md](appendix/kernel-improvements.md) - Kernel work by phase
 - [appendix/solver-roadmap.md](appendix/solver-roadmap.md) - Constraint solver evolution

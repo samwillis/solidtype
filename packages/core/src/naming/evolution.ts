@@ -1,15 +1,15 @@
 /**
  * Evolution Graph and Naming Strategy
- * 
+ *
  * This module implements the persistent naming strategy that tracks how
  * subshapes evolve through modeling operations.
  */
 
-import type { Vec3 } from '../num/vec3.js';
-import { dot3, sub3 } from '../num/vec3.js';
-import { TopoModel } from '../topo/TopoModel.js';
-import type { BodyId, FaceId, EdgeId } from '../topo/handles.js';
-import { surfaceNormal } from '../geom/surface.js';
+import type { Vec3 } from "../num/vec3.js";
+import { dot3, sub3 } from "../num/vec3.js";
+import { TopoModel } from "../topo/TopoModel.js";
+import type { BodyId, FaceId, EdgeId } from "../topo/handles.js";
+import { surfaceNormal } from "../geom/surface.js";
 import type {
   FeatureId,
   StepId,
@@ -19,7 +19,7 @@ import type {
   EvolutionMapping,
   GeometryTopologyFingerprint,
   ResolveResult,
-} from './types.js';
+} from "./types.js";
 import {
   asFeatureId,
   asStepId,
@@ -27,7 +27,7 @@ import {
   resolvedRef,
   notFoundRef,
   ambiguousRef,
-} from './types.js';
+} from "./types.js";
 
 // ============================================================================
 // NamingStrategy Interface
@@ -104,12 +104,7 @@ export class DefaultNamingStrategy implements NamingStrategy {
     subshape: SubshapeRef,
     fingerprint?: GeometryTopologyFingerprint
   ): PersistentRef {
-    const persistentRef = createPersistentRef(
-      featureId,
-      selector,
-      subshape.type,
-      fingerprint
-    );
+    const persistentRef = createPersistentRef(featureId, selector, subshape.type, fingerprint);
 
     const record: BirthRecord = {
       featureId,
@@ -137,10 +132,10 @@ export class DefaultNamingStrategy implements NamingStrategy {
       if (mapping.old && mapping.news.length > 0) {
         const oldKey = this.subshapeKey(mapping.old);
         const existingRef = this.refsBySubshape.get(oldKey);
-        
+
         if (existingRef) {
           this.refsBySubshape.delete(oldKey);
-          
+
           for (const newSubshape of mapping.news) {
             const newKey = this.subshapeKey(newSubshape);
             this.refsBySubshape.set(newKey, existingRef);
@@ -148,7 +143,7 @@ export class DefaultNamingStrategy implements NamingStrategy {
         }
       }
     }
-    
+
     this.evolutionSteps.push({ stepId, mappings });
   }
 
@@ -183,17 +178,17 @@ export class DefaultNamingStrategy implements NamingStrategy {
       currentRefs = nextRefs;
 
       if (currentRefs.length === 0) {
-        return notFoundRef('Subshape was deleted during evolution');
+        return notFoundRef(`Subshape was deleted during evolution`);
       }
     }
 
-    currentRefs = currentRefs.map(r => ({
+    currentRefs = currentRefs.map((r) => ({
       ...r,
       body: this.currentBodyMap.get(r.body) ?? r.body,
     }));
 
     if (currentRefs.length === 0) {
-      return notFoundRef('Subshape no longer exists');
+      return notFoundRef(`Subshape no longer exists`);
     }
 
     if (currentRefs.length === 1) {
@@ -243,24 +238,24 @@ export class DefaultNamingStrategy implements NamingStrategy {
 
   getFeatureRefs(featureId: FeatureId): PersistentRef[] {
     const records = this.birthsByFeature.get(featureId) || [];
-    return records.map(r => r.persistentRef);
+    return records.map((r) => r.persistentRef);
   }
 
   updateBodyMapping(oldBody: BodyId, newBody: BodyId): void {
     this.currentBodyMap.set(oldBody, newBody);
-    
+
     const keysToUpdate: Array<{ oldKey: string; newKey: string; ref: PersistentRef }> = [];
-    
+
     for (const [key, ref] of this.refsBySubshape) {
-      const [bodyStr, type, id] = key.split(':');
+      const [bodyStr, type, id] = key.split(`:`);
       const body = parseInt(bodyStr, 10) as BodyId;
-      
+
       if (body === oldBody) {
         const newKey = `${newBody}:${type}:${id}`;
         keysToUpdate.push({ oldKey: key, newKey, ref });
       }
     }
-    
+
     for (const { oldKey, newKey, ref } of keysToUpdate) {
       this.refsBySubshape.delete(oldKey);
       this.refsBySubshape.set(newKey, ref);
@@ -299,9 +294,9 @@ export function computeSubshapeFingerprint(
   model: TopoModel,
   ref: SubshapeRef
 ): GeometryTopologyFingerprint | null {
-  if (ref.type === 'face') {
+  if (ref.type === `face`) {
     return computeFaceFingerprint(model, ref.id as FaceId);
-  } else if (ref.type === 'edge') {
+  } else if (ref.type === `edge`) {
     return computeEdgeFingerprint(model, ref.id as EdgeId);
   }
   return null;
@@ -320,19 +315,16 @@ export function computeFaceFingerprint(
     for (const he of model.iterateLoopHalfEdges(loopId)) {
       const vertex = model.getHalfEdgeStartVertex(he);
       const pos = model.getVertexPosition(vertex);
-      centroidSum = [
-        centroidSum[0] + pos[0],
-        centroidSum[1] + pos[1],
-        centroidSum[2] + pos[2],
-      ];
+      centroidSum = [centroidSum[0] + pos[0], centroidSum[1] + pos[1], centroidSum[2] + pos[2]];
       vertexCount++;
       adjacentCount++;
     }
   }
 
-  const centroid: Vec3 = vertexCount > 0
-    ? [centroidSum[0] / vertexCount, centroidSum[1] / vertexCount, centroidSum[2] / vertexCount]
-    : [0, 0, 0];
+  const centroid: Vec3 =
+    vertexCount > 0
+      ? [centroidSum[0] / vertexCount, centroidSum[1] / vertexCount, centroidSum[2] / vertexCount]
+      : [0, 0, 0];
 
   const surfaceIdx = model.getFaceSurfaceIndex(faceId);
   const surface = model.getSurface(surfaceIdx);
@@ -357,7 +349,7 @@ function computeFaceApproxArea(model: TopoModel, faceId: FaceId): number {
 
   const outerLoop = loops[0];
   const vertices: Vec3[] = [];
-  
+
   for (const he of model.iterateLoopHalfEdges(outerLoop)) {
     const vertex = model.getHalfEdgeStartVertex(he);
     vertices.push(model.getVertexPosition(vertex));
@@ -393,7 +385,7 @@ export function computeEdgeFingerprint(
 ): GeometryTopologyFingerprint {
   const startVertex = model.getEdgeStartVertex(edgeId);
   const endVertex = model.getEdgeEndVertex(edgeId);
-  
+
   const startPos = model.getVertexPosition(startVertex);
   const endPos = model.getVertexPosition(endVertex);
 
@@ -454,14 +446,14 @@ export function fingerprintDistance(
 export function collectBodyFaceRefs(model: TopoModel, bodyId: BodyId): SubshapeRef[] {
   const refs: SubshapeRef[] = [];
   const shells = model.getBodyShells(bodyId);
-  
+
   for (const shellId of shells) {
     const faces = model.getShellFaces(shellId);
     for (const faceId of faces) {
-      refs.push({ body: bodyId, type: 'face', id: faceId });
+      refs.push({ body: bodyId, type: `face`, id: faceId });
     }
   }
-  
+
   return refs;
 }
 

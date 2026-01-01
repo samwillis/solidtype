@@ -21,6 +21,7 @@
 > **Enhanced from original plan** with improved sketch mode handling
 
 ### Creating a New Sketch
+
 1. User **selects a datum plane** in feature tree or 3D view
 2. User clicks "New Sketch" in toolbar (enabled when plane is selected)
 3. View switches to 2D sketch mode (camera aligned to plane)
@@ -28,12 +29,14 @@
 5. **Feature tree is disabled** during sketch editing
 
 ### Drawing
+
 1. User selects "Line" tool
 2. User clicks to place start point, clicks again for end point
 3. User can continue adding lines or switch tools
 4. Selection highlights render **in the 3D view** (not 2D overlay)
 
 ### Finishing/Canceling
+
 1. **Cmd/Ctrl+Enter** to accept sketch, or click "Finish Sketch"
 2. **Escape** to cancel sketch:
    - If new sketch: sketch is **deleted**
@@ -41,6 +44,7 @@
 3. Sketch appears in feature tree
 
 ### Editing Existing Sketch
+
 1. **Double-click** sketch in feature tree to enter edit mode
 2. Changes can be reverted with Escape
 
@@ -71,19 +75,19 @@ export interface SketchPoint {
   x: number;
   y: number;
   fixed?: boolean;
-  attachedTo?: string;  // For Phase 16
+  attachedTo?: string; // For Phase 16
 }
 
 export interface SketchLine {
   id: string;
-  type: 'line';
-  start: string;  // Point ID
-  end: string;    // Point ID
+  type: "line";
+  start: string; // Point ID
+  end: string; // Point ID
 }
 
 export interface SketchArc {
   id: string;
-  type: 'arc';
+  type: "arc";
   start: string;
   end: string;
   center: string;
@@ -95,7 +99,7 @@ export type SketchEntity = SketchLine | SketchArc;
 export interface SketchData {
   points: SketchPoint[];
   entities: SketchEntity[];
-  constraints: any[];  // Defined in Phase 07
+  constraints: any[]; // Defined in Phase 07
 }
 ```
 
@@ -112,8 +116,8 @@ interface SketchModeState {
   active: boolean;
   sketchId: string | null;
   planeId: string | null;
-  activeTool: 'select' | 'line' | 'arc' | null;
-  tempPoints: { x: number; y: number }[];  // For in-progress drawing
+  activeTool: "select" | "line" | "arc" | null;
+  tempPoints: { x: number; y: number }[]; // For in-progress drawing
 }
 
 export function SketchProvider({ children }) {
@@ -124,24 +128,24 @@ export function SketchProvider({ children }) {
     activeTool: null,
     tempPoints: [],
   });
-  
+
   const startSketch = (planeId: string) => {
     // Create new sketch in Yjs
-    const sketchId = generateId('s');
+    const sketchId = generateId("s");
     addSketchFeature(doc, sketchId, planeId);
-    
+
     setMode({
       active: true,
       sketchId,
       planeId,
-      activeTool: 'line',
+      activeTool: "line",
       tempPoints: [],
     });
-    
+
     // Align camera to plane
     alignCameraToPlane(planeId);
   };
-  
+
   const finishSketch = () => {
     setMode({
       active: false,
@@ -150,11 +154,11 @@ export function SketchProvider({ children }) {
       activeTool: null,
       tempPoints: [],
     });
-    
+
     // Restore 3D view
     restoreCamera();
   };
-  
+
   // ... tool selection, point adding, etc.
 }
 ```
@@ -170,12 +174,12 @@ export function SketchCanvas() {
   const { mode, addPoint, addLine } = useSketch();
   const { doc } = useDocument();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+
   if (!mode.active) return null;
-  
+
   const handleClick = (e: React.MouseEvent) => {
     const pos = screenToSketch(e.clientX, e.clientY);
-    
+
     if (mode.activeTool === 'line') {
       if (mode.tempPoints.length === 0) {
         // First click: start point
@@ -189,7 +193,7 @@ export function SketchCanvas() {
       }
     }
   };
-  
+
   const handleMouseMove = (e: React.MouseEvent) => {
     // Preview line while drawing
     if (mode.activeTool === 'line' && mode.tempPoints.length === 1) {
@@ -197,7 +201,7 @@ export function SketchCanvas() {
       renderPreviewLine(mode.tempPoints[0], pos);
     }
   };
-  
+
   return (
     <canvas
       ref={canvasRef}
@@ -238,28 +242,25 @@ export function SketchCanvas() {
 ```typescript
 // packages/app/src/utils/camera.ts
 
-export function alignCameraToPlane(
-  camera: THREE.Camera,
-  planeId: string
-): void {
+export function alignCameraToPlane(camera: THREE.Camera, planeId: string): void {
   const planeNormals: Record<string, THREE.Vector3> = {
     xy: new THREE.Vector3(0, 0, 1),
     xz: new THREE.Vector3(0, 1, 0),
     yz: new THREE.Vector3(1, 0, 0),
   };
-  
+
   const normal = planeNormals[planeId];
   if (!normal) return;
-  
+
   // Position camera looking at origin along normal
   const distance = camera.position.length();
   camera.position.copy(normal.clone().multiplyScalar(distance));
   camera.lookAt(0, 0, 0);
-  
+
   // Set appropriate up vector
-  if (planeId === 'xy') {
+  if (planeId === "xy") {
     camera.up.set(0, 1, 0);
-  } else if (planeId === 'xz') {
+  } else if (planeId === "xz") {
     camera.up.set(0, 0, -1);
   } else {
     camera.up.set(0, 1, 0);
@@ -281,14 +282,14 @@ The kernel already has `SketchModel` class. We need to:
 case 'sketch':
   const sketchData = parseSketchData(feature);
   const plane = getPlane(feature.attributes.plane);
-  
+
   // Create SketchModel from data
   const sketch = session.createSketch(plane);
-  
+
   for (const point of sketchData.points) {
     sketch.addPoint(point.x, point.y);
   }
-  
+
   for (const entity of sketchData.entities) {
     if (entity.type === 'line') {
       sketch.addLine(
@@ -297,7 +298,7 @@ case 'sketch':
       );
     }
   }
-  
+
   // Store sketch for later use by extrude
   sketchMap.set(feature.id, sketch);
   return null;  // Sketches don't produce bodies
@@ -323,24 +324,24 @@ Even when not editing, sketches should be visible:
 function renderSketchIn3D(sketch: SketchData, plane: PlaneInfo): THREE.Group {
   const group = new THREE.Group();
   const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-  
+
   for (const entity of sketch.entities) {
-    if (entity.type === 'line') {
-      const start = sketch.points.find(p => p.id === entity.start);
-      const end = sketch.points.find(p => p.id === entity.end);
-      
+    if (entity.type === "line") {
+      const start = sketch.points.find((p) => p.id === entity.start);
+      const end = sketch.points.find((p) => p.id === entity.end);
+
       if (start && end) {
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array([
           ...planeToWorld(start.x, start.y, plane),
           ...planeToWorld(end.x, end.y, plane),
         ]);
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
         group.add(new THREE.Line(geometry, material));
       }
     }
   }
-  
+
   return group;
 }
 ```
@@ -353,7 +354,7 @@ function renderPointHandles(sketch: SketchData, plane: PlaneInfo): THREE.Group {
   const group = new THREE.Group();
   const geometry = new THREE.SphereGeometry(0.1);
   const material = new THREE.MeshBasicMaterial({ color: 0x0088ff });
-  
+
   for (const point of sketch.points) {
     const mesh = new THREE.Mesh(geometry, material);
     const worldPos = planeToWorld(point.x, point.y, plane);
@@ -361,7 +362,7 @@ function renderPointHandles(sketch: SketchData, plane: PlaneInfo): THREE.Group {
     mesh.userData.pointId = point.id;
     group.add(mesh);
   }
-  
+
   return group;
 }
 ```
@@ -374,23 +375,23 @@ function renderPointHandles(sketch: SketchData, plane: PlaneInfo): THREE.Group {
 
 ```typescript
 // Test sketch creation in Yjs
-test('addSketchFeature creates sketch element', () => {
+test("addSketchFeature creates sketch element", () => {
   const doc = createDocument();
-  addSketchFeature(doc, 's1', 'xy');
-  
-  const sketch = findFeature(doc.features, 's1');
+  addSketchFeature(doc, "s1", "xy");
+
+  const sketch = findFeature(doc.features, "s1");
   expect(sketch).toBeDefined();
-  expect(sketch.getAttribute('plane')).toBe('xy');
+  expect(sketch.getAttribute("plane")).toBe("xy");
 });
 
 // Test point/line adding
-test('addPoint adds point to sketch', () => {
+test("addPoint adds point to sketch", () => {
   const doc = createDocument();
-  addSketchFeature(doc, 's1', 'xy');
-  
-  addPointToSketch(doc, 's1', 'p1', 5, 10);
-  
-  const sketchData = getSketchData(doc, 's1');
+  addSketchFeature(doc, "s1", "xy");
+
+  addPointToSketch(doc, "s1", "p1", 5, 10);
+
+  const sketchData = getSketchData(doc, "s1");
   expect(sketchData.points).toHaveLength(1);
   expect(sketchData.points[0].x).toBe(5);
 });

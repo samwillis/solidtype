@@ -1,40 +1,38 @@
 /**
  * Tests for integer-based geometry
- * 
+ *
  * The key test: when we compute an intersection point, both faces
  * get the EXACT SAME integer coordinates, not "slightly different" values.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from "vitest";
 import {
   Vec3I,
   Vec2I,
   mmToNano,
   nanoToMm,
-  vec3ToInt,
   vec3ToFloat,
   segmentIntersection2I,
   lineLineClosestPoints3I,
   planePlaneIntersection,
   equalsI,
-  NANO_PER_MM,
-} from './integer-geometry.js';
+} from "./integer-geometry.js";
 
-describe('integer-geometry', () => {
-  describe('conversion', () => {
-    it('converts mm to nanometers', () => {
+describe("integer-geometry", () => {
+  describe("conversion", () => {
+    it("converts mm to nanometers", () => {
       expect(mmToNano(1)).toBe(1_000_000);
-      expect(mmToNano(0.001)).toBe(1_000);  // 1 micrometer
-      expect(mmToNano(0.000001)).toBe(1);   // 1 nanometer
+      expect(mmToNano(0.001)).toBe(1_000); // 1 micrometer
+      expect(mmToNano(0.000001)).toBe(1); // 1 nanometer
     });
 
-    it('converts nanometers back to mm', () => {
+    it("converts nanometers back to mm", () => {
       expect(nanoToMm(1_000_000)).toBe(1);
       expect(nanoToMm(1_000)).toBe(0.001);
       expect(nanoToMm(1)).toBe(0.000001);
     });
 
-    it('round-trips with minimal error', () => {
+    it("round-trips with minimal error", () => {
       const original = 123.456789;
       const roundTrip = nanoToMm(mmToNano(original));
       // Error should be at most 0.5nm = 0.0000005mm
@@ -42,23 +40,23 @@ describe('integer-geometry', () => {
     });
   });
 
-  describe('segment intersection 2D', () => {
-    it('finds intersection of crossing segments', () => {
+  describe("segment intersection 2D", () => {
+    it("finds intersection of crossing segments", () => {
       // Two segments crossing at (1.5mm, 1.5mm) in mm
       // In nanometers: (1500000, 1500000)
       const p1: Vec2I = [0, 0];
-      const p2: Vec2I = [3_000_000, 3_000_000];  // 3mm
+      const p2: Vec2I = [3_000_000, 3_000_000]; // 3mm
       const p3: Vec2I = [0, 3_000_000];
       const p4: Vec2I = [3_000_000, 0];
 
       const result = segmentIntersection2I(p1, p2, p3, p4);
 
       expect(result).not.toBeNull();
-      expect(result![0]).toBe(1_500_000);  // 1.5mm in nm
+      expect(result![0]).toBe(1_500_000); // 1.5mm in nm
       expect(result![1]).toBe(1_500_000);
     });
 
-    it('returns null for parallel segments', () => {
+    it("returns null for parallel segments", () => {
       const p1: Vec2I = [0, 0];
       const p2: Vec2I = [1_000_000, 0];
       const p3: Vec2I = [0, 1_000_000];
@@ -68,7 +66,7 @@ describe('integer-geometry', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null for non-intersecting segments', () => {
+    it("returns null for non-intersecting segments", () => {
       const p1: Vec2I = [0, 0];
       const p2: Vec2I = [1_000_000, 1_000_000];
       const p3: Vec2I = [2_000_000, 0];
@@ -78,7 +76,7 @@ describe('integer-geometry', () => {
       expect(result).toBeNull();
     });
 
-    it('handles tilted lines with non-integer intersection', () => {
+    it("handles tilted lines with non-integer intersection", () => {
       // Line 1: (0, 0) to (10mm, 7mm) - tilted
       // Line 2: (0, 5mm) to (10mm, 2mm) - tilted opposite
       // Intersection is at some non-integer point
@@ -96,8 +94,8 @@ describe('integer-geometry', () => {
     });
   });
 
-  describe('THE KEY TEST: same intersection point for both faces', () => {
-    it('gives identical points when computed from both directions', () => {
+  describe("THE KEY TEST: same intersection point for both faces", () => {
+    it("gives identical points when computed from both directions", () => {
       // Simulate computing the same intersection from two different faces
       // In floating point, these would give slightly different results
       // With integer snapping, they must be IDENTICAL
@@ -123,14 +121,14 @@ describe('integer-geometry', () => {
       expect(resultFromA![0]).toBe(resultFromB![0]);
       expect(resultFromA![1]).toBe(resultFromB![1]);
 
-      console.log('Intersection point (nm):', resultFromA);
-      console.log('Intersection point (mm):', [
+      console.log("Intersection point (nm):", resultFromA);
+      console.log("Intersection point (mm):", [
         nanoToMm(resultFromA![0]),
-        nanoToMm(resultFromA![1])
+        nanoToMm(resultFromA![1]),
       ]);
     });
 
-    it('gives identical 3D intersection points from both lines', () => {
+    it("gives identical 3D intersection points from both lines", () => {
       // Two 3D lines that intersect
       // Line 1: passes through (0,0,0) in direction (1, 0.7, 0.3)
       // Line 2: passes through (5mm, 0, 0) in direction (0, 1, 0.5)
@@ -150,13 +148,13 @@ describe('integer-geometry', () => {
       // THE KEY ASSERTION: Both lines get the SAME point
       expect(equalsI(pointOnLine1, pointOnLine2)).toBe(true);
 
-      console.log('3D intersection point (nm):', pointOnLine1);
-      console.log('3D intersection point (mm):', vec3ToFloat(pointOnLine1));
+      console.log("3D intersection point (nm):", pointOnLine1);
+      console.log("3D intersection point (mm):", vec3ToFloat(pointOnLine1));
     });
   });
 
-  describe('plane-plane intersection', () => {
-    it('computes intersection of XY and XZ planes', () => {
+  describe("plane-plane intersection", () => {
+    it("computes intersection of XY and XZ planes", () => {
       // XY plane: normal (0, 0, 1), point (0, 0, 0)
       const n1: Vec3I = [0, 0, 1_000_000];
       const p1: Vec3I = [0, 0, 0];
@@ -175,22 +173,18 @@ describe('integer-geometry', () => {
       expect(result!.direction[1]).toBe(0);
       expect(result!.direction[2]).toBe(0);
 
-      console.log('Plane intersection:', result);
+      console.log("Plane intersection:", result);
     });
 
-    it('computes intersection of tilted planes', () => {
+    it("computes intersection of tilted planes", () => {
       // Plane 1: normal tilted 20° around Y
-      const angle = 20 * Math.PI / 180;
-      const n1: Vec3I = [
-        mmToNano(Math.sin(angle)),
-        0,
-        mmToNano(Math.cos(angle))
-      ];
+      const angle = (20 * Math.PI) / 180;
+      const n1: Vec3I = [mmToNano(Math.sin(angle)), 0, mmToNano(Math.cos(angle))];
       const p1: Vec3I = [0, 0, 0];
 
       // Plane 2: vertical YZ plane
       const n2: Vec3I = [1_000_000, 0, 0];
-      const p2: Vec3I = [5_000_000, 0, 0];  // 5mm along X
+      const p2: Vec3I = [5_000_000, 0, 0]; // 5mm along X
 
       const result = planePlaneIntersection(n1, p1, n2, p2);
 
@@ -201,32 +195,28 @@ describe('integer-geometry', () => {
       expect(Number.isInteger(result!.point[1])).toBe(true);
       expect(Number.isInteger(result!.point[2])).toBe(true);
 
-      console.log('Tilted plane intersection:', {
+      console.log("Tilted plane intersection:", {
         point: vec3ToFloat(result!.point),
-        direction: vec3ToFloat(result!.direction as Vec3I)
+        direction: vec3ToFloat(result!.direction as Vec3I),
       });
     });
   });
 
-  describe('practical CAD scenarios', () => {
-    it('handles the problematic 20° angled cut', () => {
+  describe("practical CAD scenarios", () => {
+    it("handles the problematic 20° angled cut", () => {
       // This is the scenario that was failing with floating point:
       // A vertical face (x=0 plane) intersecting a tilted face (20° rotation around Y)
 
       // Face 1: vertical plane at x=0
-      const n1: Vec3I = [1_000_000, 0, 0];  // normal in +X
+      const n1: Vec3I = [1_000_000, 0, 0]; // normal in +X
       const p1: Vec3I = [0, 0, 0];
 
       // Face 2: plane tilted 20° around Y axis
-      const angle = 20 * Math.PI / 180;
+      const angle = (20 * Math.PI) / 180;
       const cosA = Math.cos(angle);
       const sinA = Math.sin(angle);
-      const n2: Vec3I = [
-        mmToNano(sinA),
-        mmToNano(-cosA),
-        0
-      ];
-      const p2: Vec3I = [mmToNano(5), mmToNano(2), 0];  // Some point on the plane
+      const n2: Vec3I = [mmToNano(sinA), mmToNano(-cosA), 0];
+      const p2: Vec3I = [mmToNano(5), mmToNano(2), 0]; // Some point on the plane
 
       const result = planePlaneIntersection(n1, p1, n2, p2);
 
@@ -234,10 +224,10 @@ describe('integer-geometry', () => {
 
       // The intersection line should be along Y (since both normals are in XY plane)
       // Direction should have only Z component (cross of X-facing and tilted normals)
-      
-      console.log('Angled cut intersection:', {
+
+      console.log("Angled cut intersection:", {
         point_mm: vec3ToFloat(result!.point),
-        direction_mm: vec3ToFloat(result!.direction as Vec3I)
+        direction_mm: vec3ToFloat(result!.direction as Vec3I),
       });
 
       // Verify the point is exactly an integer (no floating point fuzz)

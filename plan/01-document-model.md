@@ -18,6 +18,7 @@
 ### Why Yjs?
 
 Yjs provides:
+
 1. **CRDT-based collaboration** - Real-time multi-user editing without conflicts
 2. **Built-in undo/redo** - UndoManager tracks all changes
 3. **XML support** - Natural fit for hierarchical feature trees
@@ -29,9 +30,9 @@ Yjs provides:
 ```typescript
 // Y.Doc structure
 interface SolidTypeDocument {
-  meta: Y.Map<string>;           // Document metadata
-  state: Y.Map<unknown>;         // Editing state (rebuild gate, etc.)
-  features: Y.XmlFragment;       // Feature tree as XML
+  meta: Y.Map<string>; // Document metadata
+  state: Y.Map<unknown>; // Editing state (rebuild gate, etc.)
+  features: Y.XmlFragment; // Feature tree as XML
 }
 ```
 
@@ -45,10 +46,10 @@ Document-level metadata:
 
 ```typescript
 interface DocumentMeta {
-  name: string;           // Document name
-  created: number;        // Timestamp
-  modified: number;       // Last modified timestamp
-  version: number;        // Schema version for migrations
+  name: string; // Document name
+  created: number; // Timestamp
+  modified: number; // Last modified timestamp
+  version: number; // Schema version for migrations
 }
 ```
 
@@ -58,7 +59,7 @@ Editing state that should be persisted:
 
 ```typescript
 interface DocumentState {
-  rebuildGate: string | null;    // Feature ID to rebuild up to (null = all)
+  rebuildGate: string | null; // Feature ID to rebuild up to (null = all)
   // Future: selected feature ID, view state, etc.
 }
 ```
@@ -81,6 +82,7 @@ The feature tree as XML elements. Initial structure:
 ### Common Attributes
 
 All features have:
+
 - `id` - Unique identifier (e.g., "s1", "e1")
 - `name` - Display name (optional, auto-generated if not provided)
 - `suppressed` - Whether feature is suppressed (not computed)
@@ -128,6 +130,7 @@ Sketches contain child data structures:
 ### Concept
 
 The rebuild gate (like SolidWorks' rollback bar) allows users to:
+
 - Drag a marker in the feature tree to any position
 - Model rebuilds only up to that point
 - Features after the gate are not computed
@@ -137,8 +140,8 @@ The rebuild gate (like SolidWorks' rollback bar) allows users to:
 
 ```typescript
 // In state (Y.Map)
-state.set('rebuildGate', 'e1');  // Rebuild up to and including feature 'e1'
-state.set('rebuildGate', null);  // Rebuild all features
+state.set("rebuildGate", "e1"); // Rebuild up to and including feature 'e1'
+state.set("rebuildGate", null); // Rebuild all features
 ```
 
 ### UI Behavior
@@ -158,7 +161,7 @@ state.set('rebuildGate', null);  // Rebuild all features
 ```typescript
 // packages/app/src/types/document.ts
 
-import * as Y from 'yjs';
+import * as Y from "yjs";
 
 // Feature base interface
 export interface FeatureBase {
@@ -169,35 +172,31 @@ export interface FeatureBase {
 
 // Specific feature types (expanded in later phases)
 export interface OriginFeature extends FeatureBase {
-  type: 'origin';
+  type: "origin";
 }
 
 export interface PlaneFeature extends FeatureBase {
-  type: 'plane';
+  type: "plane";
   normal: [number, number, number];
   origin: [number, number, number];
   xDir: [number, number, number];
 }
 
 export interface SketchFeature extends FeatureBase {
-  type: 'sketch';
-  plane: string;  // Reference to plane ID or face ref
+  type: "sketch";
+  plane: string; // Reference to plane ID or face ref
   // Points, entities, constraints stored as child data
 }
 
 export interface ExtrudeFeature extends FeatureBase {
-  type: 'extrude';
+  type: "extrude";
   sketch: string;
   distance: number;
-  op: 'add' | 'cut';
+  op: "add" | "cut";
 }
 
-export type Feature = 
-  | OriginFeature 
-  | PlaneFeature 
-  | SketchFeature 
-  | ExtrudeFeature;
-  // More types added in later phases
+export type Feature = OriginFeature | PlaneFeature | SketchFeature | ExtrudeFeature;
+// More types added in later phases
 ```
 
 ### Document Access
@@ -205,7 +204,7 @@ export type Feature =
 ```typescript
 // packages/app/src/hooks/useDocument.ts
 
-import * as Y from 'yjs';
+import * as Y from "yjs";
 
 export interface SolidTypeDoc {
   ydoc: Y.Doc;
@@ -216,56 +215,56 @@ export interface SolidTypeDoc {
 
 export function createDocument(): SolidTypeDoc {
   const ydoc = new Y.Doc();
-  const meta = ydoc.getMap('meta');
-  const state = ydoc.getMap('state');
-  const features = ydoc.getXmlFragment('features');
-  
+  const meta = ydoc.getMap("meta");
+  const state = ydoc.getMap("state");
+  const features = ydoc.getXmlFragment("features");
+
   // Initialize meta
-  meta.set('name', 'Untitled');
-  meta.set('created', Date.now());
-  meta.set('modified', Date.now());
-  meta.set('version', 1);
-  
+  meta.set("name", "Untitled");
+  meta.set("created", Date.now());
+  meta.set("modified", Date.now());
+  meta.set("version", 1);
+
   // Initialize state
-  state.set('rebuildGate', null);
-  
+  state.set("rebuildGate", null);
+
   // Initialize default features
   initializeDefaultFeatures(features);
-  
+
   return { ydoc, meta, state, features };
 }
 
 function initializeDefaultFeatures(features: Y.XmlFragment): void {
   // Add origin
-  const origin = new Y.XmlElement('origin');
-  origin.setAttribute('id', 'origin');
+  const origin = new Y.XmlElement("origin");
+  origin.setAttribute("id", "origin");
   features.push([origin]);
-  
+
   // Add XY plane
-  const xyPlane = new Y.XmlElement('plane');
-  xyPlane.setAttribute('id', 'xy');
-  xyPlane.setAttribute('name', 'XY Plane');
-  xyPlane.setAttribute('normal', '0,0,1');
-  xyPlane.setAttribute('origin', '0,0,0');
-  xyPlane.setAttribute('xDir', '1,0,0');
+  const xyPlane = new Y.XmlElement("plane");
+  xyPlane.setAttribute("id", "xy");
+  xyPlane.setAttribute("name", "XY Plane");
+  xyPlane.setAttribute("normal", "0,0,1");
+  xyPlane.setAttribute("origin", "0,0,0");
+  xyPlane.setAttribute("xDir", "1,0,0");
   features.push([xyPlane]);
-  
+
   // Add XZ plane
-  const xzPlane = new Y.XmlElement('plane');
-  xzPlane.setAttribute('id', 'xz');
-  xzPlane.setAttribute('name', 'XZ Plane');
-  xzPlane.setAttribute('normal', '0,1,0');
-  xzPlane.setAttribute('origin', '0,0,0');
-  xzPlane.setAttribute('xDir', '1,0,0');
+  const xzPlane = new Y.XmlElement("plane");
+  xzPlane.setAttribute("id", "xz");
+  xzPlane.setAttribute("name", "XZ Plane");
+  xzPlane.setAttribute("normal", "0,1,0");
+  xzPlane.setAttribute("origin", "0,0,0");
+  xzPlane.setAttribute("xDir", "1,0,0");
   features.push([xzPlane]);
-  
+
   // Add YZ plane
-  const yzPlane = new Y.XmlElement('plane');
-  yzPlane.setAttribute('id', 'yz');
-  yzPlane.setAttribute('name', 'YZ Plane');
-  yzPlane.setAttribute('normal', '1,0,0');
-  yzPlane.setAttribute('origin', '0,0,0');
-  yzPlane.setAttribute('xDir', '0,1,0');
+  const yzPlane = new Y.XmlElement("plane");
+  yzPlane.setAttribute("id", "yz");
+  yzPlane.setAttribute("name", "YZ Plane");
+  yzPlane.setAttribute("normal", "1,0,0");
+  yzPlane.setAttribute("origin", "0,0,0");
+  yzPlane.setAttribute("xDir", "0,1,0");
   features.push([yzPlane]);
 }
 ```
@@ -294,7 +293,7 @@ const DocumentContext = createContext<DocumentContextValue | null>(null);
 export function DocumentProvider({ children }: { children: React.ReactNode }) {
   const doc = useMemo(() => createDocument(), []);
   const [rebuildGate, setRebuildGateState] = useState<string | null>(null);
-  
+
   // Sync rebuild gate from Yjs
   useEffect(() => {
     const state = doc.state;
@@ -305,11 +304,11 @@ export function DocumentProvider({ children }: { children: React.ReactNode }) {
     state.observe(updateGate);
     return () => state.unobserve(updateGate);
   }, [doc]);
-  
+
   const setRebuildGate = (featureId: string | null) => {
     doc.state.set('rebuildGate', featureId);
   };
-  
+
   return (
     <DocumentContext.Provider value={{ doc, rebuildGate, setRebuildGate }}>
       {children}
@@ -345,6 +344,7 @@ None for this phase - this is purely app-side document infrastructure.
 ## User Workflow
 
 At the end of this phase, users can:
+
 1. Open the app and see the default feature tree (origin, planes)
 2. Drag the rebuild gate bar (though it has no effect yet)
 3. Use undo/redo (though no features to edit yet)
@@ -360,101 +360,101 @@ All tests must pass before phase is complete:
 ```typescript
 // packages/app/src/__tests__/document.test.ts
 
-describe('Document Creation', () => {
-  test('createDocument initializes with default features', () => {
+describe("Document Creation", () => {
+  test("createDocument initializes with default features", () => {
     const doc = createDocument();
     const features = Array.from(doc.features.toArray());
     expect(features).toHaveLength(4); // origin + 3 planes
   });
 
-  test('default features have correct structure', () => {
+  test("default features have correct structure", () => {
     const doc = createDocument();
     const features = doc.features.toArray();
-    
+
     // Origin
-    expect(features[0].nodeName).toBe('origin');
-    expect(features[0].getAttribute('id')).toBe('origin');
-    
+    expect(features[0].nodeName).toBe("origin");
+    expect(features[0].getAttribute("id")).toBe("origin");
+
     // XY Plane
-    expect(features[1].nodeName).toBe('plane');
-    expect(features[1].getAttribute('id')).toBe('xy');
-    expect(features[1].getAttribute('normal')).toBe('0,0,1');
+    expect(features[1].nodeName).toBe("plane");
+    expect(features[1].getAttribute("id")).toBe("xy");
+    expect(features[1].getAttribute("normal")).toBe("0,0,1");
   });
 
-  test('meta is initialized correctly', () => {
+  test("meta is initialized correctly", () => {
     const doc = createDocument();
-    expect(doc.meta.get('name')).toBe('Untitled');
-    expect(doc.meta.get('version')).toBe(1);
-    expect(typeof doc.meta.get('created')).toBe('number');
+    expect(doc.meta.get("name")).toBe("Untitled");
+    expect(doc.meta.get("version")).toBe(1);
+    expect(typeof doc.meta.get("created")).toBe("number");
   });
 });
 
-describe('Rebuild Gate', () => {
-  test('setRebuildGate updates state', () => {
+describe("Rebuild Gate", () => {
+  test("setRebuildGate updates state", () => {
     const doc = createDocument();
-    doc.state.set('rebuildGate', 'e1');
-    expect(doc.state.get('rebuildGate')).toBe('e1');
+    doc.state.set("rebuildGate", "e1");
+    expect(doc.state.get("rebuildGate")).toBe("e1");
   });
 
-  test('rebuildGate defaults to null', () => {
+  test("rebuildGate defaults to null", () => {
     const doc = createDocument();
-    expect(doc.state.get('rebuildGate')).toBeNull();
+    expect(doc.state.get("rebuildGate")).toBeNull();
   });
 });
 
-describe('Undo/Redo', () => {
-  test('UndoManager tracks feature additions', () => {
+describe("Undo/Redo", () => {
+  test("UndoManager tracks feature additions", () => {
     const doc = createDocument();
     const undoManager = new Y.UndoManager(doc.features);
-    
-    const sketch = new Y.XmlElement('sketch');
-    sketch.setAttribute('id', 's1');
+
+    const sketch = new Y.XmlElement("sketch");
+    sketch.setAttribute("id", "s1");
     doc.features.push([sketch]);
-    
+
     expect(doc.features.length).toBe(5);
-    
+
     undoManager.undo();
     expect(doc.features.length).toBe(4);
-    
+
     undoManager.redo();
     expect(doc.features.length).toBe(5);
   });
 
-  test('UndoManager tracks attribute changes', () => {
+  test("UndoManager tracks attribute changes", () => {
     const doc = createDocument();
     const undoManager = new Y.UndoManager(doc.features);
-    
-    const sketch = new Y.XmlElement('sketch');
-    sketch.setAttribute('id', 's1');
-    sketch.setAttribute('plane', 'xy');
+
+    const sketch = new Y.XmlElement("sketch");
+    sketch.setAttribute("id", "s1");
+    sketch.setAttribute("plane", "xy");
     doc.features.push([sketch]);
-    
+
     // Change attribute
-    sketch.setAttribute('plane', 'xz');
-    expect(sketch.getAttribute('plane')).toBe('xz');
-    
+    sketch.setAttribute("plane", "xz");
+    expect(sketch.getAttribute("plane")).toBe("xz");
+
     undoManager.undo();
-    expect(sketch.getAttribute('plane')).toBe('xy');
+    expect(sketch.getAttribute("plane")).toBe("xy");
   });
 });
 
-describe('ID Generation', () => {
-  test('generateId increments counter', () => {
+describe("ID Generation", () => {
+  test("generateId increments counter", () => {
     const counters = { s: 0, e: 0 };
-    expect(generateId('sketch', counters)).toBe('s1');
-    expect(generateId('sketch', counters)).toBe('s2');
-    expect(generateId('extrude', counters)).toBe('e1');
+    expect(generateId("sketch", counters)).toBe("s1");
+    expect(generateId("sketch", counters)).toBe("s2");
+    expect(generateId("extrude", counters)).toBe("e1");
   });
 });
 
-describe('Vector Parsing', () => {
-  test('parseVector handles comma-separated strings', () => {
-    expect(parseVector('0,0,1')).toEqual([0, 0, 1]);
-    expect(parseVector('1.5,-2.5,3')).toEqual([1.5, -2.5, 3]);
+describe("Vector Parsing", () => {
+  test("parseVector handles comma-separated strings", () => {
+    expect(parseVector("0,0,1")).toEqual([0, 0, 1]);
+    expect(parseVector("1.5,-2.5,3")).toEqual([1.5, -2.5, 3]);
   });
 
-  test('serializeVector produces comma-separated string', () => {
-    expect(serializeVector([0, 0, 1])).toBe('0,0,1');
+  test("serializeVector produces comma-separated string", () => {
+    expect(serializeVector([0, 0, 1])).toBe("0,0,1");
   });
 });
 ```
@@ -491,6 +491,7 @@ These decisions are **locked** to avoid migrations. Document them here before im
 ```
 
 **Rationale**:
+
 - Comma-separated is more readable for simple vectors
 - JSON allows complex nested structures without XML verbosity
 - Both are easy to parse and serialize
@@ -501,10 +502,10 @@ These decisions are **locked** to avoid migrations. Document them here before im
 
 ```typescript
 interface IdCounters {
-  s: number;  // sketches: s1, s2, s3
-  e: number;  // extrudes: e1, e2, e3
-  r: number;  // revolves: r1, r2, r3
-  f: number;  // fillets: f1, f2, f3
+  s: number; // sketches: s1, s2, s3
+  e: number; // extrudes: e1, e2, e3
+  r: number; // revolves: r1, r2, r3
+  f: number; // fillets: f1, f2, f3
   // etc.
 }
 
@@ -516,6 +517,7 @@ function generateId(type: string, counters: IdCounters): string {
 ```
 
 **Rationale**:
+
 - Short, readable IDs
 - Easy to reference in UI and AI context
 - Counter stored in `meta` Y.Map for persistence
@@ -537,6 +539,7 @@ function generateId(type: string, counters: IdCounters): string {
 ```
 
 **Rationale**:
+
 - Avoids nested XML list management
 - Single-attribute updates are compact and undo-friendly
 - Easy to deserialize with `JSON.parse()`
@@ -553,8 +556,8 @@ function generateId(type: string, counters: IdCounters): string {
 
 ```typescript
 // Parsing
-const distance = parseFloat(element.getAttribute('distance'));
-const fixed = element.getAttribute('fixed') === 'true';
+const distance = parseFloat(element.getAttribute("distance"));
+const fixed = element.getAttribute("fixed") === "true";
 ```
 
 ---
@@ -570,6 +573,7 @@ Features can be suppressed (skipped during rebuild):
 ```
 
 Suppressed features:
+
 - Are not computed during rebuild
 - Appear grayed out in feature tree
 - Do not contribute geometry to the model
@@ -589,14 +593,15 @@ interface RebuildResult {
 
 interface BuildError {
   featureId: string;
-  code: 'NO_CLOSED_PROFILE' | 'SELF_INTERSECTING' | 'INVALID_REFERENCE' | 'BUILD_ERROR';
+  code: "NO_CLOSED_PROFILE" | "SELF_INTERSECTING" | "INVALID_REFERENCE" | "BUILD_ERROR";
   message: string;
 }
 
-type FeatureStatus = 'computed' | 'error' | 'suppressed' | 'gated';
+type FeatureStatus = "computed" | "error" | "suppressed" | "gated";
 ```
 
 Error display contract:
+
 - Feature tree shows error icon for features with `status === 'error'`
 - Properties panel shows error message when error feature is selected
 - AI context includes errors in current build state

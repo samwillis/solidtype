@@ -61,7 +61,9 @@
   flex-shrink: 0;
   margin-right: 6px;
   color: var(--color-text-secondary);
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease;
   opacity: 0;
   width: 8px;
   height: 8px;
@@ -309,7 +311,7 @@
 
 /* Show a simple line indicator when dragging over */
 .rebuild-gate-drop-zone.drag-over::after {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   right: 0;

@@ -1,20 +1,20 @@
 /**
  * ID Allocator
- * 
+ *
  * This module provides session-scoped ID allocation for sketches, points,
  * entities, and constraints. This is important for:
- * 
+ *
  * 1. Test isolation - tests can reset IDs to avoid cross-test interference
  * 2. Worker isolation - each worker can have its own ID space
  * 3. Multi-session support - multiple modeling sessions can coexist
- * 
+ *
  * Usage:
  * - For simple use cases, the global allocator is used automatically
  * - For advanced scenarios, create an IdAllocator instance
  * - Tests should call resetAllIds() in beforeEach
  */
 
-import type { SketchId, SketchPointId, SketchEntityId, ConstraintId } from './types.js';
+import type { SketchId, SketchPointId, SketchEntityId, ConstraintId } from "./types.js";
 
 // ============================================================================
 // IdAllocator Class
@@ -22,7 +22,7 @@ import type { SketchId, SketchPointId, SketchEntityId, ConstraintId } from './ty
 
 /**
  * Allocator for sketch-related IDs
- * 
+ *
  * Each instance maintains its own ID counters, allowing for isolated
  * ID spaces in tests or parallel sessions.
  */
@@ -101,7 +101,7 @@ export function getGlobalAllocator(): IdAllocator {
 
 /**
  * Reset all global ID counters
- * 
+ *
  * This is primarily for use in tests to ensure isolation between test cases.
  */
 export function resetAllIds(): void {

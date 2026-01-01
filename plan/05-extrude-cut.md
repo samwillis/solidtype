@@ -30,11 +30,11 @@
 Same structure as add, with `op="cut"`:
 
 ```xml
-<extrude 
-  id="e2" 
+<extrude
+  id="e2"
   name="Cut1"
-  sketch="s2" 
-  distance="15" 
+  sketch="s2"
+  distance="15"
   op="cut"
   direction="reverse"
 />
@@ -62,7 +62,7 @@ export function ExtrudeDialog({ sketchId, onConfirm, onCancel }: ExtrudeDialogPr
   const [distance, setDistance] = useState(10);
   const [direction, setDirection] = useState<'normal' | 'reverse'>('normal');
   const [operation, setOperation] = useState<'add' | 'cut'>('add');
-  
+
   return (
     <Dialog open onClose={onCancel}>
       <DialogTitle>Extrude</DialogTitle>
@@ -111,9 +111,9 @@ export function ExtrudeDialog({ sketchId, onConfirm, onCancel }: ExtrudeDialogPr
 - **Cut**: Preview shown in red/orange to indicate subtraction
 
 ```typescript
-<PreviewMesh 
+<PreviewMesh
   color={operation === 'cut' ? 0xff4444 : 0x4488ff}
-  opacity={0.5} 
+  opacity={0.5}
 />
 ```
 
@@ -124,6 +124,7 @@ export function ExtrudeDialog({ sketchId, onConfirm, onCancel }: ExtrudeDialogPr
 ### Boolean Integration
 
 Cut extrude is essentially:
+
 1. Create extrude body (same as add)
 2. Subtract from existing bodies
 
@@ -132,31 +133,31 @@ Cut extrude is essentially:
 
 case 'extrude':
   const op = feature.attributes.op as 'add' | 'cut';
-  
+
   // Create the extrusion body
   const extrudeResult = session.extrude(profile, {
     distance: distance * direction,
     plane,
     operation: 'add',  // Always create body first
   });
-  
+
   if (!extrudeResult.ok) {
     throw new Error(extrudeResult.error.message);
   }
-  
+
   if (op === 'cut') {
     // Subtract from all existing bodies
     const targetBodies = Array.from(bodyMap.values());
-    
+
     for (const targetBody of targetBodies) {
       const boolResult = session.subtract(targetBody, extrudeResult.body);
-      
+
       if (boolResult.ok) {
         // Update the target body reference
         bodyMap.set(getBodyFeatureId(targetBody), boolResult.body);
       }
     }
-    
+
     // The tool body is consumed, not tracked
     return { body: null };
   } else {
@@ -169,7 +170,6 @@ case 'extrude':
 
 - **No intersection**: Cut doesn't intersect any body
   - Warning, not error (operation succeeds but has no effect)
-  
 - **Complete consumption**: Cut removes entire body
   - Body is removed from model
   - Feature tree updates
@@ -187,7 +187,7 @@ function CutPreview({ toolMesh, targetMeshes }) {
     <>
       {/* Tool body in red */}
       <Mesh geometry={toolMesh} color={0xff4444} opacity={0.7} />
-      
+
       {/* Intersection regions highlighted */}
       {targetMeshes.map(mesh => (
         <IntersectionHighlight key={mesh.id} target={mesh} tool={toolMesh} />
@@ -211,20 +211,20 @@ function CutPreview({ toolMesh, targetMeshes }) {
 
 ```typescript
 // Test cut extrude creation
-test('cut extrude removes material', () => {
+test("cut extrude removes material", () => {
   const session = new SolidSession();
-  
+
   // Create base box
   const boxSketch = createRectangleSketch(session, 20, 20);
-  session.extrude(boxSketch.toProfile(), { distance: 10, operation: 'add' });
-  
+  session.extrude(boxSketch.toProfile(), { distance: 10, operation: "add" });
+
   // Create hole
   const holeSketch = createCircleSketch(session, 5); // radius 5
-  const cutResult = session.extrude(holeSketch.toProfile(), { 
-    distance: 10, 
-    operation: 'cut' 
+  const cutResult = session.extrude(holeSketch.toProfile(), {
+    distance: 10,
+    operation: "cut",
   });
-  
+
   expect(cutResult.ok).toBe(true);
   // Should have more faces now (cylinder hole adds faces)
   expect(cutResult.body.getFaces().length).toBeGreaterThan(6);
@@ -255,20 +255,20 @@ Boolean operations (subtract) create complex topology changes. Before completing
 
 ```typescript
 // Example verification test
-test('face reference survives cut operation', () => {
+test("face reference survives cut operation", () => {
   // Create box
   const box = session.extrudeAdd(rectangleProfile, 10);
-  const topRef = session.naming.createFaceRef(box.getTopFace(), 'e1');
-  
+  const topRef = session.naming.createFaceRef(box.getTopFace(), "e1");
+
   // Cut hole (doesn't touch top face)
   const hole = session.extrudeCut(circleProfile, 10);
-  
+
   // Top face reference should still resolve
   const resolved = session.naming.resolveFaceRef(topRef);
   expect(resolved).not.toBeNull();
 });
 
-test('split face returns multiple results', () => {
+test("split face returns multiple results", () => {
   // Create box, cut that splits a face
   // Original face ref should return 'split' with multiple faces
 });

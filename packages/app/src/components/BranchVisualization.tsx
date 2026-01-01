@@ -1,14 +1,14 @@
 /**
  * Branch Visualization Component
- * 
+ *
  * Displays a tree/graph visualization of branches showing relationships.
  * Shows parent-child relationships and merge relationships.
  */
 
-import React, { useMemo } from 'react';
-import { useLiveQuery } from '@tanstack/react-db';
-import { branchesCollection } from '../lib/electric-collections';
-import './BranchVisualization.css';
+import React, { useMemo } from "react";
+import { useLiveQuery } from "@tanstack/react-db";
+import { branchesCollection } from "../lib/electric-collections";
+import "./BranchVisualization.css";
 
 // Import Branch type from schema - using inline type for now
 
@@ -50,7 +50,7 @@ export const BranchVisualization: React.FC<BranchVisualizationProps> = ({
     if (!mainBranch) return null;
 
     const branchMap = new Map<string, Branch & { children: Branch[] }>();
-    
+
     // Initialize all branches with empty children arrays
     branches.forEach((branch) => {
       branchMap.set(branch.id, {
@@ -70,8 +70,8 @@ export const BranchVisualization: React.FC<BranchVisualizationProps> = ({
 
     // Sort children by creation date
     branchMap.forEach((branch) => {
-      branch.children.sort((a, b) => 
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      branch.children.sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
     });
 
@@ -96,8 +96,8 @@ export const BranchVisualization: React.FC<BranchVisualizationProps> = ({
     });
     // Sort children by creation date
     map.forEach((branch) => {
-      branch.children.sort((a, b) => 
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      branch.children.sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
     });
     return map;
@@ -111,33 +111,57 @@ export const BranchVisualization: React.FC<BranchVisualizationProps> = ({
     );
   }
 
-  const renderBranch = (branch: Branch & { children: Branch[] }, level: number = 0): React.ReactNode => {
+  const renderBranch = (
+    branch: Branch & { children: Branch[] },
+    level: number = 0
+  ): React.ReactNode => {
     const isSelected = branch.id === selectedBranchId;
     const isMain = branch.is_main;
     const hasMerged = branch.merged_at !== null;
 
     return (
       <div key={branch.id} className="branch-visualization-item">
-        <div 
-          className={`branch-visualization-node ${isSelected ? 'selected' : ''} ${isMain ? 'main' : ''} ${hasMerged ? 'merged' : ''}`}
+        <div
+          className={`branch-visualization-node ${isSelected ? "selected" : ""} ${isMain ? "main" : ""} ${hasMerged ? "merged" : ""}`}
           style={{ paddingLeft: `${level * 24 + 8}px` }}
           onClick={() => onBranchSelect?.(branch.id)}
         >
           <div className="branch-visualization-node-content">
             <div className="branch-visualization-node-indicator">
               {isMain ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <circle cx="12" cy="12" r="10" />
                   <line x1="12" y1="8" x2="12" y2="16" />
                   <line x1="8" y1="12" x2="16" y2="12" />
                 </svg>
               ) : hasMerged ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <circle cx="12" cy="12" r="10" />
                   <path d="M8 12h8" />
                 </svg>
               ) : (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <circle cx="12" cy="12" r="10" />
                 </svg>
               )}
@@ -149,7 +173,7 @@ export const BranchVisualization: React.FC<BranchVisualizationProps> = ({
             </div>
           </div>
         </div>
-        
+
         {branch.children.length > 0 && (
           <div className="branch-visualization-children">
             {branch.children.map((child) => {
@@ -168,9 +192,7 @@ export const BranchVisualization: React.FC<BranchVisualizationProps> = ({
       <div className="branch-visualization-header">
         <h3 className="branch-visualization-title">Branches</h3>
       </div>
-      <div className="branch-visualization-tree">
-        {renderBranch(branchTree, 0)}
-      </div>
+      <div className="branch-visualization-tree">{renderBranch(branchTree, 0)}</div>
     </div>
   );
 };

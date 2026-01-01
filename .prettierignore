@@ -1,0 +1,43 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs
+dist
+**/dist
+build
+**/build
+
+# Generated files
+*.tsbuildinfo
+**/*.tsbuildinfo
+routeTree.gen.ts
+**/routeTree.gen.ts
+
+# Lock files
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Logs
+*.log
+
+# Coverage
+coverage
+**/coverage
+
+# Database
+*.db
+*.sqlite
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db

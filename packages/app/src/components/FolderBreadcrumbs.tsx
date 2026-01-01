@@ -1,15 +1,15 @@
 /**
  * Folder Breadcrumbs Component
- * 
+ *
  * Displays breadcrumb navigation for folder hierarchy.
  * Each segment is clickable to navigate up the folder tree.
  */
 
-import React, { useMemo } from 'react';
-import { useLiveQuery } from '@tanstack/react-db';
-import { LuHouse, LuChevronRight, LuFolder } from 'react-icons/lu';
-import { foldersCollection, type Folder } from '../lib/electric-collections';
-import './FolderBreadcrumbs.css';
+import React, { useMemo } from "react";
+import { useLiveQuery } from "@tanstack/react-db";
+import { LuHouse, LuChevronRight, LuFolder } from "react-icons/lu";
+import { foldersCollection, type Folder } from "../lib/electric-collections";
+import "./FolderBreadcrumbs.css";
 
 interface FolderBreadcrumbsProps {
   branchId: string;
@@ -27,15 +27,13 @@ export const FolderBreadcrumbs: React.FC<FolderBreadcrumbsProps> = ({
   // Build breadcrumb path from current folder to root
   const breadcrumbPath = useMemo(() => {
     if (!currentFolderId || !allFolders) return [];
-    
+
     const path: Folder[] = [];
     let folderId: string | null = currentFolderId;
-    
+
     // Walk up the folder tree
     while (folderId) {
-      const folder = allFolders.find(
-        (f) => f.id === folderId && f.branch_id === branchId
-      );
+      const folder = allFolders.find((f) => f.id === folderId && f.branch_id === branchId);
       if (folder) {
         path.unshift(folder);
         folderId = folder.parent_id;
@@ -43,7 +41,7 @@ export const FolderBreadcrumbs: React.FC<FolderBreadcrumbsProps> = ({
         break;
       }
     }
-    
+
     return path;
   }, [currentFolderId, allFolders, branchId]);
 
@@ -70,7 +68,7 @@ export const FolderBreadcrumbs: React.FC<FolderBreadcrumbsProps> = ({
         {/* Folder path */}
         {breadcrumbPath.map((folder, index) => {
           const isLast = index === breadcrumbPath.length - 1;
-          
+
           return (
             <li key={folder.id} className="folder-breadcrumbs-item">
               <LuChevronRight size={12} className="folder-breadcrumbs-separator" />

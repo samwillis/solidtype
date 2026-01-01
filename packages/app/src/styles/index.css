@@ -1,54 +1,58 @@
-@import '@fontsource/inter';
+@import "@fontsource/inter";
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
 :root {
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  --font-family-mono: 'SF Mono', Monaco, Menlo, 'Ubuntu Mono', Consolas, monospace;
+  --font-family:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+    "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  --font-family-mono: "SF Mono", Monaco, Menlo, "Ubuntu Mono", Consolas, monospace;
 }
 
 /* Dark theme (default) */
-:root, [data-theme="dark"] {
+:root,
+[data-theme="dark"] {
   --home-background: #010103;
   --color-bg: #1e1e1e;
   --color-bg-light: #252526;
   --color-bg-lighter: #2d2d2d;
   --color-bg-hover: #2a2d2e;
   --color-bg-active: #37373d;
-  
+
   --color-surface: #2d2d2d;
   --color-surface-alt: #383838;
   --color-hover: #3c3c3c;
-  
+
   --color-border: #3c3c3c;
   --color-border-light: #474747;
-  
+
   --color-text: #cccccc;
   --color-text-secondary: #969696;
   --color-text-muted: #6e6e6e;
-  
+
   /* International Orange - Main Accent Color */
-  --color-accent: #F04A00;
-  --color-accent-hover: #FF5511;
-  --color-accent-active: #FF6633;
+  --color-accent: #f04a00;
+  --color-accent-hover: #ff5511;
+  --color-accent-active: #ff6633;
   --color-accent-text: #ffffff;
   --color-accent-bg: rgba(240, 74, 0, 0.1);
   --color-accent-bg-hover: rgba(240, 74, 0, 0.15);
-  
+
   /* Legacy support - primary maps to accent */
-  --color-primary: #F04A00;
+  --color-primary: #f04a00;
   --color-danger: #e74c3c;
-  
+
   --color-icon: #c5c5c5;
   --color-icon-hover: #ffffff;
-  
+
   --color-viewer-bg: #1a1a1a;
-  
+
   /* Feature icon colors */
   --color-feature-sketch: #569cd6;
   --color-feature-extrude: #6a9955;
@@ -57,44 +61,43 @@
   --color-feature-primitive: #9cdcfe;
 }
 
-
 /* Light theme */
 [data-theme="light"] {
-  --home-background: #FDFAF8;
+  --home-background: #fdfaf8;
   --color-bg: #f3f3f3;
   --color-bg-light: #ffffff;
   --color-bg-lighter: #f8f8f8;
   --color-bg-hover: #e8e8e8;
   --color-bg-active: #d4d4d4;
-  
+
   --color-surface: #ffffff;
   --color-surface-alt: #f0f0f0;
   --color-hover: #e8e8e8;
-  
+
   --color-border: #e0e0e0;
   --color-border-light: #e8e8e8;
-  
+
   --color-text: #333333;
   --color-text-secondary: #666666;
   --color-text-muted: #999999;
-  
+
   /* International Orange - Main Accent Color */
-  --color-accent: #F04A00;
-  --color-accent-hover: #FF5511;
-  --color-accent-active: #FF6633;
+  --color-accent: #f04a00;
+  --color-accent-hover: #ff5511;
+  --color-accent-active: #ff6633;
   --color-accent-text: #ffffff;
   --color-accent-bg: rgba(240, 74, 0, 0.1);
   --color-accent-bg-hover: rgba(240, 74, 0, 0.15);
-  
+
   /* Legacy support - primary maps to accent */
-  --color-primary: #F04A00;
+  --color-primary: #f04a00;
   --color-danger: #e74c3c;
-  
+
   --color-icon: #424242;
   --color-icon-hover: #000000;
-  
-  --color-viewer-bg: #FDFAF8;
-  
+
+  --color-viewer-bg: #fdfaf8;
+
   /* Feature icon colors */
   --color-feature-sketch: #0066cc;
   --color-feature-extrude: #388e3c;
@@ -103,7 +106,8 @@
   --color-feature-primitive: #0277bd;
 }
 
-html, body {
+html,
+body {
   min-height: 100vh;
   width: 100vw;
   overflow-x: hidden;

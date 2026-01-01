@@ -1,15 +1,15 @@
 /**
  * OCCT Operations
- * 
+ *
  * Boolean operations, extrude, revolve, fillet, chamfer.
  */
 
-import { getOC } from './init.js';
-import { Shape } from './Shape.js';
-import type { TopoDS_Shape, TopoDS_Edge } from 'opencascade.js';
+import { getOC } from "./init.js";
+import { Shape } from "./Shape.js";
+import type { TopoDS_Shape, TopoDS_Edge } from "opencascade.js";
 // Type declarations are in ./opencascade.d.ts
 
-export type BooleanOp = 'union' | 'subtract' | 'intersect';
+export type BooleanOp = `union` | `subtract` | `intersect`;
 
 /**
  * Result of a boolean operation
@@ -22,50 +22,49 @@ export interface BooleanResult {
 
 /**
  * Perform a boolean operation on two shapes.
- * 
+ *
  * Uses BRepAlgoAPI_*_3 constructors which take (S1, S2) and perform the operation
  * immediately without requiring Build() or progress tracking.
  */
 export function booleanOp(base: Shape, tool: Shape, op: BooleanOp): BooleanResult {
   const oc = getOC();
-  
+
   let result: TopoDS_Shape;
   let builder: { delete(): void; IsDone(): boolean; Shape(): TopoDS_Shape };
-  
+
   try {
     switch (op) {
-      case 'union': {
+      case `union`: {
         // _3 = (S1, S2) constructor - performs fuse immediately
         builder = new oc.BRepAlgoAPI_Fuse_3(base.raw, tool.raw);
         break;
       }
-      case 'subtract': {
+      case `subtract`: {
         // _3 = (S1, S2) constructor - performs cut immediately
         builder = new oc.BRepAlgoAPI_Cut_3(base.raw, tool.raw);
         break;
       }
-      case 'intersect': {
+      case `intersect`: {
         // _3 = (S1, S2) constructor - performs common immediately
         builder = new oc.BRepAlgoAPI_Common_3(base.raw, tool.raw);
         break;
       }
     }
-    
+
     if (!builder.IsDone()) {
       builder.delete();
       return { success: false, error: `Boolean ${op} operation failed` };
     }
-    
+
     result = builder.Shape();
     const shape = new Shape(result);
     builder.delete();
-    
+
     return { success: true, shape };
-    
   } catch (e) {
-    return { 
-      success: false, 
-      error: e instanceof Error ? e.message : 'Unknown boolean operation error' 
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : `Unknown boolean operation error`,
     };
   }
 }
@@ -74,24 +73,24 @@ export function booleanOp(base: Shape, tool: Shape, op: BooleanOp): BooleanResul
  * Extrude a face or wire along a direction.
  */
 export function extrude(
-  profile: Shape, 
-  direction: [number, number, number], 
+  profile: Shape,
+  direction: [number, number, number],
   distance: number
 ): Shape {
   const oc = getOC();
-  
+
   const vec = new oc.gp_Vec_4(
     direction[0] * distance,
     direction[1] * distance,
     direction[2] * distance
   );
-  
+
   const prism = new oc.BRepPrimAPI_MakePrism_1(profile.raw, vec, false, true);
   const shape = new Shape(prism.Shape());
-  
+
   vec.delete();
   prism.delete();
-  
+
   return shape;
 }
 
@@ -99,26 +98,26 @@ export function extrude(
  * Extrude symmetrically (in both directions).
  */
 export function extrudeSymmetric(
-  profile: Shape, 
-  direction: [number, number, number], 
+  profile: Shape,
+  direction: [number, number, number],
   totalDistance: number
 ): Shape {
   const oc = getOC();
   const halfDist = totalDistance / 2;
-  
+
   const vec = new oc.gp_Vec_4(
     direction[0] * halfDist,
     direction[1] * halfDist,
     direction[2] * halfDist
   );
-  
+
   // Extrude in both directions
   const prism = new oc.BRepPrimAPI_MakePrism_2(profile.raw, vec, true, true);
   const shape = new Shape(prism.Shape());
-  
+
   vec.delete();
   prism.delete();
-  
+
   return shape;
 }
 
@@ -126,26 +125,26 @@ export function extrudeSymmetric(
  * Revolve a face or wire around an axis.
  */
 export function revolve(
-  profile: Shape, 
+  profile: Shape,
   axisOrigin: [number, number, number],
   axisDirection: [number, number, number],
   angleDegrees: number
 ): Shape {
   const oc = getOC();
-  
+
   const origin = new oc.gp_Pnt_3(axisOrigin[0], axisOrigin[1], axisOrigin[2]);
   const dir = new oc.gp_Dir_4(axisDirection[0], axisDirection[1], axisDirection[2]);
   const axis = new oc.gp_Ax1_2(origin, dir);
-  
-  const angleRad = angleDegrees * Math.PI / 180;
+
+  const angleRad = (angleDegrees * Math.PI) / 180;
   const revol = new oc.BRepPrimAPI_MakeRevol_1(profile.raw, axis, angleRad, true);
   const shape = new Shape(revol.Shape());
-  
+
   origin.delete();
   dir.delete();
   axis.delete();
   revol.delete();
-  
+
   return shape;
 }
 
@@ -156,27 +155,27 @@ export function filletAllEdges(shape: Shape, radius: number): Shape {
   const oc = getOC();
   // Use correct enum access: ChFi3d_FilletShape.ChFi3d_Rational
   const fillet = new oc.BRepFilletAPI_MakeFillet(shape.raw, oc.ChFi3d_FilletShape.ChFi3d_Rational);
-  
+
   // Add all edges
   const explorer = new oc.TopExp_Explorer_2(
     shape.raw,
     oc.TopAbs_ShapeEnum.TopAbs_EDGE,
     oc.TopAbs_ShapeEnum.TopAbs_SHAPE
   );
-  
+
   while (explorer.More()) {
     const edge = oc.TopoDS.Edge_1(explorer.Current());
     fillet.Add_2(radius, edge);
     explorer.Next();
   }
-  
+
   // Build() works without progress parameter in this OpenCascade.js version
   fillet.Build();
   const result = new Shape(fillet.Shape());
-  
+
   explorer.delete();
   fillet.delete();
-  
+
   return result;
 }
 
@@ -186,16 +185,16 @@ export function filletAllEdges(shape: Shape, radius: number): Shape {
 export function filletEdges(shape: Shape, radius: number, edges: TopoDS_Edge[]): Shape {
   const oc = getOC();
   const fillet = new oc.BRepFilletAPI_MakeFillet(shape.raw, oc.ChFi3d_FilletShape.ChFi3d_Rational);
-  
+
   for (const edge of edges) {
     fillet.Add_2(radius, edge);
   }
-  
+
   fillet.Build();
   const result = new Shape(fillet.Shape());
-  
+
   fillet.delete();
-  
+
   return result;
 }
 
@@ -205,21 +204,21 @@ export function filletEdges(shape: Shape, radius: number, edges: TopoDS_Edge[]):
 export function chamferAllEdges(shape: Shape, distance: number): Shape {
   const oc = getOC();
   const chamfer = new oc.BRepFilletAPI_MakeChamfer(shape.raw);
-  
+
   // Track added edges to avoid duplicates
   const addedEdges = new Set<number>();
-  
+
   // Explore all edges
   const explorer = new oc.TopExp_Explorer_2(
-    shape.raw, 
-    oc.TopAbs_ShapeEnum.TopAbs_EDGE, 
+    shape.raw,
+    oc.TopAbs_ShapeEnum.TopAbs_EDGE,
     oc.TopAbs_ShapeEnum.TopAbs_SHAPE
   );
-  
+
   while (explorer.More()) {
     const edge = oc.TopoDS.Edge_1(explorer.Current());
     const hash = edge.HashCode(10000000);
-    
+
     if (!addedEdges.has(hash)) {
       // _2 = (distance, edge) - symmetric chamfer
       chamfer.Add_2(distance, edge);
@@ -227,13 +226,13 @@ export function chamferAllEdges(shape: Shape, distance: number): Shape {
     }
     explorer.Next();
   }
-  
+
   chamfer.Build();
   const result = new Shape(chamfer.Shape());
-  
+
   explorer.delete();
   chamfer.delete();
-  
+
   return result;
 }
 
@@ -242,18 +241,18 @@ export function chamferAllEdges(shape: Shape, distance: number): Shape {
  */
 export function translate(shape: Shape, dx: number, dy: number, dz: number): Shape {
   const oc = getOC();
-  
+
   const vec = new oc.gp_Vec_4(dx, dy, dz);
   const trsf = new oc.gp_Trsf_1();
   trsf.SetTranslation_1(vec);
-  
+
   const transform = new oc.BRepBuilderAPI_Transform_2(shape.raw, trsf, true);
   const result = new Shape(transform.Shape());
-  
+
   vec.delete();
   trsf.delete();
   transform.delete();
-  
+
   return result;
 }
 
@@ -261,28 +260,28 @@ export function translate(shape: Shape, dx: number, dy: number, dz: number): Sha
  * Rotate a shape around an axis.
  */
 export function rotate(
-  shape: Shape, 
+  shape: Shape,
   axisOrigin: [number, number, number],
   axisDirection: [number, number, number],
   angleDegrees: number
 ): Shape {
   const oc = getOC();
-  
+
   const origin = new oc.gp_Pnt_3(axisOrigin[0], axisOrigin[1], axisOrigin[2]);
   const dir = new oc.gp_Dir_4(axisDirection[0], axisDirection[1], axisDirection[2]);
   const axis = new oc.gp_Ax1_2(origin, dir);
-  
+
   const trsf = new oc.gp_Trsf_1();
-  trsf.SetRotation_1(axis, angleDegrees * Math.PI / 180);
-  
+  trsf.SetRotation_1(axis, (angleDegrees * Math.PI) / 180);
+
   const transform = new oc.BRepBuilderAPI_Transform_2(shape.raw, trsf, true);
   const result = new Shape(transform.Shape());
-  
+
   origin.delete();
   dir.delete();
   axis.delete();
   trsf.delete();
   transform.delete();
-  
+
   return result;
 }

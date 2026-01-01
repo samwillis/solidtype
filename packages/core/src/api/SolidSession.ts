@@ -1,17 +1,21 @@
 /**
  * SolidSession - main entry point for modeling operations
- * 
+ *
  * Provides an object-oriented interface for creating and manipulating solid models.
  * Uses OpenCascade.js as the underlying kernel.
  */
 
-import type { Vec3 } from '../num/vec3.js';
-import type { Vec2 } from '../num/vec2.js';
-import type { DatumPlane } from '../model/planes.js';
-import { createDatumPlaneFromNormal, XY_PLANE, YZ_PLANE, ZX_PLANE } from '../model/planes.js';
-import type { SketchProfile } from '../model/sketchProfile.js';
-import { createRectangleProfile, createCircleProfile, createPolygonProfile } from '../model/sketchProfile.js';
-import { Sketch } from './Sketch.js';
+import type { Vec3 } from "../num/vec3.js";
+import type { Vec2 } from "../num/vec2.js";
+import type { DatumPlane } from "../model/planes.js";
+import { createDatumPlaneFromNormal, XY_PLANE, YZ_PLANE, ZX_PLANE } from "../model/planes.js";
+import type { SketchProfile } from "../model/sketchProfile.js";
+import {
+  createRectangleProfile,
+  createCircleProfile,
+  createPolygonProfile,
+} from "../model/sketchProfile.js";
+import { Sketch } from "./Sketch.js";
 
 // Import kernel functions (internal - not exported from @solidtype/core)
 import {
@@ -33,20 +37,20 @@ import {
   exportSTEP,
   importSTEP,
   type TessellationQuality,
-} from '../kernel/index.js';
+} from "../kernel/index.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Opaque handle to a body in the session */
-export type BodyId = number & { readonly __brand: 'BodyId' };
+export type BodyId = number & { readonly __brand: `BodyId` };
 
 /** Opaque handle to a face */
-export type FaceId = number & { readonly __brand: 'FaceId' };
+export type FaceId = number & { readonly __brand: `FaceId` };
 
 /** Opaque handle to an edge */
-export type EdgeId = number & { readonly __brand: 'EdgeId' };
+export type EdgeId = number & { readonly __brand: `EdgeId` };
 
 /** Tessellated mesh for rendering */
 export interface Mesh {
@@ -65,25 +69,25 @@ export interface BoundingBox {
 }
 
 /** Result of a modeling operation */
-export type OperationResult<T = void> = 
+export type OperationResult<T = void> =
   | { success: true; value: T }
   | { success: false; error: ModelingError };
 
 /** Modeling error with context */
 export interface ModelingError {
-  code: 'BOOLEAN_FAILED' | 'INVALID_PROFILE' | 'SELF_INTERSECTION' | 'NOT_INITIALIZED' | 'UNKNOWN';
+  code: `BOOLEAN_FAILED` | `INVALID_PROFILE` | `SELF_INTERSECTION` | `NOT_INITIALIZED` | `UNKNOWN`;
   message: string;
   details?: Record<string, unknown>;
 }
 
-export type ExtrudeOperation = 'add' | 'cut' | 'new';
+export type ExtrudeOperation = `add` | `cut` | `new`;
 
 export interface ExtrudeOptions {
   operation: ExtrudeOperation;
   distance: number;
-  direction?: [number, number, number];  // Default: profile plane normal
-  symmetric?: boolean;                    // Extrude both directions
-  targetBody?: BodyId;                    // For add/cut operations
+  direction?: [number, number, number]; // Default: profile plane normal
+  symmetric?: boolean; // Extrude both directions
+  targetBody?: BodyId; // For add/cut operations
 }
 
 export interface RevolveOptions {
@@ -95,7 +99,7 @@ export interface RevolveOptions {
 
 export interface FilletOptions {
   radius: number;
-  edges?: EdgeId[];  // If omitted, fillet all edges
+  edges?: EdgeId[]; // If omitted, fillet all edges
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,15 +108,15 @@ export interface FilletOptions {
 
 /**
  * Main session for solid modeling operations.
- * 
+ *
  * This is the primary API for the app to interact with the CAD kernel.
  * The underlying implementation (OCCT) is completely hidden.
- * 
+ *
  * @example
  * ```typescript
  * const session = new SolidSession();
  * await session.init();
- * 
+ *
  * const profile = session.createRectangleProfile(session.getXYPlane(), 10, 20);
  * const result = session.extrude(profile, { operation: 'new', distance: 5 });
  * if (result.success) {
@@ -144,7 +148,7 @@ export class SolidSession {
 
   private ensureInitialized(): void {
     if (!this.initialized) {
-      throw new Error('Session not initialized. Call init() first.');
+      throw new Error(`Session not initialized. Call init() first.`);
     }
   }
 
@@ -155,28 +159,28 @@ export class SolidSession {
   // ─────────────────────────────────────────────────────────────────────────────
   // Datum Planes
   // ─────────────────────────────────────────────────────────────────────────────
-  
+
   /**
    * Create a datum plane
    */
   createDatumPlane(origin: Vec3, normal: Vec3, xDir?: Vec3): DatumPlane {
-    return createDatumPlaneFromNormal('custom', origin, normal, xDir);
+    return createDatumPlaneFromNormal(`custom`, origin, normal, xDir);
   }
-  
+
   /**
    * Get the XY datum plane
    */
   getXYPlane(): DatumPlane {
     return XY_PLANE;
   }
-  
+
   /**
    * Get the YZ datum plane
    */
   getYZPlane(): DatumPlane {
     return YZ_PLANE;
   }
-  
+
   /**
    * Get the ZX datum plane
    */
@@ -224,10 +228,10 @@ export class SolidSession {
   // ─────────────────────────────────────────────────────────────────────────────
   // Sketches
   // ─────────────────────────────────────────────────────────────────────────────
-  
+
   /**
    * Create a new sketch on a datum plane
-   * 
+   *
    * @param plane The datum plane for the sketch
    * @param name Optional name for the sketch
    * @returns A new Sketch instance
@@ -235,11 +239,11 @@ export class SolidSession {
   createSketch(plane: DatumPlane, name?: string): Sketch {
     return new Sketch(plane, name);
   }
-  
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Profiles
   // ─────────────────────────────────────────────────────────────────────────────
-  
+
   /**
    * Create a rectangular sketch profile
    */
@@ -252,7 +256,7 @@ export class SolidSession {
   ): SketchProfile {
     return createRectangleProfile(plane, width, height, centerX, centerY);
   }
-  
+
   /**
    * Create a circular sketch profile
    */
@@ -264,7 +268,7 @@ export class SolidSession {
   ): SketchProfile {
     return createCircleProfile(plane, radius, centerX, centerY);
   }
-  
+
   /**
    * Create a profile from arbitrary vertices
    */
@@ -278,7 +282,7 @@ export class SolidSession {
 
   /**
    * Extrude a sketch to create or modify a body
-   * 
+   *
    * @param sketch The solved sketch to extrude
    * @param options Extrusion options
    * @returns Result with body ID or error
@@ -286,11 +290,11 @@ export class SolidSession {
   extrudeSketch(sketch: Sketch, options: ExtrudeOptions): OperationResult<BodyId> {
     const profile = sketch.toProfile();
     if (!profile) {
-    return {
+      return {
         success: false,
         error: {
-          code: 'INVALID_PROFILE',
-          message: 'Could not convert sketch to profile - ensure sketch forms closed loops',
+          code: `INVALID_PROFILE`,
+          message: `Could not convert sketch to profile - ensure sketch forms closed loops`,
         },
       };
     }
@@ -302,14 +306,14 @@ export class SolidSession {
    */
   extrude(profile: SketchProfile, options: ExtrudeOptions): OperationResult<BodyId> {
     this.ensureInitialized();
-    
+
     try {
       // Convert profile to OCCT face
       const face = sketchProfileToFace(profile);
-      
+
       // Get extrusion direction
       const direction = options.direction ?? getPlaneNormal(profile.plane);
-      
+
       // Create extruded solid
       let extrudedShape: Shape;
       if (options.symmetric) {
@@ -318,71 +322,68 @@ export class SolidSession {
         extrudedShape = extrude(face, direction, options.distance);
       }
       face.dispose();
-      
+
       // Handle operation type
-      if (options.operation === 'add' && options.targetBody !== undefined) {
+      if (options.operation === `add` && options.targetBody !== undefined) {
         // Union with existing body
         const target = this.bodies.get(options.targetBody);
         if (!target) {
           extrudedShape.dispose();
           return {
             success: false,
-            error: { code: 'UNKNOWN', message: `Body ${options.targetBody} not found` },
+            error: { code: `UNKNOWN`, message: `Body ${options.targetBody} not found` },
           };
         }
-        
-        const result = booleanOp(target, extrudedShape, 'union');
+
+        const result = booleanOp(target, extrudedShape, `union`);
         target.dispose();
         extrudedShape.dispose();
-        
+
         if (!result.success || !result.shape) {
           return {
             success: false,
-            error: { code: 'BOOLEAN_FAILED', message: result.error ?? 'Union failed' },
+            error: { code: `BOOLEAN_FAILED`, message: result.error ?? `Union failed` },
           };
         }
-        
+
         this.bodies.set(options.targetBody, result.shape);
         return { success: true, value: options.targetBody };
-        
-      } else if (options.operation === 'cut' && options.targetBody !== undefined) {
+      } else if (options.operation === `cut` && options.targetBody !== undefined) {
         // Subtract from existing body
         const target = this.bodies.get(options.targetBody);
         if (!target) {
           extrudedShape.dispose();
           return {
             success: false,
-            error: { code: 'UNKNOWN', message: `Body ${options.targetBody} not found` },
+            error: { code: `UNKNOWN`, message: `Body ${options.targetBody} not found` },
           };
         }
-        
-        const result = booleanOp(target, extrudedShape, 'subtract');
+
+        const result = booleanOp(target, extrudedShape, `subtract`);
         target.dispose();
         extrudedShape.dispose();
-        
+
         if (!result.success || !result.shape) {
           return {
             success: false,
-            error: { code: 'BOOLEAN_FAILED', message: result.error ?? 'Cut failed' },
+            error: { code: `BOOLEAN_FAILED`, message: result.error ?? `Cut failed` },
           };
         }
-        
+
         this.bodies.set(options.targetBody, result.shape);
         return { success: true, value: options.targetBody };
-        
       } else {
         // Create new body
         const id = this.allocateBodyId();
         this.bodies.set(id, extrudedShape);
         return { success: true, value: id };
       }
-      
     } catch (e) {
-    return {
+      return {
         success: false,
         error: {
-          code: 'UNKNOWN',
-          message: e instanceof Error ? e.message : 'Unknown extrude error',
+          code: `UNKNOWN`,
+          message: e instanceof Error ? e.message : `Unknown extrude error`,
         },
       };
     }
@@ -393,11 +394,11 @@ export class SolidSession {
    */
   revolve(profile: SketchProfile, options: RevolveOptions): OperationResult<BodyId> {
     this.ensureInitialized();
-    
+
     try {
       // Convert profile to OCCT face
       const face = sketchProfileToFace(profile);
-      
+
       // Revolve
       const revolvedShape = revolve(
         face,
@@ -406,70 +407,67 @@ export class SolidSession {
         options.angleDegrees
       );
       face.dispose();
-      
-      const operation = options.operation ?? 'new';
-      
+
+      const operation = options.operation ?? `new`;
+
       // Handle operation type
-      if (operation === 'add' && options.targetBody !== undefined) {
+      if (operation === `add` && options.targetBody !== undefined) {
         const target = this.bodies.get(options.targetBody);
         if (!target) {
           revolvedShape.dispose();
           return {
             success: false,
-            error: { code: 'UNKNOWN', message: `Body ${options.targetBody} not found` },
+            error: { code: `UNKNOWN`, message: `Body ${options.targetBody} not found` },
           };
         }
-        
-        const result = booleanOp(target, revolvedShape, 'union');
+
+        const result = booleanOp(target, revolvedShape, `union`);
         target.dispose();
         revolvedShape.dispose();
-        
+
         if (!result.success || !result.shape) {
           return {
             success: false,
-            error: { code: 'BOOLEAN_FAILED', message: result.error ?? 'Union failed' },
+            error: { code: `BOOLEAN_FAILED`, message: result.error ?? `Union failed` },
           };
         }
-        
+
         this.bodies.set(options.targetBody, result.shape);
         return { success: true, value: options.targetBody };
-        
-      } else if (operation === 'cut' && options.targetBody !== undefined) {
+      } else if (operation === `cut` && options.targetBody !== undefined) {
         const target = this.bodies.get(options.targetBody);
         if (!target) {
           revolvedShape.dispose();
           return {
             success: false,
-            error: { code: 'UNKNOWN', message: `Body ${options.targetBody} not found` },
+            error: { code: `UNKNOWN`, message: `Body ${options.targetBody} not found` },
           };
         }
-        
-        const result = booleanOp(target, revolvedShape, 'subtract');
+
+        const result = booleanOp(target, revolvedShape, `subtract`);
         target.dispose();
         revolvedShape.dispose();
-        
+
         if (!result.success || !result.shape) {
           return {
             success: false,
-            error: { code: 'BOOLEAN_FAILED', message: result.error ?? 'Cut failed' },
+            error: { code: `BOOLEAN_FAILED`, message: result.error ?? `Cut failed` },
           };
         }
-        
+
         this.bodies.set(options.targetBody, result.shape);
         return { success: true, value: options.targetBody };
-        
       } else {
         const id = this.allocateBodyId();
         this.bodies.set(id, revolvedShape);
         return { success: true, value: id };
       }
-      
     } catch (e) {
-    return {
+      return {
         success: false,
         error: {
-          code: 'UNKNOWN',
-          message: e instanceof Error ? e.message : 'Unknown revolve error',
+          code: `UNKNOWN`,
+          message: e instanceof Error ? e.message : `Unknown revolve error`,
         },
       };
     }
@@ -478,55 +476,55 @@ export class SolidSession {
   // ─────────────────────────────────────────────────────────────────────────────
   // Boolean operations
   // ─────────────────────────────────────────────────────────────────────────────
-  
+
   /**
    * Union two bodies
    */
   union(bodyA: BodyId, bodyB: BodyId): OperationResult<BodyId> {
     this.ensureInitialized();
-    return this.performBoolean(bodyA, bodyB, 'union');
+    return this.performBoolean(bodyA, bodyB, `union`);
   }
-  
+
   /**
    * Subtract bodyB from bodyA
    */
   subtract(bodyA: BodyId, bodyB: BodyId): OperationResult<BodyId> {
     this.ensureInitialized();
-    return this.performBoolean(bodyA, bodyB, 'subtract');
+    return this.performBoolean(bodyA, bodyB, `subtract`);
   }
-  
+
   /**
    * Intersect two bodies
    */
   intersect(bodyA: BodyId, bodyB: BodyId): OperationResult<BodyId> {
     this.ensureInitialized();
-    return this.performBoolean(bodyA, bodyB, 'intersect');
+    return this.performBoolean(bodyA, bodyB, `intersect`);
   }
 
   private performBoolean(
     bodyA: BodyId,
     bodyB: BodyId,
-    op: 'union' | 'subtract' | 'intersect'
+    op: `union` | `subtract` | `intersect`
   ): OperationResult<BodyId> {
     const shapeA = this.bodies.get(bodyA);
     const shapeB = this.bodies.get(bodyB);
-    
+
     if (!shapeA) {
-      return { success: false, error: { code: 'UNKNOWN', message: `Body ${bodyA} not found` } };
+      return { success: false, error: { code: `UNKNOWN`, message: `Body ${bodyA} not found` } };
     }
     if (!shapeB) {
-      return { success: false, error: { code: 'UNKNOWN', message: `Body ${bodyB} not found` } };
+      return { success: false, error: { code: `UNKNOWN`, message: `Body ${bodyB} not found` } };
     }
-    
+
     const result = booleanOp(shapeA, shapeB, op);
-    
+
     if (!result.success || !result.shape) {
       return {
         success: false,
-        error: { code: 'BOOLEAN_FAILED', message: result.error ?? `Boolean ${op} failed` },
+        error: { code: `BOOLEAN_FAILED`, message: result.error ?? `Boolean ${op} failed` },
       };
     }
-    
+
     // Create new body with result (original bodies are preserved)
     const id = this.allocateBodyId();
     this.bodies.set(id, result.shape);
@@ -542,12 +540,12 @@ export class SolidSession {
    */
   fillet(bodyId: BodyId, options: FilletOptions): OperationResult<void> {
     this.ensureInitialized();
-    
+
     const body = this.bodies.get(bodyId);
     if (!body) {
-      return { success: false, error: { code: 'UNKNOWN', message: `Body ${bodyId} not found` } };
+      return { success: false, error: { code: `UNKNOWN`, message: `Body ${bodyId} not found` } };
     }
-    
+
     try {
       // TODO: Support specific edges when options.edges is provided
       const filleted = filletAllEdges(body, options.radius);
@@ -557,7 +555,7 @@ export class SolidSession {
     } catch (e) {
       return {
         success: false,
-        error: { code: 'UNKNOWN', message: e instanceof Error ? e.message : 'Fillet failed' },
+        error: { code: `UNKNOWN`, message: e instanceof Error ? e.message : `Fillet failed` },
       };
     }
   }
@@ -567,12 +565,12 @@ export class SolidSession {
    */
   chamfer(bodyId: BodyId, distance: number, _edges?: EdgeId[]): OperationResult<void> {
     this.ensureInitialized();
-    
+
     const body = this.bodies.get(bodyId);
     if (!body) {
-      return { success: false, error: { code: 'UNKNOWN', message: `Body ${bodyId} not found` } };
+      return { success: false, error: { code: `UNKNOWN`, message: `Body ${bodyId} not found` } };
     }
-    
+
     try {
       // TODO: Support specific edges
       const chamfered = chamferAllEdges(body, distance);
@@ -582,7 +580,7 @@ export class SolidSession {
     } catch (e) {
       return {
         success: false,
-        error: { code: 'UNKNOWN', message: e instanceof Error ? e.message : 'Chamfer failed' },
+        error: { code: `UNKNOWN`, message: e instanceof Error ? e.message : `Chamfer failed` },
       };
     }
   }
@@ -594,14 +592,14 @@ export class SolidSession {
   /**
    * Get tessellated mesh for rendering
    */
-  tessellate(bodyId: BodyId, quality: TessellationQuality = 'medium'): Mesh {
+  tessellate(bodyId: BodyId, quality: TessellationQuality = `medium`): Mesh {
     this.ensureInitialized();
-    
+
     const body = this.bodies.get(bodyId);
     if (!body) {
       throw new Error(`Body ${bodyId} not found`);
     }
-    
+
     const result = tessellate(body, quality);
     return {
       positions: result.vertices,
@@ -615,12 +613,12 @@ export class SolidSession {
    */
   getBoundingBox(bodyId: BodyId): BoundingBox {
     this.ensureInitialized();
-    
+
     const body = this.bodies.get(bodyId);
     if (!body) {
       throw new Error(`Body ${bodyId} not found`);
     }
-    
+
     return getBoundingBox(body);
   }
 
@@ -640,12 +638,12 @@ export class SolidSession {
    */
   exportSTEP(bodyId: BodyId): Uint8Array {
     this.ensureInitialized();
-    
+
     const body = this.bodies.get(bodyId);
     if (!body) {
       throw new Error(`Body ${bodyId} not found`);
     }
-    
+
     return exportSTEP(body);
   }
 
@@ -654,16 +652,16 @@ export class SolidSession {
    */
   importSTEP(data: Uint8Array): OperationResult<BodyId> {
     this.ensureInitialized();
-    
+
     const result = importSTEP(data);
-    
+
     if (!result.success || !result.shape) {
       return {
         success: false,
-        error: { code: 'UNKNOWN', message: result.error ?? 'STEP import failed' },
+        error: { code: `UNKNOWN`, message: result.error ?? `STEP import failed` },
       };
     }
-    
+
     const id = this.allocateBodyId();
     this.bodies.set(id, result.shape);
     return { success: true, value: id };

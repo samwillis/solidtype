@@ -2,26 +2,26 @@
  * Tests for 3D curve evaluators
  */
 
-import { describe, it, expect } from 'vitest';
-import type { Line3D, Circle3D } from './curve3d.js';
+import { describe, it, expect } from "vitest";
+import type { Line3D, Circle3D } from "./curve3d.js";
 import {
   evalCurve3D,
   curveTangent3D,
   curveLength3D,
   closestPointOnCurve3D,
   createCircle3D,
-} from './curve3d.js';
-import { vec3, X_AXIS, Y_AXIS, Z_AXIS } from '../num/vec3.js';
-import { createNumericContext } from '../num/tolerance.js';
-import { length3, dist3 } from '../num/vec3.js';
+} from "./curve3d.js";
+import { vec3, X_AXIS, Y_AXIS, Z_AXIS } from "../num/vec3.js";
+import { createNumericContext } from "../num/tolerance.js";
+import { length3 } from "../num/vec3.js";
 
-describe('curve3d', () => {
+describe("curve3d", () => {
   const ctx = createNumericContext();
 
-  describe('evalCurve3D', () => {
-    it('evaluates line at endpoints', () => {
+  describe("evalCurve3D", () => {
+    it("evaluates line at endpoints", () => {
       const line: Line3D = {
-        kind: 'line',
+        kind: "line",
         p0: vec3(0, 0, 0),
         p1: vec3(10, 5, 2),
       };
@@ -37,9 +37,9 @@ describe('curve3d', () => {
       expect(p1[2]).toBeCloseTo(2, 10);
     });
 
-    it('evaluates line at midpoint', () => {
+    it("evaluates line at midpoint", () => {
       const line: Line3D = {
-        kind: 'line',
+        kind: "line",
         p0: vec3(0, 0, 0),
         p1: vec3(10, 0, 0),
       };
@@ -50,9 +50,9 @@ describe('curve3d', () => {
       expect(mid[2]).toBeCloseTo(0, 10);
     });
 
-    it('evaluates circle', () => {
+    it("evaluates circle", () => {
       const circle: Circle3D = {
-        kind: 'circle',
+        kind: "circle",
         center: vec3(0, 0, 0),
         radius: 5,
         normal: Z_AXIS,
@@ -74,10 +74,10 @@ describe('curve3d', () => {
     });
   });
 
-  describe('curveTangent3D', () => {
-    it('computes line tangent', () => {
+  describe("curveTangent3D", () => {
+    it("computes line tangent", () => {
       const line: Line3D = {
-        kind: 'line',
+        kind: "line",
         p0: vec3(0, 0, 0),
         p1: vec3(10, 0, 0),
       };
@@ -89,9 +89,9 @@ describe('curve3d', () => {
       expect(length3(tangent)).toBeCloseTo(1, 10);
     });
 
-    it('computes circle tangent', () => {
+    it("computes circle tangent", () => {
       const circle: Circle3D = {
-        kind: 'circle',
+        kind: "circle",
         center: vec3(0, 0, 0),
         radius: 5,
         normal: Z_AXIS,
@@ -108,10 +108,10 @@ describe('curve3d', () => {
     });
   });
 
-  describe('curveLength3D', () => {
-    it('computes line length', () => {
+  describe("curveLength3D", () => {
+    it("computes line length", () => {
       const line: Line3D = {
-        kind: 'line',
+        kind: "line",
         p0: vec3(0, 0, 0),
         p1: vec3(3, 4, 0),
       };
@@ -120,9 +120,9 @@ describe('curve3d', () => {
       expect(len).toBeCloseTo(5, 10);
     });
 
-    it('computes circle circumference', () => {
+    it("computes circle circumference", () => {
       const circle: Circle3D = {
-        kind: 'circle',
+        kind: "circle",
         center: vec3(0, 0, 0),
         radius: 5,
         normal: Z_AXIS,
@@ -135,10 +135,10 @@ describe('curve3d', () => {
     });
   });
 
-  describe('closestPointOnCurve3D', () => {
-    it('finds closest point on line', () => {
+  describe("closestPointOnCurve3D", () => {
+    it("finds closest point on line", () => {
       const line: Line3D = {
-        kind: 'line',
+        kind: "line",
         p0: vec3(0, 0, 0),
         p1: vec3(10, 0, 0),
       };
@@ -150,9 +150,9 @@ describe('curve3d', () => {
       expect(result.t).toBeCloseTo(0.5, 10);
     });
 
-    it('finds closest point on circle', () => {
+    it("finds closest point on circle", () => {
       const circle: Circle3D = {
-        kind: 'circle',
+        kind: "circle",
         center: vec3(0, 0, 0),
         radius: 5,
         normal: Z_AXIS,
@@ -167,11 +167,11 @@ describe('curve3d', () => {
     });
   });
 
-  describe('createCircle3D', () => {
-    it('creates circle from center, radius, and normal', () => {
+  describe("createCircle3D", () => {
+    it("creates circle from center, radius, and normal", () => {
       const circle = createCircle3D(vec3(0, 0, 0), 5, Z_AXIS);
 
-      expect(circle.kind).toBe('circle');
+      expect(circle.kind).toBe("circle");
       expect(circle.center).toEqual(vec3(0, 0, 0));
       expect(circle.radius).toBe(5);
       expect(circle.normal[2]).toBeCloseTo(1, 10);
@@ -180,10 +180,10 @@ describe('curve3d', () => {
     });
   });
 
-  describe('edge cases', () => {
-    it('handles zero-radius circle', () => {
+  describe("edge cases", () => {
+    it("handles zero-radius circle", () => {
       const circle: Circle3D = {
-        kind: 'circle',
+        kind: "circle",
         center: vec3(1, 2, 3),
         radius: 0,
         normal: Z_AXIS,
@@ -200,9 +200,9 @@ describe('curve3d', () => {
       expect(len).toBeCloseTo(0, 10);
     });
 
-    it('handles zero-length line', () => {
+    it("handles zero-length line", () => {
       const line: Line3D = {
-        kind: 'line',
+        kind: "line",
         p0: vec3(5, 5, 5),
         p1: vec3(5, 5, 5),
       };

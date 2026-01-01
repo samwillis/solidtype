@@ -1,10 +1,10 @@
 /**
  * Branded handle types for BREP topology
- * 
+ *
  * These are numeric handles that provide type safety through TypeScript's
  * structural typing. Each handle type is a number with a phantom brand
  * that prevents accidental mixing of different entity types.
- * 
+ *
  * The actual values are indices into the corresponding tables in TopoModel.
  */
 
@@ -12,67 +12,67 @@
  * Handle to a body in the model
  * A body is a collection of shells representing a solid or surface body.
  */
-export type BodyId = number & { __brand: 'BodyId' };
+export type BodyId = number & { __brand: `BodyId` };
 
 /**
  * Handle to a shell in the model
  * A shell is a connected set of faces that forms a closed or open boundary.
  */
-export type ShellId = number & { __brand: 'ShellId' };
+export type ShellId = number & { __brand: `ShellId` };
 
 /**
  * Handle to a face in the model
  * A face is a bounded portion of a surface.
  */
-export type FaceId = number & { __brand: 'FaceId' };
+export type FaceId = number & { __brand: `FaceId` };
 
 /**
  * Handle to an edge in the model
  * An edge is a bounded portion of a 3D curve shared by adjacent faces.
  */
-export type EdgeId = number & { __brand: 'EdgeId' };
+export type EdgeId = number & { __brand: `EdgeId` };
 
 /**
  * Handle to a half-edge in the model
  * A half-edge represents the usage of an edge within a particular loop,
  * with a specific direction.
  */
-export type HalfEdgeId = number & { __brand: 'HalfEdgeId' };
+export type HalfEdgeId = number & { __brand: `HalfEdgeId` };
 
 /**
  * Handle to a loop in the model
  * A loop is a closed sequence of half-edges forming a boundary of a face.
  * The first loop of a face is the outer boundary; subsequent loops are holes.
  */
-export type LoopId = number & { __brand: 'LoopId' };
+export type LoopId = number & { __brand: `LoopId` };
 
 /**
  * Handle to a vertex in the model
  * A vertex is a point in 3D space where edges meet.
  */
-export type VertexId = number & { __brand: 'VertexId' };
+export type VertexId = number & { __brand: `VertexId` };
 
 /**
  * Index into the surface array (geometry)
  */
-export type SurfaceIndex = number & { __brand: 'SurfaceIndex' };
+export type SurfaceIndex = number & { __brand: `SurfaceIndex` };
 
 /**
  * Index into the 3D curve array (geometry)
  */
-export type Curve3DIndex = number & { __brand: 'Curve3DIndex' };
+export type Curve3DIndex = number & { __brand: `Curve3DIndex` };
 
 /**
  * Index into the 2D curve array (geometry)
  */
-export type Curve2DIndex = number & { __brand: 'Curve2DIndex' };
+export type Curve2DIndex = number & { __brand: `Curve2DIndex` };
 
 /**
  * Index into the p-curve array
  * A p-curve represents a 2D curve in the UV space of a surface,
  * corresponding to a 3D edge projected onto that surface.
  */
-export type PCurveIndex = number & { __brand: 'PCurveIndex' };
+export type PCurveIndex = number & { __brand: `PCurveIndex` };
 
 /**
  * Sentinel value for "null" handles

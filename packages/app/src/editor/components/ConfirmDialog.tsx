@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import './ConfirmDialog.css';
+import React, { useEffect, useRef } from "react";
+import "./ConfirmDialog.css";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -16,8 +16,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   open,
   title,
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   danger = false,
   onConfirm,
   onCancel,
@@ -28,35 +28,28 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     if (!open) return;
 
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         onCancel();
       }
     };
 
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
   }, [open, onCancel]);
 
   if (!open) return null;
 
   return (
     <div className="confirm-dialog-overlay" onClick={onCancel}>
-      <div 
-        ref={dialogRef}
-        className="confirm-dialog"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div ref={dialogRef} className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
         <h3 className="confirm-dialog-title">{title}</h3>
         <p className="confirm-dialog-message">{message}</p>
         <div className="confirm-dialog-actions">
-          <button 
-            className="confirm-dialog-button cancel"
-            onClick={onCancel}
-          >
+          <button className="confirm-dialog-button cancel" onClick={onCancel}>
             {cancelLabel}
           </button>
-          <button 
-            className={`confirm-dialog-button confirm ${danger ? 'danger' : ''}`}
+          <button
+            className={`confirm-dialog-button confirm ${danger ? "danger" : ""}`}
             onClick={onConfirm}
           >
             {confirmLabel}

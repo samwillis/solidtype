@@ -2,23 +2,23 @@
  * Signup page
  */
 
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
-import { signUp, signIn } from '../lib/auth-client';
-import { ThemeToggle } from '../components/ThemeToggle';
-import '../styles/auth.css';
-import '../styles/home.css';
-import logo from '../../../../artwork/colour-logo-bold.svg';
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { signUp, signIn } from "../lib/auth-client";
+import { ThemeToggle } from "../components/ThemeToggle";
+import "../styles/auth.css";
+import "../styles/home.css";
+import logo from "../../../../artwork/colour-logo-bold.svg";
 
-export const Route = createFileRoute('/signup')({
+export const Route = createFileRoute("/signup")({
   component: SignupPage,
 });
 
 function SignupPage() {
   const navigate = useNavigate();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -35,12 +35,12 @@ function SignupPage() {
       });
 
       if (result.error) {
-        setError(result.error.message || 'Signup failed');
+        setError(result.error.message || "Signup failed");
       } else {
-        navigate({ to: '/dashboard' });
+        navigate({ to: "/dashboard" });
       }
-    } catch (err) {
-      setError('An unexpected error occurred');
+    } catch {
+      setError("An unexpected error occurred");
     } finally {
       setLoading(false);
     }
@@ -105,13 +105,13 @@ function SignupPage() {
           </div>
 
           <button type="submit" className="auth-submit" disabled={loading}>
-            {loading ? 'Creating account...' : 'Create account'}
+            {loading ? "Creating account..." : "Create account"}
           </button>
         </form>
 
         <div className="auth-footer">
           <p>
-            Already have an account?{' '}
+            Already have an account?{" "}
             <Link to="/login" className="auth-link">
               Sign in
             </Link>
@@ -126,7 +126,7 @@ function SignupPage() {
           <button
             type="button"
             className="auth-social-btn"
-            onClick={() => signIn.social({ provider: 'github' })}
+            onClick={() => signIn.social({ provider: "github" })}
           >
             <GitHubIcon />
             GitHub
@@ -134,7 +134,7 @@ function SignupPage() {
           <button
             type="button"
             className="auth-social-btn"
-            onClick={() => signIn.social({ provider: 'google' })}
+            onClick={() => signIn.social({ provider: "google" })}
           >
             <GoogleIcon />
             Google

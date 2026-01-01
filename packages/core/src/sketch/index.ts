@@ -1,6 +1,6 @@
 /**
  * Sketch Module
- * 
+ *
  * This module provides 2D sketch representation and constraint solving:
  * - SketchModel class (OO sketch data model)
  * - Constraint types (coincident, horizontal, vertical, parallel, etc.)
@@ -23,7 +23,7 @@ export type {
   SolveStatus,
   SolveResult,
   SolveOptions,
-} from './types.js';
+} from "./types.js";
 
 export {
   asSketchId,
@@ -40,7 +40,7 @@ export {
   getFreePoints,
   countBaseDOF,
   DEFAULT_SOLVE_OPTIONS,
-} from './types.js';
+} from "./types.js";
 
 // Constraints
 export type {
@@ -71,7 +71,7 @@ export type {
   RadiusDimensionConstraint,
   PointToLineDistanceConstraint,
   Constraint,
-} from './constraints.js';
+} from "./constraints.js";
 
 export {
   allocateConstraintId,
@@ -100,24 +100,16 @@ export {
   getConstraintPoints,
   getConstraintResidualCount,
   describeConstraint,
-} from './constraints.js';
+} from "./constraints.js";
 
 // SketchModel class (primary OO API)
-export { SketchModel } from './SketchModel.js';
+export { SketchModel } from "./SketchModel.js";
 
 // Solver
-export {
-  solveSketch,
-  analyzeDOF,
-} from './solver.js';
+export { solveSketch, analyzeDOF } from "./solver.js";
 
 // Graph analysis and partitioning
-export type {
-  GraphNode,
-  GraphComponent,
-  GraphAnalysis,
-  ConstraintConflict,
-} from './graph.js';
+export type { GraphNode, GraphComponent, GraphAnalysis, ConstraintConflict } from "./graph.js";
 
 export {
   buildConstraintGraph,
@@ -128,7 +120,7 @@ export {
   analyzeConstraintGraph,
   partitionForSolving,
   canSolve,
-} from './graph.js';
+} from "./graph.js";
 
 // External attachment resolution
 export type {
@@ -136,7 +128,7 @@ export type {
   ResolvedAttachment,
   AttachmentConstraintData,
   AttachmentResolutionResult,
-} from './attachment.js';
+} from "./attachment.js";
 
 export {
   projectToSketchPlane,
@@ -150,11 +142,7 @@ export {
   hasExternalAttachments,
   getAttachedPoints,
   createAttachmentConstraints,
-} from './attachment.js';
+} from "./attachment.js";
 
 // ID allocation
-export {
-  IdAllocator,
-  getGlobalAllocator,
-  resetAllIds,
-} from './idAllocator.js';
+export { IdAllocator, getGlobalAllocator, resetAllIds } from "./idAllocator.js";

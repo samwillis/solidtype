@@ -1,6 +1,6 @@
 /**
  * Healing for planar boolean results.
- * 
+ *
  * Post-processing to fix minor issues in the result:
  * - Weld vertices within tolerance
  * - Merge colinear edges
@@ -8,11 +8,11 @@
  * - Validate manifoldness
  */
 
-import type { Vec3 } from '../../num/vec3.js';
-import { sub3, cross3, length3 } from '../../num/vec3.js';
-import type { NumericContext } from '../../num/tolerance.js';
-import type { TopoModel } from '../../topo/TopoModel.js';
-import type { BodyId, FaceId } from '../../topo/handles.js';
+import type { Vec3 } from "../../num/vec3.js";
+import { sub3, cross3, length3 } from "../../num/vec3.js";
+import type { NumericContext } from "../../num/tolerance.js";
+import type { TopoModel } from "../../topo/TopoModel.js";
+import type { BodyId, FaceId } from "../../topo/handles.js";
 
 /**
  * Healing options
@@ -55,20 +55,20 @@ export function healBody(
     verticesMerged: 0,
     edgesMerged: 0,
     facesCulled: 0,
-    errors: []
+    errors: [],
   };
-  
+
   // For now, just validate manifoldness
   const validationErrors = validateManifold(model, bodyId);
   result.errors = validationErrors;
   result.success = validationErrors.length === 0;
-  
+
   return result;
 }
 
 /**
  * Validate that a body is manifold
- * 
+ *
  * A manifold body has:
  * - Every half-edge has exactly one twin
  * - Twin relationships are symmetric
@@ -76,9 +76,9 @@ export function healBody(
  */
 function validateManifold(model: TopoModel, bodyId: BodyId): string[] {
   const errors: string[] = [];
-  
+
   const shells = model.getBodyShells(bodyId);
-  
+
   // Check that each half-edge has its twin set and twins are symmetric
   for (const shellId of shells) {
     const faces = model.getShellFaces(shellId);
@@ -93,37 +93,36 @@ function validateManifold(model: TopoModel, bodyId: BodyId): string[] {
             // Check symmetry
             const twinsTwin = model.getHalfEdgeTwin(twin);
             if (twinsTwin !== heId) {
-              errors.push(`HalfEdge ${heId} twin ${twin} does not point back (points to ${twinsTwin})`);
+              errors.push(
+                `HalfEdge ${heId} twin ${twin} does not point back (points to ${twinsTwin})`
+              );
             }
           }
         }
       }
     }
   }
-  
+
   return errors;
 }
 
 /**
  * Compute face area (for sliver detection)
  */
-export function computeFaceArea(
-  model: TopoModel,
-  faceId: FaceId
-): number {
+export function computeFaceArea(model: TopoModel, faceId: FaceId): number {
   const loops = model.getFaceLoops(faceId);
   if (loops.length === 0) return 0;
-  
+
   const outerLoop = loops[0];
   const vertices: Vec3[] = [];
-  
+
   for (const he of model.iterateLoopHalfEdges(outerLoop)) {
     const vertex = model.getHalfEdgeStartVertex(he);
     vertices.push(model.getVertexPosition(vertex));
   }
-  
+
   if (vertices.length < 3) return 0;
-  
+
   // Compute area using cross product method
   let area = 0;
   const v0 = vertices[0];
@@ -135,6 +134,6 @@ export function computeFaceArea(
     const cross = cross3(e1, e2);
     area += length3(cross) / 2;
   }
-  
+
   return area;
 }

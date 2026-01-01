@@ -11,12 +11,14 @@
 The properties panel is fully implemented with **enhanced features beyond the original plan**:
 
 ### Core Components
+
 - `PropertiesPanel.tsx` - Complete feature editing UI with:
   - `NumberInput`, `TextInput`, `SelectInput`, `CheckboxInput`, `ColorInput` components
   - `PropertyRow` and `PropertyGroup` layout components
   - Feature-specific property editors for all feature types
 
 ### Feature Creation Mode (Enhancement)
+
 - **`FeatureEditContext.tsx`** - Manages new feature creation state:
   - Tracks edit mode (extrude, revolve, or none)
   - Provides live preview during parameter adjustment
@@ -26,6 +28,7 @@ The properties panel is fully implemented with **enhanced features beyond the or
   - Blue border to indicate editing mode
 
 ### Form Validation (Enhancement)
+
 - **`featureSchemas.ts`** - Zod schemas for all features:
   - `extrudeFormSchema` - Validates distance ≥ 0.1, required fields
   - `revolveFormSchema` - Validates angle 1-360°, axis required
@@ -36,6 +39,7 @@ The properties panel is fully implemented with **enhanced features beyond the or
   - Real-time validation on change
 
 ### Styling
+
 - `PropertiesPanel.css` - Property groups, rows, inputs
 - `.properties-panel-editing` - Blue border for edit mode
 - `.field-error` - Red error text for validation errors
@@ -66,17 +70,18 @@ The properties panel is fully implemented with **enhanced features beyond the or
 ### Common Properties
 
 All features have:
+
 - Name (editable)
 - Type (read-only)
 - ID (read-only, for debugging)
 
 ### Feature-Specific Properties
 
-| Feature | Properties |
-|---------|------------|
-| Sketch | Plane, Point count, Entity count |
-| Extrude | Sketch ref, Distance, Direction, Operation |
-| Revolve | Sketch ref, Axis, Angle, Operation |
+| Feature  | Properties                                  |
+| -------- | ------------------------------------------- |
+| Sketch   | Plane, Point count, Entity count            |
+| Extrude  | Sketch ref, Distance, Direction, Operation  |
+| Revolve  | Sketch ref, Axis, Angle, Operation          |
 | (future) | Additional properties as features are added |
 
 ---
@@ -92,7 +97,7 @@ export function PropertiesPanel() {
   const { selection } = useSelection();
   const { doc } = useDocument();
   const selectedFeature = useSelectedFeature(selection, doc);
-  
+
   if (!selectedFeature) {
     return (
       <div className="properties-panel">
@@ -103,7 +108,7 @@ export function PropertiesPanel() {
       </div>
     );
   }
-  
+
   return (
     <div className="properties-panel">
       <div className="panel-header">Properties</div>
@@ -133,15 +138,15 @@ function FeatureProperties({ feature }) {
 ```typescript
 function ExtrudeProperties({ feature }) {
   const { updateFeature } = useDocument();
-  
+
   const handleDistanceChange = (value: number) => {
     updateFeature(feature.id, { distance: value });
   };
-  
+
   const handleOperationChange = (value: 'add' | 'cut') => {
     updateFeature(feature.id, { op: value });
   };
-  
+
   return (
     <div className="feature-properties">
       {/* Common properties */}
@@ -156,7 +161,7 @@ function ExtrudeProperties({ feature }) {
           <span className="property-value readonly">Extrude</span>
         </PropertyRow>
       </PropertyGroup>
-      
+
       {/* Extrude-specific properties */}
       <PropertyGroup title="Parameters">
         <PropertyRow label="Sketch">
@@ -204,10 +209,10 @@ function ExtrudeProperties({ feature }) {
 
 function updateFeature(featureId: string, updates: Partial<FeatureAttributes>) {
   const features = doc.features;
-  
+
   // Find the feature element
   for (const child of features.toArray()) {
-    if (child instanceof Y.XmlElement && child.getAttribute('id') === featureId) {
+    if (child instanceof Y.XmlElement && child.getAttribute("id") === featureId) {
       // Update attributes
       for (const [key, value] of Object.entries(updates)) {
         child.setAttribute(key, String(value));
@@ -215,7 +220,7 @@ function updateFeature(featureId: string, updates: Partial<FeatureAttributes>) {
       break;
     }
   }
-  
+
   // Yjs change triggers rebuild automatically
 }
 ```
@@ -236,12 +241,12 @@ interface NumberInputProps {
 
 export function NumberInput({ value, onChange, min, max, step, unit }: NumberInputProps) {
   const [localValue, setLocalValue] = useState(String(value));
-  
+
   // Update local value when external value changes
   useEffect(() => {
     setLocalValue(String(value));
   }, [value]);
-  
+
   const handleBlur = () => {
     const parsed = parseFloat(localValue);
     if (!isNaN(parsed)) {
@@ -251,13 +256,13 @@ export function NumberInput({ value, onChange, min, max, step, unit }: NumberInp
       setLocalValue(String(value)); // Reset to original
     }
   };
-  
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleBlur();
     }
   };
-  
+
   return (
     <div className="number-input">
       <input
@@ -375,14 +380,14 @@ const handleFaceSelect = (bodyId: string, faceId: number, persistentRef: Persist
 
 ```typescript
 // Test property update
-test('updateFeature updates Yjs attribute', () => {
+test("updateFeature updates Yjs attribute", () => {
   const doc = createDocument();
-  addExtrudeFeature(doc, 'e1', 's1', 10, 'add');
-  
-  updateFeature('e1', { distance: 20 });
-  
-  const feature = findFeature(doc.features, 'e1');
-  expect(feature.getAttribute('distance')).toBe('20');
+  addExtrudeFeature(doc, "e1", "s1", 10, "add");
+
+  updateFeature("e1", { distance: 20 });
+
+  const feature = findFeature(doc.features, "e1");
+  expect(feature.getAttribute("distance")).toBe("20");
 });
 ```
 

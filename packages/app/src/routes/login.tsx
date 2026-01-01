@@ -2,22 +2,22 @@
  * Login page
  */
 
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
-import { signIn } from '../lib/auth-client';
-import { ThemeToggle } from '../components/ThemeToggle';
-import '../styles/auth.css';
-import '../styles/home.css';
-import logo from '../../../../artwork/colour-logo-bold.svg';
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { signIn } from "../lib/auth-client";
+import { ThemeToggle } from "../components/ThemeToggle";
+import "../styles/auth.css";
+import "../styles/home.css";
+import logo from "../../../../artwork/colour-logo-bold.svg";
 
-export const Route = createFileRoute('/login')({
+export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
 function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -33,12 +33,12 @@ function LoginPage() {
       });
 
       if (result.error) {
-        setError(result.error.message || 'Login failed');
+        setError(result.error.message || "Login failed");
       } else {
-        navigate({ to: '/dashboard' });
+        navigate({ to: "/dashboard" });
       }
     } catch (err) {
-      setError('An unexpected error occurred');
+      setError("An unexpected error occurred");
     } finally {
       setLoading(false);
     }
@@ -88,13 +88,13 @@ function LoginPage() {
           </div>
 
           <button type="submit" className="auth-submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
 
         <div className="auth-footer">
           <p>
-            Don't have an account?{' '}
+            Don&apos;t have an account?{" "}
             <Link to="/signup" className="auth-link">
               Sign up
             </Link>
@@ -109,7 +109,7 @@ function LoginPage() {
           <button
             type="button"
             className="auth-social-btn"
-            onClick={() => signIn.social({ provider: 'github' })}
+            onClick={() => signIn.social({ provider: "github" })}
           >
             <GitHubIcon />
             GitHub
@@ -117,7 +117,7 @@ function LoginPage() {
           <button
             type="button"
             className="auth-social-btn"
-            onClick={() => signIn.social({ provider: 'google' })}
+            onClick={() => signIn.social({ provider: "google" })}
           >
             <GoogleIcon />
             Google

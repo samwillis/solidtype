@@ -1,27 +1,27 @@
 /**
  * Selection rules for planar boolean operations.
- * 
+ *
  * Based on classification, select which face pieces to keep and
  * whether to flip their orientations.
  */
 
-import type { NumericContext } from '../../num/tolerance.js';
-import { scaledTol, snap, createNumericContext } from '../../num/tolerance.js';
-import type { Vec2 } from '../../num/vec2.js';
-import type { Vec3 } from '../../num/vec3.js';
-import { dot3 } from '../../num/vec3.js';
-import type { PlaneSurface } from '../../geom/surface.js';
-import type { FacePiece, BoolOp, SelectedPieces, BoundingBox3D } from './types.js';
-import { projectToPlane2D, unprojectFromPlane } from './intersect.js';
+import type { NumericContext } from "../../num/tolerance.js";
+import { scaledTol, snap, createNumericContext } from "../../num/tolerance.js";
+import type { Vec2 } from "../../num/vec2.js";
+import type { Vec3 } from "../../num/vec3.js";
+import { dot3 } from "../../num/vec3.js";
+import type { PlaneSurface } from "../../geom/surface.js";
+import type { FacePiece, BoolOp, SelectedPieces, BoundingBox3D } from "./types.js";
+import { projectToPlane2D, unprojectFromPlane } from "./intersect.js";
 
 /**
  * Apply selection rules to classified face pieces.
- * 
+ *
  * Rules:
  * - UNION: keep OUT pieces from both
- * - INTERSECT: keep IN pieces from both  
+ * - INTERSECT: keep IN pieces from both
  * - SUBTRACT A\B: keep A.OUT; keep B.IN but flip orientation
- * 
+ *
  * @param piecesA - Face pieces from body A
  * @param piecesB - Face pieces from body B
  * @param operation - Boolean operation type
@@ -40,12 +40,14 @@ export function selectPieces(
   const numericCtx = ctx ?? createNumericContext();
   const tol = numericCtx.tol.length;
   const snapValue = (v: number) => snap(v, numericCtx, tol);
-  
+
   // Normalize a 3D polygon loop (unproject 2D to 3D, then sort)
   const normalizeLoop3D = (piece: FacePiece): string => {
-    const vertices3D = piece.polygon.map(v => unprojectFromPlane(v, piece.surface));
+    const vertices3D = piece.polygon.map((v) => unprojectFromPlane(v, piece.surface));
     // Create key for each vertex
-    const vertexKeys = vertices3D.map(v => `${snapValue(v[0])},${snapValue(v[1])},${snapValue(v[2])}`);
+    const vertexKeys = vertices3D.map(
+      (v) => `${snapValue(v[0])},${snapValue(v[1])},${snapValue(v[2])}`
+    );
     // Find canonical starting point (lexicographically smallest)
     let minIdx = 0;
     for (let i = 1; i < vertexKeys.length; i++) {
@@ -53,17 +55,17 @@ export function selectPieces(
     }
     // Rotate to start at min, try both directions
     const rotated = [...vertexKeys.slice(minIdx), ...vertexKeys.slice(0, minIdx)];
-    const forward = rotated.join(';');
-    const reversed = [rotated[0], ...rotated.slice(1).reverse()].join(';');
+    const forward = rotated.join(`;`);
+    const reversed = [rotated[0], ...rotated.slice(1).reverse()].join(`;`);
     return forward < reversed ? forward : reversed;
   };
-  
+
   // Key that identifies the PLANE only (not the polygon shape)
   // Two faces on the same plane will have the same planeKey
   const planeKey = (piece: FacePiece): string => {
     const surf = piece.surface;
     const n = surf.normal;
-    
+
     // Canonicalize normal direction: prefer positive first non-zero component
     // This ensures faces on the same plane (with opposite normals) get the same key
     let sign = 1;
@@ -74,58 +76,75 @@ export function selectPieces(
       }
     }
     const canonNormal: Vec3 = [n[0] * sign, n[1] * sign, n[2] * sign];
-    
+
     // Compute plane equation: n · p = d (using canonical normal)
     // For the same plane, d will be the same regardless of which point on the plane we use
     const d = snapValue(dot3(surf.origin, canonNormal));
-    
+
     const normKey = `${snapValue(canonNormal[0])},${snapValue(canonNormal[1])},${snapValue(canonNormal[2])}`;
     return `${normKey}|${d}`;
   };
-  
+
   const polygonKey = (polygon: Vec2[], surface: PlaneSurface): string => {
-    const verts3D = polygon.map(v => unprojectFromPlane(v, surface));
-    const snapped = verts3D.map(v => `${snapValue(v[0])},${snapValue(v[1])},${snapValue(v[2])}`).sort();
-    return snapped.join(';');
+    const verts3D = polygon.map((v) => unprojectFromPlane(v, surface));
+    const snapped = verts3D
+      .map((v) => `${snapValue(v[0])},${snapValue(v[1])},${snapValue(v[2])}`)
+      .sort();
+    return snapped.join(`;`);
   };
 
   const coplanarShapeKey = (piece: FacePiece): string => {
     const outer = polygonKey(piece.polygon, piece.surface);
-    const holes = piece.holes.map(h => polygonKey(h, piece.surface)).sort().join('||');
+    const holes = piece.holes
+      .map((h) => polygonKey(h, piece.surface))
+      .sort()
+      .join(`||`);
     return `${planeKey(piece)}|${outer}|holes:${holes}`;
   };
-  
+
   // Key that includes polygon shape (for exact duplicates) - retained for future debugging
   const _exactKey = (piece: FacePiece): string => `${planeKey(piece)}|${normalizeLoop3D(piece)}`;
   void _exactKey; // Suppress unused warning
-  
+
   let fromA: FacePiece[];
   let fromB: FacePiece[];
   let flipB = false;
-  
+
   switch (operation) {
-    case 'union':
-      fromA = piecesA.filter(p => p.classification === 'outside' || p.classification === 'on_same');
-      fromB = piecesB.filter(p => p.classification === 'outside' || p.classification === 'on_same');
+    case `union`:
+      fromA = piecesA.filter(
+        (p) => p.classification === `outside` || p.classification === `on_same`
+      );
+      fromB = piecesB.filter(
+        (p) => p.classification === `outside` || p.classification === `on_same`
+      );
       break;
-      
-    case 'intersect':
-      fromA = piecesA.filter(p => p.classification === 'inside' || p.classification === 'on_same');
-      fromB = piecesB.filter(p => p.classification === 'inside' || p.classification === 'on_same');
+
+    case `intersect`:
+      fromA = piecesA.filter(
+        (p) => p.classification === `inside` || p.classification === `on_same`
+      );
+      fromB = piecesB.filter(
+        (p) => p.classification === `inside` || p.classification === `on_same`
+      );
       break;
-      
-    case 'subtract':
-      fromA = piecesA.filter(p => p.classification === 'outside' || p.classification === 'on_same');
-      fromB = piecesB.filter(p => p.classification === 'inside' || p.classification === 'on_same');
+
+    case `subtract`:
+      fromA = piecesA.filter(
+        (p) => p.classification === `outside` || p.classification === `on_same`
+      );
+      fromB = piecesB.filter(
+        (p) => p.classification === `inside` || p.classification === `on_same`
+      );
       flipB = true;
       break;
   }
 
-  if (operation === 'subtract' && boundsA) {
+  if (operation === `subtract` && boundsA) {
     fromB = filterPiecesByBounds3D(fromB, boundsA, numericCtx);
   }
-  
-  if (operation === 'intersect' && boundsA && _boundsB) {
+
+  if (operation === `intersect` && boundsA && _boundsB) {
     const intersectBounds: BoundingBox3D = {
       min: [
         Math.max(boundsA.min[0], _boundsB.min[0]),
@@ -138,11 +157,11 @@ export function selectPieces(
         Math.min(boundsA.max[2], _boundsB.max[2]),
       ] as Vec3,
     };
-    
+
     fromA = filterPiecesByBounds3D(fromA, intersectBounds, numericCtx);
     fromB = filterPiecesByBounds3D(fromB, intersectBounds, numericCtx);
   }
-  
+
   const seenCoplanar = new Set<string>();
   const dropCoplanarDuplicates = (piece: FacePiece): boolean => {
     const key = coplanarShapeKey(piece);
@@ -152,24 +171,24 @@ export function selectPieces(
   };
   fromA = fromA.filter(dropCoplanarDuplicates);
   fromB = fromB.filter(dropCoplanarDuplicates);
-  
+
   // Final dedup: remove exact duplicates using 3D vertex positions
   // This catches coplanar faces from different bodies that occupy the same 3D space
   const geometry3DKey = (piece: FacePiece): string => {
-    const vertices3D = piece.polygon.map(v => unprojectFromPlane(v, piece.surface));
+    const vertices3D = piece.polygon.map((v) => unprojectFromPlane(v, piece.surface));
     // Sort vertices by position to create a canonical key
     const vertexKeys = vertices3D
-      .map(v => `${snapValue(v[0])},${snapValue(v[1])},${snapValue(v[2])}`)
+      .map((v) => `${snapValue(v[0])},${snapValue(v[1])},${snapValue(v[2])}`)
       .sort();
     // Include normal direction for orientation
     const n = piece.surface.normal;
     const normalKey = `${snapValue(n[0])},${snapValue(n[1])},${snapValue(n[2])}`;
-    return `${normalKey}|${vertexKeys.join(';')}`;
+    return `${normalKey}|${vertexKeys.join(`;`)}`;
   };
-  
+
   // Filter out pieces with duplicate vertices (degenerate cycles)
   const hasUniqueVertices = (piece: FacePiece): boolean => {
-    const vertices3D = piece.polygon.map(v => unprojectFromPlane(v, piece.surface));
+    const vertices3D = piece.polygon.map((v) => unprojectFromPlane(v, piece.surface));
     const seen = new Set<string>();
     for (const v of vertices3D) {
       const key = `${snapValue(v[0])},${snapValue(v[1])},${snapValue(v[2])}`;
@@ -178,16 +197,16 @@ export function selectPieces(
     }
     return true;
   };
-  
+
   // First filter out degenerate pieces
   const validA = fromA.filter(hasUniqueVertices);
   const validB = fromB.filter(hasUniqueVertices);
-  
+
   // Then deduplicate by 3D geometry
   const seenKeys = new Set<string>();
   const dedupedA: FacePiece[] = [];
   const dedupedB: FacePiece[] = [];
-  
+
   // Prefer pieces from A over B (A has priority)
   for (const p of validA) {
     const key = geometry3DKey(p);
@@ -207,9 +226,9 @@ export function selectPieces(
   // For subtract: collapse per-plane
   // - If any tool piece exists on a plane, drop all target pieces on that plane.
   // - Keep only the first tool piece per plane (after geometry dedup).
-  if (operation === 'subtract') {
+  if (operation === `subtract`) {
     const planesB = new Set(dedupedB.map(planeKey));
-    const filteredA = dedupedA.filter(p => !planesB.has(planeKey(p)));
+    const filteredA = dedupedA.filter((p) => !planesB.has(planeKey(p)));
 
     const seenPlanes = new Set<string>();
     const mergedB: FacePiece[] = [];
@@ -225,7 +244,7 @@ export function selectPieces(
 
   // For intersect: collapse per-plane to avoid duplicate coplanar faces
   // When both bodies have a face on the same plane, keep only one (prefer A)
-  if (operation === 'intersect') {
+  if (operation === `intersect`) {
     const seenPlanesA = new Set<string>();
     const filteredA: FacePiece[] = [];
     for (const p of dedupedA) {
@@ -235,7 +254,7 @@ export function selectPieces(
         filteredA.push(p);
       }
     }
-    
+
     // For B, skip planes already covered by A
     const filteredB: FacePiece[] = [];
     for (const p of dedupedB) {
@@ -245,7 +264,7 @@ export function selectPieces(
         filteredB.push(p);
       }
     }
-    
+
     return { fromA: filteredA, fromB: filteredB, flipB };
   }
 
@@ -254,7 +273,7 @@ export function selectPieces(
 
 /**
  * Filter pieces to keep only those that are at least partially within bounds.
- * 
+ *
  * For pieces that extend beyond bounds, clamps vertices to the exact bounds.
  * This ensures that the result doesn't contain geometry outside the target body.
  */
@@ -266,48 +285,67 @@ function filterPiecesByBounds3D(
   const result: FacePiece[] = [];
   const boundsTol = scaledTol(ctx, 10);
   const snapBounds = (v: number) => snap(v, ctx, boundsTol);
-  
+
   for (const piece of pieces) {
-    const vertices3D = piece.polygon.map(v => unprojectFromPlane(v, piece.surface));
+    const vertices3D = piece.polygon.map((v) => unprojectFromPlane(v, piece.surface));
     if (vertices3D.length < 3) continue;
-    
+
     // Quick reject: if the polygon's bounding box doesn't overlap the target bounds, skip it
     let pieceMin: Vec3 = [Infinity, Infinity, Infinity];
     let pieceMax: Vec3 = [-Infinity, -Infinity, -Infinity];
     for (const v of vertices3D) {
-      pieceMin = [Math.min(pieceMin[0], v[0]), Math.min(pieceMin[1], v[1]), Math.min(pieceMin[2], v[2])];
-      pieceMax = [Math.max(pieceMax[0], v[0]), Math.max(pieceMax[1], v[1]), Math.max(pieceMax[2], v[2])];
+      pieceMin = [
+        Math.min(pieceMin[0], v[0]),
+        Math.min(pieceMin[1], v[1]),
+        Math.min(pieceMin[2], v[2]),
+      ];
+      pieceMax = [
+        Math.max(pieceMax[0], v[0]),
+        Math.max(pieceMax[1], v[1]),
+        Math.max(pieceMax[2], v[2]),
+      ];
     }
     const overlaps =
-      pieceMax[0] >= bounds.min[0] - boundsTol && pieceMin[0] <= bounds.max[0] + boundsTol &&
-      pieceMax[1] >= bounds.min[1] - boundsTol && pieceMin[1] <= bounds.max[1] + boundsTol &&
-      pieceMax[2] >= bounds.min[2] - boundsTol && pieceMin[2] <= bounds.max[2] + boundsTol;
+      pieceMax[0] >= bounds.min[0] - boundsTol &&
+      pieceMin[0] <= bounds.max[0] + boundsTol &&
+      pieceMax[1] >= bounds.min[1] - boundsTol &&
+      pieceMin[1] <= bounds.max[1] + boundsTol &&
+      pieceMax[2] >= bounds.min[2] - boundsTol &&
+      pieceMin[2] <= bounds.max[2] + boundsTol;
     if (!overlaps) continue;
-    
+
     // Check if piece needs clamping (any vertex outside bounds)
     let needsClamping = false;
     for (const v of vertices3D) {
-      if (v[0] < bounds.min[0] - boundsTol || v[0] > bounds.max[0] + boundsTol ||
-          v[1] < bounds.min[1] - boundsTol || v[1] > bounds.max[1] + boundsTol ||
-          v[2] < bounds.min[2] - boundsTol || v[2] > bounds.max[2] + boundsTol) {
+      if (
+        v[0] < bounds.min[0] - boundsTol ||
+        v[0] > bounds.max[0] + boundsTol ||
+        v[1] < bounds.min[1] - boundsTol ||
+        v[1] > bounds.max[1] + boundsTol ||
+        v[2] < bounds.min[2] - boundsTol ||
+        v[2] > bounds.max[2] + boundsTol
+      ) {
         needsClamping = true;
         break;
       }
     }
-    
+
     if (!needsClamping) {
       result.push(piece);
       continue;
     }
-    
+
     // Clamp vertices to EXACT bounds (not bounds ± tolerance)
     // This ensures we don't create vertices like 10.001 or -0.001
-    const clamped3D = vertices3D.map(v => ([
-      Math.min(Math.max(v[0], bounds.min[0]), bounds.max[0]),
-      Math.min(Math.max(v[1], bounds.min[1]), bounds.max[1]),
-      Math.min(Math.max(v[2], bounds.min[2]), bounds.max[2]),
-    ] as [number, number, number]));
-    
+    const clamped3D = vertices3D.map(
+      (v) =>
+        [
+          Math.min(Math.max(v[0], bounds.min[0]), bounds.max[0]),
+          Math.min(Math.max(v[1], bounds.min[1]), bounds.max[1]),
+          Math.min(Math.max(v[2], bounds.min[2]), bounds.max[2]),
+        ] as [number, number, number]
+    );
+
     // Deduplicate vertices that collapsed to the same position after clamping
     const deduped3D: [number, number, number][] = [];
     const seen = new Set<string>();
@@ -318,30 +356,30 @@ function filterPiecesByBounds3D(
         deduped3D.push([snapBounds(v[0]), snapBounds(v[1]), snapBounds(v[2])]);
       }
     }
-    
+
     if (deduped3D.length < 3) continue;
-    
-    const clamped2DUnsorted = deduped3D.map(p => projectToPlane2D(p, piece.surface));
+
+    const clamped2DUnsorted = deduped3D.map((p) => projectToPlane2D(p, piece.surface));
     // Sort vertices around centroid to avoid self-intersections after clamping
-    const centroid2D: Vec2 = clamped2DUnsorted.reduce<Vec2>(
-      (acc, p) => [acc[0] + p[0], acc[1] + p[1]],
-      [0, 0]
-    ).map(v => v / clamped2DUnsorted.length) as Vec2;
+    const centroid2D: Vec2 = clamped2DUnsorted
+      .reduce<Vec2>((acc, p) => [acc[0] + p[0], acc[1] + p[1]], [0, 0])
+      .map((v) => v / clamped2DUnsorted.length) as Vec2;
     const sorted2D = [...clamped2DUnsorted].sort(
-      (a, b) => Math.atan2(a[1] - centroid2D[1], a[0] - centroid2D[0]) -
-                Math.atan2(b[1] - centroid2D[1], b[0] - centroid2D[0])
+      (a, b) =>
+        Math.atan2(a[1] - centroid2D[1], a[0] - centroid2D[0]) -
+        Math.atan2(b[1] - centroid2D[1], b[0] - centroid2D[0])
     );
-    
+
     const area = computePolygonArea(sorted2D);
-    
+
     if (area <= boundsTol * boundsTol) continue;
-    
+
     result.push({
       ...piece,
       polygon: sorted2D,
     });
   }
-  
+
   return result;
 }
 
@@ -351,7 +389,7 @@ function filterPiecesByBounds3D(
  */
 export function regularize(pieces: FacePiece[]): FacePiece[] {
   // Filter out degenerate pieces (very small area)
-  return pieces.filter(p => {
+  return pieces.filter((p) => {
     const area = computePolygonArea(p.polygon);
     return Math.abs(area) > 1e-10;
   });
@@ -374,40 +412,43 @@ function computePolygonArea(polygon: readonly [number, number][]): number {
 /**
  * Point-in-polygon test for Vec2
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 function _pointInPolygon2D(point: Vec2, polygon: Vec2[]): boolean {
   const n = polygon.length;
   let inside = false;
-  
+
   for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = polygon[i][0], yi = polygon[i][1];
-    const xj = polygon[j][0], yj = polygon[j][1];
-    
-    if (((yi > point[1]) !== (yj > point[1])) &&
-        (point[0] < (xj - xi) * (point[1] - yi) / (yj - yi) + xi)) {
+    const xi = polygon[i][0],
+      yi = polygon[i][1];
+    const xj = polygon[j][0],
+      yj = polygon[j][1];
+
+    if (
+      yi > point[1] !== yj > point[1] &&
+      point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi
+    ) {
       inside = !inside;
     }
   }
-  
+
   return inside;
 }
 
 /**
  * Check if two line segments intersect (proper intersection, not just touching)
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 function _segmentsIntersect(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2): boolean {
   const d1 = cross2D(b1, b2, a1);
   const d2 = cross2D(b1, b2, a2);
   const d3 = cross2D(a1, a2, b1);
   const d4 = cross2D(a1, a2, b2);
-  
+
   // Proper intersection: points are on opposite sides of each line
-  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
-      ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
     return true;
   }
-  
+
   return false;
 }
 

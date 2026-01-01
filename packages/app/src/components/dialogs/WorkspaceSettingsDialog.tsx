@@ -1,13 +1,13 @@
 /**
  * Workspace Settings Dialog
- * 
+ *
  * Allows workspace admins to manage workspace settings
  */
 
-import React from 'react';
-import { Dialog } from '@base-ui/react/dialog';
-import './CreateDialog.css';
-import './WorkspaceSettingsDialog.css';
+import React from "react";
+import { Dialog } from "@base-ui/react/dialog";
+import "./CreateDialog.css";
+import "./WorkspaceSettingsDialog.css";
 
 interface WorkspaceSettingsDialogProps {
   open: boolean;
@@ -25,14 +25,10 @@ export const WorkspaceSettingsDialog: React.FC<WorkspaceSettingsDialogProps> = (
       <Dialog.Portal>
         <Dialog.Backdrop className="create-dialog-backdrop" />
         <Dialog.Popup className="create-dialog-popup workspace-settings-dialog">
-          <Dialog.Title className="create-dialog-title">
-            Workspace Settings
-          </Dialog.Title>
-          
+          <Dialog.Title className="create-dialog-title">Workspace Settings</Dialog.Title>
+
           <div className="workspace-settings-dialog-content">
-            <p className="workspace-settings-coming-soon">
-              Workspace settings coming soon
-            </p>
+            <p className="workspace-settings-coming-soon">Workspace settings coming soon</p>
           </div>
         </Dialog.Popup>
       </Dialog.Portal>

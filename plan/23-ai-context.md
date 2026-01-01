@@ -9,15 +9,16 @@
 
 Before starting AI integration, the following must be **stable and frozen**:
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Feature XML structure | Must be stable | AI prompts depend on exact format |
-| Attribute naming | Must be stable | `distance`, `op`, `sketch`, etc. |
-| Selection/reference format | Must be stable | `face:e1:top`, `edge:e1:top:0` |
-| Sketch JSON format | Must be stable | Points, entities, constraints arrays |
-| Error code taxonomy | Must be stable | `NO_CLOSED_PROFILE`, etc. |
+| Component                  | Status         | Notes                                |
+| -------------------------- | -------------- | ------------------------------------ |
+| Feature XML structure      | Must be stable | AI prompts depend on exact format    |
+| Attribute naming           | Must be stable | `distance`, `op`, `sketch`, etc.     |
+| Selection/reference format | Must be stable | `face:e1:top`, `edge:e1:top:0`       |
+| Sketch JSON format         | Must be stable | Points, entities, constraints arrays |
+| Error code taxonomy        | Must be stable | `NO_CLOSED_PROFILE`, etc.            |
 
 **If any of these change after Phase 23**, AI tooling will need updates:
+
 - System prompts
 - Schema documentation
 - Diff/apply logic
@@ -63,42 +64,42 @@ Serialize the Yjs feature tree to clean XML:
 
 export function serializeDocumentToXml(doc: SolidTypeDoc): string {
   const features = doc.features;
-  
+
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-  xml += '<model>\n';
-  xml += '  <meta>\n';
-  xml += `    <name>${doc.meta.get('name')}</name>\n`;
-  xml += `    <version>${doc.meta.get('version')}</version>\n`;
-  xml += '  </meta>\n';
-  xml += '  <features>\n';
-  
+  xml += "<model>\n";
+  xml += "  <meta>\n";
+  xml += `    <name>${doc.meta.get("name")}</name>\n`;
+  xml += `    <version>${doc.meta.get("version")}</version>\n`;
+  xml += "  </meta>\n";
+  xml += "  <features>\n";
+
   for (const child of features.toArray()) {
     if (child instanceof Y.XmlElement) {
       xml += serializeElement(child, 4);
     }
   }
-  
-  xml += '  </features>\n';
-  xml += '</model>';
-  
+
+  xml += "  </features>\n";
+  xml += "</model>";
+
   return xml;
 }
 
 function serializeElement(element: Y.XmlElement, indent: number): string {
-  const spaces = ' '.repeat(indent);
+  const spaces = " ".repeat(indent);
   const tagName = element.nodeName;
   const attrs = Array.from(element.getAttributes())
     .map(([k, v]) => `${k}="${escapeXml(v)}"`)
-    .join(' ');
-  
+    .join(" ");
+
   const children = element.toArray();
-  
+
   if (children.length === 0) {
     return `${spaces}<${tagName} ${attrs} />\n`;
   }
-  
+
   let xml = `${spaces}<${tagName} ${attrs}>\n`;
-  
+
   for (const child of children) {
     if (child instanceof Y.XmlElement) {
       xml += serializeElement(child, indent + 2);
@@ -106,7 +107,7 @@ function serializeElement(element: Y.XmlElement, indent: number): string {
       xml += `${spaces}  ${child.toString()}\n`;
     }
   }
-  
+
   xml += `${spaces}</${tagName}>\n`;
   return xml;
 }
@@ -150,7 +151,7 @@ Include information about what the user has selected:
 // packages/app/src/ai/serializeSelection.ts
 
 export interface SelectionContext {
-  type: 'none' | 'feature' | 'face' | 'edge';
+  type: "none" | "feature" | "face" | "edge";
   featureId?: string;
   persistentRef?: string;
   geometryInfo?: {
@@ -165,7 +166,7 @@ export function serializeSelection(selection: Selection): SelectionContext {
   if (selection.faces.length > 0) {
     const face = selection.faces[0];
     return {
-      type: 'face',
+      type: "face",
       featureId: face.featureId,
       persistentRef: face.persistentRef.toString(),
       geometryInfo: {
@@ -176,24 +177,24 @@ export function serializeSelection(selection: Selection): SelectionContext {
       },
     };
   }
-  
+
   if (selection.edges.length > 0) {
     const edge = selection.edges[0];
     return {
-      type: 'edge',
+      type: "edge",
       featureId: edge.featureId,
       persistentRef: edge.persistentRef.toString(),
     };
   }
-  
+
   if (selection.feature) {
     return {
-      type: 'feature',
+      type: "feature",
       featureId: selection.feature,
     };
   }
-  
-  return { type: 'none' };
+
+  return { type: "none" };
 }
 ```
 
@@ -209,13 +210,13 @@ Capture the current 3D view:
 export async function captureScreenshot(renderer: THREE.WebGLRenderer): Promise<string> {
   // Render the current frame
   renderer.render(scene, camera);
-  
+
   // Get canvas data as base64
   const canvas = renderer.domElement;
-  const dataUrl = canvas.toDataURL('image/png');
-  
+  const dataUrl = canvas.toDataURL("image/png");
+
   // Return base64 data (strip prefix for API)
-  return dataUrl.replace('data:image/png;base64,', '');
+  return dataUrl.replace("data:image/png;base64,", "");
 }
 ```
 
@@ -283,7 +284,7 @@ export const DOCUMENT_SCHEMA = `
 export interface AIContext {
   documentXml: string;
   selection: SelectionContext;
-  screenshot: string;  // Base64
+  screenshot: string; // Base64
   schema: string;
 }
 
@@ -296,7 +297,7 @@ export async function assembleAIContext(
     serializeDocumentToXml(doc),
     captureScreenshot(renderer),
   ]);
-  
+
   return {
     documentXml,
     selection: serializeSelection(selection),
@@ -350,27 +351,27 @@ User's request: {{userPrompt}}
 
 ```typescript
 // Test XML serialization
-test('serializeDocumentToXml produces valid XML', () => {
+test("serializeDocumentToXml produces valid XML", () => {
   const doc = createDocument();
-  addSketchFeature(doc, 's1', 'xy');
-  addExtrudeFeature(doc, 'e1', 's1', 10, 'add');
-  
+  addSketchFeature(doc, "s1", "xy");
+  addExtrudeFeature(doc, "e1", "s1", 10, "add");
+
   const xml = serializeDocumentToXml(doc);
-  
+
   expect(xml).toContain('<sketch id="s1"');
   expect(xml).toContain('<extrude id="e1"');
   // Validate XML is parseable
   const parser = new DOMParser();
-  const parsed = parser.parseFromString(xml, 'text/xml');
-  expect(parsed.querySelector('parsererror')).toBeNull();
+  const parsed = parser.parseFromString(xml, "text/xml");
+  expect(parsed.querySelector("parsererror")).toBeNull();
 });
 
 // Test selection serialization
-test('serializeSelection includes geometry info', () => {
+test("serializeSelection includes geometry info", () => {
   const selection = { faces: [mockFace], edges: [] };
   const ctx = serializeSelection(selection);
-  
-  expect(ctx.type).toBe('face');
+
+  expect(ctx.type).toBe("face");
   expect(ctx.geometryInfo).toBeDefined();
 });
 ```
@@ -410,10 +411,14 @@ export async function assembleAIContext(...): Promise<AIContext> {
 // Consistent error format AI can understand
 interface BuildError {
   featureId: string;
-  code: 'NO_CLOSED_PROFILE' | 'SELF_INTERSECTING' | 'INVALID_REFERENCE' | 
-        'AXIS_INTERSECTS_PROFILE' | 'BUILD_ERROR';
+  code:
+    | "NO_CLOSED_PROFILE"
+    | "SELF_INTERSECTING"
+    | "INVALID_REFERENCE"
+    | "AXIS_INTERSECTS_PROFILE"
+    | "BUILD_ERROR";
   message: string;
-  suggestion?: string;  // Optional fix suggestion
+  suggestion?: string; // Optional fix suggestion
 }
 ```
 

@@ -69,11 +69,11 @@ A circle is represented as an arc with coincident start/end points:
 ```typescript
 export interface SketchArc {
   id: string;
-  type: 'arc';
-  start: string;    // Point ID (on arc)
-  end: string;      // Point ID (on arc)
-  center: string;   // Point ID (center)
-  ccw: boolean;     // Counter-clockwise direction
+  type: "arc";
+  start: string; // Point ID (on arc)
+  end: string; // Point ID (on arc)
+  center: string; // Point ID (center)
+  ccw: boolean; // Counter-clockwise direction
 }
 ```
 
@@ -90,7 +90,7 @@ function ArcTool() {
   const [stage, setStage] = useState<'start' | 'end' | 'curve'>('start');
   const [startPoint, setStartPoint] = useState<Point | null>(null);
   const [endPoint, setEndPoint] = useState<Point | null>(null);
-  
+
   const handleClick = (pos: Point) => {
     switch (stage) {
       case 'start':
@@ -109,14 +109,14 @@ function ArcTool() {
         break;
     }
   };
-  
+
   const handleMouseMove = (pos: Point) => {
     if (stage === 'curve') {
       // Preview arc with current mouse position
       previewArc(startPoint, endPoint, pos);
     }
   };
-  
+
   return <SketchInteractionLayer onClick={handleClick} onMouseMove={handleMouseMove} />;
 }
 ```
@@ -126,7 +126,7 @@ function ArcTool() {
 ```typescript
 function CircleTool() {
   const [center, setCenter] = useState<Point | null>(null);
-  
+
   const handleClick = (pos: Point) => {
     if (!center) {
       setCenter(pos);
@@ -136,14 +136,14 @@ function CircleTool() {
       setCenter(null);
     }
   };
-  
+
   const handleMouseMove = (pos: Point) => {
     if (center) {
       const radius = distance(center, pos);
       previewCircle(center, radius);
     }
   };
-  
+
   return <SketchInteractionLayer onClick={handleClick} onMouseMove={handleMouseMove} />;
 }
 ```
@@ -155,15 +155,15 @@ function renderArc(arc: SketchArc, points: Map<string, Point>): Path {
   const start = points.get(arc.start);
   const end = points.get(arc.end);
   const center = points.get(arc.center);
-  
+
   const radius = distance(center, start);
   const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
   const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
-  
+
   // SVG arc path
   const largeArc = shouldUseLargeArc(startAngle, endAngle, arc.ccw);
   const sweep = arc.ccw ? 0 : 1;
-  
+
   return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} ${sweep} ${end.x} ${end.y}`;
 }
 ```
@@ -211,9 +211,9 @@ The `toProfile()` method needs to handle arcs:
 ```typescript
 // In SketchModel.toProfile()
 for (const entity of this.entities) {
-  if (entity.type === 'line') {
+  if (entity.type === "line") {
     curves.push(createLine2D(startPos, endPos));
-  } else if (entity.type === 'arc') {
+  } else if (entity.type === "arc") {
     curves.push(createArc2D(startPos, endPos, centerPos, entity.ccw));
   }
 }
@@ -229,21 +229,28 @@ for (const entity of this.entities) {
 function calculateArcCenter(p1: Point, p2: Point, p3: Point): Point {
   // p3 is a point on the arc between p1 and p2
   // Find the circumcenter of the triangle p1-p2-p3
-  
-  const ax = p1.x, ay = p1.y;
-  const bx = p2.x, by = p2.y;
-  const cx = p3.x, cy = p3.y;
-  
+
+  const ax = p1.x,
+    ay = p1.y;
+  const bx = p2.x,
+    by = p2.y;
+  const cx = p3.x,
+    cy = p3.y;
+
   const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-  
-  const ux = ((ax * ax + ay * ay) * (by - cy) + 
-              (bx * bx + by * by) * (cy - ay) + 
-              (cx * cx + cy * cy) * (ay - by)) / d;
-  
-  const uy = ((ax * ax + ay * ay) * (cx - bx) + 
-              (bx * bx + by * by) * (ax - cx) + 
-              (cx * cx + cy * cy) * (bx - ax)) / d;
-  
+
+  const ux =
+    ((ax * ax + ay * ay) * (by - cy) +
+      (bx * bx + by * by) * (cy - ay) +
+      (cx * cx + cy * cy) * (ay - by)) /
+    d;
+
+  const uy =
+    ((ax * ax + ay * ay) * (cx - bx) +
+      (bx * bx + by * by) * (ax - cx) +
+      (cx * cx + cy * cy) * (bx - ax)) /
+    d;
+
   return { x: ux, y: uy };
 }
 ```
@@ -255,7 +262,7 @@ function isCounterClockwise(start: Point, end: Point, thirdPoint: Point): boolea
   // Use cross product to determine winding
   const v1 = { x: end.x - start.x, y: end.y - start.y };
   const v2 = { x: thirdPoint.x - start.x, y: thirdPoint.y - start.y };
-  return (v1.x * v2.y - v1.y * v2.x) > 0;
+  return v1.x * v2.y - v1.y * v2.x > 0;
 }
 ```
 
@@ -267,23 +274,23 @@ function isCounterClockwise(start: Point, end: Point, thirdPoint: Point): boolea
 
 ```typescript
 // Test arc creation
-test('addArc creates arc entity', () => {
+test("addArc creates arc entity", () => {
   const sketch = new SketchModel();
   const p1 = sketch.addPoint(0, 0);
   const p2 = sketch.addPoint(10, 0);
   const center = sketch.addPoint(5, 0);
-  
+
   const arcId = sketch.addArc(p1, p2, center, true);
   expect(arcId).toBeDefined();
 });
 
 // Test profile with arc
-test('toProfile includes arcs', () => {
+test("toProfile includes arcs", () => {
   const sketch = createSketchWithArc();
   const profile = sketch.toProfile();
-  
+
   expect(profile).not.toBeNull();
-  expect(profile.curves.some(c => c.kind === 'arc')).toBe(true);
+  expect(profile.curves.some((c) => c.kind === "arc")).toBe(true);
 });
 ```
 

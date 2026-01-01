@@ -1,18 +1,18 @@
 /**
  * Types for y-durable-streams provider.
- * 
+ *
  * Vendored from https://github.com/durable-streams/durable-streams
  * TODO: Replace with @durable-streams/y-durable-streams when released
  */
 
-import type { Doc } from "yjs"
-import type { Awareness } from "y-protocols/awareness"
-import type { HeadersRecord } from "@durable-streams/client"
+import type { Doc } from "yjs";
+import type { Awareness } from "y-protocols/awareness";
+import type { HeadersRecord } from "@durable-streams/client";
 
 /**
  * Connection status of the provider.
  */
-export type ProviderStatus = `disconnected` | `connecting` | `connected`
+export type ProviderStatus = `disconnected` | `connecting` | `connected`;
 
 /**
  * Configuration for a stream endpoint.
@@ -21,13 +21,13 @@ export interface StreamConfig {
   /**
    * The URL of the durable stream.
    */
-  url: string | URL
+  url: string | URL;
 
   /**
    * Optional HTTP headers for requests.
    * Values can be static strings or functions that return strings.
    */
-  headers?: HeadersRecord
+  headers?: HeadersRecord;
 }
 
 /**
@@ -37,7 +37,7 @@ export interface AwarenessConfig extends StreamConfig {
   /**
    * The Yjs Awareness protocol instance.
    */
-  protocol: Awareness
+  protocol: Awareness;
 }
 
 /**
@@ -47,24 +47,24 @@ export interface DurableStreamsProviderOptions {
   /**
    * The Yjs document to synchronize.
    */
-  doc: Doc
+  doc: Doc;
 
   /**
    * Configuration for the document updates stream.
    */
-  documentStream: StreamConfig
+  documentStream: StreamConfig;
 
   /**
    * Optional configuration for awareness (presence) synchronization.
    * If not provided, awareness features will be disabled.
    */
-  awarenessStream?: AwarenessConfig
+  awarenessStream?: AwarenessConfig;
 
   /**
    * Whether to automatically connect on construction.
    * @default true
    */
-  connect?: boolean
+  connect?: boolean;
 }
 
 /**
@@ -75,26 +75,26 @@ export interface DurableStreamsProviderEvents {
    * Emitted when the sync state changes.
    * @param synced - Whether the provider is fully synced with the server
    */
-  synced: (synced: boolean) => void
+  synced: (synced: boolean) => void;
 
   /**
    * Emitted when the connection status changes.
    * @param status - The new connection status
    */
-  status: (status: ProviderStatus) => void
+  status: (status: ProviderStatus) => void;
 
   /**
    * Emitted when an error occurs.
    * @param error - The error that occurred
    */
-  error: (error: Error) => void
+  error: (error: Error) => void;
 }
 
 /**
  * Internal type for awareness update events from y-protocols.
  */
 export interface AwarenessUpdate {
-  added: Array<number>
-  updated: Array<number>
-  removed: Array<number>
+  added: Array<number>;
+  updated: Array<number>;
+  removed: Array<number>;
 }

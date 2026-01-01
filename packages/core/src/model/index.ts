@@ -1,6 +1,6 @@
 /**
  * Model module - Modeling operators
- * 
+ *
  * Provides modeling operations on top of geom and topo:
  * - Primitives (box, cylinder, etc.)
  * - Datum planes for sketch placement
@@ -11,21 +11,21 @@
  */
 
 // Result types and error handling
-export * from './types.js';
+export * from "./types.js";
 
 // Primitives
-export * from './primitives.js';
+export * from "./primitives.js";
 
 // Datum planes
-export * from './planes.js';
+export * from "./planes.js";
 
 // Sketch profiles
-export * from './sketchProfile.js';
+export * from "./sketchProfile.js";
 
 // Modeling operations
-export * from './extrude.js';
-export * from './revolve.js';
-export * from './boolean.js';
+export * from "./extrude.js";
+export * from "./revolve.js";
+export * from "./boolean.js";
 
 // P-curve helpers
-export * from './pcurveHelpers.js';
+export * from "./pcurveHelpers.js";

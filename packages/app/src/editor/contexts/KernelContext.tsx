@@ -2,16 +2,10 @@
  * KernelContext - provides access to the CAD kernel running in a Web Worker
  */
 
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
-import { useDocument } from './DocumentContext';
-import { YjsWorkerSync } from '../worker/YjsWorkerSync';
-import { findFeature, getSketchDataAsArrays, setSketchData } from '../document/featureHelpers';
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { useDocument } from "./DocumentContext";
+import { YjsWorkerSync } from "../worker/YjsWorkerSync";
+import { findFeature, getSketchDataAsArrays, setSketchData } from "../document/featureHelpers";
 import type {
   WorkerToMainMessage,
   TransferableMesh,
@@ -19,7 +13,7 @@ import type {
   BodyInfo,
   FeatureStatus,
   PlaneTransform,
-} from '../worker/types';
+} from "../worker/types";
 
 // ============================================================================
 // Context Types
@@ -42,15 +36,15 @@ interface KernelContextValue {
   previewExtrude: (args: {
     sketchId: string;
     distance: number;
-    direction: 'normal' | 'reverse';
-    op: 'add' | 'cut';
+    direction: "normal" | "reverse";
+    op: "add" | "cut";
   }) => void;
   /** Send a live preview request for revolve */
   previewRevolve: (args: {
     sketchId: string;
     axis: string;
     angle: number;
-    op: 'add' | 'cut';
+    op: "add" | "cut";
   }) => void;
   /** Clear any active preview mesh */
   clearPreview: () => void;
@@ -96,7 +90,7 @@ export function KernelProvider({ children }: KernelProviderProps) {
   const { doc } = useDocument();
   const workerRef = useRef<Worker | null>(null);
   const syncRef = useRef<YjsWorkerSync | null>(null);
-  
+
   // For STL export promise resolution (Phase 18)
   const stlResolveRef = useRef<{
     resolve: (value: ArrayBuffer | string) => void;
@@ -108,13 +102,9 @@ export function KernelProvider({ children }: KernelProviderProps) {
     reject: (reason: Error) => void;
   } | null>(null);
 
-  const [meshes, setMeshes] = useState<Map<string, TransferableMesh>>(
-    new Map()
-  );
+  const [meshes, setMeshes] = useState<Map<string, TransferableMesh>>(new Map());
   const [errors, setErrors] = useState<BuildError[]>([]);
-  const [featureStatus, setFeatureStatus] = useState<
-    Record<string, FeatureStatus>
-  >({});
+  const [featureStatus, setFeatureStatus] = useState<Record<string, FeatureStatus>>({});
   const [bodies, setBodies] = useState<BodyInfo[]>([]);
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [isReady, setIsReady] = useState(false);
@@ -140,10 +130,9 @@ export function KernelProvider({ children }: KernelProviderProps) {
 
   useEffect(() => {
     // Create kernel worker
-    const worker = new Worker(
-      new URL('../worker/kernel.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
+    const worker = new Worker(new URL("../worker/kernel.worker.ts", import.meta.url), {
+      type: "module",
+    });
     workerRef.current = worker;
 
     // Set up Yjs sync
@@ -155,21 +144,26 @@ export function KernelProvider({ children }: KernelProviderProps) {
       const msg = event.data;
 
       switch (msg.type) {
-        case 'ready':
+        case "ready":
           setIsReady(true);
           break;
 
-        case 'rebuild-start':
-          console.log('[Kernel] Rebuild starting');
+        case "rebuild-start":
+          console.log("[Kernel] Rebuild starting");
           setIsRebuilding(true);
           // Clear old meshes at start of rebuild
           setMeshes(new Map());
           break;
 
-        case 'rebuild-complete':
-          console.log('[Kernel] Rebuild complete, bodies:', msg.bodies.length, 'errors:', msg.errors.length);
+        case "rebuild-complete":
+          console.log(
+            "[Kernel] Rebuild complete, bodies:",
+            msg.bodies.length,
+            "errors:",
+            msg.errors.length
+          );
           if (msg.errors.length > 0) {
-            console.log('[Kernel] Errors:', msg.errors);
+            console.log("[Kernel] Errors:", msg.errors);
           }
           setErrors(msg.errors);
           setFeatureStatus(msg.featureStatus);
@@ -177,8 +171,8 @@ export function KernelProvider({ children }: KernelProviderProps) {
           setIsRebuilding(false);
           break;
 
-        case 'mesh':
-          console.log('[Kernel] Received mesh for body:', msg.bodyId);
+        case "mesh":
+          console.log("[Kernel] Received mesh for body:", msg.bodyId);
           setMeshes((prev) => {
             const next = new Map(prev);
             next.set(msg.bodyId, msg.mesh);
@@ -186,16 +180,16 @@ export function KernelProvider({ children }: KernelProviderProps) {
           });
           break;
 
-        case 'preview-error':
+        case "preview-error":
           setPreviewError(msg.message);
           break;
 
-        case 'sketch-solved': {
+        case "sketch-solved": {
           setSketchSolveInfo((prev) => ({
             ...prev,
             [msg.sketchId]: { status: msg.status, dof: msg.dof },
           }));
-          
+
           // Store the plane transform for this sketch
           if (msg.planeTransform) {
             setSketchPlaneTransforms((prev) => ({
@@ -232,28 +226,28 @@ export function KernelProvider({ children }: KernelProviderProps) {
           break;
         }
 
-        case 'stl-exported':
+        case "stl-exported":
           if (stlResolveRef.current) {
             if (msg.buffer) {
               stlResolveRef.current.resolve(msg.buffer);
             } else if (msg.content) {
               stlResolveRef.current.resolve(msg.content);
             } else {
-              stlResolveRef.current.reject(new Error('Invalid STL export response'));
+              stlResolveRef.current.reject(new Error("Invalid STL export response"));
             }
             stlResolveRef.current = null;
           }
           break;
 
-        case 'json-exported':
+        case "json-exported":
           if (jsonResolveRef.current) {
             jsonResolveRef.current.resolve(msg.content);
             jsonResolveRef.current = null;
           }
           break;
 
-        case 'error':
-          console.error('Kernel worker error:', msg.message);
+        case "error":
+          console.error("Kernel worker error:", msg.message);
           // Also reject pending STL export if any
           if (stlResolveRef.current) {
             stlResolveRef.current.reject(new Error(msg.message));
@@ -269,8 +263,8 @@ export function KernelProvider({ children }: KernelProviderProps) {
     };
 
     worker.onerror = (err) => {
-      console.error('Kernel worker error:', err);
-      console.error('Worker error details:', {
+      console.error("Kernel worker error:", err);
+      console.error("Worker error details:", {
         message: err.message,
         filename: err.filename,
         lineno: err.lineno,
@@ -288,12 +282,12 @@ export function KernelProvider({ children }: KernelProviderProps) {
   const previewExtrude = (args: {
     sketchId: string;
     distance: number;
-    direction: 'normal' | 'reverse';
-    op: 'add' | 'cut';
+    direction: "normal" | "reverse";
+    op: "add" | "cut";
   }) => {
     setPreviewError(null);
     workerRef.current?.postMessage({
-      type: 'preview-extrude',
+      type: "preview-extrude",
       ...args,
     });
   };
@@ -302,39 +296,42 @@ export function KernelProvider({ children }: KernelProviderProps) {
     sketchId: string;
     axis: string;
     angle: number;
-    op: 'add' | 'cut';
+    op: "add" | "cut";
   }) => {
     setPreviewError(null);
     workerRef.current?.postMessage({
-      type: 'preview-revolve',
+      type: "preview-revolve",
       ...args,
     });
   };
 
   const clearPreview = () => {
     setPreviewError(null);
-    workerRef.current?.postMessage({ type: 'clear-preview' });
+    workerRef.current?.postMessage({ type: "clear-preview" });
     setMeshes((prev) => {
       const next = new Map(prev);
       for (const key of Array.from(next.keys())) {
-        if (key.startsWith('__preview')) next.delete(key);
+        if (key.startsWith("__preview")) next.delete(key);
       }
       return next;
     });
   };
 
   // Export STL (Phase 18)
-  const exportStl = (options?: { binary?: boolean; name?: string }): Promise<ArrayBuffer | string> => {
+  const exportStl = (options?: {
+    binary?: boolean;
+    name?: string;
+  }): Promise<ArrayBuffer | string> => {
     return new Promise((resolve, reject) => {
       if (!workerRef.current) {
-        reject(new Error('Worker not ready'));
+        reject(new Error("Worker not ready"));
         return;
       }
       stlResolveRef.current = { resolve, reject };
-      workerRef.current.postMessage({ 
-        type: 'export-stl',
+      workerRef.current.postMessage({
+        type: "export-stl",
         binary: options?.binary ?? true,
-        name: options?.name ?? 'model',
+        name: options?.name ?? "model",
       });
     });
   };
@@ -342,11 +339,11 @@ export function KernelProvider({ children }: KernelProviderProps) {
   const exportJson = (): Promise<string> => {
     return new Promise((resolve, reject) => {
       if (!workerRef.current) {
-        reject(new Error('Worker not ready'));
+        reject(new Error("Worker not ready"));
         return;
       }
       jsonResolveRef.current = { resolve, reject };
-      workerRef.current.postMessage({ type: 'export-json' });
+      workerRef.current.postMessage({ type: "export-json" });
     });
   };
 
@@ -367,9 +364,7 @@ export function KernelProvider({ children }: KernelProviderProps) {
     exportJson,
   };
 
-  return (
-    <KernelContext.Provider value={value}>{children}</KernelContext.Provider>
-  );
+  return <KernelContext.Provider value={value}>{children}</KernelContext.Provider>;
 }
 
 // ============================================================================
@@ -379,7 +374,7 @@ export function KernelProvider({ children }: KernelProviderProps) {
 export function useKernel() {
   const ctx = useContext(KernelContext);
   if (!ctx) {
-    throw new Error('useKernel must be used within KernelProvider');
+    throw new Error("useKernel must be used within KernelProvider");
   }
   return ctx;
 }

@@ -1,17 +1,17 @@
 /**
  * Project Settings Dialog
- * 
+ *
  * Allows project admins to manage project settings, members, and delete the project
  */
 
-import React, { useState } from 'react';
-import { Dialog } from '@base-ui/react/dialog';
-import { useSession } from '../../lib/auth-client';
-import { deleteProjectMutation } from '../../lib/server-functions';
-import { useNavigate } from '@tanstack/react-router';
-import { LuTrash2, LuUserPlus } from 'react-icons/lu';
-import './CreateDialog.css';
-import './ProjectSettingsDialog.css';
+import React, { useState } from "react";
+import { Dialog } from "@base-ui/react/dialog";
+import { useSession } from "../../lib/auth-client";
+import { deleteProjectMutation } from "../../lib/server-functions";
+import { useNavigate } from "@tanstack/react-router";
+import { LuTrash2, LuUserPlus } from "react-icons/lu";
+import "./CreateDialog.css";
+import "./ProjectSettingsDialog.css";
 
 interface ProjectSettingsDialogProps {
   open: boolean;
@@ -28,39 +28,37 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const navigate = useNavigate();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  
+
   // TODO: Load project members when collection is available
   // For now, assume user is admin if they're logged in
   const currentUserId = session?.user?.id;
   const isAdmin = !!currentUserId; // Simplified for now
-  
+
   const handleDeleteProject = async () => {
     if (!projectId || !currentUserId) return;
-    
+
     setIsDeleting(true);
     try {
       await deleteProjectMutation({ projectId });
       // Navigate to dashboard after deletion
-      navigate({ to: '/dashboard' });
+      navigate({ to: "/dashboard" });
       onOpenChange(false);
     } catch (error) {
-      console.error('Failed to delete project:', error);
-      alert('Failed to delete project. Please try again.');
+      console.error("Failed to delete project:", error);
+      alert("Failed to delete project. Please try again.");
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
     }
   };
-  
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Backdrop className="create-dialog-backdrop" />
         <Dialog.Popup className="create-dialog-popup project-settings-dialog">
-          <Dialog.Title className="create-dialog-title">
-            Project Settings
-          </Dialog.Title>
-          
+          <Dialog.Title className="create-dialog-title">Project Settings</Dialog.Title>
+
           <div className="project-settings-dialog-content">
             {/* Members Section */}
             <div className="project-settings-section">
@@ -69,13 +67,16 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                 <p className="project-settings-empty">Member management coming soon</p>
               </div>
               {isAdmin && (
-                <button className="project-settings-button project-settings-button-secondary" disabled>
+                <button
+                  className="project-settings-button project-settings-button-secondary"
+                  disabled
+                >
                   <LuUserPlus size={16} />
                   <span>Add Member</span>
                 </button>
               )}
             </div>
-            
+
             {/* Danger Zone */}
             {isAdmin && (
               <div className="project-settings-section project-settings-danger-zone">
@@ -106,7 +107,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                         onClick={handleDeleteProject}
                         disabled={isDeleting}
                       >
-                        {isDeleting ? 'Deleting...' : 'Delete Project'}
+                        {isDeleting ? "Deleting..." : "Delete Project"}
                       </button>
                     </div>
                   </div>

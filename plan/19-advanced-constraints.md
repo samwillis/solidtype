@@ -10,6 +10,7 @@
 ## Implementation Notes
 
 ### What's Done:
+
 - `document.ts` - Added `parallel`, `perpendicular`, `equalLength`, `tangent`, `symmetric` to `SketchConstraint` type
 - `SketchContext.tsx` - Added new types to `ConstraintType`, `canApplyConstraint()`, and `applyConstraint()`
 - `Toolbar.tsx` - Added advanced constraints to dropdown with separator, Unicode symbols (∥, ⊥, =, ⌒, ⇔)
@@ -18,6 +19,7 @@
 - Core already had full implementations: `parallel()`, `perpendicular()`, `equalLength()`, `tangent()`, `symmetric()`
 
 ### Selection Requirements:
+
 - **Parallel/Perpendicular/Equal Length**: 2 lines selected
 - **Tangent**: 2 entities (line+arc or arc+arc)
 - **Symmetric**: 2 points + 1 line (axis)
@@ -25,7 +27,7 @@
 ## Goals
 
 - Add parallel constraint
-- Add perpendicular constraint  
+- Add perpendicular constraint
 - Add tangent constraint (line-arc, arc-arc)
 - Add equal length/radius constraint
 - Add symmetric constraint
@@ -40,8 +42,8 @@ Two lines remain parallel:
 
 ```typescript
 interface ParallelConstraint {
-  type: 'parallel';
-  lines: [string, string];  // Two line entity IDs
+  type: "parallel";
+  lines: [string, string]; // Two line entity IDs
 }
 ```
 
@@ -51,7 +53,7 @@ Two lines are at 90°:
 
 ```typescript
 interface PerpendicularConstraint {
-  type: 'perpendicular';
+  type: "perpendicular";
   lines: [string, string];
 }
 ```
@@ -62,9 +64,9 @@ Line tangent to arc, or arc tangent to arc:
 
 ```typescript
 interface TangentConstraint {
-  type: 'tangent';
-  entities: [string, string];  // Line-arc or arc-arc
-  point?: string;              // Connection point (optional)
+  type: "tangent";
+  entities: [string, string]; // Line-arc or arc-arc
+  point?: string; // Connection point (optional)
 }
 ```
 
@@ -74,7 +76,7 @@ Two lines have the same length:
 
 ```typescript
 interface EqualLengthConstraint {
-  type: 'equalLength';
+  type: "equalLength";
   lines: [string, string];
 }
 ```
@@ -85,7 +87,7 @@ Two arcs have the same radius:
 
 ```typescript
 interface EqualRadiusConstraint {
-  type: 'equalRadius';
+  type: "equalRadius";
   arcs: [string, string];
 }
 ```
@@ -96,9 +98,9 @@ Points are symmetric about a line:
 
 ```typescript
 interface SymmetricConstraint {
-  type: 'symmetric';
-  points: [string, string];  // Two points
-  axis: string;              // Line entity ID (axis of symmetry)
+  type: "symmetric";
+  points: [string, string]; // Two points
+  axis: string; // Line entity ID (axis of symmetry)
 }
 ```
 
@@ -115,35 +117,35 @@ interface SymmetricConstraint {
   <ToolbarButton icon="vertical" label="Vertical" ... />
   <ToolbarButton icon="coincident" label="Coincident" ... />
   <ToolbarButton icon="fixed" label="Fixed" ... />
-  
+
   {/* Advanced constraints (new) */}
-  <ToolbarButton 
-    icon="parallel" 
-    label="Parallel" 
+  <ToolbarButton
+    icon="parallel"
+    label="Parallel"
     onClick={() => addConstraint('parallel')}
     disabled={!canAddParallel(selection)}
   />
-  <ToolbarButton 
-    icon="perpendicular" 
-    label="Perpendicular" 
+  <ToolbarButton
+    icon="perpendicular"
+    label="Perpendicular"
     onClick={() => addConstraint('perpendicular')}
     disabled={!canAddPerpendicular(selection)}
   />
-  <ToolbarButton 
-    icon="tangent" 
-    label="Tangent" 
+  <ToolbarButton
+    icon="tangent"
+    label="Tangent"
     onClick={() => addConstraint('tangent')}
     disabled={!canAddTangent(selection)}
   />
-  <ToolbarButton 
-    icon="equal" 
-    label="Equal" 
+  <ToolbarButton
+    icon="equal"
+    label="Equal"
     onClick={() => addConstraint('equal')}
     disabled={!canAddEqual(selection)}
   />
-  <ToolbarButton 
-    icon="symmetric" 
-    label="Symmetric" 
+  <ToolbarButton
+    icon="symmetric"
+    label="Symmetric"
     onClick={() => addConstraint('symmetric')}
     disabled={!canAddSymmetric(selection)}
   />
@@ -155,21 +157,23 @@ interface SymmetricConstraint {
 ```typescript
 function canAddParallel(selection: SketchSelection): boolean {
   // Need exactly 2 lines
-  const lines = selection.entities.filter(e => e.type === 'line');
+  const lines = selection.entities.filter((e) => e.type === "line");
   return lines.length === 2;
 }
 
 function canAddTangent(selection: SketchSelection): boolean {
   // Need line + arc, or 2 arcs
-  const lines = selection.entities.filter(e => e.type === 'line');
-  const arcs = selection.entities.filter(e => e.type === 'arc');
+  const lines = selection.entities.filter((e) => e.type === "line");
+  const arcs = selection.entities.filter((e) => e.type === "arc");
   return (lines.length === 1 && arcs.length === 1) || arcs.length === 2;
 }
 
 function canAddSymmetric(selection: SketchSelection): boolean {
   // Need 2 points + 1 line
-  return selection.points.length === 2 && 
-         selection.entities.filter(e => e.type === 'line').length === 1;
+  return (
+    selection.points.length === 2 &&
+    selection.entities.filter((e) => e.type === "line").length === 1
+  );
 }
 ```
 
@@ -180,7 +184,7 @@ function canAddSymmetric(selection: SketchSelection): boolean {
 function ParallelIndicator({ line1, line2 }) {
   const midpoint1 = getLineMidpoint(line1);
   const midpoint2 = getLineMidpoint(line2);
-  
+
   return (
     <>
       <ParallelSymbol position={midpoint1} angle={getLineAngle(line1)} />
@@ -216,8 +220,10 @@ function SymmetricIndicator({ point1, point2, axis }) {
 // In solver.ts
 
 function parallelResidual(
-  p1: Point, p2: Point,  // First line
-  p3: Point, p4: Point   // Second line
+  p1: Point,
+  p2: Point, // First line
+  p3: Point,
+  p4: Point // Second line
 ): number {
   // Lines are parallel if their direction vectors are parallel
   // (cross product = 0)
@@ -225,7 +231,7 @@ function parallelResidual(
   const dy1 = p2.y - p1.y;
   const dx2 = p4.x - p3.x;
   const dy2 = p4.y - p3.y;
-  
+
   return dx1 * dy2 - dy1 * dx2;
 }
 ```
@@ -233,16 +239,13 @@ function parallelResidual(
 ### Perpendicular Constraint
 
 ```typescript
-function perpendicularResidual(
-  p1: Point, p2: Point,
-  p3: Point, p4: Point
-): number {
+function perpendicularResidual(p1: Point, p2: Point, p3: Point, p4: Point): number {
   // Lines are perpendicular if dot product = 0
   const dx1 = p2.x - p1.x;
   const dy1 = p2.y - p1.y;
   const dx2 = p4.x - p3.x;
   const dy2 = p4.y - p3.y;
-  
+
   return dx1 * dx2 + dy1 * dy2;
 }
 ```
@@ -251,8 +254,10 @@ function perpendicularResidual(
 
 ```typescript
 function tangentLineArcResidual(
-  lineStart: Point, lineEnd: Point,
-  arcCenter: Point, arcRadius: number
+  lineStart: Point,
+  lineEnd: Point,
+  arcCenter: Point,
+  arcRadius: number
 ): number {
   // Line is tangent to arc if distance from center to line equals radius
   const distance = pointToLineDistance(arcCenter, lineStart, lineEnd);
@@ -264,12 +269,14 @@ function tangentLineArcResidual(
 
 ```typescript
 function tangentArcArcResidual(
-  center1: Point, radius1: number,
-  center2: Point, radius2: number,
-  external: boolean  // External or internal tangency
+  center1: Point,
+  radius1: number,
+  center2: Point,
+  radius2: number,
+  external: boolean // External or internal tangency
 ): number {
   const dist = distance(center1, center2);
-  
+
   if (external) {
     // Circles touch externally: dist = r1 + r2
     return dist - (radius1 + radius2);
@@ -284,8 +291,10 @@ function tangentArcArcResidual(
 
 ```typescript
 function equalLengthResidual(
-  p1: Point, p2: Point,  // First line
-  p3: Point, p4: Point   // Second line
+  p1: Point,
+  p2: Point, // First line
+  p3: Point,
+  p4: Point // Second line
 ): number {
   const len1 = distance(p1, p2);
   const len2 = distance(p3, p4);
@@ -297,20 +306,22 @@ function equalLengthResidual(
 
 ```typescript
 function symmetricResidual(
-  point1: Point, point2: Point,
-  axisStart: Point, axisEnd: Point
+  point1: Point,
+  point2: Point,
+  axisStart: Point,
+  axisEnd: Point
 ): number[] {
   // Midpoint of p1-p2 should lie on axis
   const mid = { x: (point1.x + point2.x) / 2, y: (point1.y + point2.y) / 2 };
   const midOnAxis = pointToLineDistance(mid, axisStart, axisEnd);
-  
+
   // p1-p2 should be perpendicular to axis
   const dx = point2.x - point1.x;
   const dy = point2.y - point1.y;
   const axDx = axisEnd.x - axisStart.x;
   const axDy = axisEnd.y - axisStart.y;
   const perpendicular = dx * axDx + dy * axDy;
-  
+
   return [midOnAxis, perpendicular];
 }
 ```
@@ -323,20 +334,20 @@ function symmetricResidual(
 
 ```typescript
 // Test parallel constraint
-test('parallel makes lines parallel', () => {
+test("parallel makes lines parallel", () => {
   const sketch = new SketchModel();
   const p1 = sketch.addPoint(0, 0);
   const p2 = sketch.addPoint(10, 5);
   const p3 = sketch.addPoint(0, 10);
   const p4 = sketch.addPoint(10, 12);
-  
+
   sketch.addLine(p1, p2);
   sketch.addLine(p3, p4);
   sketch.addConstraint(parallel([p1, p2], [p3, p4]));
-  
+
   const result = solveSketch(sketch);
-  expect(result.status).toBe('solved');
-  
+  expect(result.status).toBe("solved");
+
   // Verify lines are parallel
   const angle1 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
   const angle2 = Math.atan2(p4.y - p3.y, p4.x - p3.x);
@@ -344,7 +355,7 @@ test('parallel makes lines parallel', () => {
 });
 
 // Test tangent constraint
-test('tangent makes line tangent to arc', () => {
+test("tangent makes line tangent to arc", () => {
   // Create arc and line, add tangent constraint
   // Verify distance from center to line equals radius
 });

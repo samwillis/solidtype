@@ -1,25 +1,25 @@
 /**
  * Sketch profiles for modeling operations
- * 
+ *
  * Sketch profiles are 2D shapes on datum planes that can be used
  * as inputs to extrude, revolve, and other operations.
- * 
+ *
  * This module provides profile creation without the full constraint solver
  * (which is in the sketch module). Profiles are defined by ordered chains
  * of Curve2D segments that close into loops.
  */
 
-import type { Vec2 } from '../num/vec2.js';
-import type { Curve2D, Line2D, Arc2D } from '../geom/curve2d.js';
-import type { NumericContext } from '../num/tolerance.js';
-import type { DatumPlane } from './planes.js';
-import { vec2, dist2 } from '../num/vec2.js';
-import { evalCurve2D } from '../geom/curve2d.js';
+import type { Vec2 } from "../num/vec2.js";
+import type { Curve2D, Line2D, Arc2D } from "../geom/curve2d.js";
+import type { NumericContext } from "../num/tolerance.js";
+import type { DatumPlane } from "./planes.js";
+import { vec2, dist2 } from "../num/vec2.js";
+import { evalCurve2D } from "../geom/curve2d.js";
 
 /**
  * Branded type for profile identifiers
  */
-export type ProfileId = number & { __brand: 'ProfileId' };
+export type ProfileId = number & { __brand: `ProfileId` };
 
 /**
  * Counter for generating unique profile IDs
@@ -53,7 +53,7 @@ export interface ProfileLoop {
 
 /**
  * A sketch profile on a datum plane
- * 
+ *
  * Contains one or more loops:
  * - First loop is the outer boundary
  * - Additional loops are holes
@@ -79,7 +79,7 @@ export interface ProfileValidation {
 
 /**
  * Create an empty sketch profile on a datum plane
- * 
+ *
  * @param plane The datum plane for the profile
  * @returns A new empty profile
  */
@@ -93,7 +93,7 @@ export function createEmptyProfile(plane: DatumPlane): SketchProfile {
 
 /**
  * Add a loop to a profile
- * 
+ *
  * @param profile The profile to add to
  * @param curves Array of curves forming the loop
  * @param isOuter Whether this is an outer boundary (default: first loop is outer)
@@ -103,45 +103,42 @@ export function addLoopToProfile(
   curves: Curve2D[],
   isOuter?: boolean
 ): void {
-  const outer = isOuter ?? (profile.loops.length === 0);
+  const outer = isOuter ?? profile.loops.length === 0;
   profile.loops.push({ curves, isOuter: outer });
 }
 
 /**
  * Validate that a profile's loops are closed
- * 
+ *
  * @param profile The profile to validate
  * @param ctx Numeric context for tolerance
  * @returns Validation result with any errors
  */
-export function validateProfile(
-  profile: SketchProfile,
-  ctx: NumericContext
-): ProfileValidation {
+export function validateProfile(profile: SketchProfile, ctx: NumericContext): ProfileValidation {
   const errors: string[] = [];
-  
+
   if (profile.loops.length === 0) {
-    errors.push('Profile has no loops');
+    errors.push(`Profile has no loops`);
     return { valid: false, errors };
   }
-  
+
   // Check each loop is closed
   for (let loopIdx = 0; loopIdx < profile.loops.length; loopIdx++) {
     const loop = profile.loops[loopIdx];
-    
+
     if (loop.curves.length === 0) {
       errors.push(`Loop ${loopIdx} has no curves`);
       continue;
     }
-    
+
     // Check that consecutive curves are connected
     for (let i = 0; i < loop.curves.length; i++) {
       const current = loop.curves[i];
       const next = loop.curves[(i + 1) % loop.curves.length];
-      
+
       const currentEnd = evalCurve2D(current, 1);
       const nextStart = evalCurve2D(next, 0);
-      
+
       const gap = dist2(currentEnd, nextStart);
       if (gap > ctx.tol.length) {
         errors.push(
@@ -150,12 +147,12 @@ export function validateProfile(
       }
     }
   }
-  
+
   // Check that first loop is outer
   if (profile.loops.length > 0 && !profile.loops[0].isOuter) {
-    errors.push('First loop should be outer boundary');
+    errors.push(`First loop should be outer boundary`);
   }
-  
+
   return {
     valid: errors.length === 0,
     errors,
@@ -164,18 +161,18 @@ export function validateProfile(
 
 /**
  * Get all vertices of a profile loop
- * 
+ *
  * @param loop The profile loop
  * @returns Array of 2D vertex positions
  */
 export function getLoopVertices(loop: ProfileLoop): Vec2[] {
   const vertices: Vec2[] = [];
-  
+
   for (const curve of loop.curves) {
     // Add start point of each curve
     vertices.push(evalCurve2D(curve, 0));
   }
-  
+
   return vertices;
 }
 
@@ -185,7 +182,7 @@ export function getLoopVertices(loop: ProfileLoop): Vec2[] {
 
 /**
  * Create a rectangular profile
- * 
+ *
  * @param plane The datum plane for the profile
  * @param width Width in X direction
  * @param height Height in Y direction
@@ -202,19 +199,19 @@ export function createRectangleProfile(
 ): SketchProfile {
   const hw = width / 2;
   const hh = height / 2;
-  
+
   const p0 = vec2(centerX - hw, centerY - hh);
   const p1 = vec2(centerX + hw, centerY - hh);
   const p2 = vec2(centerX + hw, centerY + hh);
   const p3 = vec2(centerX - hw, centerY + hh);
-  
+
   const curves: Line2D[] = [
-    { kind: 'line', p0: p0, p1: p1 }, // bottom
-    { kind: 'line', p0: p1, p1: p2 }, // right
-    { kind: 'line', p0: p2, p1: p3 }, // top
-    { kind: 'line', p0: p3, p1: p0 }, // left
+    { kind: `line`, p0: p0, p1: p1 }, // bottom
+    { kind: `line`, p0: p1, p1: p2 }, // right
+    { kind: `line`, p0: p2, p1: p3 }, // top
+    { kind: `line`, p0: p3, p1: p0 }, // left
   ];
-  
+
   const profile = createEmptyProfile(plane);
   addLoopToProfile(profile, curves, true);
   return profile;
@@ -222,7 +219,7 @@ export function createRectangleProfile(
 
 /**
  * Create a circular profile
- * 
+ *
  * @param plane The datum plane for the profile
  * @param radius Circle radius
  * @param centerX X coordinate of center (default: 0)
@@ -236,17 +233,17 @@ export function createCircleProfile(
   centerY: number = 0
 ): SketchProfile {
   const center = vec2(centerX, centerY);
-  
+
   // Create a full circle as a single arc
   const arc: Arc2D = {
-    kind: 'arc',
+    kind: `arc`,
     center,
     radius,
     startAngle: 0,
     endAngle: 2 * Math.PI,
     ccw: true,
   };
-  
+
   const profile = createEmptyProfile(plane);
   addLoopToProfile(profile, [arc], true);
   return profile;
@@ -254,27 +251,24 @@ export function createCircleProfile(
 
 /**
  * Create a polygon profile from vertices
- * 
+ *
  * @param plane The datum plane for the profile
  * @param vertices Array of vertices (at least 3, will be closed automatically)
  * @returns A polygon profile
  */
-export function createPolygonProfile(
-  plane: DatumPlane,
-  vertices: Vec2[]
-): SketchProfile {
+export function createPolygonProfile(plane: DatumPlane, vertices: Vec2[]): SketchProfile {
   if (vertices.length < 3) {
-    throw new Error('Polygon must have at least 3 vertices');
+    throw new Error(`Polygon must have at least 3 vertices`);
   }
-  
+
   const curves: Line2D[] = [];
-  
+
   for (let i = 0; i < vertices.length; i++) {
     const p0 = vertices[i];
     const p1 = vertices[(i + 1) % vertices.length];
-    curves.push({ kind: 'line', p0, p1 });
+    curves.push({ kind: `line`, p0, p1 });
   }
-  
+
   const profile = createEmptyProfile(plane);
   addLoopToProfile(profile, curves, true);
   return profile;
@@ -282,7 +276,7 @@ export function createPolygonProfile(
 
 /**
  * Create an L-shaped profile
- * 
+ *
  * @param plane The datum plane for the profile
  * @param totalWidth Total width of the L
  * @param totalHeight Total height of the L
@@ -305,13 +299,13 @@ export function createLProfile(
     vec2(legWidth, totalHeight),
     vec2(0, totalHeight),
   ];
-  
+
   return createPolygonProfile(plane, vertices);
 }
 
 /**
  * Create a profile with a rectangular hole
- * 
+ *
  * @param plane The datum plane for the profile
  * @param outerWidth Outer rectangle width
  * @param outerHeight Outer rectangle height
@@ -338,30 +332,30 @@ export function createRectangleWithHoleProfile(
   const outerCurves: Line2D[] = [];
   for (let i = 0; i < outerVertices.length; i++) {
     outerCurves.push({
-      kind: 'line',
+      kind: `line`,
       p0: outerVertices[i],
       p1: outerVertices[(i + 1) % outerVertices.length],
     });
   }
-  
+
   // Inner rectangle (hole) - wound in opposite direction
   const ihw = innerWidth / 2;
   const ihh = innerHeight / 2;
   const innerVertices: Vec2[] = [
     vec2(-ihw, -ihh),
-    vec2(-ihw, ihh),   // wound opposite to outer
+    vec2(-ihw, ihh), // wound opposite to outer
     vec2(ihw, ihh),
     vec2(ihw, -ihh),
   ];
   const innerCurves: Line2D[] = [];
   for (let i = 0; i < innerVertices.length; i++) {
     innerCurves.push({
-      kind: 'line',
+      kind: `line`,
       p0: innerVertices[i],
       p1: innerVertices[(i + 1) % innerVertices.length],
     });
   }
-  
+
   const profile = createEmptyProfile(plane);
   addLoopToProfile(profile, outerCurves, true);
   addLoopToProfile(profile, innerCurves, false);
@@ -370,21 +364,21 @@ export function createRectangleWithHoleProfile(
 
 /**
  * Compute the approximate area of a profile (outer boundary only)
- * 
+ *
  * Uses shoelace formula for polygonal approximation.
- * 
+ *
  * @param profile The profile
  * @returns Approximate area (positive for CCW, negative for CW)
  */
 export function computeProfileArea(profile: SketchProfile): number {
   if (profile.loops.length === 0) return 0;
-  
+
   let totalArea = 0;
-  
+
   for (const loop of profile.loops) {
     const vertices = getLoopVertices(loop);
     if (vertices.length < 3) continue;
-    
+
     // Shoelace formula
     let area = 0;
     for (let i = 0; i < vertices.length; i++) {
@@ -393,13 +387,13 @@ export function computeProfileArea(profile: SketchProfile): number {
       area -= vertices[j][0] * vertices[i][1];
     }
     area /= 2;
-    
+
     if (loop.isOuter) {
       totalArea += Math.abs(area);
     } else {
       totalArea -= Math.abs(area);
     }
   }
-  
+
   return totalArea;
 }

@@ -4,7 +4,7 @@
  * See DOCUMENT-MODEL.md for full specification.
  */
 
-import * as Y from 'yjs';
+import * as Y from "yjs";
 
 // ============================================================================
 // UUID Helper
@@ -21,9 +21,9 @@ export function uuid(): string {
   }
   // Fallback for environments without crypto.randomUUID
   // This implementation matches UUID v4 format
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
     const r = (Math.random() * 16) | 0;
-    const v = ch === 'x' ? r : (r & 0x3) | 0x8;
+    const v = ch === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
@@ -37,35 +37,35 @@ export function uuid(): string {
  * All model state must live under this map
  */
 export function getRoot(ydoc: Y.Doc): Y.Map<unknown> {
-  return ydoc.getMap('root');
+  return ydoc.getMap("root");
 }
 
 /**
  * Get meta map from root
  */
 export function getMeta(root: Y.Map<unknown>): Y.Map<unknown> {
-  return root.get('meta') as Y.Map<unknown>;
+  return root.get("meta") as Y.Map<unknown>;
 }
 
 /**
  * Get state map from root
  */
 export function getState(root: Y.Map<unknown>): Y.Map<unknown> {
-  return root.get('state') as Y.Map<unknown>;
+  return root.get("state") as Y.Map<unknown>;
 }
 
 /**
  * Get featuresById map from root
  */
 export function getFeaturesById(root: Y.Map<unknown>): Y.Map<Y.Map<unknown>> {
-  return root.get('featuresById') as Y.Map<Y.Map<unknown>>;
+  return root.get("featuresById") as Y.Map<Y.Map<unknown>>;
 }
 
 /**
  * Get featureOrder array from root
  */
 export function getFeatureOrder(root: Y.Map<unknown>): Y.Array<string> {
-  return root.get('featureOrder') as Y.Array<string>;
+  return root.get("featureOrder") as Y.Array<string>;
 }
 
 // ============================================================================
@@ -76,7 +76,7 @@ export function getFeatureOrder(root: Y.Map<unknown>): Y.Array<string> {
  * Forbidden top-level shared type names
  * These should NOT exist at top level - everything goes under 'root'
  */
-const FORBIDDEN_TOP_LEVEL_NAMES = ['meta', 'state', 'features', 'counters'];
+const FORBIDDEN_TOP_LEVEL_NAMES = ["meta", "state", "features", "counters"];
 
 /**
  * Check for ghost state (top-level shared types that shouldn't exist)
@@ -100,13 +100,13 @@ export function assertNoGhostState(ydoc: Y.Doc, throwOnError = true): string[] {
 
   // Check for any top-level types other than 'root'
   for (const name of shareMap.keys()) {
-    if (name !== 'root' && !FORBIDDEN_TOP_LEVEL_NAMES.includes(name)) {
+    if (name !== "root" && !FORBIDDEN_TOP_LEVEL_NAMES.includes(name)) {
       errors.push(`Unknown top-level shared type '${name}' - only 'root' is allowed`);
     }
   }
 
   if (errors.length > 0 && throwOnError) {
-    throw new Error(`Ghost state check failed:\n${errors.join('\n')}`);
+    throw new Error(`Ghost state check failed:\n${errors.join("\n")}`);
   }
 
   return errors;
@@ -142,9 +142,9 @@ export function setMapProperties(map: Y.Map<unknown>, props: Record<string, unkn
  */
 export function createSketchDataMap(): Y.Map<unknown> {
   const data = new Y.Map();
-  data.set('pointsById', new Y.Map());
-  data.set('entitiesById', new Y.Map());
-  data.set('constraintsById', new Y.Map());
+  data.set("pointsById", new Y.Map());
+  data.set("entitiesById", new Y.Map());
+  data.set("constraintsById", new Y.Map());
   return data;
 }
 
@@ -152,21 +152,21 @@ export function createSketchDataMap(): Y.Map<unknown> {
  * Get pointsById from sketch data map
  */
 export function getPointsById(dataMap: Y.Map<unknown>): Y.Map<Y.Map<unknown>> {
-  return dataMap.get('pointsById') as Y.Map<Y.Map<unknown>>;
+  return dataMap.get("pointsById") as Y.Map<Y.Map<unknown>>;
 }
 
 /**
  * Get entitiesById from sketch data map
  */
 export function getEntitiesById(dataMap: Y.Map<unknown>): Y.Map<Y.Map<unknown>> {
-  return dataMap.get('entitiesById') as Y.Map<Y.Map<unknown>>;
+  return dataMap.get("entitiesById") as Y.Map<Y.Map<unknown>>;
 }
 
 /**
  * Get constraintsById from sketch data map
  */
 export function getConstraintsById(dataMap: Y.Map<unknown>): Y.Map<Y.Map<unknown>> {
-  return dataMap.get('constraintsById') as Y.Map<Y.Map<unknown>>;
+  return dataMap.get("constraintsById") as Y.Map<Y.Map<unknown>>;
 }
 
 // ============================================================================
@@ -202,21 +202,21 @@ export function sketchDataMapToObject(dataMap: Y.Map<unknown>): {
   const entitiesById: Record<string, unknown> = {};
   const constraintsById: Record<string, unknown> = {};
 
-  const pointsMap = dataMap.get('pointsById') as Y.Map<Y.Map<unknown>> | undefined;
+  const pointsMap = dataMap.get("pointsById") as Y.Map<Y.Map<unknown>> | undefined;
   if (pointsMap) {
     pointsMap.forEach((pointMap, id) => {
       pointsById[id] = mapToObject(pointMap);
     });
   }
 
-  const entitiesMap = dataMap.get('entitiesById') as Y.Map<Y.Map<unknown>> | undefined;
+  const entitiesMap = dataMap.get("entitiesById") as Y.Map<Y.Map<unknown>> | undefined;
   if (entitiesMap) {
     entitiesMap.forEach((entityMap, id) => {
       entitiesById[id] = mapToObject(entityMap);
     });
   }
 
-  const constraintsMap = dataMap.get('constraintsById') as Y.Map<Y.Map<unknown>> | undefined;
+  const constraintsMap = dataMap.get("constraintsById") as Y.Map<Y.Map<unknown>> | undefined;
   if (constraintsMap) {
     constraintsMap.forEach((constraintMap, id) => {
       constraintsById[id] = mapToObject(constraintMap);

@@ -2,7 +2,7 @@
  * Types for the Object-Oriented API
  */
 
-import type { Vec3 } from '../num/vec3.js';
+import type { Vec3 } from "../num/vec3.js";
 
 /**
  * Ray for intersection tests
@@ -25,4 +25,4 @@ export type {
   ExtrudeOptions,
   RevolveOptions,
   FilletOptions,
-} from './SolidSession.js';
+} from "./SolidSession.js";

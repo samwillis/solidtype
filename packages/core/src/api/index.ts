@@ -1,23 +1,23 @@
 /**
  * Object-Oriented API for SolidType
- * 
+ *
  * This module provides ergonomic class-based APIs for the SolidType CAD kernel:
  * - SolidSession - main entry point for modeling operations
  * - Sketch - 2D sketch with constraint solving
  * - BodyId, FaceId, EdgeId - opaque handles for topological entities
- * 
+ *
  * The underlying CAD kernel (OpenCascade.js) is completely hidden.
  * All operations are done through SolidSession.
  */
 
 // Main session API
-export { SolidSession } from './SolidSession.js';
+export { SolidSession } from "./SolidSession.js";
 
 // Sketch API
-export { Sketch } from './Sketch.js';
+export { Sketch } from "./Sketch.js";
 
 // OCCT initialization (for external initialization in browser/worker)
-export { setOC, initOCCT } from '../kernel/init.js';
+export { setOC, initOCCT } from "../kernel/init.js";
 
 // Types
 export type {
@@ -33,7 +33,7 @@ export type {
   ExtrudeOptions,
   RevolveOptions,
   FilletOptions,
-} from './types.js';
+} from "./types.js";
 
 // Re-export tessellation quality for convenience
-export type { TessellationQuality } from '../kernel/tessellate.js';
+export type { TessellationQuality } from "../kernel/tessellate.js";

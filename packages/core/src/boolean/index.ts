@@ -2,4 +2,4 @@
  * Boolean operations module
  */
 
-export * from './planar/index.js';
+export * from "./planar/index.js";

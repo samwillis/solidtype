@@ -1,6 +1,6 @@
 /**
  * Naming module - Persistent naming subsystem
- * 
+ *
  * Provides a first-class persistent naming system that:
  * - Associates semantic identities with created faces/edges
  * - Tracks evolution of subshapes through modeling steps
@@ -18,18 +18,18 @@ export type {
   PersistentRef,
   EvolutionMapping,
   ResolveResult,
-} from './types.js';
+} from "./types.js";
 
 export {
   // Type constructors
   asFeatureId,
   asStepId,
-  
+
   // SubshapeRef constructors
   faceRef,
   edgeRef,
   vertexRef,
-  
+
   // FeatureLocalSelector constructors
   extrudeTopCapSelector,
   extrudeBottomCapSelector,
@@ -43,29 +43,27 @@ export {
   primitiveFaceSelector,
   booleanFaceFromASelector,
   booleanFaceFromBSelector,
-  
+
   // Fingerprint constructors
   emptyFingerprint,
-  
+
   // PersistentRef constructors
   createPersistentRef,
-  
+
   // EvolutionMapping constructors
   birthMapping,
   deathMapping,
   modifyMapping,
   splitMapping,
-  
+
   // ResolveResult constructors
   resolvedRef,
   notFoundRef,
   ambiguousRef,
-} from './types.js';
+} from "./types.js";
 
 // Evolution and naming strategy
-export type {
-  NamingStrategy,
-} from './evolution.js';
+export type { NamingStrategy } from "./evolution.js";
 
 export {
   DefaultNamingStrategy,
@@ -76,4 +74,4 @@ export {
   computeEdgeFingerprint,
   fingerprintDistance,
   collectBodyFaceRefs,
-} from './evolution.js';
+} from "./evolution.js";

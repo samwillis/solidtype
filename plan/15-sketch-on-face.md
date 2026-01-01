@@ -10,6 +10,7 @@
 ## Implementation Notes
 
 ### What's Done:
+
 - `document.ts` - Type documentation for face references in `SketchFeature.plane`
 - Face reference format: `face:{featureId}:{faceIndex}`
 - `kernel.worker.ts` - `getSketchPlane()` fully implements face→plane extraction:
@@ -25,12 +26,14 @@
 - Core: Exported `createDatumPlane` for creating planes from surfaces
 
 ### Key Implementation Details:
+
 1. **Face selection in Toolbar** - When a face is selected in 3D view, sketch button uses it
 2. **Face→Plane extraction** - Uses `model.getSurface()` and checks `surface.kind === 'plane'`
 3. **Normal direction** - Respects face orientation via `model.isFaceReversed()`
 4. **Error handling** - Clear error for non-planar faces
 
 ### Future Enhancements:
+
 - Camera auto-alignment to face normal when entering sketch mode on a face
 
 ## Goals
@@ -66,6 +69,7 @@
 ```
 
 The `plane` attribute can now be:
+
 - Datum plane ID: `"xy"`, `"xz"`, `"yz"`
 - Face reference: `"face:{featureId}:{selector}"`
 
@@ -73,16 +77,15 @@ The `plane` attribute can now be:
 
 ```typescript
 export interface SketchFeature extends FeatureBase {
-  type: 'sketch';
-  plane: string;  // Datum ID or face reference
+  type: "sketch";
+  plane: string; // Datum ID or face reference
   // points, entities, constraints...
 }
 
 // Parsed plane reference
-type PlaneReference = 
-  | { type: 'datum'; id: 'xy' | 'xz' | 'yz' }
-  | { type: 'face'; ref: PersistentRef }
-  ;
+type PlaneReference =
+  | { type: "datum"; id: "xy" | "xz" | "yz" }
+  | { type: "face"; ref: PersistentRef };
 ```
 
 ---
@@ -101,7 +104,7 @@ interface PlaneSelectorProps {
 
 export function PlaneSelector({ onSelect, onCancel }: PlaneSelectorProps) {
   const [selecting, setSelecting] = useState<'datum' | 'face'>('datum');
-  
+
   // Listen for face selection in 3D view
   useEffect(() => {
     if (selecting === 'face') {
@@ -113,26 +116,26 @@ export function PlaneSelector({ onSelect, onCancel }: PlaneSelectorProps) {
       return unsubscribe;
     }
   }, [selecting]);
-  
+
   return (
     <div className="plane-selector">
       <div className="plane-selector-header">Select Sketch Plane</div>
-      
+
       <div className="datum-planes">
         <Button onClick={() => onSelect('xy')}>XY Plane (Top)</Button>
         <Button onClick={() => onSelect('xz')}>XZ Plane (Front)</Button>
         <Button onClick={() => onSelect('yz')}>YZ Plane (Right)</Button>
       </div>
-      
+
       <div className="divider">or</div>
-      
-      <Button 
+
+      <Button
         onClick={() => setSelecting('face')}
         variant={selecting === 'face' ? 'primary' : 'secondary'}
       >
         {selecting === 'face' ? 'Click a face...' : 'Select Model Face'}
       </Button>
-      
+
       <Button onClick={onCancel} variant="text">Cancel</Button>
     </div>
   );
@@ -146,15 +149,15 @@ function alignCameraToFace(face: Face): void {
   // Get face normal and center
   const center = face.getCentroid();
   const normal = face.getNormal();
-  
+
   // Calculate camera position
   const distance = camera.position.distanceTo(targetRef.current);
   camera.position.copy(center).add(normal.clone().multiplyScalar(distance));
-  
+
   // Look at face center
   targetRef.current.copy(center);
   camera.lookAt(center);
-  
+
   // Set up vector (perpendicular to normal, preferring world Y)
   const up = calculateUpVector(normal);
   camera.up.copy(up);
@@ -167,15 +170,15 @@ function alignCameraToFace(face: Face): void {
 // Show the sketch plane as semi-transparent quad
 function SketchPlaneIndicator({ planeRef }: { planeRef: string }) {
   const plane = usePlane(planeRef);
-  
+
   if (!plane) return null;
-  
+
   return (
     <mesh position={plane.origin} quaternion={planeQuaternion(plane)}>
       <planeGeometry args={[10, 10]} />
-      <meshBasicMaterial 
-        color={0x4488ff} 
-        transparent 
+      <meshBasicMaterial
+        color={0x4488ff}
+        transparent
         opacity={0.1}
         side={THREE.DoubleSide}
       />
@@ -194,27 +197,27 @@ function SketchPlaneIndicator({ planeRef }: { planeRef: string }) {
 // In kernel.worker.ts
 
 function getSketchPlane(planeRef: string): DatumPlane {
-  if (planeRef === 'xy' || planeRef === 'xz' || planeRef === 'yz') {
+  if (planeRef === "xy" || planeRef === "xz" || planeRef === "yz") {
     return getDatumPlane(planeRef);
   }
-  
-  if (planeRef.startsWith('face:')) {
+
+  if (planeRef.startsWith("face:")) {
     const face = resolveFaceRef(planeRef, session);
     if (!face) throw new Error(`Cannot resolve face plane: ${planeRef}`);
-    
+
     return faceToPlane(face);
   }
-  
+
   throw new Error(`Invalid plane reference: ${planeRef}`);
 }
 
 function faceToPlane(face: Face): DatumPlane {
   const surface = face.getSurface();
-  
-  if (surface.kind !== 'plane') {
-    throw new Error('Can only sketch on planar faces');
+
+  if (surface.kind !== "plane") {
+    throw new Error("Can only sketch on planar faces");
   }
-  
+
   return {
     origin: surface.origin,
     normal: surface.normal,
@@ -230,10 +233,10 @@ Initially, only support planar faces:
 
 ```typescript
 function validateSketchPlane(face: Face): void {
-  if (face.getSurface().kind !== 'plane') {
+  if (face.getSurface().kind !== "plane") {
     throw new Error(
-      'Sketching on non-planar faces is not supported. ' +
-      'Please select a planar face or datum plane.'
+      "Sketching on non-planar faces is not supported. " +
+        "Please select a planar face or datum plane."
     );
   }
 }
@@ -251,17 +254,16 @@ When the referenced face moves (due to parameter changes):
 // During rebuild, sketch plane is re-resolved
 function processSketch(feature: SketchFeature): void {
   const plane = getSketchPlane(feature.plane);
-  
+
   // Sketch geometry is relative to plane
   // When plane moves, sketch moves with it
-  
-  const worldPoints = feature.points.map(p => 
-    planeToWorld(p.x, p.y, plane)
-  );
+
+  const worldPoints = feature.points.map((p) => planeToWorld(p.x, p.y, plane));
 }
 ```
 
 This means:
+
 - Sketch stays attached to the face
 - If face rotates, sketch rotates with it
 - If face is deleted, sketch errors
@@ -274,19 +276,19 @@ This means:
 
 ```typescript
 // Test face plane extraction
-test('faceToPlane extracts correct plane', () => {
+test("faceToPlane extracts correct plane", () => {
   const session = new SolidSession();
   const body = createBox(session);
-  
-  const topFace = body.getFaces().find(f => isTopFace(f));
+
+  const topFace = body.getFaces().find((f) => isTopFace(f));
   const plane = faceToPlane(topFace);
-  
+
   expect(plane.normal).toEqual([0, 0, 1]);
   expect(plane.origin[2]).toBeCloseTo(10); // Box height
 });
 
 // Test sketch on face
-test('sketch on face moves with face', () => {
+test("sketch on face moves with face", () => {
   // Create box, sketch on top face
   // Change box height
   // Verify sketch moved up

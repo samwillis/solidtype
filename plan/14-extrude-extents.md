@@ -10,20 +10,23 @@
 ## Implementation Notes
 
 ### What's Done:
+
 - `document.ts` - `ExtrudeExtent` type and `extent`, `extentRef` fields on `ExtrudeFeature`
 - `featureHelpers.ts` - `addExtrudeFeature()` accepts options with extent parameters
 - `PropertiesPanel.tsx` - Extent type dropdown (blind, toFace, throughAll) with `FaceSelector` component
 - `kernel.worker.ts` - `calculateExtrudeDistance()` function with proper face distance calculation
 
 ### Extent Type Status:
-| Type | Status | Notes |
-|------|--------|-------|
-| `blind` | ✅ Working | Fixed distance extrusion |
-| `throughAll` | ✅ Working | Uses large distance (1000 units) |
-| `toFace` | ✅ Working | Calculates distance to face centroid along extrude direction |
-| `toVertex` | ❌ Stub | Falls back to base distance; needs vertex selection UI |
+
+| Type         | Status     | Notes                                                        |
+| ------------ | ---------- | ------------------------------------------------------------ |
+| `blind`      | ✅ Working | Fixed distance extrusion                                     |
+| `throughAll` | ✅ Working | Uses large distance (1000 units)                             |
+| `toFace`     | ✅ Working | Calculates distance to face centroid along extrude direction |
+| `toVertex`   | ❌ Stub    | Falls back to base distance; needs vertex selection UI       |
 
 ### Key Implementation Details:
+
 1. **FaceSelector component** - UI for entering face selection mode, stores `face:featureId:faceIndex` reference
 2. **Distance calculation** - Uses dot product of (faceCentroid - planeOrigin) · planeNormal
 3. **Selection mode** - Uses `SelectionContext.setSelectionMode('selectFace')` and callback pattern
@@ -84,15 +87,15 @@
 
 ```typescript
 export interface ExtrudeFeature extends FeatureBase {
-  type: 'extrude';
+  type: "extrude";
   sketch: string;
-  op: 'add' | 'cut';
-  direction: 'normal' | 'reverse';
-  
+  op: "add" | "cut";
+  direction: "normal" | "reverse";
+
   // Extent options (mutually exclusive)
-  extent: 'blind' | 'toFace' | 'toVertex' | 'throughAll';
-  distance?: number;          // For 'blind'
-  extentRef?: string;         // For 'toFace' or 'toVertex'
+  extent: "blind" | "toFace" | "toVertex" | "throughAll";
+  distance?: number; // For 'blind'
+  extentRef?: string; // For 'toFace' or 'toVertex'
 }
 ```
 
@@ -100,10 +103,7 @@ export interface ExtrudeFeature extends FeatureBase {
 
 ```typescript
 // Persistent reference string format
-type ExtentRef = 
-  | `face:${featureId}:${localSelector}`
-  | `vertex:${featureId}:${localSelector}`
-  ;
+type ExtentRef = `face:${featureId}:${localSelector}` | `vertex:${featureId}:${localSelector}`;
 
 // Examples:
 // "face:e1:top" - top face of extrude e1
@@ -123,7 +123,7 @@ export function ExtrudeDialog({ sketchId, onConfirm, onCancel }) {
   const [distance, setDistance] = useState(10);
   const [extentRef, setExtentRef] = useState<string | null>(null);
   const [selectingFace, setSelectingFace] = useState(false);
-  
+
   return (
     <Dialog open onClose={onCancel}>
       <DialogTitle>Extrude</DialogTitle>
@@ -138,7 +138,7 @@ export function ExtrudeDialog({ sketchId, onConfirm, onCancel }) {
             { value: 'cut', label: 'Cut' },
           ]}
         />
-        
+
         {/* Extent type */}
         <Select
           label="Extent"
@@ -151,7 +151,7 @@ export function ExtrudeDialog({ sketchId, onConfirm, onCancel }) {
             { value: 'throughAll', label: 'Through All' },
           ]}
         />
-        
+
         {/* Distance input (for blind) */}
         {extent === 'blind' && (
           <NumberInput
@@ -162,7 +162,7 @@ export function ExtrudeDialog({ sketchId, onConfirm, onCancel }) {
             unit="mm"
           />
         )}
-        
+
         {/* Face selection (for toFace) */}
         {extent === 'toFace' && (
           <div className="extent-ref-input">
@@ -172,7 +172,7 @@ export function ExtrudeDialog({ sketchId, onConfirm, onCancel }) {
             </Button>
           </div>
         )}
-        
+
         {/* Vertex selection (for toVertex) */}
         {extent === 'toVertex' && (
           <div className="extent-ref-input">
@@ -183,10 +183,10 @@ export function ExtrudeDialog({ sketchId, onConfirm, onCancel }) {
           </div>
         )}
       </DialogContent>
-      
+
       <DialogActions>
         <Button onClick={onCancel}>Cancel</Button>
-        <Button 
+        <Button
           onClick={() => onConfirm({ extent, distance, extentRef, operation })}
           variant="primary"
           disabled={needsRef && !extentRef}
@@ -205,7 +205,7 @@ export function ExtrudeDialog({ sketchId, onConfirm, onCancel }) {
 // When user clicks "Select Face", enter selection mode
 function handleSelectFaceClick() {
   setSelectingFace(true);
-  
+
   // Listen for face selection
   const unsubscribe = onFaceSelected((face) => {
     setExtentRef(face.persistentRef.toString());
@@ -228,20 +228,19 @@ function resolveExtent(
   feature: ExtrudeFeature,
   session: SolidSession
 ): { distance: number } | { targetFace: Face } | { throughAll: true } {
-  
   switch (feature.extent) {
-    case 'blind':
+    case "blind":
       return { distance: feature.distance };
-      
-    case 'throughAll':
+
+    case "throughAll":
       return { throughAll: true };
-      
-    case 'toFace':
+
+    case "toFace":
       const face = resolveFaceRef(feature.extentRef, session);
       if (!face) throw new Error(`Cannot resolve face: ${feature.extentRef}`);
       return { targetFace: face };
-      
-    case 'toVertex':
+
+    case "toVertex":
       const vertex = resolveVertexRef(feature.extentRef, session);
       if (!vertex) throw new Error(`Cannot resolve vertex: ${feature.extentRef}`);
       // Convert vertex to distance
@@ -254,32 +253,28 @@ function resolveExtent(
 ### Extrude to Face
 
 ```typescript
-function extrudeToFace(
-  profile: SketchProfile,
-  targetFace: Face,
-  direction: Vec3
-): ExtrudeResult {
+function extrudeToFace(profile: SketchProfile, targetFace: Face, direction: Vec3): ExtrudeResult {
   // Calculate where profile intersects target face
   // This requires ray-surface intersection for each profile point
-  
+
   const distances: number[] = [];
-  
+
   for (const point of profile.boundaryPoints) {
     const ray = { origin: point, direction };
     const intersection = intersectRaySurface(ray, targetFace.getSurface());
-    
+
     if (intersection) {
       distances.push(intersection.t);
     }
   }
-  
+
   if (distances.length === 0) {
-    throw new Error('Profile does not intersect target face');
+    throw new Error("Profile does not intersect target face");
   }
-  
+
   // Use minimum distance to ensure we stop at the face
   const maxDistance = Math.min(...distances);
-  
+
   // Create variable-height extrude or use max distance
   return extrudeWithDistance(profile, maxDistance);
 }
@@ -295,16 +290,16 @@ function extrudeThroughAll(
 ): ExtrudeResult {
   // Find maximum extent needed to pass through all bodies
   let maxExtent = 0;
-  
+
   for (const body of existingBodies) {
     const bbox = body.getBoundingBox();
     const extent = calculateExtentThroughBBox(profile, direction, bbox);
     maxExtent = Math.max(maxExtent, extent);
   }
-  
+
   // Add margin to ensure complete penetration
   maxExtent += 1.0;
-  
+
   return extrudeWithDistance(profile, maxExtent);
 }
 ```
@@ -328,17 +323,17 @@ function createFaceRef(face: Face, session: SolidSession): string {
 function resolveFaceRef(refString: string, session: SolidSession): Face | null {
   const match = refString.match(/^face:(.+):(.+)$/);
   if (!match) return null;
-  
+
   const [, featureId, selector] = match;
-  
+
   const ref: PersistentRef = {
     originFeatureId: featureId,
     localSelector: parseSelector(selector),
   };
-  
+
   const result = session.namingStrategy.resolve(ref);
-  if (result === null || result === 'ambiguous') return null;
-  
+  if (result === null || result === "ambiguous") return null;
+
   return session.getFace(result.id);
 }
 ```
@@ -351,30 +346,33 @@ function resolveFaceRef(refString: string, session: SolidSession): Face | null {
 
 ```typescript
 // Test up-to-face extrude
-test('extrude to face stops at target', () => {
+test("extrude to face stops at target", () => {
   const session = new SolidSession();
-  
+
   // Create base body
   const baseSketch = createRectangleSketch(10, 10);
   session.extrude(baseSketch.toProfile(), { distance: 20 });
-  
+
   // Get top face
-  const topFace = session.getBody().getFaces().find(f => isTopFace(f));
-  
+  const topFace = session
+    .getBody()
+    .getFaces()
+    .find((f) => isTopFace(f));
+
   // Extrude second sketch to that face
   const secondSketch = createRectangleSketch(5, 5);
   const result = session.extrude(secondSketch.toProfile(), {
-    extent: 'toFace',
+    extent: "toFace",
     targetFace: topFace,
   });
-  
+
   expect(result.ok).toBe(true);
   // Height should match base body height
   expect(result.body.getBoundingBox().maxZ).toBeCloseTo(20);
 });
 
 // Test through all
-test('extrude through all penetrates body', () => {
+test("extrude through all penetrates body", () => {
   // Create body, then cut through all
   // Verify hole goes completely through
 });

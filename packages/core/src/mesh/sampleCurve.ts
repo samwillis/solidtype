@@ -1,16 +1,16 @@
 /**
  * Direction-aware curve sampling
- * 
+ *
  * Samples curves respecting half-edge direction for consistent tessellation.
  * Supports both 2D p-curves (for UV trimming) and 3D edge curves.
  */
 
-import type { Vec2 } from '../num/vec2.js';
-import type { Vec3 } from '../num/vec3.js';
-import type { Curve2D, Arc2D } from '../geom/curve2d.js';
-import type { Curve3D, Circle3D } from '../geom/curve3d.js';
-import { evalCurve2D } from '../geom/curve2d.js';
-import { evalCurve3D } from '../geom/curve3d.js';
+import type { Vec2 } from "../num/vec2.js";
+import type { Vec3 } from "../num/vec3.js";
+import type { Curve2D, Arc2D } from "../geom/curve2d.js";
+import type { Curve3D, Circle3D } from "../geom/curve3d.js";
+import { evalCurve2D } from "../geom/curve2d.js";
+import { evalCurve3D } from "../geom/curve3d.js";
 
 /**
  * Sampling options
@@ -35,7 +35,7 @@ const DEFAULT_OPTIONS: Required<SampleCurveOptions> = {
 
 /**
  * Sample a 2D curve, respecting direction
- * 
+ *
  * @param curve The 2D curve to sample
  * @param direction +1 for forward (t: 0→1), -1 for reverse (t: 1→0)
  * @param options Sampling options
@@ -48,9 +48,9 @@ export function sampleCurve2D(
 ): Vec2[] {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const segments = computeSegmentCount(curve, opts);
-  
+
   const points: Vec2[] = [];
-  
+
   if (direction === 1) {
     // Forward: sample from t=0 to t=1
     for (let i = 0; i <= segments; i++) {
@@ -64,13 +64,13 @@ export function sampleCurve2D(
       points.push(evalCurve2D(curve, t));
     }
   }
-  
+
   return points;
 }
 
 /**
  * Sample a 3D curve, respecting direction
- * 
+ *
  * @param curve The 3D curve to sample
  * @param direction +1 for forward (t: 0→1), -1 for reverse (t: 1→0)
  * @param options Sampling options
@@ -83,9 +83,9 @@ export function sampleCurve3D(
 ): Vec3[] {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const segments = computeSegmentCount3D(curve, opts);
-  
+
   const points: Vec3[] = [];
-  
+
   if (direction === 1) {
     // Forward: sample from t=0 to t=1
     for (let i = 0; i <= segments; i++) {
@@ -99,7 +99,7 @@ export function sampleCurve3D(
       points.push(evalCurve3D(curve, t));
     }
   }
-  
+
   return points;
 }
 
@@ -114,9 +114,9 @@ export function sampleCurve2DParams(
 ): number[] {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const segments = computeSegmentCount(curve, opts);
-  
+
   const params: number[] = [];
-  
+
   if (direction === 1) {
     for (let i = 0; i <= segments; i++) {
       params.push(i / segments);
@@ -126,7 +126,7 @@ export function sampleCurve2DParams(
       params.push(1 - i / segments);
     }
   }
-  
+
   return params;
 }
 
@@ -140,9 +140,9 @@ export function sampleCurve3DParams(
 ): number[] {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const segments = computeSegmentCount3D(curve, opts);
-  
+
   const params: number[] = [];
-  
+
   if (direction === 1) {
     for (let i = 0; i <= segments; i++) {
       params.push(i / segments);
@@ -152,7 +152,7 @@ export function sampleCurve3DParams(
       params.push(1 - i / segments);
     }
   }
-  
+
   return params;
 }
 
@@ -160,21 +160,21 @@ export function sampleCurve3DParams(
  * Compute number of segments for a 2D curve
  */
 function computeSegmentCount(curve: Curve2D, opts: Required<SampleCurveOptions>): number {
-  if (curve.kind === 'line') {
+  if (curve.kind === `line`) {
     return opts.minSegments;
   }
-  
-  if (curve.kind === 'arc') {
+
+  if (curve.kind === `arc`) {
     const span = arcAngleSpan(curve);
     const byAngle = Math.ceil(span / opts.arcAngleStep);
     return Math.min(opts.maxSegments, Math.max(opts.minArcSegments, byAngle));
   }
-  
-  if (curve.kind === 'polyline') {
+
+  if (curve.kind === `polyline`) {
     // For polylines, sample at each vertex
     return Math.max(opts.minSegments, curve.pts.length - 1);
   }
-  
+
   return opts.minSegments;
 }
 
@@ -182,21 +182,21 @@ function computeSegmentCount(curve: Curve2D, opts: Required<SampleCurveOptions>)
  * Compute number of segments for a 3D curve
  */
 function computeSegmentCount3D(curve: Curve3D, opts: Required<SampleCurveOptions>): number {
-  if (curve.kind === 'line') {
+  if (curve.kind === `line`) {
     return opts.minSegments;
   }
-  
-  if (curve.kind === 'circle') {
+
+  if (curve.kind === `circle`) {
     const span = circleAngleSpan(curve);
     const byAngle = Math.ceil(span / opts.arcAngleStep);
     return Math.min(opts.maxSegments, Math.max(opts.minArcSegments, byAngle));
   }
-  
-  if (curve.kind === 'polyline') {
+
+  if (curve.kind === `polyline`) {
     // For polylines, sample at each vertex
     return Math.max(opts.minSegments, curve.pts.length - 1);
   }
-  
+
   return opts.minSegments;
 }
 

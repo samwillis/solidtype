@@ -1,11 +1,11 @@
 /**
  * Type declarations for opencascade.js
- * 
+ *
  * This is a minimal type declaration for the parts of OpenCascade.js we use.
  * The full library has extensive APIs, but we only declare what we need.
  */
 
-declare module 'opencascade.js' {
+declare module "opencascade.js" {
   export interface OpenCascadeInstance {
     // Filesystem
     FS: {
@@ -36,16 +36,41 @@ declare module 'opencascade.js' {
     // _3 = (P1, P2) - 2 params
     // _4 = (Axes, dx, dy, dz) - 4 params
     BRepPrimAPI_MakeBox_1: new (dx: number, dy: number, dz: number) => BRepPrimAPI_MakeBox;
-    BRepPrimAPI_MakeBox_2: new (p: gp_Pnt, dx: number, dy: number, dz: number) => BRepPrimAPI_MakeBox;
+    BRepPrimAPI_MakeBox_2: new (
+      p: gp_Pnt,
+      dx: number,
+      dy: number,
+      dz: number
+    ) => BRepPrimAPI_MakeBox;
     BRepPrimAPI_MakeBox_3: new (p1: gp_Pnt, p2: gp_Pnt) => BRepPrimAPI_MakeBox;
-    BRepPrimAPI_MakeBox_4: new (axes: gp_Ax2, dx: number, dy: number, dz: number) => BRepPrimAPI_MakeBox;
+    BRepPrimAPI_MakeBox_4: new (
+      axes: gp_Ax2,
+      dx: number,
+      dy: number,
+      dz: number
+    ) => BRepPrimAPI_MakeBox;
     BRepPrimAPI_MakeCylinder_1: new (r: number, h: number) => BRepPrimAPI_MakeCylinder;
     BRepPrimAPI_MakeSphere_1: new (r: number) => BRepPrimAPI_MakeSphere;
     BRepPrimAPI_MakeCone_1: new (r1: number, r2: number, h: number) => BRepPrimAPI_MakeCone;
     BRepPrimAPI_MakeTorus_1: new (r1: number, r2: number) => BRepPrimAPI_MakeTorus;
-    BRepPrimAPI_MakePrism_1: new (s: TopoDS_Shape, v: gp_Vec, copy: boolean, canonize: boolean) => BRepPrimAPI_MakePrism;
-    BRepPrimAPI_MakePrism_2: new (s: TopoDS_Shape, v: gp_Vec, symmetric: boolean, canonize: boolean) => BRepPrimAPI_MakePrism;
-    BRepPrimAPI_MakeRevol_1: new (s: TopoDS_Shape, axis: gp_Ax1, angle: number, copy: boolean) => BRepPrimAPI_MakeRevol;
+    BRepPrimAPI_MakePrism_1: new (
+      s: TopoDS_Shape,
+      v: gp_Vec,
+      copy: boolean,
+      canonize: boolean
+    ) => BRepPrimAPI_MakePrism;
+    BRepPrimAPI_MakePrism_2: new (
+      s: TopoDS_Shape,
+      v: gp_Vec,
+      symmetric: boolean,
+      canonize: boolean
+    ) => BRepPrimAPI_MakePrism;
+    BRepPrimAPI_MakeRevol_1: new (
+      s: TopoDS_Shape,
+      axis: gp_Ax1,
+      angle: number,
+      copy: boolean
+    ) => BRepPrimAPI_MakeRevol;
 
     // Boolean operations - _3 constructors take (S1, S2) and perform operation immediately
     BRepAlgoAPI_Fuse_3: new (s1: TopoDS_Shape, s2: TopoDS_Shape) => BRepAlgoAPI_BooleanOperation;
@@ -60,12 +85,27 @@ declare module 'opencascade.js' {
     BRepBuilderAPI_MakeWire_2: new (e: TopoDS_Edge) => BRepBuilderAPI_MakeWire;
     // MakeFace constructors - numbering varies by OpenCascade.js version
     BRepBuilderAPI_MakeFace_15: new (w: TopoDS_Wire, onlyPlane: boolean) => BRepBuilderAPI_MakeFace;
-    BRepBuilderAPI_MakeFace_16: new (p: gp_Pln, w: TopoDS_Wire, inside: boolean) => BRepBuilderAPI_MakeFace;
-    BRepBuilderAPI_Copy_2: new (s: TopoDS_Shape, copyGeom: boolean, copyMesh: boolean) => BRepBuilderAPI_Copy;
-    BRepBuilderAPI_Transform_2: new (s: TopoDS_Shape, t: gp_Trsf, copy: boolean) => BRepBuilderAPI_Transform;
+    BRepBuilderAPI_MakeFace_16: new (
+      p: gp_Pln,
+      w: TopoDS_Wire,
+      inside: boolean
+    ) => BRepBuilderAPI_MakeFace;
+    BRepBuilderAPI_Copy_2: new (
+      s: TopoDS_Shape,
+      copyGeom: boolean,
+      copyMesh: boolean
+    ) => BRepBuilderAPI_Copy;
+    BRepBuilderAPI_Transform_2: new (
+      s: TopoDS_Shape,
+      t: gp_Trsf,
+      copy: boolean
+    ) => BRepBuilderAPI_Transform;
 
     // Fillet/Chamfer
-    BRepFilletAPI_MakeFillet: new (s: TopoDS_Shape, mode: ChFi3d_FilletShape) => BRepFilletAPI_MakeFillet;
+    BRepFilletAPI_MakeFillet: new (
+      s: TopoDS_Shape,
+      mode: ChFi3d_FilletShape
+    ) => BRepFilletAPI_MakeFillet;
     BRepFilletAPI_MakeChamfer: new (s: TopoDS_Shape) => BRepFilletAPI_MakeChamfer;
     // Enum accessed as oc.ChFi3d_FilletShape.ChFi3d_Rational
     ChFi3d_FilletShape: {
@@ -84,7 +124,11 @@ declare module 'opencascade.js' {
     ) => BRepMesh_IncrementalMesh;
 
     // Topology exploration
-    TopExp_Explorer_2: new (s: TopoDS_Shape, toFind: TopAbs_ShapeEnum, toAvoid: TopAbs_ShapeEnum) => TopExp_Explorer;
+    TopExp_Explorer_2: new (
+      s: TopoDS_Shape,
+      toFind: TopAbs_ShapeEnum,
+      toAvoid: TopAbs_ShapeEnum
+    ) => TopExp_Explorer;
     TopExp: {
       MapShapesAndAncestors(
         s: TopoDS_Shape,
@@ -113,12 +157,21 @@ declare module 'opencascade.js' {
 
     // BRep tools
     BRep_Tool: {
-      Triangulation(face: TopoDS_Face, location: TopLoc_Location, polyAlgo: number): Handle_Poly_Triangulation;
+      Triangulation(
+        face: TopoDS_Face,
+        location: TopLoc_Location,
+        polyAlgo: number
+      ): Handle_Poly_Triangulation;
     };
     BRep_Builder: new () => BRep_Builder;
     BRepTools: {
       Write_2(s: TopoDS_Shape, filename: string, progress: Message_ProgressRange): boolean;
-      Read_2(s: TopoDS_Shape, filename: string, builder: BRep_Builder, progress: Message_ProgressRange): boolean;
+      Read_2(
+        s: TopoDS_Shape,
+        filename: string,
+        builder: BRep_Builder,
+        progress: Message_ProgressRange
+      ): boolean;
     };
 
     // Bounding box
@@ -321,7 +374,12 @@ declare module 'opencascade.js' {
 
   // STEP I/O
   export interface STEPControl_Writer {
-    Transfer(s: TopoDS_Shape, mode: STEPControl_StepModelType, compgraph: boolean, progress: Message_ProgressRange): void;
+    Transfer(
+      s: TopoDS_Shape,
+      mode: STEPControl_StepModelType,
+      compgraph: boolean,
+      progress: Message_ProgressRange
+    ): void;
     Write(filename: string): IFSelect_ReturnStatus;
     delete(): void;
   }
@@ -349,15 +407,15 @@ declare module 'opencascade.js' {
 
 // Vite-specific ?url import pattern for WASM files
 // The package uses opencascade.wasm.js and opencascade.wasm.wasm (not .full)
-declare module 'opencascade.js/dist/opencascade.wasm.js' {
+declare module "opencascade.js/dist/opencascade.wasm.js" {
   // The default export is a constructor, not a function
   const OpenCascadeModule: new (options?: {
     locateFile?: (path: string) => string;
-  }) => Promise<import('opencascade.js').OpenCascadeInstance>;
+  }) => Promise<import("opencascade.js").OpenCascadeInstance>;
   export default OpenCascadeModule;
 }
 
-declare module 'opencascade.js/dist/opencascade.wasm.wasm?url' {
+declare module "opencascade.js/dist/opencascade.wasm.wasm?url" {
   const url: string;
   export default url;
 }

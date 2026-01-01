@@ -2,7 +2,7 @@
  * Authentication middleware for API routes
  */
 
-import { auth } from './auth';
+import { auth } from "./auth";
 
 /**
  * Require authentication for a request
@@ -12,11 +12,11 @@ export async function requireAuth(request: Request) {
   const session = await auth.api.getSession({
     headers: request.headers,
   });
-  
+
   if (!session) {
-    throw new Response('Unauthorized', { status: 401 });
+    throw new Response("Unauthorized", { status: 401 });
   }
-  
+
   return session;
 }
 

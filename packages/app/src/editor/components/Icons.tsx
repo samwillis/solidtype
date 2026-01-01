@@ -2,7 +2,19 @@
  * Shared icon components for toolbars and UI
  */
 
-import { LuUndo, LuRedo, LuDownload, LuChevronDown, LuCheck, LuX, LuBotMessageSquare, LuPenTool, LuLassoSelect, LuRectangleHorizontal, LuCircle } from 'react-icons/lu';
+import {
+  LuUndo,
+  LuRedo,
+  LuDownload,
+  LuChevronDown,
+  LuCheck,
+  LuX,
+  LuBotMessageSquare,
+  LuPenTool,
+  LuLassoSelect,
+  LuRectangleHorizontal,
+  LuCircle,
+} from "react-icons/lu";
 
 // ============================================================================
 // Feature icons

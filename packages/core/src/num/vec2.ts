@@ -1,6 +1,6 @@
 /**
  * 2D vector operations
- * 
+ *
  * Vectors are represented as tuples [number, number] for simplicity and performance.
  * All operations are pure functions.
  */

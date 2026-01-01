@@ -18,13 +18,13 @@ All data is stored using Yjs shared types (`Y.Map` and `Y.Array`) under a single
 
 ### 1.1 Key Design Principles
 
-| Principle | Description |
-|-----------|-------------|
-| **UUID identifiers** | All features and sketch elements use UUID v4 for stable identity |
-| **Y.Map records** | All records are `Y.Map` instances (never plain JS objects) |
-| **Single root** | All state lives under `ydoc.getMap('root')` |
-| **Zod validation** | Schema validated on load; runtime invariants enforced |
-| **Deterministic rebuild** | Worker iterates in sorted order for reproducibility |
+| Principle                 | Description                                                      |
+| ------------------------- | ---------------------------------------------------------------- |
+| **UUID identifiers**      | All features and sketch elements use UUID v4 for stable identity |
+| **Y.Map records**         | All records are `Y.Map` instances (never plain JS objects)       |
+| **Single root**           | All state lives under `ydoc.getMap('root')`                      |
+| **Zod validation**        | Schema validated on load; runtime invariants enforced            |
+| **Deterministic rebuild** | Worker iterates in sorted order for reproducibility              |
 
 ---
 
@@ -42,18 +42,18 @@ ydoc.getMap('root')
 
 ### 2.2 Meta
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `schemaVersion` | `2` (literal) | Document schema version |
-| `name` | `string` | Document name |
-| `created` | `number` | Creation timestamp (ms since epoch) |
-| `modified` | `number` | Last modified timestamp |
-| `units` | `'mm' \| 'cm' \| 'm' \| 'in' \| 'ft'` | Document units |
+| Field           | Type                                  | Description                         |
+| --------------- | ------------------------------------- | ----------------------------------- |
+| `schemaVersion` | `2` (literal)                         | Document schema version             |
+| `name`          | `string`                              | Document name                       |
+| `created`       | `number`                              | Creation timestamp (ms since epoch) |
+| `modified`      | `number`                              | Last modified timestamp             |
+| `units`         | `'mm' \| 'cm' \| 'm' \| 'in' \| 'ft'` | Document units                      |
 
 ### 2.3 State
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field         | Type           | Description                                  |
+| ------------- | -------------- | -------------------------------------------- |
 | `rebuildGate` | `UUID \| null` | Stop rebuild at this feature (for debugging) |
 
 ### 2.4 Features
@@ -72,10 +72,10 @@ All features share these base fields:
 
 ```ts
 interface FeatureBase {
-  id: UUID;                    // Must match the key in featuresById
-  type: string;                // Feature type discriminator
-  name?: string;               // Optional display name (non-unique)
-  suppressed?: boolean;        // If true, skip during rebuild
+  id: UUID; // Must match the key in featuresById
+  type: string; // Feature type discriminator
+  name?: string; // Optional display name (non-unique)
+  suppressed?: boolean; // If true, skip during rebuild
 }
 ```
 
@@ -85,7 +85,7 @@ The coordinate origin reference (exactly one per document).
 
 ```ts
 interface OriginFeature extends FeatureBase {
-  type: 'origin';
+  type: "origin";
   visible?: boolean;
 }
 ```
@@ -96,8 +96,8 @@ Standard reference planes (exactly one of each role per document).
 
 ```ts
 interface DatumPlaneFeature extends FeatureBase {
-  type: 'plane';
-  role: 'xy' | 'xz' | 'yz';    // Required for datum planes
+  type: "plane";
+  role: "xy" | "xz" | "yz"; // Required for datum planes
   normal: [number, number, number];
   origin: [number, number, number];
   xDir: [number, number, number];
@@ -114,7 +114,7 @@ Custom reference planes (no role field).
 
 ```ts
 interface UserPlaneFeature extends FeatureBase {
-  type: 'plane';
+  type: "plane";
   // No role field
   normal: [number, number, number];
   origin: [number, number, number];
@@ -132,17 +132,17 @@ interface UserPlaneFeature extends FeatureBase {
 
 ```ts
 interface SketchFeature extends FeatureBase {
-  type: 'sketch';
-  plane: SketchPlaneRef;       // Reference to sketch plane
+  type: "sketch";
+  plane: SketchPlaneRef; // Reference to sketch plane
   visible?: boolean;
-  data: SketchData;            // Points, entities, constraints
+  data: SketchData; // Points, entities, constraints
 }
 
 // Sketch plane reference (discriminated union)
 type SketchPlaneRef =
-  | { kind: 'planeFeatureId'; ref: UUID }   // Reference to plane feature
-  | { kind: 'faceRef'; ref: string }        // Reference to body face
-  | { kind: 'custom'; ref: string };        // Custom plane definition
+  | { kind: "planeFeatureId"; ref: UUID } // Reference to plane feature
+  | { kind: "faceRef"; ref: string } // Reference to body face
+  | { kind: "custom"; ref: string }; // Custom plane definition
 ```
 
 ### 3.6 Extrude
@@ -151,15 +151,15 @@ Linear extrusion of a sketch profile.
 
 ```ts
 interface ExtrudeFeature extends FeatureBase {
-  type: 'extrude';
-  sketch: UUID;                             // Reference to sketch feature
-  op: 'add' | 'cut';
-  direction: 'normal' | 'reverse' | [number, number, number];
-  extent: 'blind' | 'toFace' | 'toVertex' | 'throughAll';
-  distance?: number;                        // Required for 'blind'
-  extentRef?: string;                       // Required for 'toFace'/'toVertex'
+  type: "extrude";
+  sketch: UUID; // Reference to sketch feature
+  op: "add" | "cut";
+  direction: "normal" | "reverse" | [number, number, number];
+  extent: "blind" | "toFace" | "toVertex" | "throughAll";
+  distance?: number; // Required for 'blind'
+  extentRef?: string; // Required for 'toFace'/'toVertex'
   // Multi-body options
-  mergeScope?: 'auto' | 'new' | 'specific';
+  mergeScope?: "auto" | "new" | "specific";
   targetBodies?: string[];
   resultBodyName?: string;
   resultBodyColor?: string;
@@ -172,13 +172,13 @@ Rotational sweep of a sketch profile.
 
 ```ts
 interface RevolveFeature extends FeatureBase {
-  type: 'revolve';
-  sketch: UUID;                // Reference to sketch feature
-  axis: UUID;                  // Reference to line entity in sketch
-  angle: number;               // Degrees
-  op: 'add' | 'cut';
+  type: "revolve";
+  sketch: UUID; // Reference to sketch feature
+  axis: UUID; // Reference to line entity in sketch
+  angle: number; // Degrees
+  op: "add" | "cut";
   // Multi-body options
-  mergeScope?: 'auto' | 'new' | 'specific';
+  mergeScope?: "auto" | "new" | "specific";
   targetBodies?: string[];
   resultBodyName?: string;
   resultBodyColor?: string;
@@ -191,10 +191,10 @@ Explicit boolean operations between bodies.
 
 ```ts
 interface BooleanFeature extends FeatureBase {
-  type: 'boolean';
-  operation: 'union' | 'subtract' | 'intersect';
-  target: string;              // Target body ID
-  tool: string;                // Tool body ID
+  type: "boolean";
+  operation: "union" | "subtract" | "intersect";
+  target: string; // Target body ID
+  tool: string; // Tool body ID
 }
 ```
 
@@ -220,8 +220,8 @@ interface SketchPoint {
   x: number;
   y: number;
   fixed?: boolean;
-  attachedTo?: string;         // External attachment reference
-  param?: number;              // Parameter on edge (0-1)
+  attachedTo?: string; // External attachment reference
+  param?: number; // Parameter on edge (0-1)
 }
 ```
 
@@ -230,18 +230,18 @@ interface SketchPoint {
 ```ts
 interface SketchLine {
   id: UUID;
-  type: 'line';
-  start: UUID;                 // Point ID
-  end: UUID;                   // Point ID
+  type: "line";
+  start: UUID; // Point ID
+  end: UUID; // Point ID
 }
 
 interface SketchArc {
   id: UUID;
-  type: 'arc';
-  start: UUID;                 // Point ID
-  end: UUID;                   // Point ID
-  center: UUID;                // Point ID
-  ccw: boolean;                // Counter-clockwise
+  type: "arc";
+  start: UUID; // Point ID
+  end: UUID; // Point ID
+  center: UUID; // Point ID
+  ccw: boolean; // Counter-clockwise
 }
 
 type SketchEntity = SketchLine | SketchArc;
@@ -251,23 +251,85 @@ type SketchEntity = SketchLine | SketchArc;
 
 ```ts
 // Geometric constraints
-interface HorizontalConstraint { id: UUID; type: 'horizontal'; points: [UUID, UUID]; }
-interface VerticalConstraint { id: UUID; type: 'vertical'; points: [UUID, UUID]; }
-interface CoincidentConstraint { id: UUID; type: 'coincident'; points: [UUID, UUID]; }
-interface FixedConstraint { id: UUID; type: 'fixed'; point: UUID; }
-interface ParallelConstraint { id: UUID; type: 'parallel'; lines: [UUID, UUID]; }
-interface PerpendicularConstraint { id: UUID; type: 'perpendicular'; lines: [UUID, UUID]; }
-interface EqualLengthConstraint { id: UUID; type: 'equalLength'; lines: [UUID, UUID]; }
-interface TangentConstraint { id: UUID; type: 'tangent'; line: UUID; arc: UUID; connectionPoint: string; }
-interface SymmetricConstraint { id: UUID; type: 'symmetric'; points: [UUID, UUID]; axis: UUID; }
+interface HorizontalConstraint {
+  id: UUID;
+  type: "horizontal";
+  points: [UUID, UUID];
+}
+interface VerticalConstraint {
+  id: UUID;
+  type: "vertical";
+  points: [UUID, UUID];
+}
+interface CoincidentConstraint {
+  id: UUID;
+  type: "coincident";
+  points: [UUID, UUID];
+}
+interface FixedConstraint {
+  id: UUID;
+  type: "fixed";
+  point: UUID;
+}
+interface ParallelConstraint {
+  id: UUID;
+  type: "parallel";
+  lines: [UUID, UUID];
+}
+interface PerpendicularConstraint {
+  id: UUID;
+  type: "perpendicular";
+  lines: [UUID, UUID];
+}
+interface EqualLengthConstraint {
+  id: UUID;
+  type: "equalLength";
+  lines: [UUID, UUID];
+}
+interface TangentConstraint {
+  id: UUID;
+  type: "tangent";
+  line: UUID;
+  arc: UUID;
+  connectionPoint: string;
+}
+interface SymmetricConstraint {
+  id: UUID;
+  type: "symmetric";
+  points: [UUID, UUID];
+  axis: UUID;
+}
 
 // Dimensional constraints
-interface DistanceConstraint { id: UUID; type: 'distance'; points: [UUID, UUID]; value: number; offsetX?: number; offsetY?: number; }
-interface AngleConstraint { id: UUID; type: 'angle'; lines: [UUID, UUID]; value: number; offsetX?: number; offsetY?: number; }
+interface DistanceConstraint {
+  id: UUID;
+  type: "distance";
+  points: [UUID, UUID];
+  value: number;
+  offsetX?: number;
+  offsetY?: number;
+}
+interface AngleConstraint {
+  id: UUID;
+  type: "angle";
+  lines: [UUID, UUID];
+  value: number;
+  offsetX?: number;
+  offsetY?: number;
+}
 
-type SketchConstraint = HorizontalConstraint | VerticalConstraint | CoincidentConstraint 
-  | FixedConstraint | DistanceConstraint | AngleConstraint | ParallelConstraint 
-  | PerpendicularConstraint | EqualLengthConstraint | TangentConstraint | SymmetricConstraint;
+type SketchConstraint =
+  | HorizontalConstraint
+  | VerticalConstraint
+  | CoincidentConstraint
+  | FixedConstraint
+  | DistanceConstraint
+  | AngleConstraint
+  | ParallelConstraint
+  | PerpendicularConstraint
+  | EqualLengthConstraint
+  | TangentConstraint
+  | SymmetricConstraint;
 ```
 
 ---
@@ -329,9 +391,9 @@ New Y.Maps must be inserted into a tracked parent before setting fields:
 ```ts
 doc.transact(() => {
   const feature = new Y.Map();
-  featuresById.set(id, feature);  // Integrate first
-  feature.set('id', id);          // Then mutate
-  feature.set('type', 'sketch');
+  featuresById.set(id, feature); // Integrate first
+  feature.set("id", id); // Then mutate
+  feature.set("type", "sketch");
 });
 ```
 
@@ -344,11 +406,7 @@ A dev-only assertion checks for forbidden top-level types on document load.
 ### 6.4 Undo Manager Configuration
 
 ```ts
-const undoManager = new Y.UndoManager([
-  doc.featuresById,
-  doc.featureOrder,
-  doc.state
-]);
+const undoManager = new Y.UndoManager([doc.featuresById, doc.featureOrder, doc.state]);
 ```
 
 ---
@@ -382,24 +440,24 @@ The document model is formally defined using **Zod schemas** in [`packages/app/s
 
 Key schemas:
 
-| Schema | Purpose |
-|--------|---------|
-| `DocSnapshotSchema` | Validates complete `root.toJSON()` snapshot |
-| `DocumentMetaSchema` | Validates meta fields (name, version, units) |
-| `DocumentStateSchema` | Validates state fields (rebuildGate) |
-| `FeatureSchema` | Discriminated union of all feature types |
-| `SketchDataSchema` | Validates sketch points, entities, constraints |
-| `SketchPlaneRefSchema` | Discriminated union for plane references |
+| Schema                 | Purpose                                        |
+| ---------------------- | ---------------------------------------------- |
+| `DocSnapshotSchema`    | Validates complete `root.toJSON()` snapshot    |
+| `DocumentMetaSchema`   | Validates meta fields (name, version, units)   |
+| `DocumentStateSchema`  | Validates state fields (rebuildGate)           |
+| `FeatureSchema`        | Discriminated union of all feature types       |
+| `SketchDataSchema`     | Validates sketch points, entities, constraints |
+| `SketchPlaneRefSchema` | Discriminated union for plane references       |
 
 Example usage:
 
 ```ts
-import { DocSnapshotSchema } from './schema';
+import { DocSnapshotSchema } from "./schema";
 
 const snapshot = doc.root.toJSON();
 const result = DocSnapshotSchema.safeParse(snapshot);
 if (!result.success) {
-  console.error('Validation errors:', result.error.issues);
+  console.error("Validation errors:", result.error.issues);
 }
 ```
 
@@ -423,11 +481,11 @@ if (import.meta.env?.DEV) {
 
 Implementation files in `packages/app/src/document/`:
 
-| File | Purpose |
-|------|---------|
-| `schema.ts` | Zod schemas for all feature types |
-| `yjs.ts` | Yjs utilities, UUID helper, ghost state assertion |
-| `createDocument.ts` | Document creation and loading |
-| `featureHelpers.ts` | Feature CRUD operations |
-| `validate.ts` | Schema and invariant validation |
-| `index.ts` | Public exports |
+| File                | Purpose                                           |
+| ------------------- | ------------------------------------------------- |
+| `schema.ts`         | Zod schemas for all feature types                 |
+| `yjs.ts`            | Yjs utilities, UUID helper, ghost state assertion |
+| `createDocument.ts` | Document creation and loading                     |
+| `featureHelpers.ts` | Feature CRUD operations                           |
+| `validate.ts`       | Schema and invariant validation                   |
+| `index.ts`          | Public exports                                    |

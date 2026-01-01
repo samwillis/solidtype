@@ -9,11 +9,13 @@
 ## Implementation Notes
 
 The rebuild gate UI is fully implemented in:
+
 - `FeatureTree.tsx` - Contains the `RebuildGateBar` component with drag-and-drop support
 - `DocumentContext.tsx` - Manages `rebuildGate` state synced with Yjs
 - `kernel.worker.ts` - Respects the rebuild gate during feature interpretation
 
 Features:
+
 - Draggable gate bar between features
 - Features below gate are grayed out and marked as 'gated'
 - Gate position persists in Yjs state
@@ -45,8 +47,8 @@ Features:
 
 ```typescript
 // In Yjs state map
-state.set('rebuildGate', 'e1');  // Stop after feature 'e1'
-state.set('rebuildGate', null);  // Rebuild all features
+state.set("rebuildGate", "e1"); // Stop after feature 'e1'
+state.set("rebuildGate", null); // Rebuild all features
 ```
 
 ### Feature Status
@@ -54,12 +56,11 @@ state.set('rebuildGate', null);  // Rebuild all features
 Each feature gets a computed status (not stored in Yjs):
 
 ```typescript
-type FeatureStatus = 
-  | 'computed'      // Above gate, successfully built
-  | 'error'         // Above gate, failed to build
-  | 'suppressed'    // Explicitly suppressed by user
-  | 'gated'         // Below rebuild gate
-  ;
+type FeatureStatus =
+  | "computed" // Above gate, successfully built
+  | "error" // Above gate, failed to build
+  | "suppressed" // Explicitly suppressed by user
+  | "gated"; // Below rebuild gate
 ```
 
 ---
@@ -79,23 +80,23 @@ interface RebuildGateProps {
 export function RebuildGate({ position, onDrag }: RebuildGateProps) {
   const [dragging, setDragging] = useState(false);
   const [dragY, setDragY] = useState(0);
-  
+
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setDragging(true);
     setDragY(e.clientY);
   };
-  
+
   const handleMouseMove = (e: MouseEvent) => {
     if (!dragging) return;
-    
+
     // Calculate new position based on Y delta
     const delta = e.clientY - dragY;
     const newPosition = calculateNewPosition(position, delta);
     onDrag(newPosition);
     setDragY(e.clientY);
   };
-  
+
   useEffect(() => {
     if (dragging) {
       window.addEventListener('mousemove', handleMouseMove);
@@ -106,9 +107,9 @@ export function RebuildGate({ position, onDrag }: RebuildGateProps) {
       };
     }
   }, [dragging]);
-  
+
   return (
-    <div 
+    <div
       className={`rebuild-gate ${dragging ? 'dragging' : ''}`}
       onMouseDown={handleMouseDown}
     >
@@ -129,23 +130,23 @@ export function RebuildGate({ position, onDrag }: RebuildGateProps) {
 export function FeatureTree() {
   const { doc, rebuildGate, setRebuildGate } = useDocument();
   const features = useFeatures(doc);
-  
+
   // Find gate position (index after the gated feature)
-  const gateIndex = rebuildGate 
+  const gateIndex = rebuildGate
     ? features.findIndex(f => f.id === rebuildGate) + 1
     : features.length;
-  
+
   return (
     <div className="feature-tree">
       <ul>
         {features.map((feature, index) => (
           <React.Fragment key={feature.id}>
-            <FeatureTreeItem 
+            <FeatureTreeItem
               feature={feature}
               gated={index >= gateIndex}
             />
             {index === gateIndex - 1 && (
-              <RebuildGate 
+              <RebuildGate
                 position={gateIndex}
                 onDrag={(newPos) => {
                   const newGateFeature = features[newPos - 1]?.id ?? null;
@@ -156,7 +157,7 @@ export function FeatureTree() {
           </React.Fragment>
         ))}
         {gateIndex === features.length && (
-          <RebuildGate 
+          <RebuildGate
             position={features.length}
             onDrag={(newPos) => {
               const newGateFeature = features[newPos - 1]?.id ?? null;
@@ -220,10 +221,10 @@ export function FeatureTree() {
 
 At this phase, determine whether to use **full rebuild** or **incremental rebuild**:
 
-| Approach | When to Use | Trade-offs |
-|----------|-------------|------------|
-| Full rebuild | < 10 features, rebuild < 100ms | Simple, always correct |
-| Incremental | > 10 features, rebuild > 100ms | Complex, needs cache management |
+| Approach     | When to Use                    | Trade-offs                      |
+| ------------ | ------------------------------ | ------------------------------- |
+| Full rebuild | < 10 features, rebuild < 100ms | Simple, always correct          |
+| Incremental  | > 10 features, rebuild > 100ms | Complex, needs cache management |
 
 **Decision**: Start with full rebuild, measure performance, add incremental if needed.
 
@@ -241,13 +242,13 @@ for (const feature of features) {
     buildFeature(feature);
     break;
   }
-  
+
   buildFeature(feature);
 }
 
 // Mark remaining features as gated
 for (const feature of remainingFeatures) {
-  featureStatus[feature.id] = 'gated';
+  featureStatus[feature.id] = "gated";
 }
 ```
 
@@ -307,7 +308,8 @@ interface BuildError {
 - [ ] Gate syncs from main thread to worker via Yjs
 - [ ] Gate persists across page reloads (via Yjs persistence)
 - [ ] Clearing gate (set to null) rebuilds all features
-```
+
+````
 
 ---
 
@@ -341,7 +343,7 @@ interface BuildError {
 test('setRebuildGate updates Yjs state', () => {
   const doc = createDocument();
   doc.state.set('rebuildGate', 'e1');
-  
+
   expect(doc.state.get('rebuildGate')).toBe('e1');
 });
 
@@ -353,15 +355,15 @@ test('rebuild stops at gate', () => {
     { id: 's2', type: 'sketch' },
     { id: 'e2', type: 'extrude' },
   ];
-  
+
   const result = rebuild(features, 'e1');
-  
+
   expect(result.featureStatus['s1']).toBe('computed');
   expect(result.featureStatus['e1']).toBe('computed');
   expect(result.featureStatus['s2']).toBe('gated');
   expect(result.featureStatus['e2']).toBe('gated');
 });
-```
+````
 
 ### Integration Tests
 

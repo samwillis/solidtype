@@ -10,15 +10,15 @@ export interface UserAwarenessState {
   user: {
     id: string;
     name: string;
-    color: string;  // Assigned color for cursor/highlights
+    color: string; // Assigned color for cursor/highlights
   };
-  
+
   // Current location in the app
   location: {
     documentId: string | null;
     branchId: string;
   };
-  
+
   // 3D Viewer state (when in document)
   viewer?: {
     // Camera position and orientation
@@ -27,21 +27,21 @@ export interface UserAwarenessState {
     cameraUp: [number, number, number];
     zoom: number;
   };
-  
+
   // Selection state
   selection?: {
     featureIds: string[];
     faceRefs: string[];
     edgeRefs: string[];
   };
-  
+
   // Sketch state (when in sketch mode)
   sketch?: {
     sketchId: string;
-    cursorPosition: [number, number];  // 2D sketch coordinates
+    cursorPosition: [number, number]; // 2D sketch coordinates
     activeToolId: string | null;
   };
-  
+
   // Timestamp for staleness detection
   lastUpdated: number;
 }
@@ -53,13 +53,13 @@ export function generateUserColor(userId: string): string {
   // Hash the user ID to get a consistent hue
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
-    hash = ((hash << 5) - hash) + userId.charCodeAt(i);
+    hash = (hash << 5) - hash + userId.charCodeAt(i);
     hash = hash & hash; // Convert to 32-bit integer
   }
-  
+
   // Use the hash to generate a hue (0-360)
   const hue = Math.abs(hash) % 360;
-  
+
   // Return a saturated, bright color
   return `hsl(${hue}, 70%, 60%)`;
 }

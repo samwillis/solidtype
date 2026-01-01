@@ -1,20 +1,20 @@
 /**
  * Datum planes for sketch placement
- * 
+ *
  * Provides named datum planes that sketches can be placed on.
  * Planes are represented as PlaneSurface from geom module with
  * additional identity information.
  */
 
-import type { Vec3 } from '../num/vec3.js';
-import { vec3, normalize3 } from '../num/vec3.js';
-import type { PlaneSurface } from '../geom/surface.js';
-import { createPlaneSurface } from '../geom/surface.js';
+import type { Vec3 } from "../num/vec3.js";
+import { vec3, normalize3 } from "../num/vec3.js";
+import type { PlaneSurface } from "../geom/surface.js";
+import { createPlaneSurface } from "../geom/surface.js";
 
 /**
  * Branded type for plane identifiers
  */
-export type PlaneId = number & { __brand: 'PlaneId' };
+export type PlaneId = number & { __brand: `PlaneId` };
 
 /**
  * Counter for generating unique plane IDs
@@ -50,7 +50,7 @@ export interface DatumPlane {
 
 /**
  * Create a datum plane from a surface with a name
- * 
+ *
  * @param name Human-readable name
  * @param surface The plane surface geometry
  * @returns A new datum plane
@@ -65,7 +65,7 @@ export function createDatumPlane(name: string, surface: PlaneSurface): DatumPlan
 
 /**
  * Create a datum plane at the origin with specified normal and X direction
- * 
+ *
  * @param name Human-readable name
  * @param origin Point on the plane
  * @param normal Plane normal direction
@@ -84,7 +84,7 @@ export function createDatumPlaneFromNormal(
 
 /**
  * Create a datum plane offset from an existing plane
- * 
+ *
  * @param basePlane The plane to offset from
  * @param distance Distance to offset (positive = in normal direction)
  * @param name Optional name for the new plane
@@ -102,7 +102,7 @@ export function createOffsetPlane(
     base.origin[1] + offset[1] * distance,
     base.origin[2] + offset[2] * distance,
   ];
-  
+
   const surface = createPlaneSurface(newOrigin, base.normal, base.xDir);
   return createDatumPlane(name ?? `${basePlane.name}_offset_${distance}`, surface);
 }
@@ -118,7 +118,7 @@ export function createOffsetPlane(
  * - Y direction: +Y (0, 1, 0)
  */
 export const XY_PLANE: DatumPlane = createDatumPlaneFromNormal(
-  'XY',
+  `XY`,
   vec3(0, 0, 0),
   vec3(0, 0, 1),
   vec3(1, 0, 0)
@@ -131,7 +131,7 @@ export const XY_PLANE: DatumPlane = createDatumPlaneFromNormal(
  * - Y direction: +Z (0, 0, 1)
  */
 export const YZ_PLANE: DatumPlane = createDatumPlaneFromNormal(
-  'YZ',
+  `YZ`,
   vec3(0, 0, 0),
   vec3(1, 0, 0),
   vec3(0, 1, 0)
@@ -144,7 +144,7 @@ export const YZ_PLANE: DatumPlane = createDatumPlaneFromNormal(
  * - Y direction: +X (1, 0, 0)
  */
 export const ZX_PLANE: DatumPlane = createDatumPlaneFromNormal(
-  'ZX',
+  `ZX`,
   vec3(0, 0, 0),
   vec3(0, 1, 0),
   vec3(0, 0, 1)
@@ -199,7 +199,7 @@ export function getPlaneYDir(plane: DatumPlane): Vec3 {
 
 /**
  * Transform a 2D point on the plane to 3D world coordinates
- * 
+ *
  * @param plane The datum plane
  * @param x X coordinate in plane space
  * @param y Y coordinate in plane space
@@ -217,7 +217,7 @@ export function planeToWorld(plane: DatumPlane, x: number, y: number): Vec3 {
 /**
  * Transform a 3D world point to 2D plane coordinates
  * (Projects onto the plane)
- * 
+ *
  * @param plane The datum plane
  * @param point 3D world coordinates
  * @returns [x, y] coordinates in plane space
@@ -227,9 +227,9 @@ export function worldToPlane(plane: DatumPlane, point: Vec3): [number, number] {
   const dx = point[0] - origin[0];
   const dy = point[1] - origin[1];
   const dz = point[2] - origin[2];
-  
+
   const x = dx * xDir[0] + dy * xDir[1] + dz * xDir[2];
   const y = dx * yDir[0] + dy * yDir[1] + dz * yDir[2];
-  
+
   return [x, y];
 }

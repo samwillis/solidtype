@@ -11,24 +11,22 @@
  *   4. Set REGENERATE_GOLDEN = false
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { TopoModel } from '../topo/TopoModel.js';
-import { createNumericContext } from '../num/tolerance.js';
-import { createBox } from './primitives.js';
-import { subtract, union, intersect } from './boolean.js';
-import { tessellateBody } from '../mesh/tessellateBody.js';
-import { vec3 } from '../num/vec3.js';
-import type { Mesh } from '../mesh/types.js';
-import { SolidSession } from '../api/SolidSession.js';
+import { describe, it, expect, beforeEach } from "vitest";
+import { TopoModel } from "../topo/TopoModel.js";
+import { createNumericContext } from "../num/tolerance.js";
+import { createBox } from "./primitives.js";
+import { subtract, union, intersect } from "./boolean.js";
+import { tessellateBody } from "../mesh/tessellateBody.js";
+import { vec3 } from "../num/vec3.js";
+import type { Mesh } from "../mesh/types.js";
 import {
   meshToGolden,
   computeMeshStats,
   compareMeshes,
   serializeGolden,
   printMeshStats,
-  type GoldenMesh,
   type MeshStats,
-} from './__fixtures__/goldenMeshUtils.js';
+} from "./__fixtures__/goldenMeshUtils.js";
 
 // Set to true to regenerate golden data (logs JSON to console)
 const REGENERATE_GOLDEN = false;
@@ -61,7 +59,7 @@ function assertMeshStats(
     boundingBox?: { min: [number, number, number]; max: [number, number, number] };
     surfaceArea?: number;
     surfaceAreaTolerance?: number;
-    axisAreas?: Partial<MeshStats['axisAreas']>;
+    axisAreas?: Partial<MeshStats["axisAreas"]>;
     axisAreaTolerance?: number;
   }
 ): void {
@@ -81,7 +79,6 @@ function assertMeshStats(
   }
 
   if (expected.boundingBox) {
-    const tol = 0.01;
     expect(stats.boundingBox.min[0]).toBeCloseTo(expected.boundingBox.min[0], 1);
     expect(stats.boundingBox.min[1]).toBeCloseTo(expected.boundingBox.min[1], 1);
     expect(stats.boundingBox.min[2]).toBeCloseTo(expected.boundingBox.min[2], 1);
@@ -100,26 +97,26 @@ function assertMeshStats(
     const tol = expected.axisAreaTolerance ?? 1;
     for (const [key, value] of Object.entries(expected.axisAreas)) {
       if (value !== undefined) {
-        const k = key as keyof MeshStats['axisAreas'];
+        const k = key as keyof MeshStats["axisAreas"];
         expect(Math.abs(stats.axisAreas[k] - value)).toBeLessThan(tol);
       }
     }
   }
 }
 
-describe('golden mesh tests', () => {
+describe("golden mesh tests", () => {
   let model: TopoModel;
 
   beforeEach(() => {
     model = new TopoModel(createNumericContext());
   });
 
-  describe('simple primitives', () => {
-    it('unit cube mesh is exact', () => {
+  describe("simple primitives", () => {
+    it("unit cube mesh is exact", () => {
       const box = createBox(model, { center: vec3(0, 0, 0), width: 2, height: 2, depth: 2 });
       const mesh = tessellateBody(model, box);
 
-      logGoldenData(mesh, 'unit cube');
+      logGoldenData(mesh, "unit cube");
 
       // A 2x2x2 cube: 8 vertices, 12 triangles (2 per face × 6 faces)
       // But tessellation may have more vertices due to non-shared vertices per face
@@ -132,13 +129,13 @@ describe('golden mesh tests', () => {
       });
     });
 
-    it('offset box mesh has correct bounds', () => {
+    it("offset box mesh has correct bounds", () => {
       // createBox uses: width=X, height=Z, depth=Y
       // center: (5, 10, 15), width=4 (X: 3-7), height=6 (Z: 12-18), depth=8 (Y: 6-14)
       const box = createBox(model, { center: vec3(5, 10, 15), width: 4, height: 6, depth: 8 });
       const mesh = tessellateBody(model, box);
 
-      logGoldenData(mesh, 'offset box');
+      logGoldenData(mesh, "offset box");
 
       assertMeshStats(mesh, {
         boundingBox: { min: [3, 6, 12], max: [7, 14, 18] },
@@ -149,8 +146,8 @@ describe('golden mesh tests', () => {
     });
   });
 
-  describe('boolean subtract (app repro geometry)', () => {
-    it('perpendicular slot cut produces correct mesh', () => {
+  describe("boolean subtract (app repro geometry)", () => {
+    it("perpendicular slot cut produces correct mesh", () => {
       // From HANDOVER.md:
       // Base box: x ∈ [-5,19], y ∈ [-12,12], z ∈ [0,10]
       // Tool box: x ∈ [0,10], y ∈ [3,20], z ∈ [-5,17]
@@ -175,8 +172,8 @@ describe('golden mesh tests', () => {
 
       const mesh = tessellateBody(model, result.body);
 
-      logGoldenData(mesh, 'perpendicular slot cut');
-      printMeshStats(mesh, 'Perpendicular slot cut');
+      logGoldenData(mesh, "perpendicular slot cut");
+      printMeshStats(mesh, "Perpendicular slot cut");
 
       // Expected: Base box with rectangular notch cut from corner
       // Bounding box should be base box: [-5,19] x [-12,12] x [0,10]
@@ -204,11 +201,11 @@ describe('golden mesh tests', () => {
       // expect(stats.axisAreas.posX).toBeLessThan(160); // Correct with hole
       // For now, document the bug:
       if (stats.axisAreas.posX > 260) {
-        console.warn('BUG: +X face is missing the hole, area is too large');
+        console.warn("BUG: +X face is missing the hole, area is too large");
       }
     });
 
-    it('through-hole subtract produces watertight mesh', () => {
+    it("through-hole subtract produces watertight mesh", () => {
       // 4x4x2 box with 2x2 hole going completely through
       const base = createBox(model, {
         center: vec3(0, 0, 1),
@@ -231,8 +228,8 @@ describe('golden mesh tests', () => {
 
       const mesh = tessellateBody(model, result.body);
 
-      logGoldenData(mesh, 'through-hole');
-      printMeshStats(mesh, 'Through-hole');
+      logGoldenData(mesh, "through-hole");
+      printMeshStats(mesh, "Through-hole");
 
       // Expected: Box with square hole
       // Bounding box: [-2,2] x [-2,2] x [0,2]
@@ -253,15 +250,15 @@ describe('golden mesh tests', () => {
       // Expected area: outer 16 - hole 4 = 12 per face
       // Current: ~30 per face (the hole loop is duplicated)
       // TODO: Fix the duplicate hole loop issue in face extraction
-      expect(stats.axisAreas.posZ).toBeGreaterThan(5);  // At least some area
-      expect(stats.axisAreas.negZ).toBeGreaterThan(5);  // At least some area
-      
+      expect(stats.axisAreas.posZ).toBeGreaterThan(5); // At least some area
+      expect(stats.axisAreas.negZ).toBeGreaterThan(5); // At least some area
+
       // When fully fixed, use:
       // expect(stats.axisAreas.posZ).toBeCloseTo(12, 0);
       // expect(stats.axisAreas.negZ).toBeCloseTo(12, 0);
     });
 
-    it('corner notch subtract preserves topology', () => {
+    it("corner notch subtract preserves topology", () => {
       // Base: 4x4x4 box
       // Tool: 3x3x6 box at corner, extending beyond in Z
       const base = createBox(model, {
@@ -285,8 +282,8 @@ describe('golden mesh tests', () => {
 
       const mesh = tessellateBody(model, result.body);
 
-      logGoldenData(mesh, 'corner notch');
-      printMeshStats(mesh, 'Corner notch');
+      logGoldenData(mesh, "corner notch");
+      printMeshStats(mesh, "Corner notch");
 
       // Bounding box should be base box: [-2,2] x [-2,2] x [0,4]
       assertMeshStats(mesh, {
@@ -296,8 +293,8 @@ describe('golden mesh tests', () => {
     });
   });
 
-  describe('boolean union', () => {
-    it('L-shape union produces correct mesh', () => {
+  describe("boolean union", () => {
+    it("L-shape union produces correct mesh", () => {
       // Horizontal bar
       const boxA = createBox(model, {
         center: vec3(0, 0, 1),
@@ -321,8 +318,8 @@ describe('golden mesh tests', () => {
 
       const mesh = tessellateBody(model, result.body);
 
-      logGoldenData(mesh, 'L-shape union');
-      printMeshStats(mesh, 'L-shape union');
+      logGoldenData(mesh, "L-shape union");
+      printMeshStats(mesh, "L-shape union");
 
       // Bounding box: combines both boxes
       // BoxA: [-2,2] x [-2,2] x [0,2]
@@ -334,7 +331,7 @@ describe('golden mesh tests', () => {
       });
     });
 
-    it('touching boxes union merges correctly', () => {
+    it("touching boxes union merges correctly", () => {
       // Two boxes touching at x=0
       const boxA = createBox(model, {
         center: vec3(-1, 0, 0),
@@ -357,8 +354,8 @@ describe('golden mesh tests', () => {
 
       const mesh = tessellateBody(model, result.body);
 
-      logGoldenData(mesh, 'touching boxes union');
-      printMeshStats(mesh, 'Touching boxes union');
+      logGoldenData(mesh, "touching boxes union");
+      printMeshStats(mesh, "Touching boxes union");
 
       // Should form a 4x2x2 box
       assertMeshStats(mesh, {
@@ -370,8 +367,8 @@ describe('golden mesh tests', () => {
     });
   });
 
-  describe('boolean intersect', () => {
-    it('overlapping boxes intersection produces correct mesh', () => {
+  describe("boolean intersect", () => {
+    it("overlapping boxes intersection produces correct mesh", () => {
       const boxA = createBox(model, {
         center: vec3(0, 0, 0),
         width: 4,
@@ -393,8 +390,8 @@ describe('golden mesh tests', () => {
 
       const mesh = tessellateBody(model, result.body);
 
-      logGoldenData(mesh, 'overlapping boxes intersect');
-      printMeshStats(mesh, 'Overlapping boxes intersect');
+      logGoldenData(mesh, "overlapping boxes intersect");
+      printMeshStats(mesh, "Overlapping boxes intersect");
 
       // Intersection: [-1,2] x [-1,2] x [-1,2] -> 3x3x3 box
       // FIXED: Now correctly produces 6 faces with surface area 54
@@ -407,8 +404,8 @@ describe('golden mesh tests', () => {
     });
   });
 
-  describe('mesh quality validation', () => {
-    it('no degenerate triangles in subtract result', () => {
+  describe("mesh quality validation", () => {
+    it("no degenerate triangles in subtract result", () => {
       const base = createBox(model, {
         center: vec3(0, 0, 0),
         width: 10,
@@ -473,7 +470,7 @@ describe('golden mesh tests', () => {
       expect(degenerateCount).toBe(0);
     });
 
-    it('all triangle normals are consistent', () => {
+    it("all triangle normals are consistent", () => {
       const box = createBox(model, {
         center: vec3(0, 0, 0),
         width: 2,
@@ -498,13 +495,13 @@ describe('golden mesh tests', () => {
     });
   });
 
-  describe('saddle cut repro', () => {
-    it('saddle cut produces correct mesh', () => {
+  describe("saddle cut repro", () => {
+    it("saddle cut produces correct mesh", () => {
       // From user report - saddle-like cut producing wrong geometry
       // Base box: x ∈ [0, 10], y ∈ [-11, 13], z ∈ [-11, 11]
       // Cut tool: x ∈ [-4, 15], y ∈ [6, 19], z ∈ [0, 8]
       // Overlap: x ∈ [0, 10], y ∈ [6, 13], z ∈ [0, 8]
-      
+
       const base = createBox(model, {
         center: vec3(5, 1, 0),
         width: 10,
@@ -526,8 +523,8 @@ describe('golden mesh tests', () => {
 
       const mesh = tessellateBody(model, result.body);
 
-      logGoldenData(mesh, 'saddle cut');
-      printMeshStats(mesh, 'Saddle cut');
+      logGoldenData(mesh, "saddle cut");
+      printMeshStats(mesh, "Saddle cut");
 
       // Bounding box: Same as base since the cut is inside
       assertMeshStats(mesh, {
@@ -543,7 +540,7 @@ describe('golden mesh tests', () => {
       // -Z: 240 (bottom face) + 70 (cut ceiling at z=8) = 310
       // Total: 472 + 472 + 220 + 220 + 310 + 310 = 2004
       const stats = computeMeshStats(mesh);
-      
+
       expect(stats.axisAreas.posX).toBeCloseTo(472, 0);
       expect(stats.axisAreas.negX).toBeCloseTo(472, 0);
       expect(stats.axisAreas.posY).toBeCloseTo(220, 0);
@@ -554,8 +551,8 @@ describe('golden mesh tests', () => {
     });
   });
 
-  describe('determinism', () => {
-    it('same operation produces identical mesh', () => {
+  describe("determinism", () => {
+    it("same operation produces identical mesh", () => {
       // Run the same operation twice
       const model1 = new TopoModel(createNumericContext());
       const model2 = new TopoModel(createNumericContext());
@@ -579,15 +576,15 @@ describe('golden mesh tests', () => {
       const comparison = compareMeshes(mesh2, golden1, MESH_TOLERANCE);
 
       if (!comparison.equal) {
-        console.log('Determinism failure:', comparison.differences);
+        console.log("Determinism failure:", comparison.differences);
       }
 
       expect(comparison.equal).toBe(true);
     });
   });
 
-  describe('tilted geometry (non-axis-aligned)', () => {
-    it('tilted box subtract produces valid mesh', () => {
+  describe("tilted geometry (non-axis-aligned)", () => {
+    it("tilted box subtract produces valid mesh", () => {
       const model = new TopoModel(createNumericContext());
 
       // Create a base box
@@ -605,16 +602,18 @@ describe('golden mesh tests', () => {
       const mesh = tessellateBody(model, result.body);
       const stats = computeMeshStats(mesh);
 
-      console.log('Tilted subtract stats:');
+      console.log("Tilted subtract stats:");
       console.log(`  Vertices: ${stats.vertexCount}`);
       console.log(`  Triangles: ${stats.triangleCount}`);
       console.log(`  Total surface area: ${stats.totalSurfaceArea.toFixed(4)}`);
-      console.log(`  Axis areas: +X=${stats.axisAreas.posX.toFixed(2)}, -X=${stats.axisAreas.negX.toFixed(2)}, +Y=${stats.axisAreas.posY.toFixed(2)}, -Y=${stats.axisAreas.negY.toFixed(2)}, +Z=${stats.axisAreas.posZ.toFixed(2)}, -Z=${stats.axisAreas.negZ.toFixed(2)}`);
+      console.log(
+        `  Axis areas: +X=${stats.axisAreas.posX.toFixed(2)}, -X=${stats.axisAreas.negX.toFixed(2)}, +Y=${stats.axisAreas.posY.toFixed(2)}, -Y=${stats.axisAreas.negY.toFixed(2)}, +Z=${stats.axisAreas.posZ.toFixed(2)}, -Z=${stats.axisAreas.negZ.toFixed(2)}`
+      );
 
       // Verify basic mesh properties
       expect(stats.vertexCount).toBeGreaterThan(0);
       expect(stats.triangleCount).toBeGreaterThan(0);
-      
+
       // Original base is 20x20x10, tool is 10x10x20 centered at (5, 2.5, 5)
       // Tool extends from x=[0,10], y=[-2.5, 7.5], z=[-5, 15]
       // So it removes a rectangular section from the base
@@ -623,7 +622,7 @@ describe('golden mesh tests', () => {
       expect(stats.totalSurfaceArea).toBeGreaterThan(0);
     });
 
-    it('diagonal cut through box produces watertight mesh', () => {
+    it("diagonal cut through box produces watertight mesh", () => {
       const model = new TopoModel(createNumericContext());
 
       // Base box
@@ -639,15 +638,17 @@ describe('golden mesh tests', () => {
       const mesh = tessellateBody(model, result.body);
       const stats = computeMeshStats(mesh);
 
-      console.log('Diagonal cut stats:');
+      console.log("Diagonal cut stats:");
       console.log(`  Vertices: ${stats.vertexCount}`);
       console.log(`  Triangles: ${stats.triangleCount}`);
       console.log(`  Total surface area: ${stats.totalSurfaceArea.toFixed(4)}`);
-      console.log(`  Axis areas: +X=${stats.axisAreas.posX.toFixed(2)}, -X=${stats.axisAreas.negX.toFixed(2)}, +Y=${stats.axisAreas.posY.toFixed(2)}, -Y=${stats.axisAreas.negY.toFixed(2)}, +Z=${stats.axisAreas.posZ.toFixed(2)}, -Z=${stats.axisAreas.negZ.toFixed(2)}`);
+      console.log(
+        `  Axis areas: +X=${stats.axisAreas.posX.toFixed(2)}, -X=${stats.axisAreas.negX.toFixed(2)}, +Y=${stats.axisAreas.posY.toFixed(2)}, -Y=${stats.axisAreas.negY.toFixed(2)}, +Z=${stats.axisAreas.posZ.toFixed(2)}, -Z=${stats.axisAreas.negZ.toFixed(2)}`
+      );
 
       // Verify the mesh is valid
       expect(stats.triangleCount).toBeGreaterThanOrEqual(12); // At least 6 faces * 2 triangles
-      
+
       // After cutting, we should have an L-shaped cross section
       // Original box: 10x10x10 = surface area 600
       // After diagonal cut, surface area should be less due to removed corner
@@ -655,8 +656,8 @@ describe('golden mesh tests', () => {
       expect(stats.totalSurfaceArea).toBeGreaterThan(0);
     });
 
-    it('rotated boxes subtract produces valid mesh', () => {
-      // Test two axis-aligned boxes where one is offset such that  
+    it("rotated boxes subtract produces valid mesh", () => {
+      // Test two axis-aligned boxes where one is offset such that
       // the intersection edges are not on standard axes
       // This tests the 3D clipping fix for tilted geometry
       const model = new TopoModel(createNumericContext());
@@ -675,11 +676,13 @@ describe('golden mesh tests', () => {
       const mesh = tessellateBody(model, result.body);
       const stats = computeMeshStats(mesh);
 
-      console.log('Rotated boxes subtract stats:');
+      console.log("Rotated boxes subtract stats:");
       console.log(`  Vertices: ${stats.vertexCount}`);
       console.log(`  Triangles: ${stats.triangleCount}`);
       console.log(`  Total surface area: ${stats.totalSurfaceArea.toFixed(4)}`);
-      console.log(`  BBox: [${stats.boundingBox.min.join(', ')}] to [${stats.boundingBox.max.join(', ')}]`);
+      console.log(
+        `  BBox: [${stats.boundingBox.min.join(", ")}] to [${stats.boundingBox.max.join(", ")}]`
+      );
 
       // After subtract, we should have an L-shaped cross-section
       // The base minus the overlapping region
@@ -688,11 +691,11 @@ describe('golden mesh tests', () => {
       expect(stats.boundingBox.min[1]).toBeCloseTo(-5, 1);
       expect(stats.boundingBox.max[0]).toBeCloseTo(5, 1);
       expect(stats.boundingBox.max[1]).toBeCloseTo(5, 1);
-      
+
       // Surface area should be finite and positive
       expect(stats.totalSurfaceArea).toBeGreaterThan(0);
       expect(isFinite(stats.totalSurfaceArea)).toBe(true);
-      
+
       // Should have more triangles than a simple box due to the cut
       expect(stats.triangleCount).toBeGreaterThanOrEqual(12);
     });

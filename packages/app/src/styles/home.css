@@ -85,7 +85,10 @@
   font-size: 0.9375rem;
   font-weight: 600;
   border-radius: 6px;
-  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
   font-family: inherit;
 }
 
@@ -237,7 +240,10 @@
   border-radius: 6px;
   text-decoration: none;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
   font-family: inherit;
 }
 
@@ -495,7 +501,10 @@
   border-radius: 6px;
   text-decoration: none;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
   font-family: inherit;
 }
 

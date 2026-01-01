@@ -1,17 +1,17 @@
 /**
  * Shape Wrapper with Memory Management
- * 
+ *
  * OCCT objects must be manually deleted to prevent memory leaks.
  * This wrapper provides safe memory management and lifecycle control.
  */
 
-import { getOC } from './init.js';
-import type { TopoDS_Shape } from 'opencascade.js';
+import { getOC } from "./init.js";
+import type { TopoDS_Shape } from "opencascade.js";
 // Type declarations are in ./opencascade.d.ts
 
 /**
  * Wrapper for TopoDS_Shape that handles memory management.
- * 
+ *
  * IMPORTANT: Always use Shape.dispose() when done, or use
  * Shape.using() for automatic cleanup.
  */
@@ -25,7 +25,7 @@ export class Shape {
 
   get raw(): TopoDS_Shape {
     if (this._disposed) {
-      throw new Error('Shape has been disposed');
+      throw new Error(`Shape has been disposed`);
     }
     return this._shape;
   }
@@ -77,7 +77,7 @@ export class Shape {
     try {
       return fn(shapes);
     } finally {
-      shapes.forEach(s => s.dispose());
+      shapes.forEach((s) => s.dispose());
     }
   }
 }

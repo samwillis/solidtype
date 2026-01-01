@@ -2,20 +2,26 @@
  * Tests for 3D surface evaluators
  */
 
-import { describe, it, expect } from 'vitest';
-import type { PlaneSurface, CylinderSurface, ConeSurface, SphereSurface, TorusSurface } from './surface.js';
-import { evalSurface, surfaceNormal, createPlaneSurface } from './surface.js';
-import { vec3, X_AXIS, Y_AXIS, Z_AXIS } from '../num/vec3.js';
-import { createNumericContext } from '../num/tolerance.js';
-import { length3, dot3 } from '../num/vec3.js';
+import { describe, it, expect } from "vitest";
+import type {
+  PlaneSurface,
+  CylinderSurface,
+  ConeSurface,
+  SphereSurface,
+  TorusSurface,
+} from "./surface.js";
+import { evalSurface, surfaceNormal, createPlaneSurface } from "./surface.js";
+import { vec3, X_AXIS, Y_AXIS, Z_AXIS } from "../num/vec3.js";
+import { createNumericContext } from "../num/tolerance.js";
+import { length3, dot3 } from "../num/vec3.js";
 
-describe('surface', () => {
-  const ctx = createNumericContext();
+describe("surface", () => {
+  const _ctx = createNumericContext();
 
-  describe('evalSurface', () => {
-    it('evaluates plane surface', () => {
+  describe("evalSurface", () => {
+    it("evaluates plane surface", () => {
       const plane: PlaneSurface = {
-        kind: 'plane',
+        kind: "plane",
         origin: vec3(0, 0, 0),
         normal: Z_AXIS,
         xDir: X_AXIS,
@@ -28,9 +34,9 @@ describe('surface', () => {
       expect(p[2]).toBeCloseTo(0, 10);
     });
 
-    it('evaluates cylinder surface', () => {
+    it("evaluates cylinder surface", () => {
       const cylinder: CylinderSurface = {
-        kind: 'cylinder',
+        kind: "cylinder",
         center: vec3(0, 0, 0),
         axis: Z_AXIS,
         radius: 5,
@@ -43,9 +49,9 @@ describe('surface', () => {
       expect(p[2]).toBeCloseTo(0, 10);
     });
 
-    it('evaluates cone surface', () => {
+    it("evaluates cone surface", () => {
       const cone: ConeSurface = {
-        kind: 'cone',
+        kind: "cone",
         apex: vec3(0, 0, 0),
         axis: Z_AXIS,
         halfAngle: Math.PI / 4, // 45 degrees
@@ -59,9 +65,9 @@ describe('surface', () => {
       expect(radius).toBeCloseTo(1, 5);
     });
 
-    it('evaluates sphere surface', () => {
+    it("evaluates sphere surface", () => {
       const sphere: SphereSurface = {
-        kind: 'sphere',
+        kind: "sphere",
         center: vec3(0, 0, 0),
         radius: 5,
       };
@@ -74,10 +80,10 @@ describe('surface', () => {
     });
   });
 
-  describe('surfaceNormal', () => {
-    it('computes plane normal', () => {
+  describe("surfaceNormal", () => {
+    it("computes plane normal", () => {
       const plane: PlaneSurface = {
-        kind: 'plane',
+        kind: "plane",
         origin: vec3(0, 0, 0),
         normal: Z_AXIS,
         xDir: X_AXIS,
@@ -91,9 +97,9 @@ describe('surface', () => {
       expect(length3(normal)).toBeCloseTo(1, 10);
     });
 
-    it('computes cylinder normal', () => {
+    it("computes cylinder normal", () => {
       const cylinder: CylinderSurface = {
-        kind: 'cylinder',
+        kind: "cylinder",
         center: vec3(0, 0, 0),
         axis: Z_AXIS,
         radius: 5,
@@ -107,9 +113,9 @@ describe('surface', () => {
       expect(length3(normal)).toBeCloseTo(1, 10);
     });
 
-    it('computes cone normal', () => {
+    it("computes cone normal", () => {
       const cone: ConeSurface = {
-        kind: 'cone',
+        kind: "cone",
         apex: vec3(0, 0, 0),
         axis: Z_AXIS,
         halfAngle: Math.PI / 4, // 45 degrees
@@ -123,9 +129,9 @@ describe('surface', () => {
       expect(length3(normal)).toBeCloseTo(1, 10);
     });
 
-    it('computes sphere normal', () => {
+    it("computes sphere normal", () => {
       const sphere: SphereSurface = {
-        kind: 'sphere',
+        kind: "sphere",
         center: vec3(0, 0, 0),
         radius: 5,
       };
@@ -138,9 +144,9 @@ describe('surface', () => {
       expect(length3(normal)).toBeCloseTo(1, 10);
     });
 
-    it('computes torus normal and evaluates point', () => {
+    it("computes torus normal and evaluates point", () => {
       const torus: TorusSurface = {
-        kind: 'torus',
+        kind: "torus",
         center: vec3(0, 0, 0),
         axis: Z_AXIS,
         majorRadius: 3,
@@ -164,14 +170,14 @@ describe('surface', () => {
     });
   });
 
-  describe('createPlaneSurface', () => {
-    it('creates plane from origin and normal', () => {
+  describe("createPlaneSurface", () => {
+    it("creates plane from origin and normal", () => {
       const plane = createPlaneSurface(vec3(0, 0, 0), Z_AXIS);
-      
-      expect(plane.kind).toBe('plane');
+
+      expect(plane.kind).toBe("plane");
       expect(plane.origin).toEqual(vec3(0, 0, 0));
       expect(plane.normal[2]).toBeCloseTo(1, 10);
-      
+
       // xDir and yDir should be orthonormal
       expect(length3(plane.xDir)).toBeCloseTo(1, 10);
       expect(length3(plane.yDir)).toBeCloseTo(1, 10);
@@ -181,10 +187,10 @@ describe('surface', () => {
     });
   });
 
-  describe('edge cases', () => {
-    it('handles zero-radius cylinder', () => {
+  describe("edge cases", () => {
+    it("handles zero-radius cylinder", () => {
       const cylinder: CylinderSurface = {
-        kind: 'cylinder',
+        kind: "cylinder",
         center: vec3(0, 0, 0),
         axis: Z_AXIS,
         radius: 0,
@@ -196,9 +202,9 @@ describe('surface', () => {
       expect(p[2]).toBeCloseTo(0, 10);
     });
 
-    it('handles zero-radius sphere', () => {
+    it("handles zero-radius sphere", () => {
       const sphere: SphereSurface = {
-        kind: 'sphere',
+        kind: "sphere",
         center: vec3(1, 2, 3),
         radius: 0,
       };
@@ -209,9 +215,9 @@ describe('surface', () => {
       expect(p[2]).toBeCloseTo(3, 10);
     });
 
-    it('handles cone at apex (u=0)', () => {
+    it("handles cone at apex (u=0)", () => {
       const cone: ConeSurface = {
-        kind: 'cone',
+        kind: "cone",
         apex: vec3(0, 0, 0),
         axis: Z_AXIS,
         halfAngle: Math.PI / 4,
@@ -228,9 +234,9 @@ describe('surface', () => {
       expect(dot3(normal, cone.axis)).toBeCloseTo(0, 5);
     });
 
-    it('handles sphere at south pole (u=π)', () => {
+    it("handles sphere at south pole (u=π)", () => {
       const sphere: SphereSurface = {
-        kind: 'sphere',
+        kind: "sphere",
         center: vec3(0, 0, 0),
         radius: 5,
       };

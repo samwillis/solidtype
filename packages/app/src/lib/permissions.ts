@@ -2,43 +2,60 @@
  * Permission checking utilities
  */
 
-import { db } from './db';
-import { projectMembers, documents, workspaceMembers } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { db } from "./db";
+import { projectMembers, documents, workspaceMembers } from "../db/schema";
+import { eq, and } from "drizzle-orm";
 
 // Permission types
-export type Permission = 
-  | 'workspace:read'
-  | 'workspace:write'
-  | 'workspace:delete'
-  | 'workspace:manage_members'
-  | 'project:read'
-  | 'project:write'
-  | 'project:delete'
-  | 'project:manage_members'
-  | 'document:read'
-  | 'document:write'
-  | 'document:delete';
+export type Permission =
+  | "workspace:read"
+  | "workspace:write"
+  | "workspace:delete"
+  | "workspace:manage_members"
+  | "project:read"
+  | "project:write"
+  | "project:delete"
+  | "project:manage_members"
+  | "document:read"
+  | "document:write"
+  | "document:delete";
 
 // Role definitions
-type WorkspaceRole = 'owner' | 'admin' | 'member';
-type ProjectRole = 'owner' | 'admin' | 'member' | 'guest';
+type WorkspaceRole = "owner" | "admin" | "member";
+type ProjectRole = "owner" | "admin" | "member" | "guest";
 
 const workspacePermissions: Record<WorkspaceRole, Permission[]> = {
-  owner: ['workspace:read', 'workspace:write', 'workspace:delete', 'workspace:manage_members'],
-  admin: ['workspace:read', 'workspace:write', 'workspace:manage_members'],
-  member: ['workspace:read'],
+  owner: ["workspace:read", "workspace:write", "workspace:delete", "workspace:manage_members"],
+  admin: ["workspace:read", "workspace:write", "workspace:manage_members"],
+  member: ["workspace:read"],
 };
 
 const projectPermissionsMap: Record<ProjectRole, (canEdit: boolean) => Permission[]> = {
-  owner: () => ['project:read', 'project:write', 'project:delete', 'project:manage_members', 'document:read', 'document:write', 'document:delete'],
-  admin: () => ['project:read', 'project:write', 'project:manage_members', 'document:read', 'document:write', 'document:delete'],
-  member: (canEdit) => canEdit 
-    ? ['project:read', 'document:read', 'document:write']
-    : ['project:read', 'document:read'],
-  guest: (canEdit) => canEdit
-    ? ['project:read', 'document:read', 'document:write']
-    : ['project:read', 'document:read'],
+  owner: () => [
+    "project:read",
+    "project:write",
+    "project:delete",
+    "project:manage_members",
+    "document:read",
+    "document:write",
+    "document:delete",
+  ],
+  admin: () => [
+    "project:read",
+    "project:write",
+    "project:manage_members",
+    "document:read",
+    "document:write",
+    "document:delete",
+  ],
+  member: (canEdit) =>
+    canEdit
+      ? ["project:read", "document:read", "document:write"]
+      : ["project:read", "document:read"],
+  guest: (canEdit) =>
+    canEdit
+      ? ["project:read", "document:read", "document:write"]
+      : ["project:read", "document:read"],
 };
 
 /**
@@ -54,19 +71,16 @@ export async function verifyDocumentAccess(
     where: eq(documents.id, documentId),
     columns: { projectId: true },
   });
-  
+
   if (!doc) return null;
-  
+
   // Check project membership
   const membership = await db.query.projectMembers.findFirst({
-    where: and(
-      eq(projectMembers.projectId, doc.projectId),
-      eq(projectMembers.userId, userId)
-    ),
+    where: and(eq(projectMembers.projectId, doc.projectId), eq(projectMembers.userId, userId)),
   });
-  
+
   if (!membership) return null;
-  
+
   return { canEdit: membership.canEdit };
 }
 
@@ -79,14 +93,11 @@ export async function verifyProjectAccess(
   projectId: string
 ): Promise<{ canEdit: boolean; role: string } | null> {
   const membership = await db.query.projectMembers.findFirst({
-    where: and(
-      eq(projectMembers.projectId, projectId),
-      eq(projectMembers.userId, userId)
-    ),
+    where: and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)),
   });
-  
+
   if (!membership) return null;
-  
+
   return { canEdit: membership.canEdit, role: membership.role };
 }
 
@@ -99,14 +110,11 @@ export async function verifyWorkspaceMember(
   workspaceId: string
 ): Promise<{ role: string } | null> {
   const membership = await db.query.workspaceMembers.findFirst({
-    where: and(
-      eq(workspaceMembers.workspaceId, workspaceId),
-      eq(workspaceMembers.userId, userId)
-    ),
+    where: and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)),
   });
-  
+
   if (!membership) return null;
-  
+
   return { role: membership.role };
 }
 
@@ -119,23 +127,26 @@ export async function checkPermission(
   context: { workspaceId?: string; projectId?: string }
 ): Promise<boolean> {
   // Check workspace permissions
-  if (context.workspaceId && permission.startsWith('workspace:')) {
+  if (context.workspaceId && permission.startsWith("workspace:")) {
     const membership = await verifyWorkspaceMember(userId, context.workspaceId);
     if (!membership) return false;
-    
+
     const role = membership.role as WorkspaceRole;
     return workspacePermissions[role]?.includes(permission) ?? false;
   }
-  
+
   // Check project permissions
-  if (context.projectId && (permission.startsWith('project:') || permission.startsWith('document:'))) {
+  if (
+    context.projectId &&
+    (permission.startsWith("project:") || permission.startsWith("document:"))
+  ) {
     const access = await verifyProjectAccess(userId, context.projectId);
     if (!access) return false;
-    
+
     const role = access.role as ProjectRole;
     const permissions = projectPermissionsMap[role]?.(access.canEdit) ?? [];
     return permissions.includes(permission);
   }
-  
+
   return false;
 }

@@ -1,18 +1,18 @@
-import React, { useState, useCallback } from 'react';
-import './AIPanel.css';
+import React, { useState, useCallback } from "react";
+import "./AIPanel.css";
 
 interface ChatSession {
   id: string;
   title: string;
   createdAt: Date;
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 const AIPanel: React.FC = () => {
   const [sessions, setSessions] = useState<ChatSession[]>([
-    { id: '1', title: 'New Chat', createdAt: new Date(), messages: [] },
+    { id: "1", title: "New Chat", createdAt: new Date(), messages: [] },
   ]);
-  const [activeSessionId, setActiveSessionId] = useState<string>('1');
+  const [activeSessionId, setActiveSessionId] = useState<string>("1");
   const [showHistory, setShowHistory] = useState(false);
   const [closedSessions, setClosedSessions] = useState<ChatSession[]>([]);
 
@@ -21,7 +21,7 @@ const AIPanel: React.FC = () => {
   const createNewSession = useCallback(() => {
     const newSession: ChatSession = {
       id: Date.now().toString(),
-      title: 'New Chat',
+      title: "New Chat",
       createdAt: new Date(),
       messages: [],
     };
@@ -29,31 +29,34 @@ const AIPanel: React.FC = () => {
     setActiveSessionId(newSession.id);
   }, []);
 
-  const closeSession = useCallback((sessionId: string) => {
-    const session = sessions.find((s) => s.id === sessionId);
-    if (session) {
-      setClosedSessions((prev) => [session, ...prev]);
-    }
-    setSessions((prev) => {
-      const filtered = prev.filter((s) => s.id !== sessionId);
-      if (filtered.length === 0) {
-        // Create a new session if we closed the last one
-        const newSession: ChatSession = {
-          id: Date.now().toString(),
-          title: 'New Chat',
-          createdAt: new Date(),
-          messages: [],
-        };
-        setActiveSessionId(newSession.id);
-        return [newSession];
+  const closeSession = useCallback(
+    (sessionId: string) => {
+      const session = sessions.find((s) => s.id === sessionId);
+      if (session) {
+        setClosedSessions((prev) => [session, ...prev]);
       }
-      // Switch to another tab if we closed the active one
-      if (sessionId === activeSessionId) {
-        setActiveSessionId(filtered[filtered.length - 1].id);
-      }
-      return filtered;
-    });
-  }, [sessions, activeSessionId]);
+      setSessions((prev) => {
+        const filtered = prev.filter((s) => s.id !== sessionId);
+        if (filtered.length === 0) {
+          // Create a new session if we closed the last one
+          const newSession: ChatSession = {
+            id: Date.now().toString(),
+            title: "New Chat",
+            createdAt: new Date(),
+            messages: [],
+          };
+          setActiveSessionId(newSession.id);
+          return [newSession];
+        }
+        // Switch to another tab if we closed the active one
+        if (sessionId === activeSessionId) {
+          setActiveSessionId(filtered[filtered.length - 1].id);
+        }
+        return filtered;
+      });
+    },
+    [sessions, activeSessionId]
+  );
 
   const restoreSession = useCallback((session: ChatSession) => {
     setSessions((prev) => [...prev, session]);
@@ -70,7 +73,7 @@ const AIPanel: React.FC = () => {
           {sessions.map((session) => (
             <div
               key={session.id}
-              className={`ai-panel-tab ${session.id === activeSessionId ? 'active' : ''}`}
+              className={`ai-panel-tab ${session.id === activeSessionId ? "active" : ""}`}
               onClick={() => setActiveSessionId(session.id)}
             >
               <span className="ai-panel-tab-title">{session.title}</span>
@@ -146,11 +149,7 @@ const AIPanel: React.FC = () => {
       {/* Input area */}
       <div className="ai-panel-input-area">
         <div className="ai-panel-input-wrapper">
-          <textarea
-            className="ai-panel-input"
-            placeholder="Ask the AI assistant..."
-            rows={2}
-          />
+          <textarea className="ai-panel-input" placeholder="Ask the AI assistant..." rows={2} />
           <button className="ai-panel-send" aria-label="Send message">
             <SendIcon />
           </button>
@@ -176,7 +175,14 @@ const PlusIcon = () => (
 );
 
 const HistoryIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+  >
     <circle cx="12" cy="12" r="9" />
     <polyline points="12 7 12 12 15 15" />
   </svg>

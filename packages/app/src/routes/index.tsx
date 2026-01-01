@@ -38,8 +38,7 @@ function Home() {
 
     // Add Caveat font
     const fontLink = document.createElement("link");
-    fontLink.href =
-      "https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&display=swap";
+    fontLink.href = "https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&display=swap";
     fontLink.rel = "stylesheet";
     document.head.appendChild(fontLink);
 
@@ -83,31 +82,18 @@ function Home() {
       <main className="home-main">
         <section className="home-hero">
           <div className="home-hero-image-container">
-            <img
-              src={currentHeroImage}
-              alt="SolidType"
-              className="home-hero-image"
-            />
+            <img src={currentHeroImage} alt="SolidType" className="home-hero-image" />
           </div>
           <div className="home-hero-content">
             <div className="home-hero-alpha-badge">Very Alpha!</div>
             <h1 className="home-hero-title">Modern CAD, Built for the Web</h1>
             <h2 className="home-hero-subtitle">
-              Demonstrating how to build a production-ready collaborative
-              application using{" "}
-              <a
-                href="https://electric-sql.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              Demonstrating how to build a production-ready collaborative application using{" "}
+              <a href="https://electric-sql.com/" target="_blank" rel="noopener noreferrer">
                 ElectricSQL
               </a>
               ,{" "}
-              <a
-                href="https://tanstack.com/db"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href="https://tanstack.com/db" target="_blank" rel="noopener noreferrer">
                 TanStack&nbsp;DB
               </a>
               ,{" "}
@@ -119,19 +105,14 @@ function Home() {
                 Durable&nbsp;Streams
               </a>{" "}
               and{" "}
-              <a
-                href="https://yjs.dev/"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href="https://yjs.dev/" target="_blank" rel="noopener noreferrer">
                 Yjs
               </a>
               .
             </h2>
             <p className="home-hero-strap">
-              A web-based parametric CAD application powered by OpenCascade.js.
-              Create complex 3D models with 2D sketches, constraints, and AI
-              assistance—all in your browser.
+              A web-based parametric CAD application powered by OpenCascade.js. Create complex 3D
+              models with 2D sketches, constraints, and AI assistance—all in your browser.
             </p>
             <div className="home-hero-actions">
               <Link to="/signup" className="home-cta-primary">
@@ -171,8 +152,8 @@ function Home() {
               </div>
               <h3 className="home-feature-title">Sketch-Based Modeling</h3>
               <p className="home-feature-description">
-                Create precise 2D sketches with geometric constraints, then
-                extrude, revolve, or sweep them into 3D models.
+                Create precise 2D sketches with geometric constraints, then extrude, revolve, or
+                sweep them into 3D models.
               </p>
             </div>
 
@@ -192,8 +173,8 @@ function Home() {
               </div>
               <h3 className="home-feature-title">Parametric Design</h3>
               <p className="home-feature-description">
-                Edit parameters and dimensions at any time. Your model updates
-                automatically with full history tracking.
+                Edit parameters and dimensions at any time. Your model updates automatically with
+                full history tracking.
               </p>
             </div>
 
@@ -213,8 +194,8 @@ function Home() {
               </div>
               <h3 className="home-feature-title">AI-Assisted Design</h3>
               <p className="home-feature-description">
-                Use natural language to create and modify models. Let AI handle
-                the complexity while you focus on design.
+                Use natural language to create and modify models. Let AI handle the complexity while
+                you focus on design.
               </p>
             </div>
 
@@ -235,8 +216,8 @@ function Home() {
               </div>
               <h3 className="home-feature-title">Real-Time Collaboration</h3>
               <p className="home-feature-description">
-                Work together seamlessly with multi-user workspaces, branching,
-                and conflict-free merging using CRDTs.
+                Work together seamlessly with multi-user workspaces, branching, and conflict-free
+                merging using CRDTs.
               </p>
             </div>
 
@@ -257,8 +238,8 @@ function Home() {
               </div>
               <h3 className="home-feature-title">Web-Native</h3>
               <p className="home-feature-description">
-                No downloads, no plugins. Runs entirely in your browser with
-                WebAssembly for performance.
+                No downloads, no plugins. Runs entirely in your browser with WebAssembly for
+                performance.
               </p>
             </div>
 
@@ -278,8 +259,8 @@ function Home() {
               </div>
               <h3 className="home-feature-title">Battle-Tested Kernel</h3>
               <p className="home-feature-description">
-                Powered by OpenCascade.js—30+ years of development, trusted by
-                FreeCAD, KiCad, and commercial products.
+                Powered by OpenCascade.js—30+ years of development, trusted by FreeCAD, KiCad, and
+                commercial products.
               </p>
             </div>
           </div>
@@ -289,10 +270,9 @@ function Home() {
           <div className="home-showcase-content">
             <h2 className="home-showcase-title">Demo Showcase</h2>
             <p className="home-showcase-description">
-              SolidType is an open-source project and a comprehensive
-              demonstration of modern sync technologies. This project showcases
-              how to build a production-ready collaborative application using
-              Electric + Durable Streams for different data types.
+              SolidType is an open-source project and a comprehensive demonstration of modern sync
+              technologies. This project showcases how to build a production-ready collaborative
+              application using Electric + Durable Streams for different data types.
             </p>
             <div className="home-showcase-tech">
               <a
@@ -303,9 +283,7 @@ function Home() {
               >
                 <div className="home-showcase-logo">
                   <img
-                    src={
-                      theme === "dark" ? electricDarkLogo : electricLightLogo
-                    }
+                    src={theme === "dark" ? electricDarkLogo : electricLightLogo}
                     alt="Electric SQL"
                     className="home-showcase-logo-img"
                     style={{ width: "200px", height: "60px" }}
@@ -313,8 +291,8 @@ function Home() {
                 </div>
                 <h3>Electric SQL</h3>
                 <p>
-                  Real-time Postgres sync for structured metadata with live
-                  queries and optimistic mutations
+                  Real-time Postgres sync for structured metadata with live queries and optimistic
+                  mutations
                 </p>
               </a>
               <a
@@ -332,10 +310,7 @@ function Home() {
                   />
                 </div>
                 <h3>Durable Streams</h3>
-                <p>
-                  Append-only streams for Yjs document persistence with
-                  conflict-free merging
-                </p>
+                <p>Append-only streams for Yjs document persistence with conflict-free merging</p>
               </a>
               <a
                 href="https://tanstack.com/db"
@@ -352,10 +327,7 @@ function Home() {
                   />
                 </div>
                 <h3>TanStack DB</h3>
-                <p>
-                  Client-side embedded database with live queries powered by
-                  Electric SQL
-                </p>
+                <p>Client-side embedded database with live queries powered by Electric SQL</p>
               </a>
             </div>
           </div>
@@ -379,14 +351,13 @@ function Home() {
       <footer className="home-footer">
         <div className="home-footer-content">
           <p className="home-footer-text">
-            SolidType is an open-source, modern, history-capable, parametric CAD
-            application. Built with TypeScript, React, OpenCascade.js, Electric
-            SQL, and Durable Streams.
+            SolidType is an open-source, modern, history-capable, parametric CAD application. Built
+            with TypeScript, React, OpenCascade.js, Electric SQL, and Durable Streams.
           </p>
           <p className="home-footer-links">
-            This project serves as a production reference implementation for
-            Electric SQL and Durable Streams, demonstrating how to build
-            collaborative applications with local-first architecture.
+            This project serves as a production reference implementation for Electric SQL and
+            Durable Streams, demonstrating how to build collaborative applications with local-first
+            architecture.
           </p>
           <p className="home-footer-links">
             <a

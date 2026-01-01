@@ -1,20 +1,20 @@
 /**
  * Dashboard Sidebar Component
- * 
+ *
  * Shared sidebar for the dashboard layout displaying workspaces, projects, and navigation.
  * Used across dashboard index, project view, and branch view routes.
  */
 
-import React, { useState } from 'react';
-import { useNavigate, Link } from '@tanstack/react-router';
-import { Menu } from '@base-ui/react/menu';
-import { useLiveQuery, createCollection, liveQueryCollectionOptions } from '@tanstack/react-db';
-import { LuLayoutGrid, LuClock, LuEllipsis, LuSettings } from 'react-icons/lu';
-import { workspacesCollection, projectsCollection } from '../lib/electric-collections';
-import { CreateProjectDialog } from './dialogs/CreateProjectDialog';
-import { WorkspaceSettingsDialog } from './dialogs/WorkspaceSettingsDialog';
-import '../styles/dashboard.css';
-import logo from '../../../../artwork/colour-icon-bold.svg';
+import React, { useState } from "react";
+import { useNavigate, Link } from "@tanstack/react-router";
+import { Menu } from "@base-ui/react/menu";
+import { useLiveQuery, createCollection, liveQueryCollectionOptions } from "@tanstack/react-db";
+import { LuLayoutGrid, LuClock, LuEllipsis, LuSettings } from "react-icons/lu";
+import { workspacesCollection, projectsCollection } from "../lib/electric-collections";
+import { CreateProjectDialog } from "./dialogs/CreateProjectDialog";
+import { WorkspaceSettingsDialog } from "./dialogs/WorkspaceSettingsDialog";
+import "../styles/dashboard.css";
+import logo from "../../../../artwork/colour-icon-bold.svg";
 
 interface DashboardSidebarProps {
   activeSection: string;
@@ -29,12 +29,14 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   onSectionChange,
 }) => {
   const navigate = useNavigate();
-  
+
   // Dialog state
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [showWorkspaceSettings, setShowWorkspaceSettings] = useState(false);
-  const [selectedWorkspaceForCreate, setSelectedWorkspaceForCreate] = useState<string | undefined>();
-  
+  const [selectedWorkspaceForCreate, setSelectedWorkspaceForCreate] = useState<
+    string | undefined
+  >();
+
   // Query workspaces and projects
   const { data: workspaces } = useLiveQuery(() => {
     const orderedWorkspacesCollection = createCollection(
@@ -42,19 +44,19 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         query: (q) =>
           q
             .from({ workspaces: workspacesCollection })
-            .orderBy(({ workspaces: w }) => w.created_at, 'desc'),
+            .orderBy(({ workspaces: w }) => w.created_at, "desc"),
       })
     );
     return orderedWorkspacesCollection;
   });
-  
+
   const { data: allProjects } = useLiveQuery(() => {
     const allProjectsCollection = createCollection(
       liveQueryCollectionOptions({
         query: (q) =>
           q
             .from({ projects: projectsCollection })
-            .orderBy(({ projects: p }) => p.updated_at, 'desc'),
+            .orderBy(({ projects: p }) => p.updated_at, "desc"),
       })
     );
     return allProjectsCollection;
@@ -63,7 +65,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   // Group projects by workspace
   const projectsByWorkspace = React.useMemo(() => {
     if (!allProjects || !workspaces) return {};
-    
+
     const grouped: Record<string, typeof allProjects> = {};
     for (const project of allProjects) {
       if (!grouped[project.workspace_id]) {
@@ -82,15 +84,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
             <img src={logo} alt="SolidType" className="dashboard-logo" />
           </Link>
         </div>
-        
+
         <div className="dashboard-sidebar-content">
           {/* Navigation */}
           <nav className="dashboard-nav">
             <button
-              className={`dashboard-nav-item ${activeSection === 'projects' ? 'active' : ''}`}
+              className={`dashboard-nav-item ${activeSection === "projects" ? "active" : ""}`}
               onClick={() => {
-                onSectionChange('projects');
-                navigate({ to: '/dashboard' });
+                onSectionChange("projects");
+                navigate({ to: "/dashboard" });
               }}
             >
               <LuLayoutGrid />
@@ -98,10 +100,10 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
             </button>
 
             <button
-              className={`dashboard-nav-item ${activeSection === 'recent' ? 'active' : ''}`}
+              className={`dashboard-nav-item ${activeSection === "recent" ? "active" : ""}`}
               onClick={() => {
-                onSectionChange('recent');
-                navigate({ to: '/dashboard/recent' });
+                onSectionChange("recent");
+                navigate({ to: "/dashboard/recent" });
               }}
             >
               <LuClock />
@@ -142,7 +144,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           </nav>
         </div>
       </aside>
-      
+
       {/* Create Dialogs */}
       <CreateProjectDialog
         open={showCreateProject}
@@ -186,10 +188,10 @@ interface WorkspaceSectionProps {
   onOpenWorkspaceSettings: () => void;
 }
 
-function WorkspaceSection({ 
-  workspace, 
-  projects, 
-  activeSection, 
+function WorkspaceSection({
+  workspace,
+  projects,
+  activeSection,
   onProjectClick,
   onCreateProject,
   onOpenWorkspaceSettings,
@@ -231,7 +233,7 @@ function WorkspaceSection({
           {projects.map((project) => (
             <button
               key={project.id}
-              className={`dashboard-nav-item dashboard-project-item ${activeSection === `project-${project.id}` ? 'active' : ''}`}
+              className={`dashboard-nav-item dashboard-project-item ${activeSection === `project-${project.id}` ? "active" : ""}`}
               onClick={() => onProjectClick(project.id)}
             >
               <span>{project.name}</span>

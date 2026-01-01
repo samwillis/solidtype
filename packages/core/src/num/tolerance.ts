@@ -1,13 +1,13 @@
 /**
  * Tolerance model and numeric context
- * 
+ *
  * Provides a centralized tolerance system for all geometric comparisons.
  * All equality/near-equality decisions should go through these helpers
  * rather than using raw comparisons.
  */
 
-import type { Vec2 } from './vec2.js';
-import type { Vec3 } from './vec3.js';
+import type { Vec2 } from "./vec2.js";
+import type { Vec3 } from "./vec3.js";
 
 /**
  * Tolerance values for a model
@@ -119,9 +119,7 @@ export function eq2(a: Vec2, b: Vec2, ctx: NumericContext, scale = 1): boolean {
 export function eq3(a: Vec3, b: Vec3, ctx: NumericContext, scale = 1): boolean {
   const tol = ctx.tol.length * scale;
   return (
-    Math.abs(a[0] - b[0]) <= tol &&
-    Math.abs(a[1] - b[1]) <= tol &&
-    Math.abs(a[2] - b[2]) <= tol
+    Math.abs(a[0] - b[0]) <= tol && Math.abs(a[1] - b[1]) <= tol && Math.abs(a[2] - b[2]) <= tol
   );
 }
 

@@ -31,36 +31,30 @@ export type {
   BooleanFeature,
   Feature,
   DocSnapshot,
-} from '../document/schema';
+} from "../document/schema";
 
 // Re-export NewSketchConstraint from featureHelpers
-export type { NewSketchConstraint } from '../document/featureHelpers';
+export type { NewSketchConstraint } from "../document/featureHelpers";
 
 // ============================================================================
 // Legacy type aliases for backward compatibility
 // ============================================================================
 
 /** Supported unit systems */
-export type DocumentUnits = 'mm' | 'cm' | 'm' | 'in' | 'ft';
+export type DocumentUnits = "mm" | "cm" | "m" | "in" | "ft";
 
 /** Feature type discriminator */
-export type FeatureType = 
-  | 'origin'
-  | 'plane'
-  | 'sketch'
-  | 'extrude'
-  | 'revolve'
-  | 'boolean';
+export type FeatureType = "origin" | "plane" | "sketch" | "extrude" | "revolve" | "boolean";
 
 // ============================================================================
 // Build State Types (transient, not stored in Yjs)
 // ============================================================================
 
-export type FeatureStatus = 'computed' | 'error' | 'suppressed' | 'gated';
+export type FeatureStatus = "computed" | "error" | "suppressed" | "gated";
 
 export interface BuildError {
   featureId: string;
-  code: 'NO_CLOSED_PROFILE' | 'SELF_INTERSECTING' | 'INVALID_REFERENCE' | 'BUILD_ERROR';
+  code: "NO_CLOSED_PROFILE" | "SELF_INTERSECTING" | "INVALID_REFERENCE" | "BUILD_ERROR";
   message: string;
 }
 

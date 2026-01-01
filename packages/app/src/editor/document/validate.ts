@@ -5,7 +5,7 @@
  * See DOCUMENT-MODEL.md section 5 for specification.
  */
 
-import { DocSnapshotSchema, type DocSnapshot } from './schema';
+import { DocSnapshotSchema, type DocSnapshot } from "./schema";
 
 // ============================================================================
 // Validation Result
@@ -30,9 +30,7 @@ export function validateSchema(snapshot: unknown): ValidationResult {
     return { ok: true, errors: [] };
   }
 
-  const errors = result.error.issues.map(
-    (issue) => `${issue.path.join('.')}: ${issue.message}`
-  );
+  const errors = result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`);
   return { ok: false, errors };
 }
 
@@ -79,40 +77,29 @@ export function validateInvariants(snapshot: DocSnapshot): ValidationResult {
 /**
  * 6.1 Identity consistency (map key vs record.id)
  */
-function validateIdentityConsistency(
-  snapshot: DocSnapshot,
-  errors: string[]
-): void {
+function validateIdentityConsistency(snapshot: DocSnapshot, errors: string[]): void {
   for (const [key, feature] of Object.entries(snapshot.featuresById)) {
     if (feature.id !== key) {
-      errors.push(
-        `Identity mismatch: featuresById key '${key}' != feature.id '${feature.id}'`
-      );
+      errors.push(`Identity mismatch: featuresById key '${key}' != feature.id '${feature.id}'`);
     }
 
     // For sketches, validate internal ID consistency
-    if (feature.type === 'sketch') {
+    if (feature.type === "sketch") {
       const data = feature.data;
 
       for (const [pointKey, point] of Object.entries(data.pointsById)) {
         if (point.id !== pointKey) {
-          errors.push(
-            `Sketch ${key}: pointsById key '${pointKey}' != point.id '${point.id}'`
-          );
+          errors.push(`Sketch ${key}: pointsById key '${pointKey}' != point.id '${point.id}'`);
         }
       }
 
       for (const [entityKey, entity] of Object.entries(data.entitiesById)) {
         if (entity.id !== entityKey) {
-          errors.push(
-            `Sketch ${key}: entitiesById key '${entityKey}' != entity.id '${entity.id}'`
-          );
+          errors.push(`Sketch ${key}: entitiesById key '${entityKey}' != entity.id '${entity.id}'`);
         }
       }
 
-      for (const [constraintKey, constraint] of Object.entries(
-        data.constraintsById
-      )) {
+      for (const [constraintKey, constraint] of Object.entries(data.constraintsById)) {
         if (constraint.id !== constraintKey) {
           errors.push(
             `Sketch ${key}: constraintsById key '${constraintKey}' != constraint.id '${constraint.id}'`
@@ -126,33 +113,26 @@ function validateIdentityConsistency(
 /**
  * 6.2 FeatureOrder ⇄ featuresById agreement (bidirectional)
  */
-function validateOrderAgreement(
-  snapshot: DocSnapshot,
-  errors: string[]
-): void {
+function validateOrderAgreement(snapshot: DocSnapshot, errors: string[]): void {
   const orderSet = new Set(snapshot.featureOrder);
   const byIdKeys = new Set(Object.keys(snapshot.featuresById));
 
   // Check for duplicates in featureOrder
   if (orderSet.size !== snapshot.featureOrder.length) {
-    errors.push('featureOrder contains duplicate IDs');
+    errors.push("featureOrder contains duplicate IDs");
   }
 
   // Every id in featureOrder exists in featuresById
   for (const id of snapshot.featureOrder) {
     if (!byIdKeys.has(id)) {
-      errors.push(
-        `featureOrder contains '${id}' which doesn't exist in featuresById`
-      );
+      errors.push(`featureOrder contains '${id}' which doesn't exist in featuresById`);
     }
   }
 
   // Every id in featuresById appears in featureOrder
   for (const id of byIdKeys) {
     if (!orderSet.has(id)) {
-      errors.push(
-        `featuresById contains '${id}' which doesn't appear in featureOrder`
-      );
+      errors.push(`featuresById contains '${id}' which doesn't appear in featureOrder`);
     }
   }
 }
@@ -172,18 +152,18 @@ function validateDatumPlanes(snapshot: DocSnapshot, errors: string[]): void {
   let yzId: string | null = null;
 
   for (const [id, feature] of Object.entries(snapshot.featuresById)) {
-    if (feature.type === 'origin') {
+    if (feature.type === "origin") {
       originCount++;
       originId = id;
-    } else if (feature.type === 'plane' && 'role' in feature) {
+    } else if (feature.type === "plane" && "role" in feature) {
       const role = feature.role;
-      if (role === 'xy') {
+      if (role === "xy") {
         xyCount++;
         xyId = id;
-      } else if (role === 'xz') {
+      } else if (role === "xz") {
         xzCount++;
         xzId = id;
-      } else if (role === 'yz') {
+      } else if (role === "yz") {
         yzCount++;
         yzId = id;
       }
@@ -228,30 +208,23 @@ function validateRebuildGate(snapshot: DocSnapshot, errors: string[]): void {
   const gate = snapshot.state.rebuildGate;
 
   if (gate !== null && !snapshot.featuresById[gate]) {
-    errors.push(
-      `rebuildGate references '${gate}' which doesn't exist in featuresById`
-    );
+    errors.push(`rebuildGate references '${gate}' which doesn't exist in featuresById`);
   }
 }
 
 /**
  * 6.5 Sketch plane refs
  */
-function validateSketchPlaneRefs(
-  snapshot: DocSnapshot,
-  errors: string[]
-): void {
+function validateSketchPlaneRefs(snapshot: DocSnapshot, errors: string[]): void {
   for (const [id, feature] of Object.entries(snapshot.featuresById)) {
-    if (feature.type === 'sketch') {
+    if (feature.type === "sketch") {
       const plane = feature.plane;
 
-      if (plane.kind === 'planeFeatureId') {
+      if (plane.kind === "planeFeatureId") {
         const refFeature = snapshot.featuresById[plane.ref];
         if (!refFeature) {
-          errors.push(
-            `Sketch ${id}: plane ref '${plane.ref}' doesn't exist in featuresById`
-          );
-        } else if (refFeature.type !== 'plane') {
+          errors.push(`Sketch ${id}: plane ref '${plane.ref}' doesn't exist in featuresById`);
+        } else if (refFeature.type !== "plane") {
           errors.push(
             `Sketch ${id}: plane ref '${plane.ref}' is not a plane feature (is ${refFeature.type})`
           );
@@ -264,36 +237,27 @@ function validateSketchPlaneRefs(
 /**
  * 6.6 Extrude invariants
  */
-function validateExtrudeInvariants(
-  snapshot: DocSnapshot,
-  errors: string[]
-): void {
+function validateExtrudeInvariants(snapshot: DocSnapshot, errors: string[]): void {
   for (const [id, feature] of Object.entries(snapshot.featuresById)) {
-    if (feature.type === 'extrude') {
+    if (feature.type === "extrude") {
       // sketch exists and is type sketch
       const sketchFeature = snapshot.featuresById[feature.sketch];
       if (!sketchFeature) {
-        errors.push(
-          `Extrude ${id}: sketch '${feature.sketch}' doesn't exist in featuresById`
-        );
-      } else if (sketchFeature.type !== 'sketch') {
+        errors.push(`Extrude ${id}: sketch '${feature.sketch}' doesn't exist in featuresById`);
+      } else if (sketchFeature.type !== "sketch") {
         errors.push(
           `Extrude ${id}: sketch '${feature.sketch}' is not a sketch feature (is ${sketchFeature.type})`
         );
       }
 
       // Extent-specific requirements
-      if (feature.extent === 'blind') {
+      if (feature.extent === "blind") {
         if (feature.distance === undefined) {
-          errors.push(
-            `Extrude ${id}: blind extent requires distance`
-          );
+          errors.push(`Extrude ${id}: blind extent requires distance`);
         }
-      } else if (feature.extent === 'toFace' || feature.extent === 'toVertex') {
+      } else if (feature.extent === "toFace" || feature.extent === "toVertex") {
         if (!feature.extentRef) {
-          errors.push(
-            `Extrude ${id}: ${feature.extent} extent requires extentRef`
-          );
+          errors.push(`Extrude ${id}: ${feature.extent} extent requires extentRef`);
         }
       }
     }
@@ -303,19 +267,14 @@ function validateExtrudeInvariants(
 /**
  * 6.7 Revolve invariants
  */
-function validateRevolveInvariants(
-  snapshot: DocSnapshot,
-  errors: string[]
-): void {
+function validateRevolveInvariants(snapshot: DocSnapshot, errors: string[]): void {
   for (const [id, feature] of Object.entries(snapshot.featuresById)) {
-    if (feature.type === 'revolve') {
+    if (feature.type === "revolve") {
       // sketch exists and is type sketch
       const sketchFeature = snapshot.featuresById[feature.sketch];
       if (!sketchFeature) {
-        errors.push(
-          `Revolve ${id}: sketch '${feature.sketch}' doesn't exist in featuresById`
-        );
-      } else if (sketchFeature.type !== 'sketch') {
+        errors.push(`Revolve ${id}: sketch '${feature.sketch}' doesn't exist in featuresById`);
+      } else if (sketchFeature.type !== "sketch") {
         errors.push(
           `Revolve ${id}: sketch '${feature.sketch}' is not a sketch feature (is ${sketchFeature.type})`
         );
@@ -335,19 +294,16 @@ function validateRevolveInvariants(
 /**
  * 6.8 Sketch internal integrity
  */
-function validateSketchIntegrity(
-  snapshot: DocSnapshot,
-  errors: string[]
-): void {
+function validateSketchIntegrity(snapshot: DocSnapshot, errors: string[]): void {
   for (const [id, feature] of Object.entries(snapshot.featuresById)) {
-    if (feature.type === 'sketch') {
+    if (feature.type === "sketch") {
       const data = feature.data;
       const pointIds = new Set(Object.keys(data.pointsById));
       const entityIds = new Set(Object.keys(data.entitiesById));
 
       // Entity endpoints exist in pointsById
       for (const [entityId, entity] of Object.entries(data.entitiesById)) {
-        if (entity.type === 'line') {
+        if (entity.type === "line") {
           if (!pointIds.has(entity.start)) {
             errors.push(
               `Sketch ${id}: line ${entityId} start '${entity.start}' doesn't exist in pointsById`
@@ -358,7 +314,7 @@ function validateSketchIntegrity(
               `Sketch ${id}: line ${entityId} end '${entity.end}' doesn't exist in pointsById`
             );
           }
-        } else if (entity.type === 'arc') {
+        } else if (entity.type === "arc") {
           if (!pointIds.has(entity.start)) {
             errors.push(
               `Sketch ${id}: arc ${entityId} start '${entity.start}' doesn't exist in pointsById`
@@ -378,10 +334,8 @@ function validateSketchIntegrity(
       }
 
       // Constraint refs exist and are correct type
-      for (const [constraintId, constraint] of Object.entries(
-        data.constraintsById
-      )) {
-        if ('points' in constraint && Array.isArray(constraint.points)) {
+      for (const [constraintId, constraint] of Object.entries(data.constraintsById)) {
+        if ("points" in constraint && Array.isArray(constraint.points)) {
           for (const pointId of constraint.points) {
             if (!pointIds.has(pointId)) {
               errors.push(
@@ -391,7 +345,7 @@ function validateSketchIntegrity(
           }
         }
 
-        if ('point' in constraint) {
+        if ("point" in constraint) {
           if (!pointIds.has(constraint.point)) {
             errors.push(
               `Sketch ${id}: constraint ${constraintId} references point '${constraint.point}' which doesn't exist`
@@ -399,7 +353,7 @@ function validateSketchIntegrity(
           }
         }
 
-        if ('lines' in constraint && Array.isArray(constraint.lines)) {
+        if ("lines" in constraint && Array.isArray(constraint.lines)) {
           for (const lineId of constraint.lines) {
             if (!entityIds.has(lineId)) {
               errors.push(
@@ -409,7 +363,7 @@ function validateSketchIntegrity(
           }
         }
 
-        if ('line' in constraint) {
+        if ("line" in constraint) {
           if (!entityIds.has(constraint.line)) {
             errors.push(
               `Sketch ${id}: constraint ${constraintId} references line '${constraint.line}' which doesn't exist`
@@ -417,7 +371,7 @@ function validateSketchIntegrity(
           }
         }
 
-        if ('arc' in constraint) {
+        if ("arc" in constraint) {
           if (!entityIds.has(constraint.arc)) {
             errors.push(
               `Sketch ${id}: constraint ${constraintId} references arc '${constraint.arc}' which doesn't exist`
@@ -425,7 +379,7 @@ function validateSketchIntegrity(
           }
         }
 
-        if ('axis' in constraint) {
+        if ("axis" in constraint) {
           if (!entityIds.has(constraint.axis)) {
             errors.push(
               `Sketch ${id}: constraint ${constraintId} references axis '${constraint.axis}' which doesn't exist`

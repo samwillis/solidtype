@@ -25,12 +25,12 @@
 
 ### Constraint Types (This Phase)
 
-| Constraint | Selection | Effect |
-|------------|-----------|--------|
-| Horizontal | 2 points OR 1 line | Points share Y coordinate |
-| Vertical | 2 points OR 1 line | Points share X coordinate |
-| Coincident | 2 points | Points share same location |
-| Fixed | 1 point | Point cannot move |
+| Constraint | Selection          | Effect                     |
+| ---------- | ------------------ | -------------------------- |
+| Horizontal | 2 points OR 1 line | Points share Y coordinate  |
+| Vertical   | 2 points OR 1 line | Points share X coordinate  |
+| Coincident | 2 points           | Points share same location |
+| Fixed      | 1 point            | Point cannot move          |
 
 ---
 
@@ -60,32 +60,32 @@
 
 export interface HorizontalConstraint {
   id: string;
-  type: 'horizontal';
-  points: [string, string];  // Two point IDs
+  type: "horizontal";
+  points: [string, string]; // Two point IDs
 }
 
 export interface VerticalConstraint {
   id: string;
-  type: 'vertical';
+  type: "vertical";
   points: [string, string];
 }
 
 export interface CoincidentConstraint {
   id: string;
-  type: 'coincident';
+  type: "coincident";
   points: [string, string];
 }
 
 export interface FixedConstraint {
   id: string;
-  type: 'fixed';
+  type: "fixed";
   point: string;
 }
 
-export type BasicConstraint = 
-  | HorizontalConstraint 
-  | VerticalConstraint 
-  | CoincidentConstraint 
+export type BasicConstraint =
+  | HorizontalConstraint
+  | VerticalConstraint
+  | CoincidentConstraint
   | FixedConstraint;
 ```
 
@@ -132,7 +132,7 @@ function canAddHorizontal(selection: SketchSelection): boolean {
   // 2 points selected
   if (selection.points.length === 2) return true;
   // 1 line selected (use its endpoints)
-  if (selection.entities.length === 1 && selection.entities[0].type === 'line') return true;
+  if (selection.entities.length === 1 && selection.entities[0].type === "line") return true;
   return false;
 }
 
@@ -182,9 +182,9 @@ function ConstraintIndicators({ constraints, points }) {
 
 function ConstraintStatus({ sketch }) {
   const { dof, status } = analyzeConstraints(sketch);
-  
+
   return (
-    <StatusIndicator 
+    <StatusIndicator
       status={status}
       message={
         status === 'under' ? `Under-constrained (${dof} DOF)` :
@@ -209,58 +209,53 @@ The kernel has a constraint solver. We need to call it:
 
 function processSketch(feature: SerializedFeature): void {
   const sketchData = parseSketchData(feature);
-  
+
   // Create SketchModel
   const sketch = new SketchModel();
-  
+
   // Add points
   const pointMap = new Map<string, SketchPointId>();
   for (const p of sketchData.points) {
     const id = sketch.addPoint(p.x, p.y, { fixed: p.fixed });
     pointMap.set(p.id, id);
   }
-  
+
   // Add entities
   for (const e of sketchData.entities) {
-    if (e.type === 'line') {
+    if (e.type === "line") {
       sketch.addLine(pointMap.get(e.start)!, pointMap.get(e.end)!);
     }
   }
-  
+
   // Add constraints
   for (const c of sketchData.constraints) {
     switch (c.type) {
-      case 'horizontal':
-        sketch.addConstraint(horizontalPoints(
-          pointMap.get(c.points[0])!,
-          pointMap.get(c.points[1])!
-        ));
+      case "horizontal":
+        sketch.addConstraint(
+          horizontalPoints(pointMap.get(c.points[0])!, pointMap.get(c.points[1])!)
+        );
         break;
-      case 'vertical':
-        sketch.addConstraint(verticalPoints(
-          pointMap.get(c.points[0])!,
-          pointMap.get(c.points[1])!
-        ));
+      case "vertical":
+        sketch.addConstraint(
+          verticalPoints(pointMap.get(c.points[0])!, pointMap.get(c.points[1])!)
+        );
         break;
-      case 'coincident':
-        sketch.addConstraint(coincident(
-          pointMap.get(c.points[0])!,
-          pointMap.get(c.points[1])!
-        ));
+      case "coincident":
+        sketch.addConstraint(coincident(pointMap.get(c.points[0])!, pointMap.get(c.points[1])!));
         break;
-      case 'fixed':
+      case "fixed":
         sketch.addConstraint(fixed(pointMap.get(c.point)!));
         break;
     }
   }
-  
+
   // Solve
   const result = solveSketch(sketch);
-  
-  if (result.status === 'solved') {
+
+  if (result.status === "solved") {
     // Update point positions from solution
     // Send back to main thread
-  } else if (result.status === 'over_constrained') {
+  } else if (result.status === "over_constrained") {
     // Report error
   }
 }
@@ -271,7 +266,7 @@ function processSketch(feature: SerializedFeature): void {
 ```typescript
 // Worker sends back solved positions
 self.postMessage({
-  type: 'sketchSolved',
+  type: "sketchSolved",
   sketchId: feature.id,
   points: Array.from(pointMap.entries()).map(([docId, kernelId]) => ({
     id: docId,
@@ -288,11 +283,11 @@ self.postMessage({
 ```typescript
 // In KernelContext
 kernel.onSketchSolved((sketchId, points, status) => {
-  if (status === 'solved') {
+  if (status === "solved") {
     // Update Yjs with solved positions
     updateSketchPoints(doc, sketchId, points);
   }
-  
+
   setSketchStatus(sketchId, { status, dof: result.dof });
 });
 ```
@@ -303,20 +298,20 @@ kernel.onSketchSolved((sketchId, points, status) => {
 
 ### Visual States
 
-| State | Color | Meaning |
-|-------|-------|---------|
-| Satisfied | Green | Constraint is met |
-| Unsatisfied | Red | Constraint cannot be met (conflict) |
-| Redundant | Yellow | Constraint is redundant |
+| State       | Color  | Meaning                             |
+| ----------- | ------ | ----------------------------------- |
+| Satisfied   | Green  | Constraint is met                   |
+| Unsatisfied | Red    | Constraint cannot be met (conflict) |
+| Redundant   | Yellow | Constraint is redundant             |
 
 ### Error Messages
 
 ```typescript
 // Over-constrained example
-"Cannot satisfy constraint: Horizontal on p1-p2 conflicts with existing Vertical constraint"
+"Cannot satisfy constraint: Horizontal on p1-p2 conflicts with existing Vertical constraint";
 
-// Redundant example  
-"Constraint is redundant: p1 is already fixed"
+// Redundant example
+"Constraint is redundant: p1 is already fixed";
 ```
 
 ---
@@ -327,29 +322,29 @@ kernel.onSketchSolved((sketchId, points, status) => {
 
 ```typescript
 // Test constraint addition
-test('addHorizontalConstraint creates constraint', () => {
+test("addHorizontalConstraint creates constraint", () => {
   const doc = createDocument();
-  addSketchWithPoints(doc, 's1', [
-    { id: 'p1', x: 0, y: 0 },
-    { id: 'p2', x: 10, y: 5 },
+  addSketchWithPoints(doc, "s1", [
+    { id: "p1", x: 0, y: 0 },
+    { id: "p2", x: 10, y: 5 },
   ]);
-  
-  addConstraint(doc, 's1', { type: 'horizontal', points: ['p1', 'p2'] });
-  
-  const constraints = getSketchConstraints(doc, 's1');
+
+  addConstraint(doc, "s1", { type: "horizontal", points: ["p1", "p2"] });
+
+  const constraints = getSketchConstraints(doc, "s1");
   expect(constraints).toHaveLength(1);
 });
 
 // Test solver
-test('horizontal constraint aligns points', () => {
+test("horizontal constraint aligns points", () => {
   const sketch = new SketchModel();
   const p1 = sketch.addPoint(0, 0);
   const p2 = sketch.addPoint(10, 5);
-  
+
   sketch.addConstraint(horizontalPoints(p1, p2));
   const result = solveSketch(sketch);
-  
-  expect(result.status).toBe('solved');
+
+  expect(result.status).toBe("solved");
   expect(sketch.getPoint(p1).y).toBeCloseTo(sketch.getPoint(p2).y);
 });
 ```

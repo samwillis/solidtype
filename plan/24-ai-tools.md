@@ -34,8 +34,8 @@ Returns information about the currently selected face/edge:
 
 ```typescript
 const getSelectionTool = {
-  name: 'get_current_selection',
-  description: 'Get information about the currently selected face, edge, or feature',
+  name: "get_current_selection",
+  description: "Get information about the currently selected face, edge, or feature",
   parameters: {},
   execute: async (context: AIContext): Promise<SelectionInfo> => {
     return {
@@ -54,37 +54,37 @@ Find faces matching criteria:
 
 ```typescript
 const findFacesTool = {
-  name: 'find_faces',
-  description: 'Find faces matching the given criteria',
+  name: "find_faces",
+  description: "Find faces matching the given criteria",
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       surfaceType: {
-        type: 'string',
-        enum: ['plane', 'cylinder', 'cone', 'sphere', 'any'],
-        description: 'Type of surface',
+        type: "string",
+        enum: ["plane", "cylinder", "cone", "sphere", "any"],
+        description: "Type of surface",
       },
       orientation: {
-        type: 'string',
-        enum: ['top', 'bottom', 'side', 'front', 'back', 'any'],
-        description: 'Approximate orientation',
+        type: "string",
+        enum: ["top", "bottom", "side", "front", "back", "any"],
+        description: "Approximate orientation",
       },
       featureId: {
-        type: 'string',
-        description: 'Only faces from this feature',
+        type: "string",
+        description: "Only faces from this feature",
       },
       minArea: {
-        type: 'number',
-        description: 'Minimum face area',
+        type: "number",
+        description: "Minimum face area",
       },
     },
   },
   execute: async (params, context): Promise<FaceInfo[]> => {
     const allFaces = getAllFaces(context.session);
-    
+
     return allFaces
-      .filter(f => matchesCriteria(f, params))
-      .map(f => ({
+      .filter((f) => matchesCriteria(f, params))
+      .map((f) => ({
         persistentRef: f.persistentRef.toString(),
         featureId: f.originFeature,
         surfaceType: f.surface.kind,
@@ -102,26 +102,26 @@ Find edges matching criteria:
 
 ```typescript
 const findEdgesTool = {
-  name: 'find_edges',
-  description: 'Find edges matching the given criteria',
+  name: "find_edges",
+  description: "Find edges matching the given criteria",
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       curveType: {
-        type: 'string',
-        enum: ['line', 'circle', 'arc', 'any'],
+        type: "string",
+        enum: ["line", "circle", "arc", "any"],
       },
       faceRef: {
-        type: 'string',
-        description: 'Only edges of this face',
+        type: "string",
+        description: "Only edges of this face",
       },
       minLength: {
-        type: 'number',
+        type: "number",
       },
       convexity: {
-        type: 'string',
-        enum: ['convex', 'concave', 'any'],
-        description: 'Edge convexity (for fillet candidates)',
+        type: "string",
+        enum: ["convex", "concave", "any"],
+        description: "Edge convexity (for fillet candidates)",
       },
     },
   },
@@ -137,13 +137,13 @@ Get detailed geometry for a face or edge:
 
 ```typescript
 const getGeometryTool = {
-  name: 'get_geometry',
-  description: 'Get detailed geometric properties of a face or edge',
+  name: "get_geometry",
+  description: "Get detailed geometric properties of a face or edge",
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       ref: {
-        type: 'string',
+        type: "string",
         description: 'Persistent reference (e.g., "face:e1:top")',
         required: true,
       },
@@ -151,11 +151,11 @@ const getGeometryTool = {
   },
   execute: async (params, context): Promise<GeometryInfo> => {
     const { ref } = params;
-    
-    if (ref.startsWith('face:')) {
+
+    if (ref.startsWith("face:")) {
       const face = resolveFaceRef(ref, context.session);
       return {
-        type: 'face',
+        type: "face",
         surfaceType: face.surface.kind,
         area: computeArea(face),
         centroid: computeCentroid(face),
@@ -163,11 +163,11 @@ const getGeometryTool = {
         boundingBox: computeBoundingBox(face),
       };
     }
-    
-    if (ref.startsWith('edge:')) {
+
+    if (ref.startsWith("edge:")) {
       const edge = resolveEdgeRef(ref, context.session);
       return {
-        type: 'edge',
+        type: "edge",
         curveType: edge.curve.kind,
         length: computeLength(edge),
         startPoint: edge.startPoint,
@@ -175,7 +175,7 @@ const getGeometryTool = {
         midPoint: edge.midPoint,
       };
     }
-    
+
     throw new Error(`Invalid reference: ${ref}`);
   },
 };
@@ -187,58 +187,58 @@ Validate proposed XML before applying:
 
 ```typescript
 const validateXmlTool = {
-  name: 'validate_xml',
-  description: 'Validate proposed document XML for correctness',
+  name: "validate_xml",
+  description: "Validate proposed document XML for correctness",
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       xml: {
-        type: 'string',
-        description: 'The proposed XML document',
+        type: "string",
+        description: "The proposed XML document",
         required: true,
       },
     },
   },
   execute: async (params): Promise<ValidationResult> => {
     const { xml } = params;
-    
+
     // Parse XML
     const parser = new DOMParser();
-    const doc = parser.parseFromString(xml, 'text/xml');
-    
+    const doc = parser.parseFromString(xml, "text/xml");
+
     const errors: string[] = [];
-    
+
     // Check for parse errors
-    const parseError = doc.querySelector('parsererror');
+    const parseError = doc.querySelector("parsererror");
     if (parseError) {
       errors.push(`XML parse error: ${parseError.textContent}`);
       return { valid: false, errors };
     }
-    
+
     // Validate structure
-    const features = doc.querySelectorAll('features > *');
+    const features = doc.querySelectorAll("features > *");
     const featureIds = new Set<string>();
-    
+
     for (const feature of features) {
-      const id = feature.getAttribute('id');
-      
+      const id = feature.getAttribute("id");
+
       // Check for duplicate IDs
       if (featureIds.has(id)) {
         errors.push(`Duplicate feature ID: ${id}`);
       }
       featureIds.add(id);
-      
+
       // Validate references
-      if (feature.tagName === 'extrude') {
-        const sketchRef = feature.getAttribute('sketch');
+      if (feature.tagName === "extrude") {
+        const sketchRef = feature.getAttribute("sketch");
         if (!featureIds.has(sketchRef)) {
           errors.push(`Extrude ${id} references non-existent sketch: ${sketchRef}`);
         }
       }
-      
+
       // More validation...
     }
-    
+
     return { valid: errors.length === 0, errors };
   },
 };
@@ -250,14 +250,14 @@ Generate a preview of proposed changes:
 
 ```typescript
 const previewChangeTool = {
-  name: 'preview_change',
-  description: 'Preview the result of applying XML changes',
+  name: "preview_change",
+  description: "Preview the result of applying XML changes",
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       xml: {
-        type: 'string',
-        description: 'The proposed XML document',
+        type: "string",
+        description: "The proposed XML document",
         required: true,
       },
     },
@@ -286,8 +286,8 @@ export const AI_TOOLS = [
 ];
 
 export function getToolDefinitions() {
-  return AI_TOOLS.map(tool => ({
-    type: 'function',
+  return AI_TOOLS.map((tool) => ({
+    type: "function",
     function: {
       name: tool.name,
       description: tool.description,
@@ -296,12 +296,8 @@ export function getToolDefinitions() {
   }));
 }
 
-export async function executeTool(
-  name: string,
-  params: any,
-  context: AIContext
-): Promise<any> {
-  const tool = AI_TOOLS.find(t => t.name === name);
+export async function executeTool(name: string, params: any, context: AIContext): Promise<any> {
+  const tool = AI_TOOLS.find((t) => t.name === name);
   if (!tool) throw new Error(`Unknown tool: ${name}`);
   return tool.execute(params, context);
 }
@@ -314,19 +310,16 @@ export async function executeTool(
 ```typescript
 // packages/app/src/ai/chat.ts
 
-export async function processUserMessage(
-  message: string,
-  context: AIContext
-): Promise<AIResponse> {
+export async function processUserMessage(message: string, context: AIContext): Promise<AIResponse> {
   // Initial request with tools
   let response = await callLLM({
     messages: [
-      { role: 'system', content: buildSystemPrompt(context) },
-      { role: 'user', content: message },
+      { role: "system", content: buildSystemPrompt(context) },
+      { role: "user", content: message },
     ],
     tools: getToolDefinitions(),
   });
-  
+
   // Handle tool calls
   while (response.toolCalls && response.toolCalls.length > 0) {
     const toolResults = await Promise.all(
@@ -335,18 +328,18 @@ export async function processUserMessage(
         result: await executeTool(call.name, call.arguments, context),
       }))
     );
-    
+
     // Continue conversation with tool results
     response = await callLLM({
       messages: [
         ...previousMessages,
-        { role: 'assistant', toolCalls: response.toolCalls },
-        ...toolResults.map(r => ({ role: 'tool', ...r })),
+        { role: "assistant", toolCalls: response.toolCalls },
+        ...toolResults.map((r) => ({ role: "tool", ...r })),
       ],
       tools: getToolDefinitions(),
     });
   }
-  
+
   return response;
 }
 ```
@@ -359,26 +352,23 @@ export async function processUserMessage(
 
 ```typescript
 // Test find_faces tool
-test('find_faces returns matching faces', async () => {
+test("find_faces returns matching faces", async () => {
   const context = createTestContext();
-  
-  const result = await findFacesTool.execute(
-    { surfaceType: 'plane', orientation: 'top' },
-    context
-  );
-  
+
+  const result = await findFacesTool.execute({ surfaceType: "plane", orientation: "top" }, context);
+
   expect(result.length).toBeGreaterThan(0);
-  expect(result[0].surfaceType).toBe('plane');
+  expect(result[0].surfaceType).toBe("plane");
 });
 
 // Test validate_xml tool
-test('validate_xml catches missing references', async () => {
+test("validate_xml catches missing references", async () => {
   const result = await validateXmlTool.execute({
     xml: '<model><features><extrude id="e1" sketch="nonexistent" /></features></model>',
   });
-  
+
   expect(result.valid).toBe(false);
-  expect(result.errors).toContain('references non-existent sketch');
+  expect(result.errors).toContain("references non-existent sketch");
 });
 ```
 

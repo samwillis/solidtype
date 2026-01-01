@@ -2,22 +2,22 @@
  * Tests for primitive shape creation
  */
 
-import { describe, it, expect } from 'vitest';
-import { createNumericContext } from '../num/tolerance.js';
-import { vec3 } from '../num/vec3.js';
-import { TopoModel } from '../topo/TopoModel.js';
-import { asVertexId } from '../topo/handles.js';
-import { validateModel, isValidModel } from '../topo/validate.js';
-import { createBox, createUnitCube } from './primitives.js';
+import { describe, it, expect } from "vitest";
+import { createNumericContext } from "../num/tolerance.js";
+import { vec3 } from "../num/vec3.js";
+import { TopoModel } from "../topo/TopoModel.js";
+import { asVertexId } from "../topo/handles.js";
+import { validateModel, isValidModel } from "../topo/validate.js";
+import { createBox, createUnitCube } from "./primitives.js";
 
-describe('createBox', () => {
-  it('creates a valid box with correct topology', () => {
+describe("createBox", () => {
+  it("creates a valid box with correct topology", () => {
     const ctx = createNumericContext();
     const model = new TopoModel(ctx);
-    const bodyId = createBox(model);
-    
+    createBox(model);
+
     const stats = model.getStats();
-    
+
     expect(stats.bodies).toBe(1);
     expect(stats.shells).toBe(1);
     expect(stats.faces).toBe(6);
@@ -28,21 +28,21 @@ describe('createBox', () => {
     expect(stats.surfaces).toBe(6);
   });
 
-  it('creates a closed shell', () => {
+  it("creates a closed shell", () => {
     const ctx = createNumericContext();
     const model = new TopoModel(ctx);
     const bodyId = createBox(model);
-    
+
     const shells = model.getBodyShells(bodyId);
     expect(shells).toHaveLength(1);
     expect(model.isShellClosed(shells[0])).toBe(true);
   });
 
-  it('creates correct vertex positions for unit cube', () => {
+  it("creates correct vertex positions for unit cube", () => {
     const ctx = createNumericContext();
     const model = new TopoModel(ctx);
     createUnitCube(model);
-    
+
     for (let i = 0; i < 8; i++) {
       const pos = model.getVertexPosition(asVertexId(i));
       expect(Math.abs(pos[0])).toBeCloseTo(0.5, 10);
@@ -51,11 +51,11 @@ describe('createBox', () => {
     }
   });
 
-  it('creates correct vertex positions with custom dimensions', () => {
+  it("creates correct vertex positions with custom dimensions", () => {
     const ctx = createNumericContext();
     const model = new TopoModel(ctx);
     createBox(model, { width: 4, depth: 6, height: 8 });
-    
+
     const expectedHalfDims = [2, 3, 4];
     for (let i = 0; i < 8; i++) {
       const pos = model.getVertexPosition(asVertexId(i));
@@ -65,13 +65,15 @@ describe('createBox', () => {
     }
   });
 
-  it('creates correct vertex positions with custom center', () => {
+  it("creates correct vertex positions with custom center", () => {
     const ctx = createNumericContext();
     const model = new TopoModel(ctx);
     const center = vec3(10, 20, 30);
     createBox(model, { width: 2, depth: 2, height: 2, center });
-    
-    let sumX = 0, sumY = 0, sumZ = 0;
+
+    let sumX = 0,
+      sumY = 0,
+      sumZ = 0;
     for (let i = 0; i < 8; i++) {
       const pos = model.getVertexPosition(asVertexId(i));
       sumX += pos[0];
@@ -83,56 +85,59 @@ describe('createBox', () => {
     expect(sumZ / 8).toBeCloseTo(center[2], 10);
   });
 
-  it('passes model validation', () => {
+  it("passes model validation", () => {
     const ctx = createNumericContext();
     const model = new TopoModel(ctx);
     createBox(model);
-    
+
     const report = validateModel(model);
-    
-    const errors = report.issues.filter(i => i.severity === 'error');
-    const warnings = report.issues.filter(i => i.severity === 'warning');
-    
+
+    const errors = report.issues.filter((i) => i.severity === "error");
+    const warnings = report.issues.filter((i) => i.severity === "warning");
+
     expect(errors).toHaveLength(0);
     expect(warnings).toHaveLength(0);
   });
 
-  it('passes quick validation check', () => {
+  it("passes quick validation check", () => {
     const ctx = createNumericContext();
     const model = new TopoModel(ctx);
     createBox(model);
-    
+
     expect(isValidModel(model)).toBe(true);
   });
 
-  it('can create multiple boxes in same model', () => {
+  it("can create multiple boxes in same model", () => {
     const ctx = createNumericContext();
     const model = new TopoModel(ctx);
-    
+
     createBox(model, { center: vec3(-2, 0, 0) });
     createBox(model, { center: vec3(2, 0, 0) });
-    
+
     const stats = model.getStats();
-    
+
     expect(stats.bodies).toBe(2);
     expect(stats.shells).toBe(2);
     expect(stats.faces).toBe(12);
     expect(stats.vertices).toBe(16);
-    
+
     expect(isValidModel(model)).toBe(true);
   });
 });
 
-describe('createUnitCube', () => {
-  it('creates a 1x1x1 cube centered at origin', () => {
+describe("createUnitCube", () => {
+  it("creates a 1x1x1 cube centered at origin", () => {
     const ctx = createNumericContext();
     const model = new TopoModel(ctx);
     createUnitCube(model);
-    
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-    let minZ = Infinity, maxZ = -Infinity;
-    
+
+    let minX = Infinity,
+      maxX = -Infinity;
+    let minY = Infinity,
+      maxY = -Infinity;
+    let minZ = Infinity,
+      maxZ = -Infinity;
+
     for (let i = 0; i < 8; i++) {
       const pos = model.getVertexPosition(asVertexId(i));
       minX = Math.min(minX, pos[0]);
@@ -142,11 +147,11 @@ describe('createUnitCube', () => {
       minZ = Math.min(minZ, pos[2]);
       maxZ = Math.max(maxZ, pos[2]);
     }
-    
+
     expect(maxX - minX).toBeCloseTo(1, 10);
     expect(maxY - minY).toBeCloseTo(1, 10);
     expect(maxZ - minZ).toBeCloseTo(1, 10);
-    
+
     expect((maxX + minX) / 2).toBeCloseTo(0, 10);
     expect((maxY + minY) / 2).toBeCloseTo(0, 10);
     expect((maxZ + minZ) / 2).toBeCloseTo(0, 10);

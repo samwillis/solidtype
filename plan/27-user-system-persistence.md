@@ -58,16 +58,16 @@
 
 ## Technology Stack
 
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| **Database** | PostgreSQL | Primary datastore for all structured data |
-| **ORM/Migrations** | Drizzle | Type-safe schema, migrations, queries |
-| **Server Framework** | TanStack Start | Server routes, server functions, SSR |
-| **Authentication** | better-auth | User auth, sessions, OAuth providers |
-| **Real-time Sync** | ElectricSQL | Postgres → client sync for metadata |
-| **Local State** | TanStack DB | Client-side reactive store with Electric |
-| **Document Sync** | Durable Streams (`@durable-streams/client`, `@durable-streams/server`) | Yjs document persistence and sync |
-| **Containerization** | Docker | Local dev and production deployment |
+| Layer                | Technology                                                             | Purpose                                   |
+| -------------------- | ---------------------------------------------------------------------- | ----------------------------------------- |
+| **Database**         | PostgreSQL                                                             | Primary datastore for all structured data |
+| **ORM/Migrations**   | Drizzle                                                                | Type-safe schema, migrations, queries     |
+| **Server Framework** | TanStack Start                                                         | Server routes, server functions, SSR      |
+| **Authentication**   | better-auth                                                            | User auth, sessions, OAuth providers      |
+| **Real-time Sync**   | ElectricSQL                                                            | Postgres → client sync for metadata       |
+| **Local State**      | TanStack DB                                                            | Client-side reactive store with Electric  |
+| **Document Sync**    | Durable Streams (`@durable-streams/client`, `@durable-streams/server`) | Yjs document persistence and sync         |
+| **Containerization** | Docker                                                                 | Local dev and production deployment       |
 
 ---
 
@@ -121,15 +121,15 @@
 
 ```typescript
 // packages/app/src/db/schema/users.ts
-import { pgTable, uuid, text, timestamp, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean } from "drizzle-orm/pg-core";
 
-export const users = pgTable('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  email: text('email').notNull().unique(),
-  name: text('name'),
-  emailVerified: boolean('email_verified').default(false),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  emailVerified: boolean("email_verified").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 // better-auth will manage sessions, accounts, etc.
@@ -139,16 +139,18 @@ export const users = pgTable('users', {
 
 ```typescript
 // packages/app/src/db/schema/workspaces.ts
-import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp } from "drizzle-orm/pg-core";
 
-export const workspaces = pgTable('workspaces', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull(),
-  slug: text('slug').notNull().unique(), // URL-friendly identifier
-  description: text('description'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdBy: uuid('created_by').notNull().references(() => users.id),
+export const workspaces = pgTable("workspaces", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(), // URL-friendly identifier
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
 });
 ```
 
@@ -156,38 +158,50 @@ export const workspaces = pgTable('workspaces', {
 
 ```typescript
 // packages/app/src/db/schema/workspace-members.ts
-import { pgTable, uuid, timestamp, pgEnum, primaryKey } from 'drizzle-orm/pg-core';
-import { users } from './users';
-import { workspaces } from './workspaces';
+import { pgTable, uuid, timestamp, pgEnum, primaryKey } from "drizzle-orm/pg-core";
+import { users } from "./users";
+import { workspaces } from "./workspaces";
 
-export const workspaceRoleEnum = pgEnum('workspace_role', ['owner', 'admin', 'member']);
+export const workspaceRoleEnum = pgEnum("workspace_role", ["owner", "admin", "member"]);
 
-export const workspaceMembers = pgTable('workspace_members', {
-  workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  role: workspaceRoleEnum('role').notNull().default('member'),
-  joinedAt: timestamp('joined_at').defaultNow().notNull(),
-}, (table) => ({
-  pk: primaryKey({ columns: [table.workspaceId, table.userId] }),
-}));
+export const workspaceMembers = pgTable(
+  "workspace_members",
+  {
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: workspaceRoleEnum("role").notNull().default("member"),
+    joinedAt: timestamp("joined_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.workspaceId, table.userId] }),
+  })
+);
 ```
 
 ### Projects Table
 
 ```typescript
 // packages/app/src/db/schema/projects.ts
-import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core';
-import { workspaces } from './workspaces';
-import { users } from './users';
+import { pgTable, uuid, text, timestamp } from "drizzle-orm/pg-core";
+import { workspaces } from "./workspaces";
+import { users } from "./users";
 
-export const projects = pgTable('projects', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  description: text('description'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdBy: uuid('created_by').notNull().references(() => users.id),
+export const projects = pgTable("projects", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
 });
 
 // Index for Electric sync filtering
@@ -198,56 +212,70 @@ export const projects = pgTable('projects', {
 
 ```typescript
 // packages/app/src/db/schema/project-members.ts
-import { pgTable, uuid, timestamp, pgEnum, primaryKey } from 'drizzle-orm/pg-core';
-import { users } from './users';
-import { projects } from './projects';
+import { pgTable, uuid, timestamp, pgEnum, primaryKey } from "drizzle-orm/pg-core";
+import { users } from "./users";
+import { projects } from "./projects";
 
-export const projectRoleEnum = pgEnum('project_role', ['owner', 'admin', 'member', 'guest']);
+export const projectRoleEnum = pgEnum("project_role", ["owner", "admin", "member", "guest"]);
 
-export const projectMembers = pgTable('project_members', {
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  role: projectRoleEnum('role').notNull().default('member'),
-  canEdit: boolean('can_edit').notNull().default(true), // false = read-only
-  joinedAt: timestamp('joined_at').defaultNow().notNull(),
-}, (table) => ({
-  pk: primaryKey({ columns: [table.projectId, table.userId] }),
-}));
+export const projectMembers = pgTable(
+  "project_members",
+  {
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: projectRoleEnum("role").notNull().default("member"),
+    canEdit: boolean("can_edit").notNull().default(true), // false = read-only
+    joinedAt: timestamp("joined_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.projectId, table.userId] }),
+  })
+);
 ```
 
 ### Branches Table
 
 ```typescript
 // packages/app/src/db/schema/branches.ts
-import { pgTable, uuid, text, timestamp, boolean } from 'drizzle-orm/pg-core';
-import { projects } from './projects';
-import { users } from './users';
+import { pgTable, uuid, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { projects } from "./projects";
+import { users } from "./users";
 
-export const branches = pgTable('branches', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  
+export const branches = pgTable("branches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+
   // Branch metadata
-  name: text('name').notNull(),           // e.g., "main", "feature-new-part", "john-wip"
-  description: text('description'),        // Optional description of what this branch is for
-  isMain: boolean('is_main').notNull().default(false), // Only one branch per project can be main
-  
+  name: text("name").notNull(), // e.g., "main", "feature-new-part", "john-wip"
+  description: text("description"), // Optional description of what this branch is for
+  isMain: boolean("is_main").notNull().default(false), // Only one branch per project can be main
+
   // Fork point - which branch this was created from (null for main)
-  parentBranchId: uuid('parent_branch_id').references(() => branches.id),
-  forkedAt: timestamp('forked_at'),        // When this branch was created from parent
-  
+  parentBranchId: uuid("parent_branch_id").references(() => branches.id),
+  forkedAt: timestamp("forked_at"), // When this branch was created from parent
+
   // Ownership
-  createdBy: uuid('created_by').notNull().references(() => users.id),
-  ownerId: uuid('owner_id').notNull().references(() => users.id), // Who "owns" this branch
-  
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id), // Who "owns" this branch
+
   // Timestamps
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+
   // Merge status
-  mergedAt: timestamp('merged_at'),        // When this branch was merged back
-  mergedBy: uuid('merged_by').references(() => users.id),
-  mergedIntoBranchId: uuid('merged_into_branch_id').references(() => branches.id),
+  mergedAt: timestamp("merged_at"), // When this branch was merged back
+  mergedBy: uuid("merged_by").references(() => users.id),
+  mergedIntoBranchId: uuid("merged_into_branch_id").references(() => branches.id),
 });
 
 // Indexes
@@ -259,24 +287,30 @@ export const branches = pgTable('branches', {
 
 ```typescript
 // packages/app/src/db/schema/folders.ts
-import { pgTable, uuid, text, timestamp, integer } from 'drizzle-orm/pg-core';
-import { projects } from './projects';
-import { branches } from './branches';
-import { users } from './users';
+import { pgTable, uuid, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { projects } from "./projects";
+import { branches } from "./branches";
+import { users } from "./users";
 
-export const folders = pgTable('folders', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  
+export const folders = pgTable("folders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
   // Denormalized: both project_id and branch_id for easy filtering
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  branchId: uuid('branch_id').notNull().references(() => branches.id, { onDelete: 'cascade' }),
-  
-  parentId: uuid('parent_id').references(() => folders.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  sortOrder: integer('sort_order').notNull().default(0),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdBy: uuid('created_by').notNull().references(() => users.id),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+
+  parentId: uuid("parent_id").references(() => folders.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
 });
 
 // Indexes for Electric sync filtering
@@ -289,50 +323,56 @@ export const folders = pgTable('folders', {
 
 ```typescript
 // packages/app/src/db/schema/documents.ts
-import { pgTable, uuid, text, timestamp, integer, pgEnum, boolean } from 'drizzle-orm/pg-core';
-import { projects } from './projects';
-import { branches } from './branches';
-import { folders } from './folders';
-import { users } from './users';
+import { pgTable, uuid, text, timestamp, integer, pgEnum, boolean } from "drizzle-orm/pg-core";
+import { projects } from "./projects";
+import { branches } from "./branches";
+import { folders } from "./folders";
+import { users } from "./users";
 
-export const documentTypeEnum = pgEnum('document_type', [
-  'part',      // CAD part (current focus)
-  'assembly',  // Future: assembly of parts
-  'drawing',   // Future: 2D drawings
-  'sketch',    // Future: standalone sketch
-  'file',      // Future: attached files
-  'notes',     // Future: rich text notes
+export const documentTypeEnum = pgEnum("document_type", [
+  "part", // CAD part (current focus)
+  "assembly", // Future: assembly of parts
+  "drawing", // Future: 2D drawings
+  "sketch", // Future: standalone sketch
+  "file", // Future: attached files
+  "notes", // Future: rich text notes
 ]);
 
-export const documents = pgTable('documents', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  
+export const documents = pgTable("documents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
   // Denormalized: both project_id and branch_id for easy filtering
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  branchId: uuid('branch_id').notNull().references(() => branches.id, { onDelete: 'cascade' }),
-  
-  folderId: uuid('folder_id').references(() => folders.id, { onDelete: 'set null' }),
-  name: text('name').notNull(),
-  type: documentTypeEnum('type').notNull().default('part'),
-  
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id")
+    .notNull()
+    .references(() => branches.id, { onDelete: "cascade" }),
+
+  folderId: uuid("folder_id").references(() => folders.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  type: documentTypeEnum("type").notNull().default("part"),
+
   // Durable Stream reference for Yjs document
   // Denormalized: includes project_id, document_id, and branch_id for easy identification
   // Format: "project/{projectId}/doc/{documentId}/branch/{branchId}"
-  durableStreamId: text('durable_stream_id'),
-  
+  durableStreamId: text("durable_stream_id"),
+
   // For branching: soft delete flag (restored on merge if edited in branch)
-  isDeleted: boolean('is_deleted').notNull().default(false),
-  deletedAt: timestamp('deleted_at'),
-  deletedBy: uuid('deleted_by').references(() => users.id),
-  
+  isDeleted: boolean("is_deleted").notNull().default(false),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: uuid("deleted_by").references(() => users.id),
+
   // Metadata for quick display (without loading full Yjs doc)
-  featureCount: integer('feature_count').default(0),
-  lastEditedBy: uuid('last_edited_by').references(() => users.id),
-  
-  sortOrder: integer('sort_order').notNull().default(0),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  createdBy: uuid('created_by').notNull().references(() => users.id),
+  featureCount: integer("feature_count").default(0),
+  lastEditedBy: uuid("last_edited_by").references(() => users.id),
+
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
 });
 
 // Indexes for Electric sync filtering
@@ -351,8 +391,8 @@ better-auth supports multiple database backends. We use the **Postgres adapter**
 
 ```typescript
 // packages/app/src/lib/auth.ts
-import { betterAuth } from 'better-auth';
-import { Pool } from 'pg';
+import { betterAuth } from "better-auth";
+import { Pool } from "pg";
 
 // Use the same Postgres connection as the rest of the app
 const pool = new Pool({
@@ -387,13 +427,13 @@ If you prefer to use your Drizzle instance (for consistency with the rest of the
 
 ```typescript
 // packages/app/src/lib/auth.ts
-import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { db } from './db';
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { db } from "./db";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
-    provider: 'pg',
+    provider: "pg",
   }),
   emailAndPassword: {
     enabled: true,
@@ -421,7 +461,7 @@ export const auth = betterAuth({
 
 ```typescript
 // packages/app/src/lib/auth-client.ts
-import { createAuthClient } from 'better-auth/react';
+import { createAuthClient } from "better-auth/react";
 
 export const authClient = createAuthClient({
   baseURL: import.meta.env.VITE_API_URL,
@@ -437,6 +477,7 @@ export const { useSession, signIn, signUp, signOut } = authClient;
 ### Electric Authorization Proxy
 
 **All Electric shape requests are proxied through our API** for authentication. The server:
+
 1. Authenticates the user via session cookie
 2. Verifies the user has access to the requested project/branch
 3. Constructs the WHERE clause server-side with proper authorization
@@ -448,26 +489,26 @@ This prevents clients from constructing arbitrary WHERE clauses to access data t
 
 We use semantic, resource-oriented URLs that represent the data, not the underlying technology:
 
-| Resource | URL | Description |
-|----------|-----|-------------|
-| Project branches | `GET /api/projects/:projectId/sync` | Electric shape stream for branches |
-| Branch content | `GET /api/projects/:projectId/branches/:branchId/sync` | Electric shape stream for docs & folders |
-| Document stream | `GET/POST /api/docs/:docId/stream` | Durable stream for Yjs doc |
-| Awareness stream | `GET/POST /api/docs/:docId/awareness` | Durable stream for presence |
+| Resource         | URL                                                    | Description                              |
+| ---------------- | ------------------------------------------------------ | ---------------------------------------- |
+| Project branches | `GET /api/projects/:projectId/sync`                    | Electric shape stream for branches       |
+| Branch content   | `GET /api/projects/:projectId/branches/:branchId/sync` | Electric shape stream for docs & folders |
+| Document stream  | `GET/POST /api/docs/:docId/stream`                     | Durable stream for Yjs doc               |
+| Awareness stream | `GET/POST /api/docs/:docId/awareness`                  | Durable stream for presence              |
 
 ### Server-Side Shape Proxy
 
 ```typescript
 // packages/app/src/routes/api/projects/[projectId]/sync.ts
-import { createAPIFileRoute } from '@tanstack/start/api';
-import { requireAuth } from '../../../../lib/auth-middleware';
+import { createAPIFileRoute } from "@tanstack/start/api";
+import { requireAuth } from "../../../../lib/auth-middleware";
 
 // GET /api/projects/:projectId/sync - Stream project branches
-export const Route = createAPIFileRoute('/api/projects/$projectId/sync')({
+export const Route = createAPIFileRoute("/api/projects/$projectId/sync")({
   GET: async ({ request, params }) => {
     const session = await requireAuth(request);
     const { projectId } = params;
-    
+
     // Verify user has access to this project via subquery in WHERE
     const whereClause = `
       project_id = '${projectId}'
@@ -476,36 +517,36 @@ export const Route = createAPIFileRoute('/api/projects/$projectId/sync')({
         WHERE user_id = '${session.user.id}'
       )
     `;
-    
-    return proxyToElectric(request, 'branches', whereClause);
+
+    return proxyToElectric(request, "branches", whereClause);
   },
 });
 ```
 
 ```typescript
 // packages/app/src/routes/api/projects/[projectId]/branches/[branchId]/sync.ts
-import { createAPIFileRoute } from '@tanstack/start/api';
-import { requireAuth } from '../../../../../../lib/auth-middleware';
+import { createAPIFileRoute } from "@tanstack/start/api";
+import { requireAuth } from "../../../../../../lib/auth-middleware";
 
 // GET /api/projects/:projectId/branches/:branchId/sync - Stream branch documents & folders
-export const Route = createAPIFileRoute('/api/projects/$projectId/branches/$branchId/sync')({
+export const Route = createAPIFileRoute("/api/projects/$projectId/branches/$branchId/sync")({
   GET: async ({ request, params }) => {
     const session = await requireAuth(request);
     const { projectId, branchId } = params;
     const url = new URL(request.url);
-    const table = url.searchParams.get('table') || 'documents'; // 'documents' or 'folders'
-    
+    const table = url.searchParams.get("table") || "documents"; // 'documents' or 'folders'
+
     // Verify access via subquery
     const whereClause = `
       branch_id = '${branchId}'
       AND project_id = '${projectId}'
-      ${table === 'documents' ? 'AND is_deleted = false' : ''}
+      ${table === "documents" ? "AND is_deleted = false" : ""}
       AND project_id IN (
         SELECT project_id FROM project_members 
         WHERE user_id = '${session.user.id}'
       )
     `;
-    
+
     return proxyToElectric(request, table, whereClause);
   },
 });
@@ -519,27 +560,27 @@ export async function proxyToElectric(
   whereClause: string
 ): Promise<Response> {
   const url = new URL(request.url);
-  
-  const electricUrl = new URL('/v1/shape', process.env.ELECTRIC_URL);
-  electricUrl.searchParams.set('table', table);
-  electricUrl.searchParams.set('where', whereClause);
-  
+
+  const electricUrl = new URL("/v1/shape", process.env.ELECTRIC_URL);
+  electricUrl.searchParams.set("table", table);
+  electricUrl.searchParams.set("where", whereClause);
+
   // Forward Electric-specific params (offset, live, handle, etc.)
   for (const [key, value] of url.searchParams) {
-    if (!['table'].includes(key)) {
+    if (!["table"].includes(key)) {
       electricUrl.searchParams.set(key, value);
     }
   }
-  
+
   const response = await fetch(electricUrl.toString(), {
-    headers: { 'Accept': request.headers.get('Accept') || 'application/json' },
+    headers: { Accept: request.headers.get("Accept") || "application/json" },
   });
-  
+
   return new Response(response.body, {
     status: response.status,
     headers: {
-      'Content-Type': response.headers.get('Content-Type') || 'application/json',
-      'Cache-Control': response.headers.get('Cache-Control') || 'no-cache',
+      "Content-Type": response.headers.get("Content-Type") || "application/json",
+      "Cache-Control": response.headers.get("Cache-Control") || "no-cache",
     },
   });
 }
@@ -549,7 +590,7 @@ export async function proxyToElectric(
 
 ```typescript
 // packages/app/src/lib/electric.ts
-import { ShapeStream, Shape } from '@electric-sql/client';
+import { ShapeStream, Shape } from "@electric-sql/client";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -561,13 +602,13 @@ export const createProjectBranchesShape = (projectId: string) => ({
 // GET /api/projects/:projectId/branches/:branchId/sync?table=documents
 export const createBranchDocumentsShape = (projectId: string, branchId: string) => ({
   url: new URL(`/api/projects/${projectId}/branches/${branchId}/sync`, API_BASE),
-  params: { table: 'documents' },
+  params: { table: "documents" },
 });
 
 // GET /api/projects/:projectId/branches/:branchId/sync?table=folders
 export const createBranchFoldersShape = (projectId: string, branchId: string) => ({
   url: new URL(`/api/projects/${projectId}/branches/${branchId}/sync`, API_BASE),
-  params: { table: 'folders' },
+  params: { table: "folders" },
 });
 ```
 
@@ -585,29 +626,29 @@ When a user opens a project:
 
 ```typescript
 // packages/app/src/hooks/useBranchSync.ts
-import { useElectricQuery } from '@tanstack/db-react';
-import { 
-  createBranchDocumentsShape, 
+import { useElectricQuery } from "@tanstack/db-react";
+import {
+  createBranchDocumentsShape,
   createBranchFoldersShape,
-  createProjectBranchesShape 
-} from '../lib/electric';
+  createProjectBranchesShape,
+} from "../lib/electric";
 
 export function useBranchSync(projectId: string, branchId: string) {
   // GET /api/projects/:projectId/sync - branches for project
   const branches = useElectricQuery({
     shape: createProjectBranchesShape(projectId),
   });
-  
+
   // GET /api/projects/:projectId/branches/:branchId/sync?table=documents
   const documents = useElectricQuery({
     shape: createBranchDocumentsShape(projectId, branchId),
   });
-  
+
   // GET /api/projects/:projectId/branches/:branchId/sync?table=folders
   const folders = useElectricQuery({
     shape: createBranchFoldersShape(projectId, branchId),
   });
-  
+
   return { branches, documents, folders };
 }
 ```
@@ -620,18 +661,18 @@ export function useBranchSync(projectId: string, branchId: string) {
 
 ```typescript
 // packages/app/src/lib/tanstack-db.ts
-import { createDB } from '@tanstack/db';
-import { createElectricCollection } from '@tanstack/db-electric';
-import { documentsSchema, foldersSchema } from './schemas';
+import { createDB } from "@tanstack/db";
+import { createElectricCollection } from "@tanstack/db-electric";
+import { documentsSchema, foldersSchema } from "./schemas";
 
 export const db = createDB({
   collections: {
     documents: createElectricCollection({
-      name: 'documents',
+      name: "documents",
       schema: documentsSchema,
     }),
     folders: createElectricCollection({
-      name: 'folders', 
+      name: "folders",
       schema: foldersSchema,
     }),
   },
@@ -642,15 +683,15 @@ export const db = createDB({
 
 ```typescript
 // packages/app/src/hooks/useDocuments.ts
-import { db } from '../lib/tanstack-db';
+import { db } from "../lib/tanstack-db";
 
 export function useDocuments(projectId: string) {
   // Live query - automatically updates when data changes
   const documents = db.documents.useQuery({
     where: { projectId },
-    orderBy: { sortOrder: 'asc' },
+    orderBy: { sortOrder: "asc" },
   });
-  
+
   // Optimistic mutation - updates locally immediately
   const createDocument = async (data: CreateDocumentInput) => {
     const doc = await db.documents.insert({
@@ -662,18 +703,18 @@ export function useDocuments(projectId: string) {
     });
     return doc;
   };
-  
+
   const updateDocument = async (id: string, data: UpdateDocumentInput) => {
     await db.documents.update({
       where: { id },
       data: { ...data, updatedAt: new Date() },
     });
   };
-  
+
   const deleteDocument = async (id: string) => {
     await db.documents.delete({ where: { id } });
   };
-  
+
   return { documents, createDocument, updateDocument, deleteDocument };
 }
 ```
@@ -684,13 +725,13 @@ export function useDocuments(projectId: string) {
 
 ### Why Durable Streams for Yjs?
 
-| Requirement | ElectricSQL | Durable Streams |
-|-------------|-------------|-----------------|
-| Structured metadata | ✅ Great fit | ❌ Not designed for this |
-| Yjs binary updates | ❌ Not suited | ✅ Perfect fit |
-| Append-only log | ❌ Row-based | ✅ Native concept |
-| Resume from offset | ❌ Polling | ✅ Built-in |
-| Presence/awareness | ❌ No | ✅ Via separate stream |
+| Requirement         | ElectricSQL   | Durable Streams          |
+| ------------------- | ------------- | ------------------------ |
+| Structured metadata | ✅ Great fit  | ❌ Not designed for this |
+| Yjs binary updates  | ❌ Not suited | ✅ Perfect fit           |
+| Append-only log     | ❌ Row-based  | ✅ Native concept        |
+| Resume from offset  | ❌ Polling    | ✅ Built-in              |
+| Presence/awareness  | ❌ No         | ✅ Via separate stream   |
 
 ### Durable Stream Per Document Per Branch
 
@@ -704,6 +745,7 @@ Stream paths are denormalized with `projectId`, `documentId`, and `branchId` for
 ```
 
 This denormalized path structure enables:
+
 - **Easy access control**: Check project permissions before allowing stream access
 - **Simple identification**: Stream path tells you exactly what it contains
 - **Consistent naming**: Same pattern as document table's durableStreamId field
@@ -713,6 +755,7 @@ When a branch is created, the Yjs stream is "forked" - the current state from th
 ### Durable Streams Authorization Proxy
 
 **All Durable Streams requests are proxied through our API** for authentication. The server:
+
 1. Authenticates the user via session cookie
 2. Verifies the user has access to the project
 3. Checks write permissions for POST requests
@@ -720,29 +763,29 @@ When a branch is created, the Yjs stream is "forked" - the current state from th
 
 ```typescript
 // packages/app/src/routes/api/docs/[docId]/stream.ts
-import { createAPIFileRoute } from '@tanstack/start/api';
-import { requireAuth } from '../../../../lib/auth-middleware';
-import { verifyDocumentAccess } from '../../../../lib/permissions';
+import { createAPIFileRoute } from "@tanstack/start/api";
+import { requireAuth } from "../../../../lib/auth-middleware";
+import { verifyDocumentAccess } from "../../../../lib/permissions";
 
 // GET/POST /api/docs/:docId/stream - Yjs document stream
-export const Route = createAPIFileRoute('/api/docs/$docId/stream')({
+export const Route = createAPIFileRoute("/api/docs/$docId/stream")({
   ALL: async ({ request, params }) => {
     const session = await requireAuth(request);
     const { docId } = params;
-    
+
     // Verify user has access to the document's project
-    // verifyDocumentAccess looks up the doc, finds its project, 
+    // verifyDocumentAccess looks up the doc, finds its project,
     // and checks project_members for this user
     const access = await verifyDocumentAccess(session.user.id, docId);
     if (!access) {
-      return new Response('Forbidden', { status: 403 });
+      return new Response("Forbidden", { status: 403 });
     }
-    
+
     // Check write permissions for POST
-    if (request.method === 'POST' && !access.canEdit) {
-      return new Response('Read-only access', { status: 403 });
+    if (request.method === "POST" && !access.canEdit) {
+      return new Response("Read-only access", { status: 403 });
     }
-    
+
     // Map to internal durable stream path (docId is globally unique)
     return proxyToDurableStream(request, `docs/${docId}`);
   },
@@ -751,21 +794,21 @@ export const Route = createAPIFileRoute('/api/docs/$docId/stream')({
 
 ```typescript
 // packages/app/src/routes/api/docs/[docId]/awareness.ts
-import { createAPIFileRoute } from '@tanstack/start/api';
-import { requireAuth } from '../../../../lib/auth-middleware';
-import { verifyDocumentAccess } from '../../../../lib/permissions';
+import { createAPIFileRoute } from "@tanstack/start/api";
+import { requireAuth } from "../../../../lib/auth-middleware";
+import { verifyDocumentAccess } from "../../../../lib/permissions";
 
 // GET/POST /api/docs/:docId/awareness - presence stream
-export const Route = createAPIFileRoute('/api/docs/$docId/awareness')({
+export const Route = createAPIFileRoute("/api/docs/$docId/awareness")({
   ALL: async ({ request, params }) => {
     const session = await requireAuth(request);
     const { docId } = params;
-    
+
     const access = await verifyDocumentAccess(session.user.id, docId);
     if (!access) {
-      return new Response('Forbidden', { status: 403 });
+      return new Response("Forbidden", { status: 403 });
     }
-    
+
     // Awareness is always writable if user has any access
     return proxyToDurableStream(request, `docs/${docId}/awareness`);
   },
@@ -779,30 +822,30 @@ export async function proxyToDurableStream(
   streamPath: string
 ): Promise<Response> {
   const url = new URL(request.url);
-  
+
   const durableUrl = new URL(`/v1/stream/${streamPath}`, process.env.DURABLE_STREAMS_URL);
-  
+
   // Forward query params (offset, live, etc.)
   for (const [key, value] of url.searchParams) {
     durableUrl.searchParams.set(key, value);
   }
-  
+
   const response = await fetch(durableUrl.toString(), {
     method: request.method,
     headers: {
-      'Content-Type': request.headers.get('Content-Type') || 'application/octet-stream',
-      'Accept': request.headers.get('Accept') || '*/*',
+      "Content-Type": request.headers.get("Content-Type") || "application/octet-stream",
+      Accept: request.headers.get("Accept") || "*/*",
     },
-    body: request.method === 'POST' ? request.body : undefined,
+    body: request.method === "POST" ? request.body : undefined,
     // @ts-expect-error duplex is needed for streaming request bodies
-    duplex: 'half',
+    duplex: "half",
   });
-  
+
   return new Response(response.body, {
     status: response.status,
     headers: {
-      'Content-Type': response.headers.get('Content-Type') || 'application/octet-stream',
-      'Cache-Control': response.headers.get('Cache-Control') || 'no-cache',
+      "Content-Type": response.headers.get("Content-Type") || "application/octet-stream",
+      "Cache-Control": response.headers.get("Cache-Control") || "no-cache",
     },
   });
 }
@@ -812,9 +855,9 @@ export async function proxyToDurableStream(
 
 ```typescript
 // packages/app/src/lib/yjs-sync.ts
-import * as Y from 'yjs';
-import { Awareness } from 'y-protocols/awareness';
-import { DurableStreamProvider, DurableStreamAwarenessProvider } from './vendor/y-durable-streams';
+import * as Y from "yjs";
+import { Awareness } from "y-protocols/awareness";
+import { DurableStreamProvider, DurableStreamAwarenessProvider } from "./vendor/y-durable-streams";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -822,11 +865,11 @@ export function createDocumentSync(documentId: string, doc: Y.Doc) {
   // Simple URLs - auth and project lookup happen server-side
   const streamUrl = `${API_BASE}/api/docs/${documentId}/stream`;
   const awarenessUrl = `${API_BASE}/api/docs/${documentId}/awareness`;
-  
+
   const docProvider = new DurableStreamProvider(streamUrl, doc);
   const awareness = new Awareness(doc);
   const awarenessProvider = new DurableStreamAwarenessProvider(awarenessUrl, awareness);
-  
+
   return {
     doc,
     awareness,
@@ -855,8 +898,8 @@ There's a planned `y-durable-streams` package (see [PR #81](https://github.com/d
 // Vendored from https://github.com/durable-streams/durable-streams/pull/81
 // TODO: Replace with @durable-streams/y-durable-streams when released
 
-export { DurableStreamProvider } from './provider';
-export { DurableStreamAwarenessProvider } from './awareness';
+export { DurableStreamProvider } from "./provider";
+export { DurableStreamAwarenessProvider } from "./awareness";
 ```
 
 ### Provider Implementation (Vendored)
@@ -865,57 +908,58 @@ The vendored provider wraps `@durable-streams/client` with Yjs-specific logic:
 
 ```typescript
 // packages/app/src/lib/vendor/y-durable-streams/provider.ts
-import * as Y from 'yjs';
-import { DurableStreamHandle } from '@durable-streams/client';
+import * as Y from "yjs";
+import { DurableStreamHandle } from "@durable-streams/client";
 
 export class DurableStreamProvider {
   private handle: DurableStreamHandle;
   private doc: Y.Doc;
-  private offset: string = '-1';
+  private offset: string = "-1";
   private abortController: AbortController | null = null;
   private connected: boolean = false;
-  
+
   constructor(url: string, doc: Y.Doc) {
     this.doc = doc;
     this.handle = new DurableStreamHandle({ url });
   }
-  
+
   async connect() {
     if (this.connected) return;
     this.connected = true;
     this.abortController = new AbortController();
-    
+
     // Load existing document state and subscribe to live updates
     const response = await this.handle.stream({
-      offset: '-1',
-      live: 'auto',
+      offset: "-1",
+      live: "auto",
       signal: this.abortController.signal,
     });
-    
+
     // Apply incoming updates
     response.subscribeJson(async (batch) => {
       for (const item of batch.items) {
-        const update = typeof item === 'string' 
-          ? Uint8Array.from(atob(item), c => c.charCodeAt(0))
-          : new Uint8Array(item);
+        const update =
+          typeof item === "string"
+            ? Uint8Array.from(atob(item), (c) => c.charCodeAt(0))
+            : new Uint8Array(item);
         Y.applyUpdate(this.doc, update, this);
       }
       this.offset = batch.offset;
     });
-    
+
     // Publish local changes
-    this.doc.on('update', this.handleUpdate);
+    this.doc.on("update", this.handleUpdate);
   }
-  
+
   private handleUpdate = async (update: Uint8Array, origin: unknown) => {
     if (origin !== this && this.connected) {
       await this.handle.append(update);
     }
   };
-  
+
   disconnect() {
     this.connected = false;
-    this.doc.off('update', this.handleUpdate);
+    this.doc.off("update", this.handleUpdate);
     this.abortController?.abort();
     this.abortController = null;
   }
@@ -924,46 +968,51 @@ export class DurableStreamProvider {
 
 ```typescript
 // packages/app/src/lib/vendor/y-durable-streams/awareness.ts
-import { Awareness, encodeAwarenessUpdate, applyAwarenessUpdate } from 'y-protocols/awareness';
-import { DurableStreamHandle } from '@durable-streams/client';
+import { Awareness, encodeAwarenessUpdate, applyAwarenessUpdate } from "y-protocols/awareness";
+import { DurableStreamHandle } from "@durable-streams/client";
 
 export class DurableStreamAwarenessProvider {
   private handle: DurableStreamHandle;
   private awareness: Awareness;
   private abortController: AbortController | null = null;
   private connected: boolean = false;
-  
+
   constructor(url: string, awareness: Awareness) {
     this.awareness = awareness;
     this.handle = new DurableStreamHandle({ url });
   }
-  
+
   async connect() {
     if (this.connected) return;
     this.connected = true;
     this.abortController = new AbortController();
-    
+
     // Stream awareness updates
     const response = await this.handle.stream({
-      offset: '-1',
-      live: 'sse',
+      offset: "-1",
+      live: "sse",
       signal: this.abortController.signal,
     });
-    
+
     response.subscribeJson(async (batch) => {
       for (const item of batch.items) {
-        const update = typeof item === 'string'
-          ? Uint8Array.from(atob(item), c => c.charCodeAt(0))
-          : new Uint8Array(item);
+        const update =
+          typeof item === "string"
+            ? Uint8Array.from(atob(item), (c) => c.charCodeAt(0))
+            : new Uint8Array(item);
         applyAwarenessUpdate(this.awareness, update, this);
       }
     });
-    
+
     // Publish local awareness changes
-    this.awareness.on('update', this.handleUpdate);
+    this.awareness.on("update", this.handleUpdate);
   }
-  
-  private handleUpdate = async ({ added, updated, removed }: {
+
+  private handleUpdate = async ({
+    added,
+    updated,
+    removed,
+  }: {
     added: number[];
     updated: number[];
     removed: number[];
@@ -975,10 +1024,10 @@ export class DurableStreamAwarenessProvider {
       await this.handle.append(update);
     }
   };
-  
+
   disconnect() {
     this.connected = false;
-    this.awareness.off('update', this.handleUpdate);
+    this.awareness.off("update", this.handleUpdate);
     this.abortController?.abort();
     this.abortController = null;
   }
@@ -991,13 +1040,18 @@ When `@durable-streams/y-durable-streams` (or similar) is released:
 
 1. Install the official package: `pnpm add @durable-streams/y-durable-streams`
 2. Update imports in `yjs-sync.ts`:
+
    ```typescript
    // Replace vendored import:
    // import { DurableStreamProvider, DurableStreamAwarenessProvider } from './vendor/y-durable-streams';
-   
+
    // With official package:
-   import { DurableStreamProvider, DurableStreamAwarenessProvider } from '@durable-streams/y-durable-streams';
+   import {
+     DurableStreamProvider,
+     DurableStreamAwarenessProvider,
+   } from "@durable-streams/y-durable-streams";
    ```
+
 3. Delete the vendored directory: `packages/app/src/lib/vendor/y-durable-streams/`
 4. Test that everything still works
 
@@ -1009,16 +1063,17 @@ Branching allows users to work on isolated copies of a project and later merge t
 
 ### Branch Concepts
 
-| Concept | Description |
-|---------|-------------|
-| **Main branch** | The default branch for every project, named "main" |
+| Concept            | Description                                                      |
+| ------------------ | ---------------------------------------------------------------- |
+| **Main branch**    | The default branch for every project, named "main"               |
 | **Feature branch** | A branch created from main (or another branch) for isolated work |
-| **Fork point** | The moment a branch was created; used for merge calculations |
-| **Merge** | Combining a branch's changes back into another branch |
+| **Fork point**     | The moment a branch was created; used for merge calculations     |
+| **Merge**          | Combining a branch's changes back into another branch            |
 
 ### Branch Data Model
 
 Each branch has:
+
 - **name**: Short identifier (e.g., "main", "johns-experiment", "feature-fillet")
 - **description**: Optional explanation of the branch's purpose
 - **owner**: The user who owns/maintains this branch
@@ -1046,8 +1101,8 @@ When a user creates a branch:
 
 ```typescript
 // packages/app/src/lib/branching.ts
-import * as Y from 'yjs';
-import { DurableStreamHandle } from '@durable-streams/client';
+import * as Y from "yjs";
+import { DurableStreamHandle } from "@durable-streams/client";
 
 export async function createBranch(
   projectId: string,
@@ -1056,20 +1111,22 @@ export async function createBranch(
   description?: string
 ): Promise<Branch> {
   // 1. Create branch record
-  const branch = await db.insert(branches).values({
-    projectId,
-    parentBranchId,
-    name: branchName,
-    description,
-    forkedAt: new Date(),
-    createdBy: session.user.id,
-    ownerId: session.user.id,
-  }).returning();
-  
+  const branch = await db
+    .insert(branches)
+    .values({
+      projectId,
+      parentBranchId,
+      name: branchName,
+      description,
+      forkedAt: new Date(),
+      createdBy: session.user.id,
+      ownerId: session.user.id,
+    })
+    .returning();
+
   // 2. Copy folders and documents to new branch
-  const parentFolders = await db.select().from(folders)
-    .where(eq(folders.branchId, parentBranchId));
-  
+  const parentFolders = await db.select().from(folders).where(eq(folders.branchId, parentBranchId));
+
   for (const folder of parentFolders) {
     await db.insert(folders).values({
       ...folder,
@@ -1077,54 +1134,60 @@ export async function createBranch(
       branchId: branch.id,
     });
   }
-  
-  const parentDocs = await db.select().from(documents)
+
+  const parentDocs = await db
+    .select()
+    .from(documents)
     .where(eq(documents.branchId, parentBranchId));
-  
+
   for (const doc of parentDocs) {
     // Create new document record for this branch
-    const newDoc = await db.insert(documents).values({
-      ...doc,
-      id: doc.id, // Keep same document ID for merge tracking
-      branchId: branch.id,
-      durableStreamId: `project/${projectId}/doc/${doc.id}/branch/${branch.id}`,
-    }).returning();
-    
+    const newDoc = await db
+      .insert(documents)
+      .values({
+        ...doc,
+        id: doc.id, // Keep same document ID for merge tracking
+        branchId: branch.id,
+        durableStreamId: `project/${projectId}/doc/${doc.id}/branch/${branch.id}`,
+      })
+      .returning();
+
     // 3. Fork the Yjs stream - copy current state
     await forkDurableStream(
       `project/${projectId}/doc/${doc.id}/branch/${parentBranchId}`,
       `project/${projectId}/doc/${doc.id}/branch/${branch.id}`
     );
   }
-  
+
   return branch;
 }
 
 async function forkDurableStream(sourceStreamId: string, targetStreamId: string) {
   const DURABLE_STREAMS_URL = process.env.DURABLE_STREAMS_URL!;
-  
+
   // Read full state from source stream
-  const sourceHandle = new DurableStreamHandle({ 
-    url: `${DURABLE_STREAMS_URL}/v1/stream/${sourceStreamId}` 
+  const sourceHandle = new DurableStreamHandle({
+    url: `${DURABLE_STREAMS_URL}/v1/stream/${sourceStreamId}`,
   });
-  
+
   // Get full Yjs state by replaying all updates
   const doc = new Y.Doc();
-  const res = await sourceHandle.stream({ offset: '-1', live: false });
+  const res = await sourceHandle.stream({ offset: "-1", live: false });
   const items = await res.json();
-  
+
   for (const item of items) {
-    const update = typeof item === 'string'
-      ? Uint8Array.from(atob(item), c => c.charCodeAt(0))
-      : new Uint8Array(item);
+    const update =
+      typeof item === "string"
+        ? Uint8Array.from(atob(item), (c) => c.charCodeAt(0))
+        : new Uint8Array(item);
     Y.applyUpdate(doc, update);
   }
-  
+
   // Create new stream and write full state as first entry
   const targetHandle = new DurableStreamHandle({
     url: `${DURABLE_STREAMS_URL}/v1/stream/${targetStreamId}`,
   });
-  
+
   // Write full document state as initial entry
   const fullState = Y.encodeStateAsUpdate(doc);
   await targetHandle.append(fullState);
@@ -1138,6 +1201,7 @@ Merging uses Yjs's built-in CRDT merge capabilities. The key insight is that Yjs
 **Merge Strategy: "Edit Wins"**
 
 When merging branch A into branch B:
+
 - Documents edited in A are brought into B with their A state
 - Documents deleted in B but edited in A are **restored** (edit wins over delete)
 - Documents deleted in both are deleted
@@ -1151,87 +1215,97 @@ export async function mergeBranch(
   sourceBranchId: string,
   targetBranchId: string
 ): Promise<MergeResult> {
-  const sourceBranch = await db.select().from(branches)
-    .where(eq(branches.id, sourceBranchId)).limit(1);
-  
+  const sourceBranch = await db
+    .select()
+    .from(branches)
+    .where(eq(branches.id, sourceBranchId))
+    .limit(1);
+
   const sourceDocsMap = new Map(
-    (await db.select().from(documents).where(eq(documents.branchId, sourceBranchId)))
-      .map(d => [d.id, d])
+    (await db.select().from(documents).where(eq(documents.branchId, sourceBranchId))).map((d) => [
+      d.id,
+      d,
+    ])
   );
-  
+
   const targetDocsMap = new Map(
-    (await db.select().from(documents).where(eq(documents.branchId, targetBranchId)))
-      .map(d => [d.id, d])
+    (await db.select().from(documents).where(eq(documents.branchId, targetBranchId))).map((d) => [
+      d.id,
+      d,
+    ])
   );
-  
+
   const mergeResults: MergeDocResult[] = [];
-  
+
   // Process each document in source branch
   for (const [docId, sourceDoc] of sourceDocsMap) {
     const targetDoc = targetDocsMap.get(docId);
-    
+
     if (!targetDoc) {
       // Document created in source branch - add to target
       await copyDocumentToBranch(sourceDoc, targetBranchId);
-      mergeResults.push({ docId, action: 'created' });
+      mergeResults.push({ docId, action: "created" });
     } else if (targetDoc.isDeleted && !sourceDoc.isDeleted) {
       // Deleted in target but exists in source - RESTORE (edit wins)
       await restoreDocument(targetDoc.id, targetBranchId);
       await mergeYjsDocument(sourceDoc.durableStreamId!, targetDoc.durableStreamId!);
-      mergeResults.push({ docId, action: 'restored' });
+      mergeResults.push({ docId, action: "restored" });
     } else if (!sourceDoc.isDeleted) {
       // Both exist - merge Yjs states
       await mergeYjsDocument(sourceDoc.durableStreamId!, targetDoc.durableStreamId!);
-      mergeResults.push({ docId, action: 'merged' });
+      mergeResults.push({ docId, action: "merged" });
     }
   }
-  
+
   // Mark source branch as merged
-  await db.update(branches)
+  await db
+    .update(branches)
     .set({
       mergedAt: new Date(),
       mergedBy: session.user.id,
       mergedIntoBranchId: targetBranchId,
     })
     .where(eq(branches.id, sourceBranchId));
-  
+
   return { branch: sourceBranch, results: mergeResults };
 }
 
 async function mergeYjsDocument(sourceStreamId: string, targetStreamId: string) {
   const DURABLE_STREAMS_URL = process.env.DURABLE_STREAMS_URL!;
-  
+
   // Load source document state
   const sourceDoc = new Y.Doc();
-  const sourceHandle = new DurableStreamHandle({ 
-    url: `${DURABLE_STREAMS_URL}/v1/stream/${sourceStreamId}` 
+  const sourceHandle = new DurableStreamHandle({
+    url: `${DURABLE_STREAMS_URL}/v1/stream/${sourceStreamId}`,
   });
-  const sourceRes = await sourceHandle.stream({ offset: '-1', live: false });
+  const sourceRes = await sourceHandle.stream({ offset: "-1", live: false });
   const sourceItems = await sourceRes.json();
   for (const item of sourceItems) {
-    const update = typeof item === 'string'
-      ? Uint8Array.from(atob(item), c => c.charCodeAt(0))
-      : new Uint8Array(item);
+    const update =
+      typeof item === "string"
+        ? Uint8Array.from(atob(item), (c) => c.charCodeAt(0))
+        : new Uint8Array(item);
     Y.applyUpdate(sourceDoc, update);
   }
-  
+
   // Load target document state
   const targetDoc = new Y.Doc();
-  const targetHandle = new DurableStreamHandle({ 
-    url: `${DURABLE_STREAMS_URL}/v1/stream/${targetStreamId}` 
+  const targetHandle = new DurableStreamHandle({
+    url: `${DURABLE_STREAMS_URL}/v1/stream/${targetStreamId}`,
   });
-  const targetRes = await targetHandle.stream({ offset: '-1', live: false });
+  const targetRes = await targetHandle.stream({ offset: "-1", live: false });
   const targetItems = await targetRes.json();
   for (const item of targetItems) {
-    const update = typeof item === 'string'
-      ? Uint8Array.from(atob(item), c => c.charCodeAt(0))
-      : new Uint8Array(item);
+    const update =
+      typeof item === "string"
+        ? Uint8Array.from(atob(item), (c) => c.charCodeAt(0))
+        : new Uint8Array(item);
     Y.applyUpdate(targetDoc, update);
   }
-  
+
   // Compute the diff: changes in source that target doesn't have
   const diff = Y.encodeStateAsUpdate(sourceDoc, Y.encodeStateVector(targetDoc));
-  
+
   // Append the diff to target stream (if there are changes)
   if (diff.length > 0) {
     await targetHandle.append(diff);
@@ -1257,16 +1331,16 @@ The UI should show:
 // packages/app/src/components/BranchSelector.tsx
 export function BranchSelector({ projectId, currentBranchId }: Props) {
   const branches = useBranches(projectId);
-  const currentBranch = branches.find(b => b.id === currentBranchId);
-  
+  const currentBranch = branches.find((b) => b.id === currentBranchId);
+
   return (
     <Select value={currentBranchId} onValueChange={switchBranch}>
       <SelectTrigger>
         <BranchIcon />
-        <span>{currentBranch?.name ?? 'main'}</span>
+        <span>{currentBranch?.name ?? "main"}</span>
       </SelectTrigger>
       <SelectContent>
-        {branches.map(branch => (
+        {branches.map((branch) => (
           <SelectItem key={branch.id} value={branch.id}>
             <span>{branch.name}</span>
             {branch.isMain && <Badge>main</Badge>}
@@ -1299,15 +1373,15 @@ interface UserAwarenessState {
   user: {
     id: string;
     name: string;
-    color: string;  // Assigned color for cursor/highlights
+    color: string; // Assigned color for cursor/highlights
   };
-  
+
   // Current location in the app
   location: {
     documentId: string | null;
     branchId: string;
   };
-  
+
   // 3D Viewer state (when in document)
   viewer?: {
     // Camera position and orientation
@@ -1316,21 +1390,21 @@ interface UserAwarenessState {
     cameraUp: [number, number, number];
     zoom: number;
   };
-  
+
   // Selection state
   selection?: {
     featureIds: string[];
     faceRefs: string[];
     edgeRefs: string[];
   };
-  
+
   // Sketch state (when in sketch mode)
   sketch?: {
     sketchId: string;
-    cursorPosition: [number, number];  // 2D sketch coordinates
+    cursorPosition: [number, number]; // 2D sketch coordinates
     activeToolId: string | null;
   };
-  
+
   // Timestamp for staleness detection
   lastUpdated: number;
 }
@@ -1340,22 +1414,22 @@ interface UserAwarenessState {
 
 ```typescript
 // packages/app/src/lib/awareness-provider.ts
-import * as Y from 'yjs';
-import { Awareness } from 'y-protocols/awareness';
-import { DurableStreamAwarenessProvider } from './vendor/y-durable-streams';
+import * as Y from "yjs";
+import { Awareness } from "y-protocols/awareness";
+import { DurableStreamAwarenessProvider } from "./vendor/y-durable-streams";
 
 export class SolidTypeAwareness {
   private awareness: Awareness;
   private provider: DurableStreamAwarenessProvider;
   private localState: UserAwarenessState;
-  
+
   constructor(doc: Y.Doc, documentId: string, branchId: string, user: User) {
     this.awareness = new Awareness(doc);
-    
+
     // Simple URL - server handles auth and project lookup
     const awarenessUrl = `${import.meta.env.VITE_API_URL}/api/docs/${documentId}/awareness`;
     this.provider = new DurableStreamAwarenessProvider(awarenessUrl, this.awareness);
-    
+
     // Set initial local state
     this.localState = {
       user: {
@@ -1369,12 +1443,12 @@ export class SolidTypeAwareness {
       },
       lastUpdated: Date.now(),
     };
-    
+
     this.awareness.setLocalState(this.localState);
   }
-  
+
   // Update viewer state (called on camera change)
-  updateViewerState(viewer: UserAwarenessState['viewer']) {
+  updateViewerState(viewer: UserAwarenessState["viewer"]) {
     this.localState = {
       ...this.localState,
       viewer,
@@ -1382,9 +1456,9 @@ export class SolidTypeAwareness {
     };
     this.awareness.setLocalState(this.localState);
   }
-  
+
   // Update selection state
-  updateSelection(selection: UserAwarenessState['selection']) {
+  updateSelection(selection: UserAwarenessState["selection"]) {
     this.localState = {
       ...this.localState,
       selection,
@@ -1392,9 +1466,9 @@ export class SolidTypeAwareness {
     };
     this.awareness.setLocalState(this.localState);
   }
-  
+
   // Update sketch cursor
-  updateSketchCursor(sketch: UserAwarenessState['sketch']) {
+  updateSketchCursor(sketch: UserAwarenessState["sketch"]) {
     this.localState = {
       ...this.localState,
       sketch,
@@ -1402,7 +1476,7 @@ export class SolidTypeAwareness {
     };
     this.awareness.setLocalState(this.localState);
   }
-  
+
   // Get all connected users
   getConnectedUsers(): UserAwarenessState[] {
     const states: UserAwarenessState[] = [];
@@ -1413,10 +1487,10 @@ export class SolidTypeAwareness {
     });
     return states;
   }
-  
+
   // Subscribe to awareness changes
   onUsersChange(callback: (users: UserAwarenessState[]) => void) {
-    this.awareness.on('change', () => {
+    this.awareness.on("change", () => {
       callback(this.getConnectedUsers());
     });
   }
@@ -1427,44 +1501,44 @@ export class SolidTypeAwareness {
 
 ```typescript
 // packages/app/src/hooks/useFollowing.ts
-import { useState, useEffect, useCallback } from 'react';
-import { useAwareness } from '../contexts/AwarenessContext';
-import { useViewer } from '../contexts/ViewerContext';
+import { useState, useEffect, useCallback } from "react";
+import { useAwareness } from "../contexts/AwarenessContext";
+import { useViewer } from "../contexts/ViewerContext";
 
 export function useFollowing() {
   const awareness = useAwareness();
   const viewer = useViewer();
   const [followingUserId, setFollowingUserId] = useState<string | null>(null);
   const [connectedUsers, setConnectedUsers] = useState<UserAwarenessState[]>([]);
-  
+
   // Update connected users list
   useEffect(() => {
     if (!awareness) return;
-    
+
     const updateUsers = () => {
       setConnectedUsers(awareness.getConnectedUsers());
     };
-    
+
     awareness.onUsersChange(updateUsers);
     updateUsers();
   }, [awareness]);
-  
+
   // Follow a user - sync camera to their view
   const followUser = useCallback((userId: string) => {
     setFollowingUserId(userId);
   }, []);
-  
+
   const stopFollowing = useCallback(() => {
     setFollowingUserId(null);
   }, []);
-  
+
   // Apply followed user's camera state
   useEffect(() => {
     if (!followingUserId || !viewer) return;
-    
-    const followedUser = connectedUsers.find(u => u.user.id === followingUserId);
+
+    const followedUser = connectedUsers.find((u) => u.user.id === followingUserId);
     if (!followedUser?.viewer) return;
-    
+
     // Smoothly animate camera to followed user's position
     viewer.animateCameraTo({
       position: followedUser.viewer.cameraPosition,
@@ -1473,24 +1547,24 @@ export function useFollowing() {
       duration: 300,
     });
   }, [followingUserId, connectedUsers, viewer]);
-  
+
   // Stop following if user moves camera manually
   useEffect(() => {
     if (!followingUserId || !viewer) return;
-    
+
     const handleUserInteraction = () => {
       // Only stop if user actively moved camera
       if (viewer.isUserInteracting) {
         stopFollowing();
       }
     };
-    
-    viewer.controls.addEventListener('change', handleUserInteraction);
+
+    viewer.controls.addEventListener("change", handleUserInteraction);
     return () => {
-      viewer.controls.removeEventListener('change', handleUserInteraction);
+      viewer.controls.removeEventListener("change", handleUserInteraction);
     };
   }, [followingUserId, viewer, stopFollowing]);
-  
+
   return {
     connectedUsers,
     followingUserId,
@@ -1507,27 +1581,20 @@ export function useFollowing() {
 // packages/app/src/components/UserPresence.tsx
 export function UserPresence() {
   const { connectedUsers, followingUserId, followUser, stopFollowing } = useFollowing();
-  
+
   return (
     <div className="user-presence">
-      {connectedUsers.map(user => (
+      {connectedUsers.map((user) => (
         <Tooltip key={user.user.id} content={user.user.name}>
           <button
-            className={cn(
-              'user-avatar',
-              followingUserId === user.user.id && 'following'
-            )}
+            className={cn("user-avatar", followingUserId === user.user.id && "following")}
             style={{ borderColor: user.user.color }}
-            onClick={() => 
-              followingUserId === user.user.id 
-                ? stopFollowing() 
-                : followUser(user.user.id)
+            onClick={() =>
+              followingUserId === user.user.id ? stopFollowing() : followUser(user.user.id)
             }
           >
             <Avatar fallback={user.user.name[0]} />
-            {followingUserId === user.user.id && (
-              <EyeIcon className="following-indicator" />
-            )}
+            {followingUserId === user.user.id && <EyeIcon className="following-indicator" />}
           </button>
         </Tooltip>
       ))}
@@ -1542,15 +1609,15 @@ Show other users' cursors and selections in the viewer:
 
 ```tsx
 // packages/app/src/components/UserCursors3D.tsx
-import { useFollowing } from '../hooks/useFollowing';
-import { Html } from '@react-three/drei';
+import { useFollowing } from "../hooks/useFollowing";
+import { Html } from "@react-three/drei";
 
 export function UserCursors3D() {
   const { connectedUsers } = useFollowing();
-  
+
   return (
     <>
-      {connectedUsers.map(user => (
+      {connectedUsers.map((user) => (
         <group key={user.user.id}>
           {/* Show user's camera position as a small indicator */}
           {user.viewer && (
@@ -1559,23 +1626,15 @@ export function UserCursors3D() {
               distanceFactor={10}
               className="user-camera-indicator"
             >
-              <div 
-                className="user-marker"
-                style={{ backgroundColor: user.user.color }}
-              >
+              <div className="user-marker" style={{ backgroundColor: user.user.color }}>
                 <span>{user.user.name}</span>
               </div>
             </Html>
           )}
-          
+
           {/* Highlight user's selected faces/edges */}
-          {user.selection?.faceRefs.map(ref => (
-            <FaceHighlight 
-              key={ref} 
-              faceRef={ref} 
-              color={user.user.color} 
-              opacity={0.3}
-            />
+          {user.selection?.faceRefs.map((ref) => (
+            <FaceHighlight key={ref} faceRef={ref} color={user.user.color} opacity={0.3} />
           ))}
         </group>
       ))}
@@ -1593,29 +1652,19 @@ In sketch mode, show other users' 2D cursors:
 export function SketchCursors() {
   const { connectedUsers } = useFollowing();
   const { sketchId } = useSketchContext();
-  
+
   // Filter to users in the same sketch
-  const usersInSketch = connectedUsers.filter(
-    u => u.sketch?.sketchId === sketchId
-  );
-  
+  const usersInSketch = connectedUsers.filter((u) => u.sketch?.sketchId === sketchId);
+
   return (
     <svg className="sketch-cursors-overlay">
-      {usersInSketch.map(user => (
-        <g 
+      {usersInSketch.map((user) => (
+        <g
           key={user.user.id}
           transform={`translate(${user.sketch!.cursorPosition[0]}, ${user.sketch!.cursorPosition[1]})`}
         >
-          <circle 
-            r="4" 
-            fill={user.user.color} 
-          />
-          <text 
-            x="8" 
-            y="4" 
-            fill={user.user.color}
-            fontSize="12"
-          >
+          <circle r="4" fill={user.user.color} />
+          <text x="8" y="4" fill={user.user.color} fontSize="12">
             {user.user.name}
           </text>
         </g>
@@ -1633,10 +1682,10 @@ export function SketchCursors() {
 
 ```typescript
 // packages/app/src/routes/api/auth/[...auth].ts
-import { createAPIFileRoute } from '@tanstack/start/api';
-import { auth } from '../../../lib/auth';
+import { createAPIFileRoute } from "@tanstack/start/api";
+import { auth } from "../../../lib/auth";
 
-export const Route = createAPIFileRoute('/api/auth/$')({
+export const Route = createAPIFileRoute("/api/auth/$")({
   GET: async ({ request }) => {
     return auth.handler(request);
   },
@@ -1650,32 +1699,29 @@ export const Route = createAPIFileRoute('/api/auth/$')({
 
 ```typescript
 // packages/app/src/routes/api/workspaces.ts
-import { createAPIFileRoute } from '@tanstack/start/api';
-import { db } from '../../lib/db';
-import { workspaces, workspaceMembers } from '../../db/schema';
-import { requireAuth } from '../../lib/auth-middleware';
+import { createAPIFileRoute } from "@tanstack/start/api";
+import { db } from "../../lib/db";
+import { workspaces, workspaceMembers } from "../../db/schema";
+import { requireAuth } from "../../lib/auth-middleware";
 
-export const Route = createAPIFileRoute('/api/workspaces')({
+export const Route = createAPIFileRoute("/api/workspaces")({
   GET: async ({ request }) => {
     const session = await requireAuth(request);
-    
+
     // Get workspaces user is a member of
     const userWorkspaces = await db
       .select()
       .from(workspaces)
-      .innerJoin(
-        workspaceMembers,
-        eq(workspaces.id, workspaceMembers.workspaceId)
-      )
+      .innerJoin(workspaceMembers, eq(workspaces.id, workspaceMembers.workspaceId))
       .where(eq(workspaceMembers.userId, session.user.id));
-    
+
     return Response.json(userWorkspaces);
   },
-  
+
   POST: async ({ request }) => {
     const session = await requireAuth(request);
     const body = await request.json();
-    
+
     // Create workspace and add creator as owner
     const [workspace] = await db.transaction(async (tx) => {
       const [ws] = await tx
@@ -1686,16 +1732,16 @@ export const Route = createAPIFileRoute('/api/workspaces')({
           createdBy: session.user.id,
         })
         .returning();
-      
+
       await tx.insert(workspaceMembers).values({
         workspaceId: ws.id,
         userId: session.user.id,
-        role: 'owner',
+        role: "owner",
       });
-      
+
       return [ws];
     });
-    
+
     return Response.json(workspace, { status: 201 });
   },
 });
@@ -1705,41 +1751,38 @@ export const Route = createAPIFileRoute('/api/workspaces')({
 
 ```typescript
 // packages/app/src/routes/api/workspaces/[workspaceId]/projects.ts
-import { createAPIFileRoute } from '@tanstack/start/api';
-import { db } from '../../../../lib/db';
-import { projects, projectMembers } from '../../../../db/schema';
-import { requireWorkspaceMember } from '../../../../lib/auth-middleware';
+import { createAPIFileRoute } from "@tanstack/start/api";
+import { db } from "../../../../lib/db";
+import { projects, projectMembers } from "../../../../db/schema";
+import { requireWorkspaceMember } from "../../../../lib/auth-middleware";
 
-export const Route = createAPIFileRoute('/api/workspaces/$workspaceId/projects')({
+export const Route = createAPIFileRoute("/api/workspaces/$workspaceId/projects")({
   GET: async ({ request, params }) => {
     const session = await requireWorkspaceMember(request, params.workspaceId);
-    
+
     // Get projects user has access to in this workspace
     const userProjects = await db
       .select()
       .from(projects)
-      .leftJoin(
-        projectMembers,
-        eq(projects.id, projectMembers.projectId)
-      )
+      .leftJoin(projectMembers, eq(projects.id, projectMembers.projectId))
       .where(
         and(
           eq(projects.workspaceId, params.workspaceId),
           or(
-            eq(projectMembers.userId, session.user.id),
+            eq(projectMembers.userId, session.user.id)
             // Workspace admins/owners see all projects
             // ... additional access logic
           )
         )
       );
-    
+
     return Response.json(userProjects);
   },
-  
+
   POST: async ({ request, params }) => {
     const session = await requireWorkspaceMember(request, params.workspaceId);
     const body = await request.json();
-    
+
     const [project] = await db.transaction(async (tx) => {
       const [proj] = await tx
         .insert(projects)
@@ -1749,18 +1792,18 @@ export const Route = createAPIFileRoute('/api/workspaces/$workspaceId/projects')
           createdBy: session.user.id,
         })
         .returning();
-      
+
       // Creator is project owner
       await tx.insert(projectMembers).values({
         projectId: proj.id,
         userId: session.user.id,
-        role: 'owner',
+        role: "owner",
         canEdit: true,
       });
-      
+
       return [proj];
     });
-    
+
     return Response.json(project, { status: 201 });
   },
 });
@@ -1770,44 +1813,43 @@ export const Route = createAPIFileRoute('/api/workspaces/$workspaceId/projects')
 
 ```typescript
 // packages/app/src/lib/server-functions.ts
-import { createServerFn } from '@tanstack/start';
-import { db } from './db';
-import { documents } from '../db/schema';
+import { createServerFn } from "@tanstack/start";
+import { db } from "./db";
+import { documents } from "../db/schema";
 
 // Server function for creating a document with Durable Stream
-export const createDocument = createServerFn('POST', async (input: {
-  projectId: string;
-  name: string;
-  type: 'part' | 'assembly' | 'drawing';
-}) => {
-  const session = await getSession();
-  if (!session) throw new Error('Unauthorized');
-  
-  // Verify project access
-  const hasAccess = await verifyProjectAccess(session.user.id, input.projectId);
-  if (!hasAccess) throw new Error('Forbidden');
-  
-  const documentId = crypto.randomUUID();
-  
-  // Create the Durable Stream for this document
-  const durableStreamId = `doc/${documentId}`;
-  await createDurableStream(durableStreamId);
-  
-  // Create document record
-  const [doc] = await db
-    .insert(documents)
-    .values({
-      id: documentId,
-      projectId: input.projectId,
-      name: input.name,
-      type: input.type,
-      durableStreamId,
-      createdBy: session.user.id,
-    })
-    .returning();
-  
-  return doc;
-});
+export const createDocument = createServerFn(
+  "POST",
+  async (input: { projectId: string; name: string; type: "part" | "assembly" | "drawing" }) => {
+    const session = await getSession();
+    if (!session) throw new Error("Unauthorized");
+
+    // Verify project access
+    const hasAccess = await verifyProjectAccess(session.user.id, input.projectId);
+    if (!hasAccess) throw new Error("Forbidden");
+
+    const documentId = crypto.randomUUID();
+
+    // Create the Durable Stream for this document
+    const durableStreamId = `doc/${documentId}`;
+    await createDurableStream(durableStreamId);
+
+    // Create document record
+    const [doc] = await db
+      .insert(documents)
+      .values({
+        id: documentId,
+        projectId: input.projectId,
+        name: input.name,
+        type: input.type,
+        durableStreamId,
+        createdBy: session.user.id,
+      })
+      .returning();
+
+    return doc;
+  }
+);
 ```
 
 ---
@@ -1834,34 +1876,51 @@ Project Level:
 ```typescript
 // packages/app/src/lib/permissions.ts
 
-export type Permission = 
-  | 'workspace:read'
-  | 'workspace:write'
-  | 'workspace:delete'
-  | 'workspace:manage_members'
-  | 'project:read'
-  | 'project:write'
-  | 'project:delete'
-  | 'project:manage_members'
-  | 'document:read'
-  | 'document:write'
-  | 'document:delete';
+export type Permission =
+  | "workspace:read"
+  | "workspace:write"
+  | "workspace:delete"
+  | "workspace:manage_members"
+  | "project:read"
+  | "project:write"
+  | "project:delete"
+  | "project:manage_members"
+  | "document:read"
+  | "document:write"
+  | "document:delete";
 
 const workspacePermissions: Record<WorkspaceRole, Permission[]> = {
-  owner: ['workspace:read', 'workspace:write', 'workspace:delete', 'workspace:manage_members'],
-  admin: ['workspace:read', 'workspace:write', 'workspace:manage_members'],
-  member: ['workspace:read'],
+  owner: ["workspace:read", "workspace:write", "workspace:delete", "workspace:manage_members"],
+  admin: ["workspace:read", "workspace:write", "workspace:manage_members"],
+  member: ["workspace:read"],
 };
 
 const projectPermissions: Record<ProjectRole, (canEdit: boolean) => Permission[]> = {
-  owner: () => ['project:read', 'project:write', 'project:delete', 'project:manage_members', 'document:read', 'document:write', 'document:delete'],
-  admin: () => ['project:read', 'project:write', 'project:manage_members', 'document:read', 'document:write', 'document:delete'],
-  member: (canEdit) => canEdit 
-    ? ['project:read', 'document:read', 'document:write']
-    : ['project:read', 'document:read'],
-  guest: (canEdit) => canEdit
-    ? ['project:read', 'document:read', 'document:write']
-    : ['project:read', 'document:read'],
+  owner: () => [
+    "project:read",
+    "project:write",
+    "project:delete",
+    "project:manage_members",
+    "document:read",
+    "document:write",
+    "document:delete",
+  ],
+  admin: () => [
+    "project:read",
+    "project:write",
+    "project:manage_members",
+    "document:read",
+    "document:write",
+    "document:delete",
+  ],
+  member: (canEdit) =>
+    canEdit
+      ? ["project:read", "document:read", "document:write"]
+      : ["project:read", "document:read"],
+  guest: (canEdit) =>
+    canEdit
+      ? ["project:read", "document:read", "document:write"]
+      : ["project:read", "document:read"],
 };
 
 export async function checkPermission(
@@ -1883,19 +1942,16 @@ export async function verifyDocumentAccess(
     where: eq(documents.id, documentId),
     columns: { projectId: true },
   });
-  
+
   if (!doc) return null;
-  
+
   // Check project membership
   const membership = await db.query.projectMembers.findFirst({
-    where: and(
-      eq(projectMembers.projectId, doc.projectId),
-      eq(projectMembers.userId, userId)
-    ),
+    where: and(eq(projectMembers.projectId, doc.projectId), eq(projectMembers.userId, userId)),
   });
-  
+
   if (!membership) return null;
-  
+
   return { canEdit: membership.canEdit };
 }
 
@@ -1905,14 +1961,11 @@ export async function verifyProjectAccess(
   projectId: string
 ): Promise<{ canEdit: boolean; role: string } | null> {
   const membership = await db.query.projectMembers.findFirst({
-    where: and(
-      eq(projectMembers.projectId, projectId),
-      eq(projectMembers.userId, userId)
-    ),
+    where: and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)),
   });
-  
+
   if (!membership) return null;
-  
+
   return { canEdit: membership.canEdit, role: membership.role };
 }
 ```
@@ -1946,7 +1999,7 @@ USING (
 ### docker-compose.yml
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
@@ -1970,7 +2023,7 @@ services:
     environment:
       DATABASE_URL: postgresql://solidtype:${POSTGRES_PASSWORD}@postgres:5432/solidtype
       ELECTRIC_WRITE_TO_PG_MODE: direct_writes
-      AUTH_MODE: insecure  # Configure properly for production
+      AUTH_MODE: insecure # Configure properly for production
     ports:
       - "3000:3000"
     depends_on:
@@ -2000,10 +2053,10 @@ We run `@durable-streams/server` as a simple Node.js service with file-based sto
 
 ```typescript
 // services/durable-streams/server.ts
-import { DurableStreamTestServer } from '@durable-streams/server';
+import { DurableStreamTestServer } from "@durable-streams/server";
 
-const port = parseInt(process.env.PORT || '4437');
-const host = process.env.HOST || '0.0.0.0';
+const port = parseInt(process.env.PORT || "4437");
+const host = process.env.HOST || "0.0.0.0";
 
 const server = new DurableStreamTestServer({
   port,
@@ -2080,11 +2133,11 @@ Or use the test server programmatically in your dev setup:
 
 ```typescript
 // packages/app/scripts/dev-streams.ts
-import { DurableStreamTestServer } from '@durable-streams/server';
+import { DurableStreamTestServer } from "@durable-streams/server";
 
 const server = new DurableStreamTestServer({
   port: 4437,
-  host: '127.0.0.1',
+  host: "127.0.0.1",
 });
 
 await server.start();
@@ -2184,6 +2237,7 @@ User                    App                  Durable Stream      Other Client
 6. Add login/signup UI pages
 
 **Deliverables:**
+
 - [ ] Docker compose with Postgres running
 - [ ] All schema tables created
 - [ ] Auth flow working (email/password)
@@ -2198,6 +2252,7 @@ User                    App                  Durable Stream      Other Client
 5. Set up permission checking
 
 **Deliverables:**
+
 - [ ] Create/list/update/delete workspaces
 - [ ] Create/list/update/delete projects
 - [ ] Invite users to workspaces/projects
@@ -2212,6 +2267,7 @@ User                    App                  Durable Stream      Other Client
 5. Add optimistic mutations
 
 **Deliverables:**
+
 - [ ] Electric syncing documents/folders
 - [ ] Real-time updates across clients
 - [ ] Offline-capable document list
@@ -2225,6 +2281,7 @@ User                    App                  Durable Stream      Other Client
 5. Handle reconnection and offline queue
 
 **Deliverables:**
+
 - [ ] Yjs documents persisted to Durable Streams
 - [ ] Multi-user real-time editing works
 - [ ] Presence indicators show active users
@@ -2240,6 +2297,7 @@ User                    App                  Durable Stream      Other Client
 6. Handle merge conflicts and UI feedback
 
 **Deliverables:**
+
 - [ ] Create branch from main or other branch
 - [ ] Switch between branches
 - [ ] Merge branch into target with edit-wins strategy
@@ -2257,6 +2315,7 @@ User                    App                  Durable Stream      Other Client
 7. Add smooth camera animation when following
 
 **Deliverables:**
+
 - [ ] See other users' avatars when in same document
 - [ ] Click user avatar to follow their view
 - [ ] Camera smoothly tracks followed user
@@ -2273,6 +2332,7 @@ User                    App                  Durable Stream      Other Client
 5. Performance optimization for large projects
 
 **Deliverables:**
+
 - [ ] Full end-to-end workflow working
 - [ ] Create document → edit → save → share
 - [ ] Multi-user collaboration tested
@@ -2299,6 +2359,7 @@ The current app uses a single local Yjs document. Migration steps:
 ### Preserving Local-Only Mode
 
 Keep a "local mode" for:
+
 - Demo/playground without account
 - Offline-first new documents
 - Export/import for data portability
@@ -2310,46 +2371,46 @@ Keep a "local mode" for:
 ### Unit Tests
 
 ```typescript
-describe('Permissions', () => {
-  test('workspace owner has all permissions', () => {
+describe("Permissions", () => {
+  test("workspace owner has all permissions", () => {
     // ...
   });
-  
-  test('project guest cannot edit documents', () => {
+
+  test("project guest cannot edit documents", () => {
     // ...
   });
 });
 
-describe('Electric Sync', () => {
-  test('documents shape filters by branch_id', () => {
+describe("Electric Sync", () => {
+  test("documents shape filters by branch_id", () => {
     // ...
   });
 });
 
-describe('Durable Streams', () => {
-  test('Yjs updates are persisted', () => {
+describe("Durable Streams", () => {
+  test("Yjs updates are persisted", () => {
     // ...
   });
-  
-  test('reconnection resumes from last offset', () => {
+
+  test("reconnection resumes from last offset", () => {
     // ...
   });
 });
 
-describe('Branching', () => {
-  test('createBranch copies all documents to new branch', () => {
+describe("Branching", () => {
+  test("createBranch copies all documents to new branch", () => {
     // ...
   });
-  
-  test('createBranch forks Yjs streams correctly', () => {
+
+  test("createBranch forks Yjs streams correctly", () => {
     // ...
   });
-  
-  test('mergeBranch applies source changes to target', () => {
+
+  test("mergeBranch applies source changes to target", () => {
     // ...
   });
-  
-  test('mergeBranch restores deleted docs that were edited (edit wins)', () => {
+
+  test("mergeBranch restores deleted docs that were edited (edit wins)", () => {
     // 1. Create doc in main
     // 2. Branch to feature
     // 3. Delete doc in main
@@ -2357,22 +2418,22 @@ describe('Branching', () => {
     // 5. Merge feature → main
     // 6. Doc should be restored with feature edits
   });
-  
-  test('mergeBranch handles concurrent Yjs edits', () => {
+
+  test("mergeBranch handles concurrent Yjs edits", () => {
     // Yjs CRDT merge should work correctly
   });
 });
 
-describe('Following', () => {
-  test('awareness state includes user info', () => {
+describe("Following", () => {
+  test("awareness state includes user info", () => {
     // ...
   });
-  
-  test('following user updates camera position', () => {
+
+  test("following user updates camera position", () => {
     // ...
   });
-  
-  test('user interaction stops following', () => {
+
+  test("user interaction stops following", () => {
     // ...
   });
 });
@@ -2419,6 +2480,7 @@ See the [Electric Shapes section](#electric-authorization-proxy) for implementat
 ### 2. Durable Streams Server Scaling
 
 We use `@durable-streams/server` with file-based storage for simplicity. For production:
+
 - **File storage** - Simple, works well for moderate scale
 - **Shared storage** - For horizontal scaling, would need shared filesystem (NFS, EFS)
 - **Custom backend** - Could implement database-backed storage for better scaling
@@ -2428,6 +2490,7 @@ We use `@durable-streams/server` with file-based storage for simplicity. For pro
 ### 3. Large Document Handling
 
 For documents with many features:
+
 - **Lazy loading** - load Yjs incrementally?
 - **Pagination** - not really applicable to Yjs
 - **Compression** - Yjs supports encoding
@@ -2437,11 +2500,13 @@ For documents with many features:
 ### 4. Branch Merge Conflicts
 
 When merging, Yjs handles most conflicts automatically (CRDT), but CAD-specific issues remain:
+
 - **Broken references** - if a feature references another feature that was deleted on one branch
 - **Impossible geometry** - concurrent edits could create invalid models
 - **Parameter conflicts** - same parameter changed to different values
 
-**Current thinking:** 
+**Current thinking:**
+
 - Trust Yjs for merge; let the CAD kernel fail gracefully on rebuild
 - Show clear error messages when merged model has issues
 - Future: pre-merge validation that warns about potential conflicts
@@ -2449,6 +2514,7 @@ When merging, Yjs handles most conflicts automatically (CRDT), but CAD-specific 
 ### 5. Branch Cleanup
 
 What happens to old branches?
+
 - **Keep forever** - simple but clutters the list
 - **Auto-archive after merge** - hide but don't delete
 - **Manual delete** - user must explicitly clean up
@@ -2459,6 +2525,7 @@ What happens to old branches?
 ### 6. Long-Running Branches
 
 If a branch lives for weeks, main may diverge significantly:
+
 - **Rebase** - complex with Yjs (would need to replay edits)
 - **Merge main into branch periodically** - keeps branch up-to-date
 - **Conflict preview** - show what would conflict before merge

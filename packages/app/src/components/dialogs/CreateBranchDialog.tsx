@@ -1,26 +1,26 @@
 /**
  * Create Branch Dialog
- * 
+ *
  * Dialog for creating a new branch from an existing branch.
  * Copies all documents and folders from the parent branch.
  */
 
-import React, { useState, useEffect } from 'react';
-import { useForm } from '@tanstack/react-form';
-import { Dialog } from '@base-ui/react/dialog';
-import { Select } from '@base-ui/react/select';
-import { LuChevronDown } from 'react-icons/lu';
-import { useSession } from '../../lib/auth-client';
-import { createBranchWithContentMutation } from '../../lib/server-functions';
-import { useLiveQuery, eq, createCollection, liveQueryCollectionOptions } from '@tanstack/react-db';
-import { branchesCollection } from '../../lib/electric-collections';
-import { z } from 'zod';
-import './CreateDialog.css';
+import React, { useState, useEffect } from "react";
+import { useForm } from "@tanstack/react-form";
+import { Dialog } from "@base-ui/react/dialog";
+import { Select } from "@base-ui/react/select";
+import { LuChevronDown } from "react-icons/lu";
+import { useSession } from "../../lib/auth-client";
+import { createBranchWithContentMutation } from "../../lib/server-functions";
+import { useLiveQuery, eq, createCollection, liveQueryCollectionOptions } from "@tanstack/react-db";
+import { branchesCollection } from "../../lib/electric-collections";
+import { z } from "zod";
+import "./CreateDialog.css";
 
 const branchSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
-  description: z.string().max(500, 'Description must be less than 500 characters').optional(),
-  parentBranchId: z.string().uuid('Parent branch is required'),
+  name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
+  description: z.string().max(500, "Description must be less than 500 characters").optional(),
+  parentBranchId: z.string().uuid("Parent branch is required"),
 });
 
 interface CreateBranchDialogProps {
@@ -49,8 +49,8 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
           q
             .from({ branches: branchesCollection })
             .where(({ branches: b }) => eq(b.project_id, projectId))
-            .orderBy(({ branches: b }) => b.is_main, 'desc')
-            .orderBy(({ branches: b }) => b.created_at, 'desc'),
+            .orderBy(({ branches: b }) => b.is_main, "desc")
+            .orderBy(({ branches: b }) => b.created_at, "desc"),
       })
     );
     return projectBranchesCollection;
@@ -58,13 +58,13 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
 
   const form = useForm({
     defaultValues: {
-      name: '',
-      description: '',
-      parentBranchId: parentBranchId || '',
+      name: "",
+      description: "",
+      parentBranchId: parentBranchId || "",
     },
     onSubmit: async ({ value }) => {
       if (!session?.user?.id) {
-        console.error('User not authenticated');
+        console.error("User not authenticated");
         return;
       }
 
@@ -83,7 +83,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
         onOpenChange(false);
         onSuccess?.(result.data.branch.id);
       } catch (error) {
-        console.error('Failed to create branch:', error);
+        console.error("Failed to create branch:", error);
         // TODO: Show error toast/message
       } finally {
         setIsSubmitting(false);
@@ -94,17 +94,17 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
   // Update parent branch when prop changes
   useEffect(() => {
     if (open && parentBranchId) {
-      form.setFieldValue('parentBranchId', parentBranchId);
+      form.setFieldValue("parentBranchId", parentBranchId);
     }
   }, [open, parentBranchId]);
 
   // Reset form when dialog opens
   useEffect(() => {
     if (open) {
-      form.setFieldValue('name', '');
-      form.setFieldValue('description', '');
+      form.setFieldValue("name", "");
+      form.setFieldValue("description", "");
       if (parentBranchId) {
-        form.setFieldValue('parentBranchId', parentBranchId);
+        form.setFieldValue("parentBranchId", parentBranchId);
       }
     }
   }, [open]);
@@ -142,7 +142,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
                   </label>
                   <Select.Root
                     value={field.state.value}
-                    onValueChange={(value) => field.handleChange(value || '')}
+                    onValueChange={(value) => field.handleChange(value || "")}
                     disabled={isSubmitting}
                   >
                     <Select.Trigger
@@ -150,7 +150,8 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
                       className="create-dialog-select-trigger"
                       aria-label="Select parent branch"
                     >
-                      {allBranches?.find((b) => b.id === field.state.value)?.name || 'Select branch...'}
+                      {allBranches?.find((b) => b.id === field.state.value)?.name ||
+                        "Select branch..."}
                       <LuChevronDown size={12} />
                     </Select.Trigger>
                     <Select.Portal>
@@ -163,7 +164,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
                                 value={branch.id}
                                 className="create-dialog-select-option"
                               >
-                                {branch.name} {branch.is_main ? '(main)' : ''}
+                                {branch.name} {branch.is_main ? "(main)" : ""}
                               </Select.Item>
                             ))
                           ) : (
@@ -176,9 +177,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
                     </Select.Portal>
                   </Select.Root>
                   {field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
-                    <div className="create-dialog-error">
-                      {field.state.meta.errors.join(', ')}
-                    </div>
+                    <div className="create-dialog-error">{field.state.meta.errors.join(", ")}</div>
                   )}
                 </div>
               )}
@@ -208,9 +207,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
                     disabled={isSubmitting}
                   />
                   {field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
-                    <div className="create-dialog-error">
-                      {field.state.meta.errors.join(', ')}
-                    </div>
+                    <div className="create-dialog-error">{field.state.meta.errors.join(", ")}</div>
                   )}
                 </div>
               )}
@@ -255,7 +252,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
                     className="create-dialog-button create-dialog-button-submit"
                     disabled={!canSubmit || isSubmitting}
                   >
-                    {isSubmitting ? 'Creating...' : 'Create Branch'}
+                    {isSubmitting ? "Creating..." : "Create Branch"}
                   </button>
                 </div>
               )}

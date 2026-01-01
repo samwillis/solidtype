@@ -2,24 +2,19 @@
  * Tests for 2D curve evaluators
  */
 
-import { describe, it, expect } from 'vitest';
-import type { Line2D, Arc2D } from './curve2d.js';
-import {
-  evalCurve2D,
-  curveTangent2D,
-  curveLength2D,
-  closestPointOnCurve2D,
-} from './curve2d.js';
-import { vec2, length2 } from '../num/vec2.js';
-import { createNumericContext } from '../num/tolerance.js';
+import { describe, it, expect } from "vitest";
+import type { Line2D, Arc2D } from "./curve2d.js";
+import { evalCurve2D, curveTangent2D, curveLength2D, closestPointOnCurve2D } from "./curve2d.js";
+import { vec2, length2 } from "../num/vec2.js";
+import { createNumericContext } from "../num/tolerance.js";
 
-describe('curve2d', () => {
+describe(`curve2d`, () => {
   const ctx = createNumericContext();
 
-  describe('evalCurve2D', () => {
-    it('evaluates line at endpoints', () => {
+  describe(`evalCurve2D`, () => {
+    it(`evaluates line at endpoints`, () => {
       const line: Line2D = {
-        kind: 'line',
+        kind: `line`,
         p0: vec2(0, 0),
         p1: vec2(10, 5),
       };
@@ -33,9 +28,9 @@ describe('curve2d', () => {
       expect(p1[1]).toBeCloseTo(5, 10);
     });
 
-    it('evaluates line at midpoint', () => {
+    it(`evaluates line at midpoint`, () => {
       const line: Line2D = {
-        kind: 'line',
+        kind: `line`,
         p0: vec2(0, 0),
         p1: vec2(10, 0),
       };
@@ -45,9 +40,9 @@ describe('curve2d', () => {
       expect(mid[1]).toBeCloseTo(0, 10);
     });
 
-    it('evaluates arc at start and end', () => {
+    it(`evaluates arc at start and end`, () => {
       const arc: Arc2D = {
-        kind: 'arc',
+        kind: `arc`,
         center: vec2(0, 0),
         radius: 5,
         startAngle: 0,
@@ -64,9 +59,9 @@ describe('curve2d', () => {
       expect(end[1]).toBeCloseTo(5, 10);
     });
 
-    it('evaluates arc at midpoint', () => {
+    it(`evaluates arc at midpoint`, () => {
       const arc: Arc2D = {
-        kind: 'arc',
+        kind: `arc`,
         center: vec2(0, 0),
         radius: 5,
         startAngle: 0,
@@ -81,10 +76,10 @@ describe('curve2d', () => {
     });
   });
 
-  describe('curveTangent2D', () => {
-    it('computes line tangent', () => {
+  describe(`curveTangent2D`, () => {
+    it(`computes line tangent`, () => {
       const line: Line2D = {
-        kind: 'line',
+        kind: `line`,
         p0: vec2(0, 0),
         p1: vec2(10, 0),
       };
@@ -94,9 +89,9 @@ describe('curve2d', () => {
       expect(tangent[1]).toBeCloseTo(0, 10);
     });
 
-    it('computes arc tangent', () => {
+    it(`computes arc tangent`, () => {
       const arc: Arc2D = {
-        kind: 'arc',
+        kind: `arc`,
         center: vec2(0, 0),
         radius: 5,
         startAngle: 0,
@@ -110,10 +105,10 @@ describe('curve2d', () => {
     });
   });
 
-  describe('curveLength2D', () => {
-    it('computes line length', () => {
+  describe(`curveLength2D`, () => {
+    it(`computes line length`, () => {
       const line: Line2D = {
-        kind: 'line',
+        kind: `line`,
         p0: vec2(0, 0),
         p1: vec2(3, 4),
       };
@@ -122,9 +117,9 @@ describe('curve2d', () => {
       expect(len).toBeCloseTo(5, 10);
     });
 
-    it('computes arc length', () => {
+    it(`computes arc length`, () => {
       const arc: Arc2D = {
-        kind: 'arc',
+        kind: `arc`,
         center: vec2(0, 0),
         radius: 5,
         startAngle: 0,
@@ -137,10 +132,10 @@ describe('curve2d', () => {
     });
   });
 
-  describe('closestPointOnCurve2D', () => {
-    it('finds closest point on line', () => {
+  describe(`closestPointOnCurve2D`, () => {
+    it(`finds closest point on line`, () => {
       const line: Line2D = {
-        kind: 'line',
+        kind: `line`,
         p0: vec2(0, 0),
         p1: vec2(10, 0),
       };
@@ -151,9 +146,9 @@ describe('curve2d', () => {
       expect(result.t).toBeCloseTo(0.5, 10);
     });
 
-    it('clamps to line endpoints', () => {
+    it(`clamps to line endpoints`, () => {
       const line: Line2D = {
-        kind: 'line',
+        kind: `line`,
         p0: vec2(0, 0),
         p1: vec2(10, 0),
       };
@@ -164,9 +159,9 @@ describe('curve2d', () => {
       expect(result.t).toBeCloseTo(1, 10);
     });
 
-    it('finds closest point on arc', () => {
+    it(`finds closest point on arc`, () => {
       const arc: Arc2D = {
-        kind: 'arc',
+        kind: `arc`,
         center: vec2(0, 0),
         radius: 5,
         startAngle: 0,
@@ -181,10 +176,10 @@ describe('curve2d', () => {
     });
   });
 
-  describe('edge cases', () => {
-    it('handles zero-radius arc', () => {
+  describe(`edge cases`, () => {
+    it(`handles zero-radius arc`, () => {
       const arc: Arc2D = {
-        kind: 'arc',
+        kind: `arc`,
         center: vec2(1, 2),
         radius: 0,
         startAngle: 0,
@@ -200,9 +195,9 @@ describe('curve2d', () => {
       expect(len).toBeCloseTo(0, 10);
     });
 
-    it('handles degenerate arc (zero angle span)', () => {
+    it(`handles degenerate arc (zero angle span)`, () => {
       const arc: Arc2D = {
-        kind: 'arc',
+        kind: `arc`,
         center: vec2(0, 0),
         radius: 5,
         startAngle: 0,
@@ -219,9 +214,9 @@ describe('curve2d', () => {
       expect(len).toBeCloseTo(0, 10);
     });
 
-    it('handles zero-length line', () => {
+    it(`handles zero-length line`, () => {
       const line: Line2D = {
-        kind: 'line',
+        kind: `line`,
         p0: vec2(5, 5),
         p1: vec2(5, 5),
       };

@@ -1,12 +1,12 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Tooltip } from '@base-ui/react';
-import { Menu } from '@base-ui/react/menu';
-import { useSketch } from '../contexts/SketchContext';
-import { useDocument } from '../contexts/DocumentContext';
-import { useSelection } from '../contexts/SelectionContext';
-import { useFeatureEdit } from '../contexts/FeatureEditContext';
-import { useKernel } from '../contexts/KernelContext';
-import { useViewer } from '../contexts/ViewerContext';
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { Tooltip } from "@base-ui/react";
+import { Menu } from "@base-ui/react/menu";
+import { useSketch } from "../contexts/SketchContext";
+import { useDocument } from "../contexts/DocumentContext";
+import { useSelection } from "../contexts/SelectionContext";
+import { useFeatureEdit } from "../contexts/FeatureEditContext";
+import { useKernel } from "../contexts/KernelContext";
+import { useViewer } from "../contexts/ViewerContext";
 import {
   SketchIcon,
   ExtrudeIcon,
@@ -30,13 +30,23 @@ import {
   NormalViewIcon,
   CheckIcon,
   CloseIcon,
-} from './Icons';
-import './FloatingToolbar.css';
+} from "./Icons";
+import "./FloatingToolbar.css";
 
 interface FloatingToolbarProps {}
 
 const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
-  const { mode, startSketch, finishSketch, cancelSketch, addRectangle, setTool, canApplyConstraint, applyConstraint, clearSelection: clearSketchSelection } = useSketch();
+  const {
+    mode,
+    startSketch,
+    finishSketch,
+    cancelSketch,
+    addRectangle,
+    setTool,
+    canApplyConstraint,
+    applyConstraint,
+    clearSelection: clearSketchSelection,
+  } = useSketch();
   const { undo, redo, canUndo, canRedo, features, addBoolean } = useDocument();
   const { selectedFeatureId, selectFeature, clearSelection } = useSelection();
   const { exportStl, exportJson, bodies, sketchPlaneTransforms } = useKernel();
@@ -44,44 +54,47 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
   const { actions: viewerActions } = useViewer();
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingJson, setIsExportingJson] = useState(false);
-  
+
   // Toggle tool - clicking an active tool toggles it off
-  const toggleTool = useCallback((tool: 'select' | 'line' | 'arc' | 'circle' | 'rectangle') => {
-    if (mode.activeTool === tool) {
-      setTool('none');
-    } else {
-      setTool(tool);
-    }
-  }, [mode.activeTool, setTool]);
+  const toggleTool = useCallback(
+    (tool: "select" | "line" | "arc" | "circle" | "rectangle") => {
+      if (mode.activeTool === tool) {
+        setTool("none");
+      } else {
+        setTool(tool);
+      }
+    },
+    [mode.activeTool, setTool]
+  );
 
   const canExport = bodies.length > 0 && !isExporting;
-  
+
   const handleExportStl = useCallback(async () => {
     if (!canExport) return;
-    
+
     setIsExporting(true);
     try {
-      const result = await exportStl({ binary: true, name: 'model' });
-      
+      const result = await exportStl({ binary: true, name: "model" });
+
       if (result instanceof ArrayBuffer) {
-        const blob = new Blob([result], { type: 'model/stl' });
+        const blob = new Blob([result], { type: "model/stl" });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+        const a = document.createElement("a");
         a.href = url;
-        a.download = 'model.stl';
+        a.download = "model.stl";
         a.click();
         URL.revokeObjectURL(url);
-      } else if (typeof result === 'string') {
-        const blob = new Blob([result], { type: 'text/plain' });
+      } else if (typeof result === "string") {
+        const blob = new Blob([result], { type: "text/plain" });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+        const a = document.createElement("a");
         a.href = url;
-        a.download = 'model.stl';
+        a.download = "model.stl";
         a.click();
         URL.revokeObjectURL(url);
       }
     } catch (err) {
-      console.error('Export failed:', err);
+      console.error("Export failed:", err);
       alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsExporting(false);
@@ -93,48 +106,47 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
     setIsExportingJson(true);
     try {
       const content = await exportJson();
-      const blob = new Blob([content], { type: 'application/json' });
+      const blob = new Blob([content], { type: "application/json" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = 'model.json';
+      a.download = "model.json";
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Export JSON failed:', err);
+      console.error("Export JSON failed:", err);
       alert(`Export JSON failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsExportingJson(false);
     }
   }, [canExport, exportJson, isExportingJson]);
 
-
   const sketches = useMemo(() => {
-    return features.filter((f) => f.type === 'sketch');
+    return features.filter((f) => f.type === "sketch");
   }, [features]);
 
   const selectedPlane = useMemo(() => {
     if (!selectedFeatureId) return null;
-    const feature = features.find(f => f.id === selectedFeatureId);
-    if (feature?.type === 'plane') {
+    const feature = features.find((f) => f.id === selectedFeatureId);
+    if (feature?.type === "plane") {
       return feature.id;
     }
     return null;
   }, [selectedFeatureId, features]);
-  
+
   const { selectedFaces } = useSelection();
   const selectedFaceRef = useMemo(() => {
     if (selectedFaces.length !== 1) return null;
     const face = selectedFaces[0];
     return `face:${face.featureId}:${face.faceIndex}`;
   }, [selectedFaces]);
-  
+
   const sketchPlaneRef = selectedPlane || selectedFaceRef;
 
   const selectedSketch = useMemo(() => {
     if (!selectedFeatureId) return null;
-    const feature = features.find(f => f.id === selectedFeatureId);
-    if (feature?.type === 'sketch') {
+    const feature = features.find((f) => f.id === selectedFeatureId);
+    if (feature?.type === "sketch") {
       return feature;
     }
     return null;
@@ -142,16 +154,16 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
       const modKey = isMac ? e.metaKey : e.ctrlKey;
-      
-      if (modKey && e.key === 'Enter' && mode.active) {
+
+      if (modKey && e.key === "Enter" && mode.active) {
         e.preventDefault();
         finishSketch();
         return;
       }
-      
-      if (e.key === 'Escape') {
+
+      if (e.key === "Escape") {
         e.preventDefault();
         if (mode.active) {
           clearSketchSelection();
@@ -164,9 +176,16 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mode.active, finishSketch, cancelSketch, selectFeature, clearSelection, clearSketchSelection]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    mode.active,
+    finishSketch,
+    cancelSketch,
+    selectFeature,
+    clearSelection,
+    clearSketchSelection,
+  ]);
 
   const handleNewSketch = () => {
     if (!sketchPlaneRef) return;
@@ -189,17 +208,17 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
   };
 
   const bodyFeatures = useMemo(() => {
-    return features.filter(f => f.type === 'extrude' || f.type === 'revolve');
+    return features.filter((f) => f.type === "extrude" || f.type === "revolve");
   }, [features]);
-  
+
   const canBoolean = !isEditing && bodyFeatures.length >= 2;
-  
-  const handleBoolean = (operation: 'union' | 'subtract' | 'intersect') => {
+
+  const handleBoolean = (operation: "union" | "subtract" | "intersect") => {
     if (bodyFeatures.length < 2) return;
-    
+
     const target = bodyFeatures[bodyFeatures.length - 2];
     const tool = bodyFeatures[bodyFeatures.length - 1];
-    
+
     addBoolean(operation, target.id, tool.id);
   };
 
@@ -218,7 +237,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
           <Tooltip.Root>
             <Tooltip.Trigger
               delay={300}
-              className={`floating-toolbar-button ${!canUndo ? 'disabled' : ''}`}
+              className={`floating-toolbar-button ${!canUndo ? "disabled" : ""}`}
               onClick={undo}
               render={<button aria-label="Undo" disabled={!canUndo} />}
             >
@@ -233,7 +252,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
           <Tooltip.Root>
             <Tooltip.Trigger
               delay={300}
-              className={`floating-toolbar-button ${!canRedo ? 'disabled' : ''}`}
+              className={`floating-toolbar-button ${!canRedo ? "disabled" : ""}`}
               onClick={redo}
               render={<button aria-label="Redo" disabled={!canRedo} />}
             >
@@ -255,8 +274,8 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
             <Tooltip.Root>
               <Tooltip.Trigger
                 delay={300}
-                className={`floating-toolbar-button ${mode.activeTool === 'select' ? 'active' : ''}`}
-                onClick={() => toggleTool('select')}
+                className={`floating-toolbar-button ${mode.activeTool === "select" ? "active" : ""}`}
+                onClick={() => toggleTool("select")}
                 render={<button aria-label="Select" />}
               >
                 <SelectIcon />
@@ -270,8 +289,8 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
             <Tooltip.Root>
               <Tooltip.Trigger
                 delay={300}
-                className={`floating-toolbar-button ${mode.activeTool === 'line' ? 'active' : ''}`}
-                onClick={() => toggleTool('line')}
+                className={`floating-toolbar-button ${mode.activeTool === "line" ? "active" : ""}`}
+                onClick={() => toggleTool("line")}
                 render={<button aria-label="Line" />}
               >
                 <LineIcon />
@@ -285,8 +304,8 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
             <Tooltip.Root>
               <Tooltip.Trigger
                 delay={300}
-                className={`floating-toolbar-button ${mode.activeTool === 'arc' ? 'active' : ''}`}
-                onClick={() => toggleTool('arc')}
+                className={`floating-toolbar-button ${mode.activeTool === "arc" ? "active" : ""}`}
+                onClick={() => toggleTool("arc")}
                 render={<button aria-label="Arc" />}
               >
                 <ArcIcon />
@@ -300,8 +319,8 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
             <Tooltip.Root>
               <Tooltip.Trigger
                 delay={300}
-                className={`floating-toolbar-button ${mode.activeTool === 'circle' ? 'active' : ''}`}
-                onClick={() => toggleTool('circle')}
+                className={`floating-toolbar-button ${mode.activeTool === "circle" ? "active" : ""}`}
+                onClick={() => toggleTool("circle")}
                 render={<button aria-label="Circle" />}
               >
                 <CircleIcon />
@@ -330,7 +349,10 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
 
             {/* Constraints dropdown */}
             <Menu.Root>
-              <Menu.Trigger className="floating-toolbar-button floating-toolbar-dropdown-button" aria-label="Constraints">
+              <Menu.Trigger
+                className="floating-toolbar-button floating-toolbar-dropdown-button"
+                aria-label="Constraints"
+              >
                 <ConstraintsIcon />
                 <ChevronDownIcon />
               </Menu.Trigger>
@@ -339,79 +361,79 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                   <Menu.Popup className="floating-toolbar-dropdown-menu">
                     <Menu.Item
                       className="floating-toolbar-dropdown-item"
-                      onClick={() => applyConstraint('horizontal')}
-                      disabled={!canApplyConstraint('horizontal')}
+                      onClick={() => applyConstraint("horizontal")}
+                      disabled={!canApplyConstraint("horizontal")}
                     >
                       <span className="floating-toolbar-dropdown-key">H</span> Horizontal
                     </Menu.Item>
                     <Menu.Item
                       className="floating-toolbar-dropdown-item"
-                      onClick={() => applyConstraint('vertical')}
-                      disabled={!canApplyConstraint('vertical')}
+                      onClick={() => applyConstraint("vertical")}
+                      disabled={!canApplyConstraint("vertical")}
                     >
                       <span className="floating-toolbar-dropdown-key">V</span> Vertical
                     </Menu.Item>
                     <Menu.Item
                       className="floating-toolbar-dropdown-item"
-                      onClick={() => applyConstraint('coincident')}
-                      disabled={!canApplyConstraint('coincident')}
+                      onClick={() => applyConstraint("coincident")}
+                      disabled={!canApplyConstraint("coincident")}
                     >
                       <span className="floating-toolbar-dropdown-key">C</span> Coincident
                     </Menu.Item>
                     <Menu.Item
                       className="floating-toolbar-dropdown-item"
-                      onClick={() => applyConstraint('fixed')}
-                      disabled={!canApplyConstraint('fixed')}
+                      onClick={() => applyConstraint("fixed")}
+                      disabled={!canApplyConstraint("fixed")}
                     >
                       <span className="floating-toolbar-dropdown-key">F</span> Fixed
                     </Menu.Item>
                     <Menu.Item
                       className="floating-toolbar-dropdown-item"
-                      onClick={() => applyConstraint('distance')}
-                      disabled={!canApplyConstraint('distance')}
+                      onClick={() => applyConstraint("distance")}
+                      disabled={!canApplyConstraint("distance")}
                     >
                       <span className="floating-toolbar-dropdown-key">D</span> Distance
                     </Menu.Item>
                     <Menu.Item
                       className="floating-toolbar-dropdown-item"
-                      onClick={() => applyConstraint('angle')}
-                      disabled={!canApplyConstraint('angle')}
+                      onClick={() => applyConstraint("angle")}
+                      disabled={!canApplyConstraint("angle")}
                     >
                       <span className="floating-toolbar-dropdown-key">∠</span> Angle
                     </Menu.Item>
                     <Menu.Separator className="floating-toolbar-dropdown-separator" />
                     <Menu.Item
                       className="floating-toolbar-dropdown-item"
-                      onClick={() => applyConstraint('parallel')}
-                      disabled={!canApplyConstraint('parallel')}
+                      onClick={() => applyConstraint("parallel")}
+                      disabled={!canApplyConstraint("parallel")}
                     >
                       <span className="floating-toolbar-dropdown-key">∥</span> Parallel
                     </Menu.Item>
                     <Menu.Item
                       className="floating-toolbar-dropdown-item"
-                      onClick={() => applyConstraint('perpendicular')}
-                      disabled={!canApplyConstraint('perpendicular')}
+                      onClick={() => applyConstraint("perpendicular")}
+                      disabled={!canApplyConstraint("perpendicular")}
                     >
                       <span className="floating-toolbar-dropdown-key">⊥</span> Perpendicular
                     </Menu.Item>
                     <Menu.Item
                       className="floating-toolbar-dropdown-item"
-                      onClick={() => applyConstraint('equalLength')}
-                      disabled={!canApplyConstraint('equalLength')}
+                      onClick={() => applyConstraint("equalLength")}
+                      disabled={!canApplyConstraint("equalLength")}
                     >
                       <span className="floating-toolbar-dropdown-key">=</span> Equal Length
                     </Menu.Item>
                     <Menu.Item
                       className="floating-toolbar-dropdown-item"
-                      onClick={() => applyConstraint('tangent')}
-                      disabled={!canApplyConstraint('tangent')}
+                      onClick={() => applyConstraint("tangent")}
+                      disabled={!canApplyConstraint("tangent")}
                     >
                       <span className="floating-toolbar-dropdown-key">⌒</span> Tangent
                     </Menu.Item>
                     <Menu.Item
                       className="floating-toolbar-dropdown-item"
-                      onClick={() => applyConstraint('symmetric')}
-                      disabled={!canApplyConstraint('symmetric')}
+                      onClick={() => applyConstraint("symmetric")}
+                      disabled={!canApplyConstraint("symmetric")}
                     >
                       <span className="floating-toolbar-dropdown-key">⇔</span> Symmetric
                     </Menu.Item>
@@ -432,14 +454,14 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                     if (mode.sketchId && mode.planeId) {
                       // Map plane IDs to view presets
                       const planeViewMap: Record<string, string> = {
-                        'xy': 'top',
-                        'xz': 'front',
-                        'yz': 'right',
-                        'top': 'top',
-                        'front': 'front',
-                        'right': 'right',
+                        xy: "top",
+                        xz: "front",
+                        yz: "right",
+                        top: "top",
+                        front: "front",
+                        right: "right",
                       };
-                      const view = planeViewMap[mode.planeId] || 'top';
+                      const view = planeViewMap[mode.planeId] || "top";
                       viewerActions.setView(view as any);
                     }
                   }}
@@ -449,7 +471,9 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Positioner side="top" sideOffset={6}>
-                    <Tooltip.Popup className="floating-toolbar-tooltip">View Normal to Sketch Plane</Tooltip.Popup>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">
+                      View Normal to Sketch Plane
+                    </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
               </Tooltip.Root>
@@ -464,7 +488,9 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Positioner side="top" sideOffset={6}>
-                    <Tooltip.Popup className="floating-toolbar-tooltip">Accept Sketch (Ctrl+Enter)</Tooltip.Popup>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">
+                      Accept Sketch (Ctrl+Enter)
+                    </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
               </Tooltip.Root>
@@ -479,7 +505,9 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Positioner side="top" sideOffset={6}>
-                    <Tooltip.Popup className="floating-toolbar-tooltip">Cancel Sketch</Tooltip.Popup>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">
+                      Cancel Sketch
+                    </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
               </Tooltip.Root>
@@ -492,7 +520,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
               <Tooltip.Root>
                 <Tooltip.Trigger
                   delay={300}
-                  className={`floating-toolbar-button ${!canStartSketch ? 'disabled' : ''}`}
+                  className={`floating-toolbar-button ${!canStartSketch ? "disabled" : ""}`}
                   onClick={handleNewSketch}
                   render={<button aria-label="New Sketch" disabled={!canStartSketch} />}
                 >
@@ -501,11 +529,11 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                 <Tooltip.Portal>
                   <Tooltip.Positioner side="top" sideOffset={6}>
                     <Tooltip.Popup className="floating-toolbar-tooltip">
-                      {canStartSketch 
-                        ? (selectedFaceRef 
-                            ? `New Sketch on Face` 
-                            : `New Sketch on ${(selectedPlane || '').toUpperCase()}`)
-                        : 'New Sketch (select a plane or face first)'}
+                      {canStartSketch
+                        ? selectedFaceRef
+                          ? `New Sketch on Face`
+                          : `New Sketch on ${(selectedPlane || "").toUpperCase()}`
+                        : "New Sketch (select a plane or face first)"}
                     </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
@@ -520,12 +548,14 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Positioner side="top" sideOffset={6}>
-                    <Tooltip.Popup className="floating-toolbar-tooltip">Plane (coming soon)</Tooltip.Popup>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">
+                      Plane (coming soon)
+                    </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
               </Tooltip.Root>
             </div>
-            
+
             <div className="floating-toolbar-separator" />
 
             {/* Feature tools */}
@@ -533,7 +563,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
               <Tooltip.Root>
                 <Tooltip.Trigger
                   delay={300}
-                  className={`floating-toolbar-button ${!canExtrude ? 'disabled' : ''}`}
+                  className={`floating-toolbar-button ${!canExtrude ? "disabled" : ""}`}
                   onClick={handleExtrude}
                   render={<button aria-label="Extrude" disabled={!canExtrude} />}
                 >
@@ -542,7 +572,9 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                 <Tooltip.Portal>
                   <Tooltip.Positioner side="top" sideOffset={6}>
                     <Tooltip.Popup className="floating-toolbar-tooltip">
-                      {selectedSketch ? `Extrude ${selectedSketch.name || selectedSketch.id}` : 'Extrude (select a sketch)'}
+                      {selectedSketch
+                        ? `Extrude ${selectedSketch.name || selectedSketch.id}`
+                        : "Extrude (select a sketch)"}
                     </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
@@ -550,7 +582,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
               <Tooltip.Root>
                 <Tooltip.Trigger
                   delay={300}
-                  className={`floating-toolbar-button ${!canRevolve ? 'disabled' : ''}`}
+                  className={`floating-toolbar-button ${!canRevolve ? "disabled" : ""}`}
                   onClick={handleRevolve}
                   render={<button aria-label="Revolve" disabled={!canRevolve} />}
                 >
@@ -559,7 +591,9 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                 <Tooltip.Portal>
                   <Tooltip.Positioner side="top" sideOffset={6}>
                     <Tooltip.Popup className="floating-toolbar-tooltip">
-                      {selectedSketch ? `Revolve ${selectedSketch.name || selectedSketch.id}` : 'Revolve (select a sketch)'}
+                      {selectedSketch
+                        ? `Revolve ${selectedSketch.name || selectedSketch.id}`
+                        : "Revolve (select a sketch)"}
                     </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
@@ -571,8 +605,8 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                   <Tooltip.Trigger
                     delay={300}
                     render={
-                      <Menu.Trigger 
-                        className={`floating-toolbar-button ${!canBoolean ? 'disabled' : ''}`}
+                      <Menu.Trigger
+                        className={`floating-toolbar-button ${!canBoolean ? "disabled" : ""}`}
                         aria-label="Boolean"
                         disabled={!canBoolean}
                       >
@@ -584,7 +618,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                   <Tooltip.Portal>
                     <Tooltip.Positioner side="top" sideOffset={6}>
                       <Tooltip.Popup className="floating-toolbar-tooltip">
-                        Boolean Operations {canBoolean ? '' : '(need 2+ bodies)'}
+                        Boolean Operations {canBoolean ? "" : "(need 2+ bodies)"}
                       </Tooltip.Popup>
                     </Tooltip.Positioner>
                   </Tooltip.Portal>
@@ -594,21 +628,21 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                     <Menu.Popup className="floating-toolbar-dropdown">
                       <Menu.Item
                         className="floating-toolbar-dropdown-item"
-                        onClick={() => handleBoolean('union')}
+                        onClick={() => handleBoolean("union")}
                       >
                         <UnionIcon />
                         <span>Union</span>
                       </Menu.Item>
                       <Menu.Item
                         className="floating-toolbar-dropdown-item"
-                        onClick={() => handleBoolean('subtract')}
+                        onClick={() => handleBoolean("subtract")}
                       >
                         <SubtractIcon />
                         <span>Subtract</span>
                       </Menu.Item>
                       <Menu.Item
                         className="floating-toolbar-dropdown-item"
-                        onClick={() => handleBoolean('intersect')}
+                        onClick={() => handleBoolean("intersect")}
                       >
                         <IntersectIcon />
                         <span>Intersect</span>
@@ -628,7 +662,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
           <Tooltip.Root>
             <Tooltip.Trigger
               delay={300}
-              className={`floating-toolbar-button ${!canExport ? 'disabled' : ''} ${isExporting ? 'loading' : ''}`}
+              className={`floating-toolbar-button ${!canExport ? "disabled" : ""} ${isExporting ? "loading" : ""}`}
               onClick={handleExportStl}
               render={<button aria-label="Export STL" disabled={!canExport} />}
             >
@@ -637,7 +671,11 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
             <Tooltip.Portal>
               <Tooltip.Positioner side="top" sideOffset={6}>
                 <Tooltip.Popup className="floating-toolbar-tooltip">
-                  {isExporting ? 'Exporting...' : (canExport ? 'Export STL' : 'Export STL (no bodies)')}
+                  {isExporting
+                    ? "Exporting..."
+                    : canExport
+                      ? "Export STL"
+                      : "Export STL (no bodies)"}
                 </Tooltip.Popup>
               </Tooltip.Positioner>
             </Tooltip.Portal>

@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import FloatingToolbar from './components/FloatingToolbar';
-import FloatingFeatureTreePanel from './components/FloatingFeatureTreePanel';
-import ViewCube from './components/ViewCube';
-import Viewer from './components/Viewer';
-import PropertiesPanel from './components/PropertiesPanel';
-import StatusOverlay from './components/StatusOverlay';
-import { DocumentProvider, useDocument } from './contexts/DocumentContext';
-import { KernelProvider } from './contexts/KernelContext';
-import { SketchProvider } from './contexts/SketchContext';
-import { SelectionProvider } from './contexts/SelectionContext';
-import { FeatureEditProvider } from './contexts/FeatureEditContext';
-import './Editor.css';
+import React, { useState, useEffect } from "react";
+import FloatingToolbar from "./components/FloatingToolbar";
+import FloatingFeatureTreePanel from "./components/FloatingFeatureTreePanel";
+import ViewCube from "./components/ViewCube";
+import Viewer from "./components/Viewer";
+import PropertiesPanel from "./components/PropertiesPanel";
+import StatusOverlay from "./components/StatusOverlay";
+import { DocumentProvider, useDocument } from "./contexts/DocumentContext";
+import { KernelProvider } from "./contexts/KernelContext";
+import { SketchProvider } from "./contexts/SketchContext";
+import { SelectionProvider } from "./contexts/SelectionContext";
+import { FeatureEditProvider } from "./contexts/FeatureEditContext";
+import "./Editor.css";
 
 // Inner component that uses the document context
 const EditorContent: React.FC = () => {
@@ -24,23 +24,23 @@ const EditorContent: React.FC = () => {
   // Keyboard shortcuts for undo/redo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
       const modKey = isMac ? e.metaKey : e.ctrlKey;
 
-      if (modKey && e.key === 'z' && !e.shiftKey) {
+      if (modKey && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         if (canUndo) undo();
-      } else if (modKey && e.key === 'z' && e.shiftKey) {
+      } else if (modKey && e.key === "z" && e.shiftKey) {
         e.preventDefault();
         if (canRedo) redo();
-      } else if (modKey && e.key === 'y') {
+      } else if (modKey && e.key === "y") {
         e.preventDefault();
         if (canRedo) redo();
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [undo, redo, canUndo, canRedo]);
 
   return (
@@ -51,19 +51,19 @@ const EditorContent: React.FC = () => {
         <main className="app-center">
           <div className="app-viewer">
             <Viewer />
-            
+
             {/* Floating Feature Tree Panel (top left) */}
             <FloatingFeatureTreePanel />
-            
+
             {/* Floating Properties Panel (top right) - always visible */}
             <PropertiesPanel />
-            
+
             {/* Floating Toolbar (bottom center) */}
             <FloatingToolbar />
-            
+
             {/* Status Overlay (bottom left) */}
             <StatusOverlay />
-            
+
             {/* View Cube (bottom right) */}
             <ViewCube />
           </div>

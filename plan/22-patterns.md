@@ -29,8 +29,8 @@
 ### Document Model
 
 ```xml
-<linearPattern 
-  id="lp1" 
+<linearPattern
+  id="lp1"
   name="LinearPattern1"
   features="e2,f1"
   direction="1,0,0"
@@ -57,8 +57,8 @@
 ### Document Model
 
 ```xml
-<circularPattern 
-  id="cp1" 
+<circularPattern
+  id="cp1"
   name="CircularPattern1"
   features="e3"
   axisOrigin="0,0,0"
@@ -74,20 +74,20 @@
 
 ```typescript
 export interface LinearPatternFeature extends FeatureBase {
-  type: 'linearPattern';
-  features: string[];     // Feature IDs to pattern
+  type: "linearPattern";
+  features: string[]; // Feature IDs to pattern
   direction: [number, number, number];
   count: number;
   spacing: number;
 }
 
 export interface CircularPatternFeature extends FeatureBase {
-  type: 'circularPattern';
+  type: "circularPattern";
   features: string[];
   axisOrigin: [number, number, number];
   axisDirection: [number, number, number];
   count: number;
-  totalAngle: number;     // Degrees
+  totalAngle: number; // Degrees
 }
 ```
 
@@ -98,18 +98,15 @@ export interface CircularPatternFeature extends FeatureBase {
 ### Linear Pattern
 
 ```typescript
-export function linearPattern(
-  session: SolidSession,
-  options: LinearPatternOptions
-): PatternResult {
+export function linearPattern(session: SolidSession, options: LinearPatternOptions): PatternResult {
   const { features, direction, count, spacing } = options;
-  
+
   const patternBodies: Body[] = [];
-  
+
   for (let i = 1; i < count; i++) {
     // Calculate offset for this instance
     const offset = scale(normalize(direction), spacing * i);
-    
+
     // For each feature, create a translated copy
     for (const featureId of features) {
       const originalBody = getBodyForFeature(featureId);
@@ -118,12 +115,12 @@ export function linearPattern(
       patternBodies.push(copiedBody);
     }
   }
-  
+
   // Union all pattern instances with original bodies
   for (const patternBody of patternBodies) {
     session.union(getMainBody(), patternBody);
   }
-  
+
   return { ok: true };
 }
 ```
@@ -136,15 +133,15 @@ export function circularPattern(
   options: CircularPatternOptions
 ): PatternResult {
   const { features, axisOrigin, axisDirection, count, totalAngle } = options;
-  
-  const angleStep = (totalAngle * Math.PI / 180) / count;
-  
+
+  const angleStep = (totalAngle * Math.PI) / 180 / count;
+
   for (let i = 1; i < count; i++) {
     const angle = angleStep * i;
-    
+
     // Create rotation transform around axis
     const transform = createRotationTransform(axisOrigin, axisDirection, angle);
-    
+
     for (const featureId of features) {
       const originalBody = getBodyForFeature(featureId);
       const copiedBody = copyBody(originalBody);
@@ -152,7 +149,7 @@ export function circularPattern(
       patternBodies.push(copiedBody);
     }
   }
-  
+
   // Union all instances
   // ...
 }
@@ -171,7 +168,7 @@ export function LinearPatternDialog({ onConfirm, onCancel }) {
   const [customDirection, setCustomDirection] = useState([1, 0, 0]);
   const [count, setCount] = useState(3);
   const [spacing, setSpacing] = useState(10);
-  
+
   return (
     <Dialog open onClose={onCancel}>
       <DialogTitle>Linear Pattern</DialogTitle>
@@ -182,7 +179,7 @@ export function LinearPatternDialog({ onConfirm, onCancel }) {
           onChange={setFeatures}
           multi={true}
         />
-        
+
         <Select
           label="Direction"
           value={direction}
@@ -194,7 +191,7 @@ export function LinearPatternDialog({ onConfirm, onCancel }) {
             { value: 'custom', label: 'Custom...' },
           ]}
         />
-        
+
         <NumberInput label="Count" value={count} onChange={setCount} min={2} />
         <NumberInput label="Spacing" value={spacing} onChange={setSpacing} min={0.1} unit="mm" />
       </DialogContent>
@@ -235,23 +232,23 @@ function PatternPreview({ originalBodies, transforms }) {
 
 ```typescript
 // Test linear pattern
-test('linear pattern creates correct number of instances', () => {
+test("linear pattern creates correct number of instances", () => {
   const session = new SolidSession();
   createBox(session, 5, 5, 5);
-  
+
   linearPattern(session, {
-    features: ['e1'],
+    features: ["e1"],
     direction: [10, 0, 0],
     count: 3,
     spacing: 10,
   });
-  
+
   // Should have 3 bodies (or 1 merged body)
   // Check bounding box spans expected range
 });
 
 // Test circular pattern
-test('circular pattern places instances correctly', () => {
+test("circular pattern places instances correctly", () => {
   // Create instance, circular pattern around Z axis
   // Verify instances are at correct angles
 });

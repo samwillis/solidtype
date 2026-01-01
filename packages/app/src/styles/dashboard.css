@@ -35,7 +35,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Sidebar */
@@ -677,7 +679,6 @@
   width: 28px;
   height: 28px;
 }
-
 
 /* User menu */
 .dashboard-user-button {

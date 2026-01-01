@@ -72,6 +72,7 @@ docker-compose up -d
 ```
 
 This starts:
+
 - **PostgreSQL** on port `54321` (host) → `5432` (container)
   - Configured with `wal_level=logical` for Electric SQL replication
   - Config file: `postgres.conf` (mounted in container)
@@ -98,6 +99,7 @@ pnpm db:push
 ```
 
 This creates all database tables, including:
+
 - Application tables (workspaces, projects, documents, etc.)
 - Better Auth tables (`user`, `session`, `account`, `verification`)
 
@@ -184,6 +186,7 @@ pnpm db:studio      # Open Drizzle Studio
 - **Database**: `solidtype`
 
 Connect from host:
+
 ```bash
 psql postgresql://solidtype:solidtype@localhost:54321/solidtype
 ```
@@ -205,6 +208,7 @@ psql postgresql://solidtype:solidtype@localhost:54321/solidtype
 1. **Database Changes**: After modifying schema in `packages/app/src/db/schema/`, run `pnpm db:generate` and `pnpm db:push`
 
 2. **Service Logs**: View logs for any service:
+
    ```bash
    docker-compose logs -f postgres
    docker-compose logs -f electric
@@ -212,13 +216,14 @@ psql postgresql://solidtype:solidtype@localhost:54321/solidtype
    ```
 
 3. **Reset Database**: To start fresh (required if WAL level was changed):
+
    ```bash
    docker-compose down -v  # Remove volumes (⚠️ deletes all data)
    docker-compose up -d     # Recreate services with new config
    cd packages/app
    pnpm db:push            # Recreate all tables (including better-auth tables)
    ```
-   
+
    **Note**: If you're adding `wal_level=logical` to an existing database, you must recreate the volume. WAL level changes require a fresh database.
 
 4. **Hot Reload**: The dev server supports HMR. Changes to React components and most code will hot-reload automatically.
@@ -276,11 +281,13 @@ See [`packages/app/src/lib/electric-proxy.ts`](./packages/app/src/lib/electric-p
 ### Services Won't Start
 
 1. **Check Docker**: Ensure Docker Desktop is running
+
    ```bash
    docker ps
    ```
 
 2. **Check Ports**: Ensure ports 54321, 3100, 3200 are available
+
    ```bash
    lsof -i :54321
    lsof -i :3100
@@ -295,6 +302,7 @@ See [`packages/app/src/lib/electric-proxy.ts`](./packages/app/src/lib/electric-p
 ### Database Connection Issues
 
 1. **Verify Postgres is running**:
+
    ```bash
    docker-compose ps postgres
    ```
@@ -325,6 +333,7 @@ This creates all required tables including better-auth's authentication tables (
 ### Electric SQL Not Syncing
 
 1. **Check Electric logs**:
+
    ```bash
    docker-compose logs electric
    ```

@@ -10,6 +10,7 @@
 ## Implementation Notes
 
 ### What's Done:
+
 - `document.ts` - SketchPoint now has `attachedTo`, `param`, and `attachmentBroken` fields
 - `kernel.worker.ts` - `resolveAttachment()` function to resolve edge/vertex references to world coordinates
 - `kernel.worker.ts` - `projectToSketchPlane()` function for projecting world points to sketch 2D
@@ -18,12 +19,14 @@
 - Attached points are automatically treated as fixed constraints
 
 ### What's NOT Done:
+
 - Snap detection UI during point dragging
 - Visual feedback for snap targets (edge/vertex indicators)
 - Context menu for "Attach to Edge" / "Detach"
 - Broken attachment visual indicator
 
 ### Future Work:
+
 1. Add snap detection when dragging points near edges/vertices
 2. Visual overlay showing available snap targets
 3. Context menu actions for manual attachment
@@ -81,17 +84,16 @@ interface SketchPoint {
   x: number;
   y: number;
   fixed?: boolean;
-  
+
   // External attachment
-  attachedTo?: string;  // Edge or vertex reference
-  param?: number;       // Parameter on edge (0-1)
+  attachedTo?: string; // Edge or vertex reference
+  param?: number; // Parameter on edge (0-1)
 }
 
 // Attachment reference format
-type AttachmentRef = 
-  | `edge:${featureId}:${selector}`   // Point on edge
-  | `vertex:${featureId}:${selector}` // Point at vertex
-  ;
+type AttachmentRef =
+  | `edge:${featureId}:${selector}` // Point on edge
+  | `vertex:${featureId}:${selector}`; // Point at vertex
 ```
 
 ---
@@ -108,28 +110,28 @@ function checkSnapTargets(
 ): SnapTarget | null {
   // Raycast to find nearby edges/vertices
   const hits = raycastForSnap(screenPos);
-  
+
   for (const hit of hits) {
     // Check if close to an edge
-    if (hit.type === 'edge' && hit.distance < SNAP_THRESHOLD) {
+    if (hit.type === "edge" && hit.distance < SNAP_THRESHOLD) {
       return {
-        type: 'edge',
+        type: "edge",
         ref: hit.edgeRef,
         param: hit.param,
         position: hit.position,
       };
     }
-    
+
     // Check if close to a vertex
-    if (hit.type === 'vertex' && hit.distance < SNAP_THRESHOLD) {
+    if (hit.type === "vertex" && hit.distance < SNAP_THRESHOLD) {
       return {
-        type: 'vertex',
+        type: "vertex",
         ref: hit.vertexRef,
         position: hit.position,
       };
     }
   }
-  
+
   return null;
 }
 ```
@@ -140,13 +142,13 @@ function checkSnapTargets(
 // Show snap indicator when near edge/vertex
 function SnapIndicator({ snapTarget }: { snapTarget: SnapTarget | null }) {
   if (!snapTarget) return null;
-  
+
   return (
-    <div 
+    <div
       className="snap-indicator"
-      style={{ 
-        left: snapTarget.screenX, 
-        top: snapTarget.screenY 
+      style={{
+        left: snapTarget.screenX,
+        top: snapTarget.screenY
       }}
     >
       {snapTarget.type === 'edge' ? (
@@ -180,7 +182,7 @@ function AttachToEdgeMode({ pointId }) {
     attachPointToEdge(pointId, edgeRef, param);
     exitAttachMode();
   };
-  
+
   return <EdgeSelectionOverlay onSelect={handleEdgeClick} />;
 }
 ```
@@ -198,26 +200,25 @@ function resolveAttachment(
   attachment: AttachmentRef,
   session: SolidSession
 ): { x: number; y: number } {
-  
-  if (attachment.startsWith('edge:')) {
+  if (attachment.startsWith("edge:")) {
     const edge = resolveEdgeRef(attachment.ref, session);
     if (!edge) throw new Error(`Cannot resolve edge: ${attachment.ref}`);
-    
+
     // Get point on edge at parameter
     const worldPos = edge.pointAt(attachment.param ?? 0.5);
-    
+
     // Project to sketch plane
     return projectToSketchPlane(worldPos, sketchPlane);
   }
-  
-  if (attachment.startsWith('vertex:')) {
+
+  if (attachment.startsWith("vertex:")) {
     const vertex = resolveVertexRef(attachment.ref, session);
     if (!vertex) throw new Error(`Cannot resolve vertex: ${attachment.ref}`);
-    
+
     // Project to sketch plane
     return projectToSketchPlane(vertex.position, sketchPlane);
   }
-  
+
   throw new Error(`Invalid attachment: ${attachment}`);
 }
 ```
@@ -229,25 +230,25 @@ External attachments work like fixed constraints:
 ```typescript
 function buildSketchConstraints(sketch: SketchData): Constraint[] {
   const constraints: Constraint[] = [];
-  
+
   for (const point of sketch.points) {
     if (point.attachedTo) {
       // Resolve attachment to get target position
       const targetPos = resolveAttachment(point.attachedTo);
-      
+
       // Add as fixed constraint at resolved position
       constraints.push({
-        type: 'fixed',
+        type: "fixed",
         point: point.id,
         x: targetPos.x,
         y: targetPos.y,
       });
     }
   }
-  
+
   // Add other constraints
   constraints.push(...sketch.constraints);
-  
+
   return constraints;
 }
 ```
@@ -259,7 +260,7 @@ For "point on edge" (not fixed position), allow the point to slide:
 ```typescript
 // Point can be anywhere on edge, solver finds optimal position
 constraints.push({
-  type: 'pointOnCurve',
+  type: "pointOnCurve",
   point: point.id,
   curve: edgeToCurve(edge),
 });
@@ -278,12 +279,12 @@ If the referenced edge/vertex no longer exists:
 ```typescript
 function handleMissingAttachment(point: SketchPoint): void {
   console.warn(`Attachment ${point.attachedTo} not found`);
-  
+
   // Options:
   // 1. Keep point at last known position (current x, y)
   // 2. Mark sketch as having errors
   // 3. Prompt user to re-attach
-  
+
   // For now: keep position, mark as broken
   point.attachmentBroken = true;
 }
@@ -306,23 +307,23 @@ function handleMissingAttachment(point: SketchPoint): void {
 
 ```typescript
 // Test attachment resolution
-test('resolveAttachment returns correct position', () => {
+test("resolveAttachment returns correct position", () => {
   const session = new SolidSession();
   createBox(session);
-  
+
   // Get an edge
-  const edge = getEdge(session, 'e1:side:0');
+  const edge = getEdge(session, "e1:side:0");
   const edgeRef = createEdgeRef(edge);
-  
+
   // Resolve at parameter 0.5
   const pos = resolveAttachment(`edge:${edgeRef}`, { param: 0.5 });
-  
+
   // Should be at midpoint of edge
   expect(pos.x).toBeCloseTo(5);
 });
 
 // Test attachment update
-test('attached point moves with edge', () => {
+test("attached point moves with edge", () => {
   // Create box, attach point to edge
   // Change box size
   // Verify point moved

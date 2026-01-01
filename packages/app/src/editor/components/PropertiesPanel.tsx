@@ -1,26 +1,39 @@
 /**
  * Properties Panel - displays and edits properties of selected features
  * Phase 13: Properties Panel
- * 
+ *
  * Also handles feature creation with accept/cancel buttons when in edit mode.
  * Uses Tanstack Form with Zod validation for feature editing.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Menu } from '@base-ui/react/menu';
-import { useForm } from '@tanstack/react-form';
-import { useDocument } from '../contexts/DocumentContext';
-import { useSelection } from '../contexts/SelectionContext';
-import { useFeatureEdit } from '../contexts/FeatureEditContext';
-import { extrudeFormSchema, revolveFormSchema, type ExtrudeFormData, type RevolveFormData } from '../types/featureSchemas';
-import type { Feature, ExtrudeFeature, RevolveFeature, SketchFeature, PlaneFeature, OriginFeature, SketchLine } from '../types/document';
-import { useKernel } from '../contexts/KernelContext';
-import { useViewer } from '../contexts/ViewerContext';
-import { useTheme } from '../contexts/ThemeContext';
-import { Tooltip } from '@base-ui/react';
-import AIPanel from './AIPanel';
-import { AIIcon } from './Icons';
-import './PropertiesPanel.css';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { Menu } from "@base-ui/react/menu";
+import { useForm } from "@tanstack/react-form";
+import { useDocument } from "../contexts/DocumentContext";
+import { useSelection } from "../contexts/SelectionContext";
+import { useFeatureEdit } from "../contexts/FeatureEditContext";
+import {
+  extrudeFormSchema,
+  revolveFormSchema,
+  type ExtrudeFormData,
+  type RevolveFormData,
+} from "../types/featureSchemas";
+import type {
+  Feature,
+  ExtrudeFeature,
+  RevolveFeature,
+  SketchFeature,
+  PlaneFeature,
+  OriginFeature,
+  SketchLine,
+} from "../types/document";
+import { useKernel } from "../contexts/KernelContext";
+import { useViewer } from "../contexts/ViewerContext";
+import { useTheme } from "../contexts/ThemeContext";
+import { Tooltip } from "@base-ui/react";
+import AIPanel from "./AIPanel";
+import { AIIcon } from "./Icons";
+import "./PropertiesPanel.css";
 
 // ============================================================================
 // Input Components
@@ -54,7 +67,7 @@ function NumberInput({ value, onChange, min, max, step: _step, unit, disabled }:
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       handleBlur();
     }
   };
@@ -95,7 +108,7 @@ function TextInput({ value, onChange, placeholder, disabled }: TextInputProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       handleBlur();
     }
   };
@@ -121,7 +134,12 @@ interface SelectInputProps<T extends string> {
   disabled?: boolean;
 }
 
-function SelectInput<T extends string>({ value, onChange, options, disabled }: SelectInputProps<T>) {
+function SelectInput<T extends string>({
+  value,
+  onChange,
+  options,
+  disabled,
+}: SelectInputProps<T>) {
   return (
     <select
       className="select-input"
@@ -169,7 +187,7 @@ interface ColorInputProps {
 function ColorInput({ value, onChange, defaultColor, disabled }: ColorInputProps) {
   const currentColor = value || defaultColor;
   const isDefault = !value;
-  
+
   return (
     <div className="color-input">
       <input
@@ -180,11 +198,7 @@ function ColorInput({ value, onChange, defaultColor, disabled }: ColorInputProps
       />
       <span className="color-value">{currentColor}</span>
       {!isDefault && (
-        <button
-          className="reset-color"
-          onClick={() => onChange(undefined)}
-          disabled={disabled}
-        >
+        <button className="reset-color" onClick={() => onChange(undefined)} disabled={disabled}>
           Reset
         </button>
       )}
@@ -204,55 +218,49 @@ interface FaceSelectorProps {
 function FaceSelector({ value, onChange }: FaceSelectorProps) {
   const [isSelecting, setIsSelecting] = useState(false);
   const { setSelectionMode, setOnFaceSelected } = useSelection();
-  
+
   const handleStartSelection = useCallback(() => {
     setIsSelecting(true);
-    setSelectionMode('selectFace');
+    setSelectionMode("selectFace");
     setOnFaceSelected((face) => {
       // Create persistent reference from face selection
       const ref = `face:${face.featureId}:${face.faceIndex}`;
       onChange(ref);
       setIsSelecting(false);
-      setSelectionMode('default');
+      setSelectionMode("default");
       setOnFaceSelected(undefined);
     });
   }, [setSelectionMode, setOnFaceSelected, onChange]);
-  
+
   const handleCancelSelection = useCallback(() => {
     setIsSelecting(false);
-    setSelectionMode('default');
+    setSelectionMode("default");
     setOnFaceSelected(undefined);
   }, [setSelectionMode, setOnFaceSelected]);
-  
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
       if (isSelecting) {
-        setSelectionMode('default');
+        setSelectionMode("default");
         setOnFaceSelected(undefined);
       }
     };
   }, [isSelecting, setSelectionMode, setOnFaceSelected]);
-  
+
   return (
     <div className="face-selector">
       {isSelecting ? (
         <>
           <span className="face-selector-prompt">Click a face...</span>
-          <button 
-            className="face-selector-cancel"
-            onClick={handleCancelSelection}
-          >
+          <button className="face-selector-cancel" onClick={handleCancelSelection}>
             Cancel
           </button>
         </>
       ) : (
         <>
-          <span className="face-selector-value">{value || 'Not selected'}</span>
-          <button 
-            className="face-selector-btn"
-            onClick={handleStartSelection}
-          >
+          <span className="face-selector-value">{value || "Not selected"}</span>
+          <button className="face-selector-btn" onClick={handleStartSelection}>
             Select
           </button>
         </>
@@ -264,10 +272,14 @@ function FaceSelector({ value, onChange }: FaceSelectorProps) {
 /** Get default color for a plane ID */
 function getDefaultPlaneColorHex(planeId: string): string {
   switch (planeId) {
-    case 'xy': return '#0088ff';
-    case 'xz': return '#00cc44';
-    case 'yz': return '#ff4444';
-    default: return '#888888';
+    case "xy":
+      return "#0088ff";
+    case "xz":
+      return "#00cc44";
+    case "yz":
+      return "#ff4444";
+    default:
+      return "#888888";
   }
 }
 
@@ -296,11 +308,7 @@ interface PropertyGroupProps {
 
 function PropertyGroup({ title, children }: PropertyGroupProps) {
   // Don't render group title - make it more like Figma
-  return (
-    <div className="property-group">
-      {children}
-    </div>
-  );
+  return <div className="property-group">{children}</div>;
 }
 
 // ============================================================================
@@ -314,15 +322,12 @@ interface FeaturePropertiesProps {
 
 function OriginProperties({ feature, onUpdate }: FeaturePropertiesProps) {
   const origin = feature as OriginFeature;
-  
+
   return (
     <>
       <PropertyGroup title="General">
         <PropertyRow label="Name">
-          <TextInput
-            value={origin.name || 'Origin'}
-            onChange={(name) => onUpdate({ name })}
-          />
+          <TextInput value={origin.name || "Origin"} onChange={(name) => onUpdate({ name })} />
         </PropertyRow>
         <PropertyRow label="Type">
           <span className="readonly-value">Origin</span>
@@ -331,7 +336,7 @@ function OriginProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           <span className="readonly-value">{origin.id}</span>
         </PropertyRow>
       </PropertyGroup>
-      
+
       <PropertyGroup title="Display">
         <PropertyRow label="Visible">
           <CheckboxInput
@@ -346,15 +351,12 @@ function OriginProperties({ feature, onUpdate }: FeaturePropertiesProps) {
 
 function PlaneProperties({ feature, onUpdate }: FeaturePropertiesProps) {
   const plane = feature as PlaneFeature;
-  
+
   return (
     <>
       <PropertyGroup title="General">
         <PropertyRow label="Name">
-          <TextInput
-            value={plane.name || plane.id}
-            onChange={(name) => onUpdate({ name })}
-          />
+          <TextInput value={plane.name || plane.id} onChange={(name) => onUpdate({ name })} />
         </PropertyRow>
         <PropertyRow label="Type">
           <span className="readonly-value">Datum Plane</span>
@@ -363,7 +365,7 @@ function PlaneProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           <span className="readonly-value">{plane.id}</span>
         </PropertyRow>
       </PropertyGroup>
-      
+
       <PropertyGroup title="Display">
         <PropertyRow label="Visible">
           <CheckboxInput
@@ -404,7 +406,7 @@ function PlaneProperties({ feature, onUpdate }: FeaturePropertiesProps) {
         <PropertyRow label="Color">
           <ColorInput
             value={plane.color}
-            onChange={(color) => onUpdate({ color: color || '' })}
+            onChange={(color) => onUpdate({ color: color || "" })}
             defaultColor={getDefaultPlaneColorHex(plane.id)}
           />
         </PropertyRow>
@@ -415,15 +417,12 @@ function PlaneProperties({ feature, onUpdate }: FeaturePropertiesProps) {
 
 function SketchProperties({ feature, onUpdate }: FeaturePropertiesProps) {
   const sketch = feature as SketchFeature;
-  
+
   return (
     <>
       <PropertyGroup title="General">
         <PropertyRow label="Name">
-          <TextInput
-            value={sketch.name || sketch.id}
-            onChange={(name) => onUpdate({ name })}
-          />
+          <TextInput value={sketch.name || sketch.id} onChange={(name) => onUpdate({ name })} />
         </PropertyRow>
         <PropertyRow label="Type">
           <span className="readonly-value">Sketch</span>
@@ -432,7 +431,7 @@ function SketchProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           <span className="readonly-value">{sketch.id}</span>
         </PropertyRow>
       </PropertyGroup>
-      
+
       <PropertyGroup title="Display">
         <PropertyRow label="Visible">
           <CheckboxInput
@@ -441,19 +440,31 @@ function SketchProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           />
         </PropertyRow>
       </PropertyGroup>
-      
+
       <PropertyGroup title="Parameters">
         <PropertyRow label="Plane">
-          <span className="readonly-value">{sketch.plane.kind === 'planeFeatureId' ? 'Datum Plane' : sketch.plane.kind === 'faceRef' ? 'Face' : 'Custom'}</span>
+          <span className="readonly-value">
+            {sketch.plane.kind === "planeFeatureId"
+              ? "Datum Plane"
+              : sketch.plane.kind === "faceRef"
+                ? "Face"
+                : "Custom"}
+          </span>
         </PropertyRow>
         <PropertyRow label="Points">
-          <span className="readonly-value">{sketch.data ? Object.keys(sketch.data.pointsById).length : 0}</span>
+          <span className="readonly-value">
+            {sketch.data ? Object.keys(sketch.data.pointsById).length : 0}
+          </span>
         </PropertyRow>
         <PropertyRow label="Entities">
-          <span className="readonly-value">{sketch.data ? Object.keys(sketch.data.entitiesById).length : 0}</span>
+          <span className="readonly-value">
+            {sketch.data ? Object.keys(sketch.data.entitiesById).length : 0}
+          </span>
         </PropertyRow>
         <PropertyRow label="Constraints">
-          <span className="readonly-value">{sketch.data ? Object.keys(sketch.data.constraintsById).length : 0}</span>
+          <span className="readonly-value">
+            {sketch.data ? Object.keys(sketch.data.constraintsById).length : 0}
+          </span>
         </PropertyRow>
       </PropertyGroup>
     </>
@@ -462,19 +473,16 @@ function SketchProperties({ feature, onUpdate }: FeaturePropertiesProps) {
 
 function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
   const extrude = feature as ExtrudeFeature;
-  const extent = extrude.extent ?? 'blind';
+  const extent = extrude.extent ?? "blind";
   const { bodies } = useKernel();
-  const mergeScope = extrude.mergeScope ?? 'auto';
-  const isAddOperation = extrude.op === 'add';
-  
+  const mergeScope = extrude.mergeScope ?? "auto";
+  const isAddOperation = extrude.op === "add";
+
   return (
     <>
       <PropertyGroup title="General">
         <PropertyRow label="Name">
-          <TextInput
-            value={extrude.name || extrude.id}
-            onChange={(name) => onUpdate({ name })}
-          />
+          <TextInput value={extrude.name || extrude.id} onChange={(name) => onUpdate({ name })} />
         </PropertyRow>
         <PropertyRow label="Type">
           <span className="readonly-value">Extrude</span>
@@ -483,7 +491,7 @@ function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           <span className="readonly-value">{extrude.id}</span>
         </PropertyRow>
       </PropertyGroup>
-      
+
       <PropertyGroup title="Parameters">
         <PropertyRow label="Sketch">
           <span className="readonly-value">{extrude.sketch}</span>
@@ -493,18 +501,18 @@ function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
             value={extrude.op}
             onChange={(op) => onUpdate({ op })}
             options={[
-              { value: 'add', label: 'Add' },
-              { value: 'cut', label: 'Cut' },
+              { value: "add", label: "Add" },
+              { value: "cut", label: "Cut" },
             ]}
           />
         </PropertyRow>
         <PropertyRow label="Direction">
           <SelectInput
-            value={typeof extrude.direction === 'string' ? extrude.direction : 'normal'}
+            value={typeof extrude.direction === "string" ? extrude.direction : "normal"}
             onChange={(direction) => onUpdate({ direction })}
             options={[
-              { value: 'normal', label: 'Normal' },
-              { value: 'reverse', label: 'Reverse' },
+              { value: "normal", label: "Normal" },
+              { value: "reverse", label: "Reverse" },
             ]}
           />
         </PropertyRow>
@@ -513,13 +521,13 @@ function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
             value={extent}
             onChange={(ext) => onUpdate({ extent: ext })}
             options={[
-              { value: 'blind', label: 'Distance' },
-              { value: 'toFace', label: 'Up to Face' },
-              { value: 'throughAll', label: 'Through All' },
+              { value: "blind", label: "Distance" },
+              { value: "toFace", label: "Up to Face" },
+              { value: "throughAll", label: "Through All" },
             ]}
           />
         </PropertyRow>
-        {extent === 'blind' && (
+        {extent === "blind" && (
           <PropertyRow label="Distance">
             <NumberInput
               value={extrude.distance ?? 10}
@@ -530,16 +538,16 @@ function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
             />
           </PropertyRow>
         )}
-        {extent === 'toFace' && (
+        {extent === "toFace" && (
           <PropertyRow label="Target Face">
-            <FaceSelector 
+            <FaceSelector
               value={extrude.extentRef}
               onChange={(ref) => onUpdate({ extentRef: ref })}
             />
           </PropertyRow>
         )}
       </PropertyGroup>
-      
+
       {isAddOperation && (
         <PropertyGroup title="Multi-Body">
           <PropertyRow label="Merge">
@@ -547,13 +555,13 @@ function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
               value={mergeScope}
               onChange={(scope) => onUpdate({ mergeScope: scope })}
               options={[
-                { value: 'auto', label: 'Auto (merge with intersecting)' },
-                { value: 'new', label: 'Create new body' },
-                { value: 'specific', label: 'Merge with selected' },
+                { value: "auto", label: "Auto (merge with intersecting)" },
+                { value: "new", label: "Create new body" },
+                { value: "specific", label: "Merge with selected" },
               ]}
             />
           </PropertyRow>
-          {mergeScope === 'specific' && bodies.length > 0 && (
+          {mergeScope === "specific" && bodies.length > 0 && (
             <PropertyRow label="Target Bodies">
               <div className="body-selector">
                 {bodies.map((body) => (
@@ -565,11 +573,11 @@ function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
                         const current = extrude.targetBodies || [];
                         const newTargets = e.target.checked
                           ? [...current, body.featureId]
-                          : current.filter(id => id !== body.featureId);
-                        onUpdate({ targetBodies: newTargets.join(',') });
+                          : current.filter((id) => id !== body.featureId);
+                        onUpdate({ targetBodies: newTargets.join(",") });
                       }}
                     />
-                    <span style={{ color: body.color || '#6699cc' }}>●</span>
+                    <span style={{ color: body.color || "#6699cc" }}>●</span>
                     {body.name || body.featureId}
                   </label>
                 ))}
@@ -578,7 +586,7 @@ function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           )}
           <PropertyRow label="Body Name">
             <TextInput
-              value={extrude.resultBodyName || ''}
+              value={extrude.resultBodyName || ""}
               onChange={(name) => onUpdate({ resultBodyName: name })}
               placeholder="Auto"
             />
@@ -586,7 +594,7 @@ function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           <PropertyRow label="Body Color">
             <ColorInput
               value={extrude.resultBodyColor}
-              onChange={(color) => onUpdate({ resultBodyColor: color || '' })}
+              onChange={(color) => onUpdate({ resultBodyColor: color || "" })}
               defaultColor="#6699cc"
             />
           </PropertyRow>
@@ -599,17 +607,14 @@ function ExtrudeProperties({ feature, onUpdate }: FeaturePropertiesProps) {
 function RevolveProperties({ feature, onUpdate }: FeaturePropertiesProps) {
   const revolve = feature as RevolveFeature;
   const { bodies } = useKernel();
-  const mergeScope = revolve.mergeScope ?? 'auto';
-  const isAddOperation = revolve.op === 'add';
-  
+  const mergeScope = revolve.mergeScope ?? "auto";
+  const isAddOperation = revolve.op === "add";
+
   return (
     <>
       <PropertyGroup title="General">
         <PropertyRow label="Name">
-          <TextInput
-            value={revolve.name || revolve.id}
-            onChange={(name) => onUpdate({ name })}
-          />
+          <TextInput value={revolve.name || revolve.id} onChange={(name) => onUpdate({ name })} />
         </PropertyRow>
         <PropertyRow label="Type">
           <span className="readonly-value">Revolve</span>
@@ -618,7 +623,7 @@ function RevolveProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           <span className="readonly-value">{revolve.id}</span>
         </PropertyRow>
       </PropertyGroup>
-      
+
       <PropertyGroup title="Parameters">
         <PropertyRow label="Sketch">
           <span className="readonly-value">{revolve.sketch}</span>
@@ -641,13 +646,13 @@ function RevolveProperties({ feature, onUpdate }: FeaturePropertiesProps) {
             value={revolve.op}
             onChange={(op) => onUpdate({ op })}
             options={[
-              { value: 'add', label: 'Add' },
-              { value: 'cut', label: 'Cut' },
+              { value: "add", label: "Add" },
+              { value: "cut", label: "Cut" },
             ]}
           />
         </PropertyRow>
       </PropertyGroup>
-      
+
       {isAddOperation && (
         <PropertyGroup title="Multi-Body">
           <PropertyRow label="Merge">
@@ -655,13 +660,13 @@ function RevolveProperties({ feature, onUpdate }: FeaturePropertiesProps) {
               value={mergeScope}
               onChange={(scope) => onUpdate({ mergeScope: scope })}
               options={[
-                { value: 'auto', label: 'Auto (merge with intersecting)' },
-                { value: 'new', label: 'Create new body' },
-                { value: 'specific', label: 'Merge with selected' },
+                { value: "auto", label: "Auto (merge with intersecting)" },
+                { value: "new", label: "Create new body" },
+                { value: "specific", label: "Merge with selected" },
               ]}
             />
           </PropertyRow>
-          {mergeScope === 'specific' && bodies.length > 0 && (
+          {mergeScope === "specific" && bodies.length > 0 && (
             <PropertyRow label="Target Bodies">
               <div className="body-selector">
                 {bodies.map((body) => (
@@ -673,11 +678,11 @@ function RevolveProperties({ feature, onUpdate }: FeaturePropertiesProps) {
                         const current = revolve.targetBodies || [];
                         const newTargets = e.target.checked
                           ? [...current, body.featureId]
-                          : current.filter(id => id !== body.featureId);
-                        onUpdate({ targetBodies: newTargets.join(',') });
+                          : current.filter((id) => id !== body.featureId);
+                        onUpdate({ targetBodies: newTargets.join(",") });
                       }}
                     />
-                    <span style={{ color: body.color || '#6699cc' }}>●</span>
+                    <span style={{ color: body.color || "#6699cc" }}>●</span>
                     {body.name || body.featureId}
                   </label>
                 ))}
@@ -686,7 +691,7 @@ function RevolveProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           )}
           <PropertyRow label="Body Name">
             <TextInput
-              value={revolve.resultBodyName || ''}
+              value={revolve.resultBodyName || ""}
               onChange={(name) => onUpdate({ resultBodyName: name })}
               placeholder="Auto"
             />
@@ -694,7 +699,7 @@ function RevolveProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           <PropertyRow label="Body Color">
             <ColorInput
               value={revolve.resultBodyColor}
-              onChange={(color) => onUpdate({ resultBodyColor: color || '' })}
+              onChange={(color) => onUpdate({ resultBodyColor: color || "" })}
               defaultColor="#6699cc"
             />
           </PropertyRow>
@@ -708,10 +713,7 @@ function GenericProperties({ feature, onUpdate }: FeaturePropertiesProps) {
   return (
     <PropertyGroup title="General">
       <PropertyRow label="Name">
-        <TextInput
-          value={feature.name || feature.id}
-          onChange={(name) => onUpdate({ name })}
-        />
+        <TextInput value={feature.name || feature.id} onChange={(name) => onUpdate({ name })} />
       </PropertyRow>
       <PropertyRow label="Type">
         <span className="readonly-value">{feature.type}</span>
@@ -762,8 +764,8 @@ function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }: ExtrudeEditForm
   }, [form, onUpdate]);
 
   const currentOp = form.state.values.op;
-  const currentMergeScope = form.state.values.mergeScope || 'auto';
-  const isAddOperation = currentOp === 'add';
+  const currentMergeScope = form.state.values.mergeScope || "auto";
+  const isAddOperation = currentOp === "add";
 
   return (
     <form
@@ -783,10 +785,10 @@ function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }: ExtrudeEditForm
             <PropertyRow label="Operation">
               <SelectInput
                 value={field.state.value}
-                onChange={(op) => field.handleChange(op as 'add' | 'cut')}
+                onChange={(op) => field.handleChange(op as "add" | "cut")}
                 options={[
-                  { value: 'add', label: 'Add' },
-                  { value: 'cut', label: 'Cut' },
+                  { value: "add", label: "Add" },
+                  { value: "cut", label: "Cut" },
                 ]}
               />
             </PropertyRow>
@@ -798,10 +800,10 @@ function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }: ExtrudeEditForm
             <PropertyRow label="Direction">
               <SelectInput
                 value={field.state.value}
-                onChange={(dir) => field.handleChange(dir as 'normal' | 'reverse')}
+                onChange={(dir) => field.handleChange(dir as "normal" | "reverse")}
                 options={[
-                  { value: 'normal', label: 'Normal' },
-                  { value: 'reverse', label: 'Reverse' },
+                  { value: "normal", label: "Normal" },
+                  { value: "reverse", label: "Reverse" },
                 ]}
               />
             </PropertyRow>
@@ -813,7 +815,7 @@ function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }: ExtrudeEditForm
           validators={{
             onChange: ({ value }) => {
               if (value === undefined || value < 0.1) {
-                return 'Distance must be at least 0.1';
+                return "Distance must be at least 0.1";
               }
               return undefined;
             },
@@ -845,19 +847,19 @@ function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }: ExtrudeEditForm
             {(field) => (
               <PropertyRow label="Merge">
                 <SelectInput
-                  value={field.state.value || 'auto'}
-                  onChange={(scope) => field.handleChange(scope as 'auto' | 'new' | 'specific')}
+                  value={field.state.value || "auto"}
+                  onChange={(scope) => field.handleChange(scope as "auto" | "new" | "specific")}
                   options={[
-                    { value: 'auto', label: 'Auto (merge with intersecting)' },
-                    { value: 'new', label: 'Create new body' },
-                    { value: 'specific', label: 'Merge with selected' },
+                    { value: "auto", label: "Auto (merge with intersecting)" },
+                    { value: "new", label: "Create new body" },
+                    { value: "specific", label: "Merge with selected" },
                   ]}
                 />
               </PropertyRow>
             )}
           </form.Field>
-          
-          {currentMergeScope === 'specific' && (
+
+          {currentMergeScope === "specific" && (
             <form.Field name="targetBodies">
               {(field) => (
                 <PropertyRow label="Target Bodies">
@@ -875,7 +877,7 @@ function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }: ExtrudeEditForm
                             field.handleChange(newTargets);
                           }}
                         />
-                        <span style={{ color: body.color || '#6699cc' }}>●</span>
+                        <span style={{ color: body.color || "#6699cc" }}>●</span>
                         {body.name || body.featureId}
                       </label>
                     ))}
@@ -888,11 +890,7 @@ function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }: ExtrudeEditForm
       )}
 
       <div className="properties-panel-actions">
-        <button
-          type="button"
-          className="properties-btn properties-btn-cancel"
-          onClick={onCancel}
-        >
+        <button type="button" className="properties-btn properties-btn-cancel" onClick={onCancel}>
           Cancel
         </button>
         <button
@@ -915,7 +913,13 @@ interface RevolveEditFormProps {
   onCancel: () => void;
 }
 
-function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }: RevolveEditFormProps) {
+function RevolveEditForm({
+  data,
+  axisCandidates,
+  onUpdate,
+  onAccept,
+  onCancel,
+}: RevolveEditFormProps) {
   const { bodies } = useKernel();
   const form = useForm({
     defaultValues: data,
@@ -943,8 +947,8 @@ function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }:
   }, [form, onUpdate]);
 
   const currentOp = form.state.values.op;
-  const currentMergeScope = form.state.values.mergeScope || 'auto';
-  const isAddOperation = currentOp === 'add';
+  const currentMergeScope = form.state.values.mergeScope || "auto";
+  const isAddOperation = currentOp === "add";
 
   return (
     <form
@@ -964,10 +968,10 @@ function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }:
             <PropertyRow label="Operation">
               <SelectInput
                 value={field.state.value}
-                onChange={(op) => field.handleChange(op as 'add' | 'cut')}
+                onChange={(op) => field.handleChange(op as "add" | "cut")}
                 options={[
-                  { value: 'add', label: 'Add' },
-                  { value: 'cut', label: 'Cut' },
+                  { value: "add", label: "Add" },
+                  { value: "cut", label: "Cut" },
                 ]}
               />
             </PropertyRow>
@@ -979,7 +983,7 @@ function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }:
           validators={{
             onChange: ({ value }) => {
               if (!value) {
-                return 'Axis is required';
+                return "Axis is required";
               }
               return undefined;
             },
@@ -991,9 +995,10 @@ function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }:
                 <SelectInput
                   value={field.state.value}
                   onChange={(axis) => field.handleChange(axis)}
-                  options={axisCandidates.length > 0
-                    ? axisCandidates.map(l => ({ value: l.id, label: l.id }))
-                    : [{ value: '', label: 'No lines in sketch' }]
+                  options={
+                    axisCandidates.length > 0
+                      ? axisCandidates.map((l) => ({ value: l.id, label: l.id }))
+                      : [{ value: "", label: "No lines in sketch" }]
                   }
                   disabled={axisCandidates.length === 0}
                 />
@@ -1009,8 +1014,8 @@ function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }:
           name="angle"
           validators={{
             onChange: ({ value }) => {
-              if (value < 1) return 'Angle must be at least 1°';
-              if (value > 360) return 'Angle must be at most 360°';
+              if (value < 1) return "Angle must be at least 1°";
+              if (value > 360) return "Angle must be at most 360°";
               return undefined;
             },
           }}
@@ -1042,19 +1047,19 @@ function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }:
             {(field) => (
               <PropertyRow label="Merge">
                 <SelectInput
-                  value={field.state.value || 'auto'}
-                  onChange={(scope) => field.handleChange(scope as 'auto' | 'new' | 'specific')}
+                  value={field.state.value || "auto"}
+                  onChange={(scope) => field.handleChange(scope as "auto" | "new" | "specific")}
                   options={[
-                    { value: 'auto', label: 'Auto (merge with intersecting)' },
-                    { value: 'new', label: 'Create new body' },
-                    { value: 'specific', label: 'Merge with selected' },
+                    { value: "auto", label: "Auto (merge with intersecting)" },
+                    { value: "new", label: "Create new body" },
+                    { value: "specific", label: "Merge with selected" },
                   ]}
                 />
               </PropertyRow>
             )}
           </form.Field>
-          
-          {currentMergeScope === 'specific' && (
+
+          {currentMergeScope === "specific" && (
             <form.Field name="targetBodies">
               {(field) => (
                 <PropertyRow label="Target Bodies">
@@ -1072,7 +1077,7 @@ function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }:
                             field.handleChange(newTargets);
                           }}
                         />
-                        <span style={{ color: body.color || '#6699cc' }}>●</span>
+                        <span style={{ color: body.color || "#6699cc" }}>●</span>
                         {body.name || body.featureId}
                       </label>
                     ))}
@@ -1085,11 +1090,7 @@ function RevolveEditForm({ data, axisCandidates, onUpdate, onAccept, onCancel }:
       )}
 
       <div className="properties-panel-actions">
-        <button
-          type="button"
-          className="properties-btn properties-btn-cancel"
-          onClick={onCancel}
-        >
+        <button type="button" className="properties-btn properties-btn-cancel" onClick={onCancel}>
           Cancel
         </button>
         <button
@@ -1115,36 +1116,41 @@ const PropertiesPanel: React.FC = () => {
   const { state: viewerState, actions: viewerActions } = useViewer();
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const [showAIChat, setShowAIChat] = useState(false);
-  
+
   // Get axis candidates for revolve
   const axisCandidates = useMemo(() => {
-    if (editMode.type !== 'revolve') return [];
+    if (editMode.type !== "revolve") return [];
     const sketch = getFeatureById(editMode.sketchId);
-    if (!sketch || sketch.type !== 'sketch' || !sketch.data) return [];
-    return Object.values(sketch.data.entitiesById).filter((e): e is SketchLine => e.type === 'line');
+    if (!sketch || sketch.type !== "sketch" || !sketch.data) return [];
+    return Object.values(sketch.data.entitiesById).filter(
+      (e): e is SketchLine => e.type === "line"
+    );
   }, [editMode, getFeatureById]);
-  
+
   // Get the selected feature
   const selectedFeature = selectedFeatureId ? getFeatureById(selectedFeatureId) : null;
-  
-  // If a face is selected but no feature, use the face's feature
-  const effectiveFeature = selectedFeature || 
-    (selectedFaces.length > 0 ? getFeatureById(selectedFaces[0].featureId) : null);
-  
-  const handleUpdate = useCallback((updates: Record<string, string | number | boolean>) => {
-    if (!effectiveFeature) return;
-    
-    // Update the feature in Yjs
-    const featureMap = doc.featuresById.get(effectiveFeature.id);
-    if (featureMap) {
-      doc.ydoc.transact(() => {
-        for (const [key, value] of Object.entries(updates)) {
-          featureMap.set(key, value);
-        }
-      });
-    }
-  }, [effectiveFeature, doc]);
 
+  // If a face is selected but no feature, use the face's feature
+  const effectiveFeature =
+    selectedFeature ||
+    (selectedFaces.length > 0 ? getFeatureById(selectedFaces[0].featureId) : null);
+
+  const handleUpdate = useCallback(
+    (updates: Record<string, string | number | boolean>) => {
+      if (!effectiveFeature) return;
+
+      // Update the feature in Yjs
+      const featureMap = doc.featuresById.get(effectiveFeature.id);
+      if (featureMap) {
+        doc.ydoc.transact(() => {
+          for (const [key, value] of Object.entries(updates)) {
+            featureMap.set(key, value);
+          }
+        });
+      }
+    },
+    [effectiveFeature, doc]
+  );
 
   // Render header with user, display dropdown, chat, and share buttons
   const renderHeader = () => (
@@ -1158,7 +1164,14 @@ const PropertiesPanel: React.FC = () => {
               onClick={() => {}}
               render={<button aria-label="User" />}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                 <circle cx="12" cy="7" r="4" />
               </svg>
@@ -1170,14 +1183,31 @@ const PropertiesPanel: React.FC = () => {
             </Tooltip.Portal>
           </Tooltip.Root>
           <Menu.Root>
-            <Menu.Trigger className="properties-panel-header-icon-button" aria-label="Display Options">
-              {viewerState.projectionMode === 'perspective' ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <Menu.Trigger
+              className="properties-panel-header-icon-button"
+              aria-label="Display Options"
+            >
+              {viewerState.projectionMode === "perspective" ? (
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
                   <path d="M12 2l8 4v12l-8 4-8-4V6l8-4z" />
                   <path d="M12 22V10M12 10L4 6M12 10l8-4" />
                 </svg>
               ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
                   <rect x="4" y="4" width="16" height="16" />
                   <line x1="4" y1="12" x2="20" y2="12" />
                   <line x1="12" y1="4" x2="12" y2="20" />
@@ -1188,30 +1218,46 @@ const PropertiesPanel: React.FC = () => {
               <Menu.Positioner sideOffset={8}>
                 <Menu.Popup className="properties-panel-header-dropdown">
                   <Menu.Group>
-                    <Menu.GroupLabel className="properties-panel-header-dropdown-label">Projection</Menu.GroupLabel>
+                    <Menu.GroupLabel className="properties-panel-header-dropdown-label">
+                      Projection
+                    </Menu.GroupLabel>
                     <Menu.Item
-                      className={`properties-panel-header-dropdown-item ${viewerState.projectionMode === 'perspective' ? 'active' : ''}`}
+                      className={`properties-panel-header-dropdown-item ${viewerState.projectionMode === "perspective" ? "active" : ""}`}
                       onClick={() => {
-                        if (viewerState.projectionMode !== 'perspective') {
+                        if (viewerState.projectionMode !== "perspective") {
                           viewerActions.toggleProjection();
                         }
                       }}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
                         <path d="M12 2l8 4v12l-8 4-8-4V6l8-4z" />
                         <path d="M12 22V10M12 10L4 6M12 10l8-4" />
                       </svg>
                       <span>Perspective</span>
                     </Menu.Item>
                     <Menu.Item
-                      className={`properties-panel-header-dropdown-item ${viewerState.projectionMode === 'orthographic' ? 'active' : ''}`}
+                      className={`properties-panel-header-dropdown-item ${viewerState.projectionMode === "orthographic" ? "active" : ""}`}
                       onClick={() => {
-                        if (viewerState.projectionMode !== 'orthographic') {
+                        if (viewerState.projectionMode !== "orthographic") {
                           viewerActions.toggleProjection();
                         }
                       }}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
                         <rect x="4" y="4" width="16" height="16" />
                         <line x1="4" y1="12" x2="20" y2="12" />
                         <line x1="12" y1="4" x2="12" y2="20" />
@@ -1220,29 +1266,45 @@ const PropertiesPanel: React.FC = () => {
                     </Menu.Item>
                   </Menu.Group>
                   <Menu.Group>
-                    <Menu.GroupLabel className="properties-panel-header-dropdown-label">Display</Menu.GroupLabel>
+                    <Menu.GroupLabel className="properties-panel-header-dropdown-label">
+                      Display
+                    </Menu.GroupLabel>
                     <Menu.Item
-                      className={`properties-panel-header-dropdown-item ${viewerState.displayMode === 'shaded' ? 'active' : ''}`}
+                      className={`properties-panel-header-dropdown-item ${viewerState.displayMode === "shaded" ? "active" : ""}`}
                       onClick={() => {
-                        if (viewerState.displayMode !== 'shaded') {
-                          viewerActions.setDisplayMode('shaded');
+                        if (viewerState.displayMode !== "shaded") {
+                          viewerActions.setDisplayMode("shaded");
                         }
                       }}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        stroke="currentColor"
+                        strokeWidth="1"
+                      >
                         <path d="M12 3l9 5v8l-9 5-9-5V8l9-5z" />
                       </svg>
                       <span>Shaded</span>
                     </Menu.Item>
                     <Menu.Item
-                      className={`properties-panel-header-dropdown-item ${viewerState.displayMode === 'wireframe' ? 'active' : ''}`}
+                      className={`properties-panel-header-dropdown-item ${viewerState.displayMode === "wireframe" ? "active" : ""}`}
                       onClick={() => {
-                        if (viewerState.displayMode !== 'wireframe') {
-                          viewerActions.setDisplayMode('wireframe');
+                        if (viewerState.displayMode !== "wireframe") {
+                          viewerActions.setDisplayMode("wireframe");
                         }
                       }}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
                         <path d="M12 3l9 5v8l-9 5-9-5V8l9-5z" />
                         <path d="M12 21V12M3 8l9 4 9-4" />
                       </svg>
@@ -1250,31 +1312,54 @@ const PropertiesPanel: React.FC = () => {
                     </Menu.Item>
                   </Menu.Group>
                   <Menu.Group>
-                    <Menu.GroupLabel className="properties-panel-header-dropdown-label">Theme</Menu.GroupLabel>
+                    <Menu.GroupLabel className="properties-panel-header-dropdown-label">
+                      Theme
+                    </Menu.GroupLabel>
                     <Menu.Item
-                      className={`properties-panel-header-dropdown-item ${themeMode === 'light' ? 'active' : ''}`}
-                      onClick={() => setThemeMode('light')}
+                      className={`properties-panel-header-dropdown-item ${themeMode === "light" ? "active" : ""}`}
+                      onClick={() => setThemeMode("light")}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
                         <circle cx="12" cy="12" r="4" />
                         <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
                       </svg>
                       <span>Light</span>
                     </Menu.Item>
                     <Menu.Item
-                      className={`properties-panel-header-dropdown-item ${themeMode === 'dark' ? 'active' : ''}`}
-                      onClick={() => setThemeMode('dark')}
+                      className={`properties-panel-header-dropdown-item ${themeMode === "dark" ? "active" : ""}`}
+                      onClick={() => setThemeMode("dark")}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
                         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                       </svg>
                       <span>Dark</span>
                     </Menu.Item>
                     <Menu.Item
-                      className={`properties-panel-header-dropdown-item ${themeMode === 'auto' ? 'active' : ''}`}
-                      onClick={() => setThemeMode('auto')}
+                      className={`properties-panel-header-dropdown-item ${themeMode === "auto" ? "active" : ""}`}
+                      onClick={() => setThemeMode("auto")}
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
                         <rect x="2" y="3" width="20" height="18" rx="2" />
                         <path d="M8 3v4M16 3v4M2 9h20" />
                         <path d="M9 13h6M9 17h6" />
@@ -1286,41 +1371,41 @@ const PropertiesPanel: React.FC = () => {
               </Menu.Positioner>
             </Menu.Portal>
           </Menu.Root>
+        </div>
+        <div className="properties-panel-header-right">
+          <Tooltip.Root>
+            <Tooltip.Trigger
+              delay={300}
+              className={`properties-panel-header-button properties-panel-header-chat ${showAIChat ? "active" : ""}`}
+              onClick={() => setShowAIChat(!showAIChat)}
+              render={<button aria-label="AI Chat" />}
+            >
+              <AIIcon />
+              <span>Chat</span>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Positioner side="bottom" sideOffset={6}>
+                <Tooltip.Popup className="properties-panel-header-tooltip">AI Chat</Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+          <Tooltip.Root>
+            <Tooltip.Trigger
+              delay={300}
+              className="properties-panel-header-button properties-panel-header-share"
+              onClick={() => {}}
+              render={<button aria-label="Share" />}
+            >
+              Share
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Positioner side="bottom" sideOffset={6}>
+                <Tooltip.Popup className="properties-panel-header-tooltip">Share</Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        </div>
       </div>
-      <div className="properties-panel-header-right">
-        <Tooltip.Root>
-          <Tooltip.Trigger
-            delay={300}
-            className={`properties-panel-header-button properties-panel-header-chat ${showAIChat ? 'active' : ''}`}
-            onClick={() => setShowAIChat(!showAIChat)}
-            render={<button aria-label="AI Chat" />}
-          >
-            <AIIcon />
-            <span>Chat</span>
-          </Tooltip.Trigger>
-          <Tooltip.Portal>
-            <Tooltip.Positioner side="bottom" sideOffset={6}>
-              <Tooltip.Popup className="properties-panel-header-tooltip">AI Chat</Tooltip.Popup>
-            </Tooltip.Positioner>
-          </Tooltip.Portal>
-        </Tooltip.Root>
-        <Tooltip.Root>
-          <Tooltip.Trigger
-            delay={300}
-            className="properties-panel-header-button properties-panel-header-share"
-            onClick={() => {}}
-            render={<button aria-label="Share" />}
-          >
-            Share
-          </Tooltip.Trigger>
-          <Tooltip.Portal>
-            <Tooltip.Positioner side="bottom" sideOffset={6}>
-              <Tooltip.Popup className="properties-panel-header-tooltip">Share</Tooltip.Popup>
-            </Tooltip.Positioner>
-          </Tooltip.Portal>
-        </Tooltip.Root>
-      </div>
-    </div>
     </Tooltip.Provider>
   );
 
@@ -1330,16 +1415,16 @@ const PropertiesPanel: React.FC = () => {
       <div className="properties-panel properties-panel-floating properties-panel-editing">
         {renderHeader()}
         <div className="properties-panel-content">
-          {editMode.type === 'extrude' && (
-            <ExtrudeEditForm 
-              data={editMode.data as ExtrudeFormData} 
+          {editMode.type === "extrude" && (
+            <ExtrudeEditForm
+              data={editMode.data as ExtrudeFormData}
               onUpdate={updateFormData}
               onAccept={acceptEdit}
               onCancel={cancelEdit}
             />
           )}
-          {editMode.type === 'revolve' && (
-            <RevolveEditForm 
+          {editMode.type === "revolve" && (
+            <RevolveEditForm
               data={editMode.data as RevolveFormData}
               axisCandidates={axisCandidates}
               onUpdate={updateFormData}
@@ -1361,15 +1446,15 @@ const PropertiesPanel: React.FC = () => {
     }
 
     switch (effectiveFeature.type) {
-      case 'origin':
+      case "origin":
         return <OriginProperties feature={effectiveFeature} onUpdate={handleUpdate} />;
-      case 'plane':
+      case "plane":
         return <PlaneProperties feature={effectiveFeature} onUpdate={handleUpdate} />;
-      case 'sketch':
+      case "sketch":
         return <SketchProperties feature={effectiveFeature} onUpdate={handleUpdate} />;
-      case 'extrude':
+      case "extrude":
         return <ExtrudeProperties feature={effectiveFeature} onUpdate={handleUpdate} />;
-      case 'revolve':
+      case "revolve":
         return <RevolveProperties feature={effectiveFeature} onUpdate={handleUpdate} />;
       default:
         return <GenericProperties feature={effectiveFeature} onUpdate={handleUpdate} />;
@@ -1377,15 +1462,11 @@ const PropertiesPanel: React.FC = () => {
   };
 
   const content = showAIChat ? <AIPanel /> : renderProperties();
-  
+
   return (
     <div className="properties-panel properties-panel-floating">
       {renderHeader()}
-      {content && (
-        <div className="properties-panel-content">
-          {content}
-        </div>
-      )}
+      {content && <div className="properties-panel-content">{content}</div>}
     </div>
   );
 };

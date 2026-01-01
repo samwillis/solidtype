@@ -1,18 +1,18 @@
 /**
  * Persistent Naming Types
- * 
+ *
  * This module defines the core types for the persistent naming subsystem.
  * The naming system allows faces, edges, and vertices to be referenced
  * stably across parametric edits and modeling operations.
- * 
+ *
  * Design influences:
  * - Kripac's topological ID system
  * - OpenCascade's OCAF TNaming_NamedShape
  * - FreeCAD's topological naming improvements (realthunder)
  */
 
-import type { Vec3 } from '../num/vec3.js';
-import type { BodyId, FaceId, EdgeId, VertexId } from '../topo/handles.js';
+import type { Vec3 } from "../num/vec3.js";
+import type { BodyId, FaceId, EdgeId, VertexId } from "../topo/handles.js";
 
 // ============================================================================
 // Branded IDs for the naming system
@@ -20,19 +20,19 @@ import type { BodyId, FaceId, EdgeId, VertexId } from '../topo/handles.js';
 
 /**
  * Feature ID - identifies a modeling feature (extrude, revolve, boolean, etc.)
- * 
+ *
  * Each modeling operation allocates a unique FeatureId to track
  * the entities it creates.
  */
-export type FeatureId = number & { __brand: 'FeatureId' };
+export type FeatureId = number & { __brand: `FeatureId` };
 
 /**
  * Step ID - identifies a step in the model history
- * 
+ *
  * Each modeling operation that modifies existing geometry creates a new step.
  * Used for tracking evolution across operations.
  */
-export type StepId = number & { __brand: 'StepId' };
+export type StepId = number & { __brand: `StepId` };
 
 /**
  * Cast a number to a FeatureId
@@ -57,11 +57,11 @@ export function asStepId(id: number): StepId {
 /**
  * Type of subshape entity
  */
-export type SubshapeType = 'face' | 'edge' | 'vertex';
+export type SubshapeType = `face` | `edge` | `vertex`;
 
 /**
  * SubshapeRef - ephemeral reference to a topological entity
- * 
+ *
  * This is an "internal" reference that's valid within a single model build.
  * External systems should use PersistentRef instead.
  */
@@ -78,21 +78,21 @@ export interface SubshapeRef {
  * Create a SubshapeRef for a face
  */
 export function faceRef(body: BodyId, face: FaceId): SubshapeRef {
-  return { body, type: 'face', id: face };
+  return { body, type: `face`, id: face };
 }
 
 /**
  * Create a SubshapeRef for an edge
  */
 export function edgeRef(body: BodyId, edge: EdgeId): SubshapeRef {
-  return { body, type: 'edge', id: edge };
+  return { body, type: `edge`, id: edge };
 }
 
 /**
  * Create a SubshapeRef for a vertex
  */
 export function vertexRef(body: BodyId, vertex: VertexId): SubshapeRef {
-  return { body, type: 'vertex', id: vertex };
+  return { body, type: `vertex`, id: vertex };
 }
 
 // ============================================================================
@@ -101,7 +101,7 @@ export function vertexRef(body: BodyId, vertex: VertexId): SubshapeRef {
 
 /**
  * FeatureLocalSelector - identifies a subshape within the context of its creating feature
- * 
+ *
  * This provides a stable path to identify which part of a feature a subshape
  * represents. Examples:
  * - Extrude top cap: { kind: 'extrude.topCap', data: { loop: 0 } }
@@ -120,63 +120,75 @@ export interface FeatureLocalSelector {
  * Create a selector for an extrude top cap face
  */
 export function extrudeTopCapSelector(loopIndex: number = 0): FeatureLocalSelector {
-  return { kind: 'extrude.topCap', data: { loop: loopIndex } };
+  return { kind: `extrude.topCap`, data: { loop: loopIndex } };
 }
 
 /**
  * Create a selector for an extrude bottom cap face
  */
 export function extrudeBottomCapSelector(loopIndex: number = 0): FeatureLocalSelector {
-  return { kind: 'extrude.bottomCap', data: { loop: loopIndex } };
+  return { kind: `extrude.bottomCap`, data: { loop: loopIndex } };
 }
 
 /**
  * Create a selector for an extrude side face
  */
 export function extrudeSideSelector(loopIndex: number, segmentIndex: number): FeatureLocalSelector {
-  return { kind: 'extrude.side', data: { loop: loopIndex, segment: segmentIndex } };
+  return { kind: `extrude.side`, data: { loop: loopIndex, segment: segmentIndex } };
 }
 
 /**
  * Create a selector for an extrude side edge (vertical edge)
  */
-export function extrudeSideEdgeSelector(loopIndex: number, vertexIndex: number): FeatureLocalSelector {
-  return { kind: 'extrude.sideEdge', data: { loop: loopIndex, vertex: vertexIndex } };
+export function extrudeSideEdgeSelector(
+  loopIndex: number,
+  vertexIndex: number
+): FeatureLocalSelector {
+  return { kind: `extrude.sideEdge`, data: { loop: loopIndex, vertex: vertexIndex } };
 }
 
 /**
  * Create a selector for an extrude top edge
  */
-export function extrudeTopEdgeSelector(loopIndex: number, segmentIndex: number): FeatureLocalSelector {
-  return { kind: 'extrude.topEdge', data: { loop: loopIndex, segment: segmentIndex } };
+export function extrudeTopEdgeSelector(
+  loopIndex: number,
+  segmentIndex: number
+): FeatureLocalSelector {
+  return { kind: `extrude.topEdge`, data: { loop: loopIndex, segment: segmentIndex } };
 }
 
 /**
  * Create a selector for an extrude bottom edge
  */
-export function extrudeBottomEdgeSelector(loopIndex: number, segmentIndex: number): FeatureLocalSelector {
-  return { kind: 'extrude.bottomEdge', data: { loop: loopIndex, segment: segmentIndex } };
+export function extrudeBottomEdgeSelector(
+  loopIndex: number,
+  segmentIndex: number
+): FeatureLocalSelector {
+  return { kind: `extrude.bottomEdge`, data: { loop: loopIndex, segment: segmentIndex } };
 }
 
 /**
  * Create a selector for a revolve side face
  */
-export function revolveSideSelector(profileSegment: number, ringSegment: number): FeatureLocalSelector {
-  return { kind: 'revolve.side', data: { segment: profileSegment, ring: ringSegment } };
+export function revolveSideSelector(
+  profileSegment: number,
+  ringSegment: number
+): FeatureLocalSelector {
+  return { kind: `revolve.side`, data: { segment: profileSegment, ring: ringSegment } };
 }
 
 /**
  * Create a selector for a revolve start cap face
  */
 export function revolveStartCapSelector(): FeatureLocalSelector {
-  return { kind: 'revolve.startCap', data: {} };
+  return { kind: `revolve.startCap`, data: {} };
 }
 
 /**
  * Create a selector for a revolve end cap face
  */
 export function revolveEndCapSelector(): FeatureLocalSelector {
-  return { kind: 'revolve.endCap', data: {} };
+  return { kind: `revolve.endCap`, data: {} };
 }
 
 /**
@@ -185,21 +197,21 @@ export function revolveEndCapSelector(): FeatureLocalSelector {
 export function primitiveFaceSelector(faceIndex: number, faceName?: string): FeatureLocalSelector {
   const data: Record<string, number | string> = { index: faceIndex };
   if (faceName) data.name = faceName;
-  return { kind: 'primitive.face', data };
+  return { kind: `primitive.face`, data };
 }
 
 /**
  * Create a selector for a boolean result face derived from body A
  */
 export function booleanFaceFromASelector(originalFaceIndex: number): FeatureLocalSelector {
-  return { kind: 'boolean.faceFromA', data: { originalIndex: originalFaceIndex } };
+  return { kind: `boolean.faceFromA`, data: { originalIndex: originalFaceIndex } };
 }
 
 /**
  * Create a selector for a boolean result face derived from body B
  */
 export function booleanFaceFromBSelector(originalFaceIndex: number): FeatureLocalSelector {
-  return { kind: 'boolean.faceFromB', data: { originalIndex: originalFaceIndex } };
+  return { kind: `boolean.faceFromB`, data: { originalIndex: originalFaceIndex } };
 }
 
 // ============================================================================
@@ -208,7 +220,7 @@ export function booleanFaceFromBSelector(originalFaceIndex: number): FeatureLoca
 
 /**
  * GeometryTopologyFingerprint - compact descriptor for matching subshapes
- * 
+ *
  * Used as a fallback when topology-based matching is ambiguous (e.g., splits).
  * Contains geometric and topological hints to help identify the "right" subshape.
  */
@@ -241,7 +253,7 @@ export function emptyFingerprint(): GeometryTopologyFingerprint {
 
 /**
  * PersistentRef - stable reference to a subshape exposed to external consumers
- * 
+ *
  * This is the main type that constraints, dimensions, and other features
  * should hold onto. It survives parametric edits and can be resolved
  * back to a current SubshapeRef.
@@ -280,7 +292,7 @@ export function createPersistentRef(
 
 /**
  * EvolutionMapping - describes how a subshape evolved through a modeling step
- * 
+ *
  * Possible scenarios:
  * - Birth: old is null, news contains the newly created subshapes
  * - Death: old exists, news is empty (subshape was deleted)
@@ -295,35 +307,41 @@ export interface EvolutionMapping {
   /** The resulting subshapes (empty for deaths, multiple for splits) */
   news: SubshapeRef[];
   /** Optional description of the evolution type */
-  evolutionType?: 'birth' | 'death' | 'split' | 'merge' | 'modify' | 'unchanged';
+  evolutionType?: `birth` | `death` | `split` | `merge` | `modify` | `unchanged`;
 }
 
 /**
  * Create an evolution mapping for a birth
  */
 export function birthMapping(newSubshapes: SubshapeRef[]): EvolutionMapping {
-  return { old: null, news: newSubshapes, evolutionType: 'birth' };
+  return { old: null, news: newSubshapes, evolutionType: `birth` };
 }
 
 /**
  * Create an evolution mapping for a death
  */
 export function deathMapping(oldSubshape: SubshapeRef): EvolutionMapping {
-  return { old: oldSubshape, news: [], evolutionType: 'death' };
+  return { old: oldSubshape, news: [], evolutionType: `death` };
 }
 
 /**
  * Create an evolution mapping for a modification
  */
-export function modifyMapping(oldSubshape: SubshapeRef, newSubshape: SubshapeRef): EvolutionMapping {
-  return { old: oldSubshape, news: [newSubshape], evolutionType: 'modify' };
+export function modifyMapping(
+  oldSubshape: SubshapeRef,
+  newSubshape: SubshapeRef
+): EvolutionMapping {
+  return { old: oldSubshape, news: [newSubshape], evolutionType: `modify` };
 }
 
 /**
  * Create an evolution mapping for a split
  */
-export function splitMapping(oldSubshape: SubshapeRef, newSubshapes: SubshapeRef[]): EvolutionMapping {
-  return { old: oldSubshape, news: newSubshapes, evolutionType: 'split' };
+export function splitMapping(
+  oldSubshape: SubshapeRef,
+  newSubshapes: SubshapeRef[]
+): EvolutionMapping {
+  return { old: oldSubshape, news: newSubshapes, evolutionType: `split` };
 }
 
 // ============================================================================
@@ -333,28 +351,28 @@ export function splitMapping(oldSubshape: SubshapeRef, newSubshapes: SubshapeRef
 /**
  * Result of resolving a PersistentRef
  */
-export type ResolveResult = 
-  | { status: 'found'; ref: SubshapeRef }
-  | { status: 'not_found'; reason: string }
-  | { status: 'ambiguous'; candidates: SubshapeRef[] };
+export type ResolveResult =
+  | { status: `found`; ref: SubshapeRef }
+  | { status: `not_found`; reason: string }
+  | { status: `ambiguous`; candidates: SubshapeRef[] };
 
 /**
  * Create a successful resolve result
  */
 export function resolvedRef(ref: SubshapeRef): ResolveResult {
-  return { status: 'found', ref };
+  return { status: `found`, ref };
 }
 
 /**
  * Create a not-found resolve result
  */
 export function notFoundRef(reason: string): ResolveResult {
-  return { status: 'not_found', reason };
+  return { status: `not_found`, reason };
 }
 
 /**
  * Create an ambiguous resolve result
  */
 export function ambiguousRef(candidates: SubshapeRef[]): ResolveResult {
-  return { status: 'ambiguous', candidates };
+  return { status: `ambiguous`, candidates };
 }

@@ -2,10 +2,10 @@
  * Types for planar boolean operations
  */
 
-import type { Vec2 } from '../../num/vec2.js';
-import type { Vec3 } from '../../num/vec3.js';
-import type { FaceId, HalfEdgeId, VertexId } from '../../topo/handles.js';
-import type { PlaneSurface } from '../../geom/surface.js';
+import type { Vec2 } from "../../num/vec2.js";
+import type { Vec3 } from "../../num/vec3.js";
+import type { FaceId, HalfEdgeId, VertexId } from "../../topo/handles.js";
+import type { PlaneSurface } from "../../geom/surface.js";
 
 /**
  * A 2D polygon in the UV space of a planar face
@@ -53,7 +53,7 @@ export interface PlaneIntersectionResult {
 /**
  * Classification of a face piece relative to another solid
  */
-export type PieceClassification = 'inside' | 'outside' | 'on_same' | 'on_opposite';
+export type PieceClassification = `inside` | `outside` | `on_same` | `on_opposite`;
 
 /**
  * A face piece resulting from imprinting
@@ -76,7 +76,7 @@ export interface FacePiece {
 /**
  * Boolean operation type
  */
-export type BoolOp = 'union' | 'subtract' | 'intersect';
+export type BoolOp = `union` | `subtract` | `intersect`;
 
 /**
  * 3D axis-aligned bounding box

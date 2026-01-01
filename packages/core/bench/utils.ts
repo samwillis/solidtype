@@ -1,6 +1,6 @@
 /**
  * Benchmark utilities for SolidType performance testing
- * 
+ *
  * Provides simple timing utilities for measuring performance of
  * core operations like model building, tessellation, and constraint solving.
  */
@@ -47,7 +47,7 @@ const DEFAULT_OPTIONS: Required<BenchmarkOptions> = {
 
 /**
  * Run a benchmark and collect timing statistics
- * 
+ *
  * @param name Name of the benchmark
  * @param fn Function to benchmark
  * @param options Benchmark options
@@ -59,7 +59,7 @@ export function runBenchmark(
   options?: BenchmarkOptions
 ): BenchmarkResult {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  
+
   // Warmup runs
   if (opts.verbose) {
     console.log(`[${name}] Running ${opts.warmup} warmup iterations...`);
@@ -67,35 +67,35 @@ export function runBenchmark(
   for (let i = 0; i < opts.warmup; i++) {
     fn();
   }
-  
+
   // Timed runs
   const times: number[] = [];
-  
+
   if (opts.verbose) {
     console.log(`[${name}] Running ${opts.iterations} iterations...`);
   }
-  
+
   for (let i = 0; i < opts.iterations; i++) {
     const start = performance.now();
     fn();
     const end = performance.now();
     times.push(end - start);
   }
-  
+
   // Compute statistics
   const totalMs = times.reduce((a, b) => a + b, 0);
   const avgMs = totalMs / opts.iterations;
   const minMs = Math.min(...times);
   const maxMs = Math.max(...times);
-  
+
   // Standard deviation
-  const squaredDiffs = times.map(t => Math.pow(t - avgMs, 2));
+  const squaredDiffs = times.map((t) => Math.pow(t - avgMs, 2));
   const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / opts.iterations;
   const stdDevMs = Math.sqrt(avgSquaredDiff);
-  
+
   // Operations per second
   const opsPerSec = 1000 / avgMs;
-  
+
   return {
     name,
     iterations: opts.iterations,
@@ -117,34 +117,34 @@ export async function runBenchmarkAsync(
   options?: BenchmarkOptions
 ): Promise<BenchmarkResult> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  
+
   // Warmup runs
   for (let i = 0; i < opts.warmup; i++) {
     await fn();
   }
-  
+
   // Timed runs
   const times: number[] = [];
-  
+
   for (let i = 0; i < opts.iterations; i++) {
     const start = performance.now();
     await fn();
     const end = performance.now();
     times.push(end - start);
   }
-  
+
   // Compute statistics
   const totalMs = times.reduce((a, b) => a + b, 0);
   const avgMs = totalMs / opts.iterations;
   const minMs = Math.min(...times);
   const maxMs = Math.max(...times);
-  
-  const squaredDiffs = times.map(t => Math.pow(t - avgMs, 2));
+
+  const squaredDiffs = times.map((t) => Math.pow(t - avgMs, 2));
   const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / opts.iterations;
   const stdDevMs = Math.sqrt(avgSquaredDiff);
-  
+
   const opsPerSec = 1000 / avgMs;
-  
+
   return {
     name,
     iterations: opts.iterations,
@@ -169,7 +169,7 @@ export function formatResult(result: BenchmarkResult): string {
     `  Max:        ${result.maxMs.toFixed(3)} ms`,
     `  Std Dev:    ${result.stdDevMs.toFixed(3)} ms`,
     `  Ops/sec:    ${result.opsPerSec.toFixed(2)}`,
-  ].join('\n');
+  ].join(`\n`);
 }
 
 /**
@@ -177,7 +177,7 @@ export function formatResult(result: BenchmarkResult): string {
  */
 export function printResult(result: BenchmarkResult): void {
   console.log(formatResult(result));
-  console.log('');
+  console.log(``);
 }
 
 /**
@@ -188,13 +188,13 @@ export function runBenchmarks(
   options?: BenchmarkOptions
 ): BenchmarkResult[] {
   const results: BenchmarkResult[] = [];
-  
+
   for (const { name, fn } of benchmarks) {
     const result = runBenchmark(name, fn, options);
     results.push(result);
     printResult(result);
   }
-  
+
   return results;
 }
 
@@ -202,12 +202,13 @@ export function runBenchmarks(
  * Create a summary table from benchmark results
  */
 export function summarizeResults(results: BenchmarkResult[]): string {
-  const header = '| Benchmark | Avg (ms) | Min (ms) | Max (ms) | Ops/sec |';
-  const separator = '|-----------|----------|----------|----------|---------|';
-  
-  const rows = results.map(r => 
-    `| ${r.name.padEnd(9)} | ${r.avgMs.toFixed(3).padStart(8)} | ${r.minMs.toFixed(3).padStart(8)} | ${r.maxMs.toFixed(3).padStart(8)} | ${r.opsPerSec.toFixed(1).padStart(7)} |`
+  const header = `| Benchmark | Avg (ms) | Min (ms) | Max (ms) | Ops/sec |`;
+  const separator = `|-----------|----------|----------|----------|---------|`;
+
+  const rows = results.map(
+    (r) =>
+      `| ${r.name.padEnd(9)} | ${r.avgMs.toFixed(3).padStart(8)} | ${r.minMs.toFixed(3).padStart(8)} | ${r.maxMs.toFixed(3).padStart(8)} | ${r.opsPerSec.toFixed(1).padStart(7)} |`
   );
-  
-  return [header, separator, ...rows].join('\n');
+
+  return [header, separator, ...rows].join(`\n`);
 }

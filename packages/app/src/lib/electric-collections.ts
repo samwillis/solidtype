@@ -1,23 +1,23 @@
 /**
  * Electric Collections for SolidType
- * 
+ *
  * Uses TanStack DB with Electric collections for real-time sync.
  * Collections subscribe to Electric Shapes via the server proxy.
- * 
+ *
  * Architecture:
  * - Electric (read-path): Postgres → Electric → Client collections
  * - Writes: Collection mutation → API → Postgres → txid → Electric sync → reconcile
- * 
+ *
  * Collections are singleton instances - one per table.
  * The auth proxy ensures users only sync data they have access to.
  * Components query collections using useLiveQuery with WHERE clauses.
- * 
+ *
  * See: https://electric-sql.com/AGENTS.md
  */
 
-import { createCollection } from '@tanstack/react-db';
-import { electricCollectionOptions } from '@tanstack/electric-db-collection';
-import { z } from 'zod';
+import { createCollection } from "@tanstack/react-db";
+import { electricCollectionOptions } from "@tanstack/electric-db-collection";
+import { z } from "zod";
 import {
   createBranchMutation,
   updateBranchMutation,
@@ -34,7 +34,7 @@ import {
   createProjectMutation,
   updateProjectMutation,
   deleteProjectMutation,
-} from './server-functions';
+} from "./server-functions";
 
 // ============================================================================
 // Schemas (Zod for validation + type inference)
@@ -62,7 +62,7 @@ export const documentSchema = z.object({
   project_id: z.string().uuid(),
   branch_id: z.string().uuid(),
   name: z.string(),
-  type: z.enum(['part', 'assembly', 'drawing', 'sketch', 'file', 'notes']), // document_type enum
+  type: z.enum(["part", "assembly", "drawing", "sketch", "file", "notes"]), // document_type enum
   folder_id: z.string().uuid().nullable(),
   sort_order: z.number(),
   feature_count: z.number().nullable(), // Feature count for quick display
@@ -119,10 +119,10 @@ export type Project = z.infer<typeof projectSchema>;
 
 // Get API base URL for client-side requests
 const getApiBase = () => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     return window.location.origin;
   }
-  return 'http://localhost:3000';
+  return "http://localhost:3000";
 };
 
 /**
@@ -131,7 +131,7 @@ const getApiBase = () => {
  */
 export const workspacesCollection = createCollection(
   electricCollectionOptions({
-    id: 'workspaces',
+    id: "workspaces",
     schema: workspaceSchema,
     getKey: (row) => row.id,
     shapeOptions: {
@@ -147,7 +147,9 @@ export const workspacesCollection = createCollection(
     },
     onUpdate: async ({ transaction }) => {
       const updated = transaction.mutations[0].modified;
-      const { txid } = await updateWorkspaceMutation({ data: { workspaceId: updated.id, updates: updated } });
+      const { txid } = await updateWorkspaceMutation({
+        data: { workspaceId: updated.id, updates: updated },
+      });
       return { txid };
     },
     onDelete: async ({ transaction }) => {
@@ -164,7 +166,7 @@ export const workspacesCollection = createCollection(
  */
 export const branchesCollection = createCollection(
   electricCollectionOptions({
-    id: 'branches',
+    id: "branches",
     schema: branchSchema,
     getKey: (row) => row.id,
     shapeOptions: {
@@ -175,12 +177,16 @@ export const branchesCollection = createCollection(
     },
     onInsert: async ({ transaction }) => {
       const newBranch = transaction.mutations[0].modified;
-      const { txid } = await createBranchMutation({ data: { projectId: newBranch.project_id, branch: newBranch } });
+      const { txid } = await createBranchMutation({
+        data: { projectId: newBranch.project_id, branch: newBranch },
+      });
       return { txid };
     },
     onUpdate: async ({ transaction }) => {
       const updated = transaction.mutations[0].modified;
-      const { txid } = await updateBranchMutation({ data: { branchId: updated.id, updates: updated } });
+      const { txid } = await updateBranchMutation({
+        data: { branchId: updated.id, updates: updated },
+      });
       return { txid };
     },
     onDelete: async ({ transaction }) => {
@@ -197,7 +203,7 @@ export const branchesCollection = createCollection(
  */
 export const documentsCollection = createCollection(
   electricCollectionOptions({
-    id: 'documents',
+    id: "documents",
     schema: documentSchema,
     getKey: (row) => row.id,
     shapeOptions: {
@@ -213,23 +219,31 @@ export const documentsCollection = createCollection(
       const normalizedDoc: any = {
         ...newDoc,
       };
-      
+
       // Remove folderId if it's empty/null/undefined
-      if (!newDoc.folderId || (typeof newDoc.folderId === 'string' && newDoc.folderId.trim() === '')) {
+      if (
+        !newDoc.folderId ||
+        (typeof newDoc.folderId === "string" && newDoc.folderId.trim() === "")
+      ) {
         delete normalizedDoc.folderId;
       }
-      
+
       // Remove durableStreamId if it's empty/null/undefined (will be set after creation)
-      if (!newDoc.durableStreamId || (typeof newDoc.durableStreamId === 'string' && newDoc.durableStreamId.trim() === '')) {
+      if (
+        !newDoc.durableStreamId ||
+        (typeof newDoc.durableStreamId === "string" && newDoc.durableStreamId.trim() === "")
+      ) {
         delete normalizedDoc.durableStreamId;
       }
-      
+
       const { txid } = await createDocumentMutation({ data: { document: normalizedDoc } });
       return { txid };
     },
     onUpdate: async ({ transaction }) => {
       const updated = transaction.mutations[0].modified;
-      const { txid } = await updateDocumentMutation({ data: { documentId: updated.id, updates: updated } });
+      const { txid } = await updateDocumentMutation({
+        data: { documentId: updated.id, updates: updated },
+      });
       return { txid };
     },
     onDelete: async ({ transaction }) => {
@@ -246,7 +260,7 @@ export const documentsCollection = createCollection(
  */
 export const projectsCollection = createCollection(
   electricCollectionOptions({
-    id: 'projects',
+    id: "projects",
     schema: projectSchema,
     getKey: (row) => row.id,
     shapeOptions: {
@@ -262,7 +276,9 @@ export const projectsCollection = createCollection(
     },
     onUpdate: async ({ transaction }) => {
       const updated = transaction.mutations[0].modified;
-      const { txid } = await updateProjectMutation({ data: { projectId: updated.id, updates: updated } });
+      const { txid } = await updateProjectMutation({
+        data: { projectId: updated.id, updates: updated },
+      });
       return { txid };
     },
     onDelete: async ({ transaction }) => {
@@ -279,7 +295,7 @@ export const projectsCollection = createCollection(
  */
 export const foldersCollection = createCollection(
   electricCollectionOptions({
-    id: 'folders',
+    id: "folders",
     schema: folderSchema,
     getKey: (row) => row.id,
     shapeOptions: {
@@ -295,7 +311,9 @@ export const foldersCollection = createCollection(
     },
     onUpdate: async ({ transaction }) => {
       const updated = transaction.mutations[0].modified;
-      const { txid } = await updateFolderMutation({ data: { folderId: updated.id, updates: updated } });
+      const { txid } = await updateFolderMutation({
+        data: { folderId: updated.id, updates: updated },
+      });
       return { txid };
     },
     onDelete: async ({ transaction }) => {

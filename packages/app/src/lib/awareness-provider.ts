@@ -1,17 +1,15 @@
 /**
  * SolidType awareness provider
- * 
+ *
  * Wraps Yjs awareness with SolidType-specific state management.
  */
 
-import * as Y from 'yjs';
-import { Awareness } from 'y-protocols/awareness';
-import { DurableStreamsProvider } from './vendor/y-durable-streams';
-import { type UserAwarenessState, generateUserColor } from './awareness-state';
+import * as Y from "yjs";
+import { Awareness } from "y-protocols/awareness";
+import { DurableStreamsProvider } from "./vendor/y-durable-streams";
+import { type UserAwarenessState, generateUserColor } from "./awareness-state";
 
-const API_BASE = typeof window !== 'undefined' 
-  ? window.location.origin 
-  : 'http://localhost:3000';
+const API_BASE = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
 
 export class SolidTypeAwareness {
   private doc: Y.Doc;
@@ -20,7 +18,7 @@ export class SolidTypeAwareness {
   private localState: UserAwarenessState;
   private listeners: Set<(users: UserAwarenessState[]) => void> = new Set();
   private documentId: string;
-  
+
   constructor(
     doc: Y.Doc,
     documentId: string,
@@ -30,7 +28,7 @@ export class SolidTypeAwareness {
     this.doc = doc;
     this.documentId = documentId;
     this.awareness = new Awareness(doc);
-    
+
     // Set initial local state
     this.localState = {
       user: {
@@ -44,20 +42,20 @@ export class SolidTypeAwareness {
       },
       lastUpdated: Date.now(),
     };
-    
+
     this.awareness.setLocalState(this.localState);
-    
+
     // Forward awareness changes to listeners
-    this.awareness.on('change', () => {
+    this.awareness.on("change", () => {
       this.notifyListeners();
     });
   }
-  
+
   async connect() {
     // Create provider with combined doc + awareness streams
     const docStreamUrl = `${API_BASE}/api/docs/${this.documentId}/stream`;
     const awarenessStreamUrl = `${API_BASE}/api/docs/${this.documentId}/awareness`;
-    
+
     this.provider = new DurableStreamsProvider({
       doc: this.doc,
       documentStream: {
@@ -68,27 +66,27 @@ export class SolidTypeAwareness {
         protocol: this.awareness,
       },
     });
-    
+
     // Wait for initial sync
     await new Promise<void>((resolve) => {
       if (this.provider?.synced) {
         resolve();
       } else {
-        this.provider?.once('synced', () => resolve());
+        this.provider?.once("synced", () => resolve());
       }
     });
   }
-  
+
   disconnect() {
     this.provider?.destroy();
     this.provider = null;
     this.listeners.clear();
   }
-  
+
   /**
    * Update viewer state (called on camera change)
    */
-  updateViewerState(viewer: UserAwarenessState['viewer']) {
+  updateViewerState(viewer: UserAwarenessState["viewer"]) {
     this.localState = {
       ...this.localState,
       viewer,
@@ -96,11 +94,11 @@ export class SolidTypeAwareness {
     };
     this.awareness.setLocalState(this.localState);
   }
-  
+
   /**
    * Update selection state
    */
-  updateSelection(selection: UserAwarenessState['selection']) {
+  updateSelection(selection: UserAwarenessState["selection"]) {
     this.localState = {
       ...this.localState,
       selection,
@@ -108,11 +106,11 @@ export class SolidTypeAwareness {
     };
     this.awareness.setLocalState(this.localState);
   }
-  
+
   /**
    * Update sketch cursor
    */
-  updateSketchCursor(sketch: UserAwarenessState['sketch']) {
+  updateSketchCursor(sketch: UserAwarenessState["sketch"]) {
     this.localState = {
       ...this.localState,
       sketch,
@@ -120,7 +118,7 @@ export class SolidTypeAwareness {
     };
     this.awareness.setLocalState(this.localState);
   }
-  
+
   /**
    * Clear sketch state (when exiting sketch mode)
    */
@@ -132,7 +130,7 @@ export class SolidTypeAwareness {
     };
     this.awareness.setLocalState(this.localState);
   }
-  
+
   /**
    * Get all connected users (excluding self)
    */
@@ -145,14 +143,14 @@ export class SolidTypeAwareness {
     });
     return states;
   }
-  
+
   /**
    * Get the local user's state
    */
   getLocalState(): UserAwarenessState {
     return this.localState;
   }
-  
+
   /**
    * Subscribe to awareness changes
    */
@@ -162,7 +160,7 @@ export class SolidTypeAwareness {
       this.listeners.delete(callback);
     };
   }
-  
+
   private notifyListeners() {
     const users = this.getConnectedUsers();
     for (const listener of this.listeners) {

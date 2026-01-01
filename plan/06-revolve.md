@@ -34,8 +34,8 @@ Same as above, but cuts from existing body instead of adding.
 ### Revolve Feature
 
 ```xml
-<revolve 
-  id="r1" 
+<revolve
+  id="r1"
   name="Revolve1"
   sketch="s1"
   axis="l1"
@@ -45,6 +45,7 @@ Same as above, but cuts from existing body instead of adding.
 ```
 
 Attributes:
+
 - `sketch` - Sketch containing the profile
 - `axis` - Entity ID within sketch (line) or external reference
 - `angle` - Revolution angle in degrees
@@ -54,11 +55,11 @@ Attributes:
 
 ```typescript
 export interface RevolveFeature extends FeatureBase {
-  type: 'revolve';
+  type: "revolve";
   sketch: string;
-  axis: string;          // Line ID in sketch
-  angle: number;         // Degrees
-  op: 'add' | 'cut';
+  axis: string; // Line ID in sketch
+  angle: number; // Degrees
+  op: "add" | "cut";
 }
 ```
 
@@ -73,10 +74,10 @@ export function RevolveDialog({ sketchId, onConfirm, onCancel }) {
   const [axis, setAxis] = useState<string | null>(null);
   const [angle, setAngle] = useState(360);
   const [operation, setOperation] = useState<'add' | 'cut'>('add');
-  
+
   const sketchData = useSketchData(sketchId);
   const lines = sketchData.entities.filter(e => e.type === 'line');
-  
+
   return (
     <Dialog open onClose={onCancel}>
       <DialogTitle>Revolve</DialogTitle>
@@ -90,7 +91,7 @@ export function RevolveDialog({ sketchId, onConfirm, onCancel }) {
             { value: 'cut', label: 'Cut' },
           ]}
         />
-        
+
         <Select
           label="Axis"
           value={axis}
@@ -101,7 +102,7 @@ export function RevolveDialog({ sketchId, onConfirm, onCancel }) {
           }))}
           placeholder="Select axis line"
         />
-        
+
         <NumberInput
           label="Angle"
           value={angle}
@@ -114,8 +115,8 @@ export function RevolveDialog({ sketchId, onConfirm, onCancel }) {
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel}>Cancel</Button>
-        <Button 
-          onClick={() => onConfirm(axis, angle, operation)} 
+        <Button
+          onClick={() => onConfirm(axis, angle, operation)}
           variant="primary"
           disabled={!axis}
         >
@@ -167,41 +168,41 @@ case 'revolve':
   const axisId = feature.attributes.axis;
   const angle = parseFloat(feature.attributes.angle);
   const op = feature.attributes.op as 'add' | 'cut';
-  
+
   const sketch = sketchMap.get(sketchId);
   if (!sketch) throw new Error(`Sketch not found: ${sketchId}`);
-  
+
   const profile = sketch.toProfile();
   if (!profile) throw new Error('No closed profile found');
-  
+
   // Get axis from sketch
   const axisLine = sketch.getEntity(axisId);
   if (!axisLine || axisLine.type !== 'line') {
     throw new Error('Invalid axis selection');
   }
-  
+
   // Convert to 3D axis
   const axisStart = sketch.pointToWorld(axisLine.start);
   const axisEnd = sketch.pointToWorld(axisLine.end);
-  
+
   const result = session.revolve(profile, {
     axisOrigin: axisStart,
     axisDirection: normalize(subtract(axisEnd, axisStart)),
     angle: (angle * Math.PI) / 180,  // Convert to radians
     operation: 'add',
   });
-  
+
   if (!result.ok) {
     throw new Error(result.error.message);
   }
-  
+
   if (op === 'cut') {
     // Boolean subtract from existing bodies
     // (same pattern as extrude cut)
   } else {
     bodyMap.set(feature.id, result.body);
   }
-  
+
   return { body: result.body };
 ```
 
@@ -255,24 +256,24 @@ Result: Quarter section
 
 ```typescript
 // Test revolve cylinder
-test('revolve rectangle creates cylinder', () => {
+test("revolve rectangle creates cylinder", () => {
   const session = new SolidSession();
   const sketch = createSketchWithRectangleAndAxis(session);
-  
+
   const result = session.revolve(sketch.toProfile(), {
     axisOrigin: [0, 0, 0],
     axisDirection: [0, 1, 0],
     angle: Math.PI * 2,
-    operation: 'add',
+    operation: "add",
   });
-  
+
   expect(result.ok).toBe(true);
   // Cylinder: 2 circular faces + 1 cylindrical face
   expect(result.body.getFaces().length).toBe(3);
 });
 
 // Test partial revolve
-test('revolve 90 degrees creates quarter', () => {
+test("revolve 90 degrees creates quarter", () => {
   // Similar setup, angle = PI/2
   // Should have 5 faces (2 end caps + 3 surfaces)
 });
@@ -304,31 +305,31 @@ Revolve creates curved surfaces with different topology than extrude. Before com
 
 ```typescript
 // Example verification test
-test('revolve face selectors are correct', () => {
+test("revolve face selectors are correct", () => {
   const body = session.revolve(profile, {
     axis: [0, 1, 0],
-    angle: Math.PI / 2,  // 90 degrees
+    angle: Math.PI / 2, // 90 degrees
   });
-  
+
   const faces = body.getFaces();
-  const selectors = faces.map(f => f.localSelector);
-  
-  expect(selectors).toContain('start');
-  expect(selectors).toContain('end');
-  expect(selectors).toContain('outer');
+  const selectors = faces.map((f) => f.localSelector);
+
+  expect(selectors).toContain("start");
+  expect(selectors).toContain("end");
+  expect(selectors).toContain("outer");
 });
 
-test('full revolve has no caps', () => {
+test("full revolve has no caps", () => {
   const body = session.revolve(profile, {
     axis: [0, 1, 0],
-    angle: Math.PI * 2,  // 360 degrees
+    angle: Math.PI * 2, // 360 degrees
   });
-  
+
   const faces = body.getFaces();
-  const selectors = faces.map(f => f.localSelector);
-  
-  expect(selectors).not.toContain('start');
-  expect(selectors).not.toContain('end');
+  const selectors = faces.map((f) => f.localSelector);
+
+  expect(selectors).not.toContain("start");
+  expect(selectors).not.toContain("end");
 });
 ```
 

@@ -1,21 +1,31 @@
 /**
  * Face tessellation
- * 
+ *
  * Converts BREP faces into triangle meshes.
  * Supports planar faces and basic cylinder faces.
  */
 
-import type { Vec2 } from '../num/vec2.js';
-import type { Vec3 } from '../num/vec3.js';
-import { vec2 } from '../num/vec2.js';
-import { sub3, dot3, normalize3, cross3, add3, mul3, vec3, length3 } from '../num/vec3.js';
-import type { PlaneSurface, CylinderSurface, ConeSurface, SphereSurface, TorusSurface } from '../geom/surface.js';
-import { surfaceNormal } from '../geom/surface.js';
-import { TopoModel } from '../topo/TopoModel.js';
-import type { FaceId, LoopId } from '../topo/handles.js';
-import type { Mesh, TessellationOptions } from './types.js';
-import { createMesh, DEFAULT_TESSELLATION_OPTIONS } from './types.js';
-import { computeSignedArea, triangulatePolygon, triangulatePolygonWithHoles } from './triangulate.js';
+import type { Vec2 } from "../num/vec2.js";
+import type { Vec3 } from "../num/vec3.js";
+import { vec2 } from "../num/vec2.js";
+import { sub3, dot3, normalize3, cross3, add3, mul3, vec3, length3 } from "../num/vec3.js";
+import type {
+  PlaneSurface,
+  CylinderSurface,
+  ConeSurface,
+  SphereSurface,
+  TorusSurface,
+} from "../geom/surface.js";
+import { surfaceNormal } from "../geom/surface.js";
+import { TopoModel } from "../topo/TopoModel.js";
+import type { FaceId, LoopId } from "../topo/handles.js";
+import type { Mesh, TessellationOptions } from "./types.js";
+import { createMesh, DEFAULT_TESSELLATION_OPTIONS } from "./types.js";
+import {
+  computeSignedArea,
+  triangulatePolygon,
+  triangulatePolygonWithHoles,
+} from "./triangulate.js";
 
 /**
  * Project a 3D point onto a plane's 2D coordinate system
@@ -43,12 +53,12 @@ export function unprojectFromPlane(point2D: Vec2, plane: PlaneSurface): Vec3 {
  */
 function getLoopVertices(model: TopoModel, loopId: LoopId): Vec3[] {
   const vertices: Vec3[] = [];
-  
+
   for (const he of model.iterateLoopHalfEdges(loopId)) {
     const vertex = model.getHalfEdgeStartVertex(he);
     vertices.push(model.getVertexPosition(vertex));
   }
-  
+
   return vertices;
 }
 
@@ -56,8 +66,11 @@ function getLoopVertices(model: TopoModel, loopId: LoopId): Vec3[] {
  * Tessellate a planar face
  * NOTE: This function is retained but unused - it was causing issues with concave polygons
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function _sortLoopAroundCentroid(verts3D: Vec3[], surface: PlaneSurface): { verts3D: Vec3[]; verts2D: Vec2[] } {
+
+function _sortLoopAroundCentroid(
+  verts3D: Vec3[],
+  surface: PlaneSurface
+): { verts3D: Vec3[]; verts2D: Vec2[] } {
   const verts2D = verts3D.map((v) => projectToPlane(v, surface));
   if (verts2D.length <= 2) {
     return { verts3D, verts2D };
@@ -98,7 +111,7 @@ function hashLoop2D(verts2D: Vec2[]): string {
   return `${verts2D.length}:${verts2D
     .map(([x, y]) => `${Math.round(x * 1e6)}:${Math.round(y * 1e6)}`)
     .sort()
-    .join('|')}`;
+    .join(`|`)}`;
 }
 
 function shrinkPolygonTowardsCentroid(verts: Vec2[], factor: number): Vec2[] {
@@ -116,9 +129,12 @@ function shrinkPolygonTowardsCentroid(verts: Vec2[], factor: number): Vec2[] {
 
 function segmentsDistance(p: Vec2, a: Vec2, b: Vec2): number {
   // Project point p onto segment ab and clamp
-  const ax = a[0], ay = a[1];
-  const bx = b[0], by = b[1];
-  const px = p[0], py = p[1];
+  const ax = a[0],
+    ay = a[1];
+  const bx = b[0],
+    by = b[1];
+  const px = p[0],
+    py = p[1];
   const abx = bx - ax;
   const aby = by - ay;
   const abLen2 = abx * abx + aby * aby;
@@ -188,8 +204,8 @@ function tessellatePlanarFace(
   const holes = loopsData.slice(1);
 
   // Ensure outer is CCW
-  let outerVerts3D = outer.verts3D.slice();
-  let outerVerts2D = outer.verts2D.slice();
+  const outerVerts3D = outer.verts3D.slice();
+  const outerVerts2D = outer.verts2D.slice();
   if (computeSignedArea(outerVerts2D) < 0) {
     outerVerts2D.reverse();
     outerVerts3D.reverse();
@@ -312,9 +328,10 @@ function tessellateCylinderFace(
   if (vertices3D.length < 3) return createMesh([], [], []);
 
   const axis = normalize3(surface.axis);
-  const { uPerp, vPerp } = surface.uPerp && surface.vPerp
-    ? { uPerp: surface.uPerp, vPerp: surface.vPerp }
-    : computeOrthonormalBasis(axis);
+  const { uPerp, vPerp } =
+    surface.uPerp && surface.vPerp
+      ? { uPerp: surface.uPerp, vPerp: surface.vPerp }
+      : computeOrthonormalBasis(axis);
 
   // Project vertices onto cylinder (u, vAngle) coordinates
   const uVals: number[] = [];
@@ -374,9 +391,10 @@ function tessellateConeFace(
   if (vertices3D.length < 3) return createMesh([], [], []);
 
   const axis = normalize3(surface.axis);
-  const { uPerp, vPerp } = surface.uPerp && surface.vPerp
-    ? { uPerp: surface.uPerp, vPerp: surface.vPerp }
-    : computeOrthonormalBasis(axis);
+  const { uPerp, vPerp } =
+    surface.uPerp && surface.vPerp
+      ? { uPerp: surface.uPerp, vPerp: surface.vPerp }
+      : computeOrthonormalBasis(axis);
 
   const uVals: number[] = [];
   const vAngles: number[] = [];
@@ -488,9 +506,10 @@ function tessellateTorusFace(
   if (vertices3D.length < 3) return createMesh([], [], []);
 
   const axis = normalize3(surface.axis);
-  const { uPerp, vPerp } = surface.uPerp && surface.vPerp
-    ? { uPerp: surface.uPerp, vPerp: surface.vPerp }
-    : computeOrthonormalBasis(axis);
+  const { uPerp, vPerp } =
+    surface.uPerp && surface.vPerp
+      ? { uPerp: surface.uPerp, vPerp: surface.vPerp }
+      : computeOrthonormalBasis(axis);
 
   const uAngles: number[] = [];
   const vAngles: number[] = [];
@@ -557,20 +576,20 @@ export function tessellateFace(
   const surfaceIdx = model.getFaceSurfaceIndex(faceId);
   const surface = model.getSurface(surfaceIdx);
   const reversed = model.isFaceReversed(faceId);
-  
+
   switch (surface.kind) {
-    case 'plane':
+    case `plane`:
       return tessellatePlanarFace(model, faceId, surface, reversed);
-      
-    case 'cylinder':
+
+    case `cylinder`:
       return tessellateCylinderFace(model, faceId, surface, reversed);
-    case 'cone':
+    case `cone`:
       return tessellateConeFace(model, faceId, surface, reversed);
-    case 'sphere':
+    case `sphere`:
       return tessellateSphereFace(model, faceId, surface, reversed);
-    case 'torus':
+    case `torus`:
       return tessellateTorusFace(model, faceId, surface, reversed);
-      
+
     default:
       return createMesh([], [], []);
   }

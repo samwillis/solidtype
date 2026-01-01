@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
-import { useSketch } from '../contexts/SketchContext';
-import { useDocument } from '../contexts/DocumentContext';
-import { useKernel } from '../contexts/KernelContext';
-import './StatusOverlay.css';
+import React, { useMemo } from "react";
+import { useSketch } from "../contexts/SketchContext";
+import { useDocument } from "../contexts/DocumentContext";
+import { useKernel } from "../contexts/KernelContext";
+import "./StatusOverlay.css";
 
 interface StatusOverlayProps {
   status?: string;
@@ -16,9 +16,9 @@ const StatusOverlay: React.FC<StatusOverlayProps> = ({ status }) => {
   // Get actual status
   const getStatus = () => {
     if (status) return status;
-    if (isRebuilding) return 'Rebuilding...';
-    if (errors.length > 0) return `${errors.length} error${errors.length > 1 ? 's' : ''}`;
-    if (sketchMode.active) return 'Editing Sketch';
+    if (isRebuilding) return "Rebuilding...";
+    if (errors.length > 0) return `${errors.length} error${errors.length > 1 ? "s" : ""}`;
+    if (sketchMode.active) return "Editing Sketch";
     return null; // Don't show "Ready" - only show when there's something to show
   };
 
@@ -27,14 +27,14 @@ const StatusOverlay: React.FC<StatusOverlayProps> = ({ status }) => {
     if (!sketchMode.active || !sketchMode.sketchId) return null;
     const info = sketchSolveInfo[sketchMode.sketchId];
     if (!info) return null;
-    
+
     const dof = info.dof;
     if (!dof) return `Solve: ${info.status}`;
-    
+
     const tag = dof.isOverConstrained
-      ? 'Over'
+      ? "Over"
       : dof.isFullyConstrained
-        ? 'Fully'
+        ? "Fully"
         : `DOF ${dof.remainingDOF}`;
     return `Solve: ${info.status} • ${tag}`;
   };
@@ -59,20 +59,12 @@ const StatusOverlay: React.FC<StatusOverlayProps> = ({ status }) => {
   return (
     <div className="status-overlay">
       {currentStatus && (
-        <div className={`status-overlay-item ${errors.length > 0 ? 'status-error' : ''}`}>
+        <div className={`status-overlay-item ${errors.length > 0 ? "status-error" : ""}`}>
           {currentStatus}
         </div>
       )}
-      {solveStatus && (
-        <div className="status-overlay-item status-solve">
-          {solveStatus}
-        </div>
-      )}
-      {coordinates && (
-        <div className="status-overlay-item status-coordinates">
-          {coordinates}
-        </div>
-      )}
+      {solveStatus && <div className="status-overlay-item status-solve">{solveStatus}</div>}
+      {coordinates && <div className="status-overlay-item status-coordinates">{coordinates}</div>}
     </div>
   );
 };

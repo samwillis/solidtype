@@ -5,7 +5,7 @@
  * See DOCUMENT-MODEL.md for specification.
  */
 
-import * as Y from 'yjs';
+import * as Y from "yjs";
 import {
   uuid,
   getRoot,
@@ -16,8 +16,8 @@ import {
   createFeatureMap,
   setMapProperties,
   assertNoGhostState,
-} from './yjs';
-import type { DatumPlaneRole, SketchPlaneRef } from './schema';
+} from "./yjs";
+import type { DatumPlaneRole, SketchPlaneRef } from "./schema";
 
 // ============================================================================
 // Document Interface
@@ -58,28 +58,28 @@ export function createDocument(): SolidTypeDoc {
 
   // Create root and all required submaps in a single transaction
   ydoc.transact(() => {
-    const root = ydoc.getMap('root');
+    const root = ydoc.getMap("root");
 
     // Create meta map
     const meta = new Y.Map();
-    root.set('meta', meta);
-    meta.set('schemaVersion', 2);
-    meta.set('name', 'Untitled');
-    meta.set('created', Date.now());
-    meta.set('modified', Date.now());
-    meta.set('units', 'mm');
+    root.set("meta", meta);
+    meta.set("schemaVersion", 2);
+    meta.set("name", "Untitled");
+    meta.set("created", Date.now());
+    meta.set("modified", Date.now());
+    meta.set("units", "mm");
 
     // Create state map
     const state = new Y.Map();
-    root.set('state', state);
-    state.set('rebuildGate', null);
+    root.set("state", state);
+    state.set("rebuildGate", null);
 
     // Create features maps
     const featuresById = new Y.Map<Y.Map<unknown>>();
-    root.set('featuresById', featuresById);
+    root.set("featuresById", featuresById);
 
     const featureOrder = new Y.Array<string>();
-    root.set('featureOrder', featureOrder);
+    root.set("featureOrder", featureOrder);
 
     // Create default features (origin + 3 datum planes)
     initializeDefaultFeatures(featuresById, featureOrder);
@@ -121,8 +121,8 @@ function initializeDefaultFeatures(
   featuresById.set(originId, origin);
   setMapProperties(origin, {
     id: originId,
-    type: 'origin',
-    name: 'Origin',
+    type: "origin",
+    name: "Origin",
     visible: false,
   });
 
@@ -131,9 +131,9 @@ function initializeDefaultFeatures(
   featuresById.set(xyPlaneId, xyPlane);
   setMapProperties(xyPlane, {
     id: xyPlaneId,
-    type: 'plane',
-    name: 'XY Plane',
-    role: 'xy' as DatumPlaneRole,
+    type: "plane",
+    name: "XY Plane",
+    role: "xy" as DatumPlaneRole,
     normal: [0, 0, 1],
     origin: [0, 0, 0],
     xDir: [1, 0, 0],
@@ -149,9 +149,9 @@ function initializeDefaultFeatures(
   featuresById.set(xzPlaneId, xzPlane);
   setMapProperties(xzPlane, {
     id: xzPlaneId,
-    type: 'plane',
-    name: 'XZ Plane',
-    role: 'xz' as DatumPlaneRole,
+    type: "plane",
+    name: "XZ Plane",
+    role: "xz" as DatumPlaneRole,
     normal: [0, 1, 0],
     origin: [0, 0, 0],
     xDir: [1, 0, 0],
@@ -167,9 +167,9 @@ function initializeDefaultFeatures(
   featuresById.set(yzPlaneId, yzPlane);
   setMapProperties(yzPlane, {
     id: yzPlaneId,
-    type: 'plane',
-    name: 'YZ Plane',
-    role: 'yz' as DatumPlaneRole,
+    type: "plane",
+    name: "YZ Plane",
+    role: "yz" as DatumPlaneRole,
     normal: [1, 0, 0],
     origin: [0, 0, 0],
     xDir: [0, 1, 0],
@@ -217,13 +217,10 @@ export function loadDocument(ydoc: Y.Doc): SolidTypeDoc {
 /**
  * Find datum plane ID by role
  */
-export function findDatumPlaneByRole(
-  doc: SolidTypeDoc,
-  role: DatumPlaneRole
-): string | null {
+export function findDatumPlaneByRole(doc: SolidTypeDoc, role: DatumPlaneRole): string | null {
   let foundId: string | null = null;
   doc.featuresById.forEach((featureMap, id) => {
-    if (featureMap.get('type') === 'plane' && featureMap.get('role') === role) {
+    if (featureMap.get("type") === "plane" && featureMap.get("role") === role) {
       foundId = id;
     }
   });
@@ -245,14 +242,14 @@ export function getDatumPlaneIds(doc: SolidTypeDoc): {
   let yz: string | null = null;
 
   doc.featuresById.forEach((featureMap, id) => {
-    const type = featureMap.get('type');
-    if (type === 'origin') {
+    const type = featureMap.get("type");
+    if (type === "origin") {
       origin = id;
-    } else if (type === 'plane') {
-      const role = featureMap.get('role') as DatumPlaneRole | undefined;
-      if (role === 'xy') xy = id;
-      else if (role === 'xz') xz = id;
-      else if (role === 'yz') yz = id;
+    } else if (type === "plane") {
+      const role = featureMap.get("role") as DatumPlaneRole | undefined;
+      if (role === "xy") xy = id;
+      else if (role === "xz") xz = id;
+      else if (role === "yz") yz = id;
     }
   });
 
@@ -267,14 +264,14 @@ export function makePlaneRef(doc: SolidTypeDoc, role: DatumPlaneRole): SketchPla
   if (!planeId) {
     throw new Error(`Datum plane with role '${role}' not found`);
   }
-  return { kind: 'planeFeatureId', ref: planeId };
+  return { kind: "planeFeatureId", ref: planeId };
 }
 
 /**
  * Create a SketchPlaneRef for a face reference
  */
 export function makeFaceRef(faceRefString: string): SketchPlaneRef {
-  return { kind: 'faceRef', ref: faceRefString };
+  return { kind: "faceRef", ref: faceRefString };
 }
 
 /**
@@ -284,21 +281,21 @@ export function makeFaceRef(faceRefString: string): SketchPlaneRef {
  */
 export function parsePlaneRef(doc: SolidTypeDoc, planeString: string): SketchPlaneRef {
   // Check for legacy datum plane roles
-  if (planeString === 'xy' || planeString === 'xz' || planeString === 'yz') {
+  if (planeString === "xy" || planeString === "xz" || planeString === "yz") {
     return makePlaneRef(doc, planeString);
   }
 
   // Check for face reference
-  if (planeString.startsWith('face:')) {
+  if (planeString.startsWith("face:")) {
     return makeFaceRef(planeString);
   }
 
   // Check if it's already a UUID (plane feature ID)
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (uuidRegex.test(planeString)) {
-    return { kind: 'planeFeatureId', ref: planeString };
+    return { kind: "planeFeatureId", ref: planeString };
   }
 
   // Custom plane reference
-  return { kind: 'custom', ref: planeString };
+  return { kind: "custom", ref: planeString };
 }

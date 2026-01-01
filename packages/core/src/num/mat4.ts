@@ -1,44 +1,46 @@
 /**
  * 4x4 matrix operations
- * 
+ *
  * Matrices are represented as 16-element arrays in column-major order:
  * [m00, m10, m20, m30, m01, m11, m21, m31, m02, m12, m22, m32, m03, m13, m23, m33]
- * 
+ *
  * This matches common graphics library conventions (WebGL, three.js).
  * All operations are pure functions.
  */
 
-import type { Vec3 } from './vec3.js';
+import type { Vec3 } from "./vec3.js";
 
 export type Mat4 = [
-  number, number, number, number,
-  number, number, number, number,
-  number, number, number, number,
-  number, number, number, number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
 ];
 
 /**
  * Identity matrix
  */
 export function identity4(): Mat4 {
-  return [
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1,
-  ];
+  return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 }
 
 /**
  * Zero matrix
  */
 export function zero4(): Mat4 {
-  return [
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-    0, 0, 0, 0,
-  ];
+  return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 }
 
 /**

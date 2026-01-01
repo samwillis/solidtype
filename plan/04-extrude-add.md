@@ -40,17 +40,18 @@
 ### Extrude Feature
 
 ```xml
-<extrude 
-  id="e1" 
+<extrude
+  id="e1"
   name="Extrude1"
-  sketch="s1" 
-  distance="10" 
+  sketch="s1"
+  distance="10"
   op="add"
   direction="normal"
 />
 ```
 
 Attributes:
+
 - `sketch` - Reference to sketch feature ID
 - `distance` - Extrusion distance (number)
 - `op` - Operation type: `add` (this phase), `cut` (Phase 05)
@@ -60,11 +61,11 @@ Attributes:
 
 ```typescript
 export interface ExtrudeFeature extends FeatureBase {
-  type: 'extrude';
-  sketch: string;          // Sketch ID reference
+  type: "extrude";
+  sketch: string; // Sketch ID reference
   distance: number;
-  op: 'add' | 'cut';
-  direction: 'normal' | 'reverse' | [number, number, number];
+  op: "add" | "cut";
+  direction: "normal" | "reverse" | [number, number, number];
 }
 ```
 
@@ -82,7 +83,7 @@ export interface ExtrudeFeature extends FeatureBase {
 // Centralized state management for feature creation
 export function FeatureEditProvider({ children }) {
   const [editMode, setEditMode] = useState<FeatureEditMode>({ type: 'none' });
-  
+
   const startExtrudeEdit = (sketchId: string) => {
     // Initialize with defaults, show in properties panel
     setEditMode({
@@ -93,7 +94,7 @@ export function FeatureEditProvider({ children }) {
     // Trigger live preview
     previewExtrude({ sketchId, distance: 10, ... });
   };
-  
+
   const acceptEdit = () => {
     // Create the actual feature
     addExtrude(editMode.sketchId, editMode.data);
@@ -114,7 +115,7 @@ function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }) {
       onChange: ({ value }) => extrudeFormSchema.safeParse(value),
     },
   });
-  
+
   return (
     <form onSubmit={form.handleSubmit}>
       <form.Field name="op">...</form.Field>
@@ -141,7 +142,7 @@ interface ExtrudeDialogProps {
 export function ExtrudeDialog({ sketchId, onConfirm, onCancel }: ExtrudeDialogProps) {
   const [distance, setDistance] = useState(10);
   const [direction, setDirection] = useState<'normal' | 'reverse'>('normal');
-  
+
   return (
     <Dialog open onClose={onCancel}>
       <DialogTitle>Extrude</DialogTitle>
@@ -181,13 +182,13 @@ export function ExtrudeDialog({ sketchId, onConfirm, onCancel }: ExtrudeDialogPr
 // Show extrude preview while dialog is open
 function ExtrudePreview({ sketchId, distance, direction }) {
   const { previewExtrude, clearPreview } = useKernel();
-  
+
   // Request preview mesh from kernel
   useEffect(() => {
     previewExtrude({ sketchId, distance, direction, op: 'add' });
     return () => clearPreview();
   }, [sketchId, distance, direction, previewExtrude, clearPreview]);
-  
+
   // Kernel sends preview mesh, rendered semi-transparent
   return <PreviewMesh opacity={0.5} />;
 }
@@ -229,37 +230,37 @@ function ExtrudePreview({ sketchId, distance, direction }) {
 case 'extrude':
   const sketchId = feature.attributes.sketch;
   const sketch = sketchMap.get(sketchId);
-  
+
   if (!sketch) {
     throw new Error(`Sketch not found: ${sketchId}`);
   }
-  
+
   // Get closed profile from sketch
   const profile = sketch.toProfile();
   if (!profile) {
     throw new Error('Sketch does not contain a closed profile');
   }
-  
+
   // Get plane from sketch
   const plane = getPlaneForSketch(sketchId);
-  
+
   // Create extrude
   const distance = parseFloat(feature.attributes.distance);
   const direction = feature.attributes.direction === 'reverse' ? -1 : 1;
-  
+
   const result = session.extrude(profile, {
     distance: distance * direction,
     plane,
     operation: 'add',
   });
-  
+
   if (!result.ok) {
     throw new Error(result.error.message);
   }
-  
+
   // Track body
   bodyMap.set(feature.id, result.body);
-  
+
   return {
     body: {
       id: feature.id,
@@ -278,15 +279,15 @@ The kernel needs to convert sketch lines into a closed profile:
 toProfile(): SketchProfile | null {
   // Find closed loops in the sketch
   const loops = this.findClosedLoops();
-  
+
   if (loops.length === 0) {
     return null;
   }
-  
+
   // Use outer loop as profile boundary
   // (inner loops would be holes - future work)
   const outerLoop = this.getOuterLoop(loops);
-  
+
   return {
     curves: this.loopToCurves(outerLoop),
     plane: this.plane,
@@ -317,9 +318,9 @@ Before completing this phase, ensure:
 
 - [ ] **Local selectors assigned**: Extrude assigns selectors to all created faces
   - `top` for top face
-  - `bottom` for bottom face  
+  - `bottom` for bottom face
   - `side:0`, `side:1`, ... for side faces (indexed by profile edge)
-- [ ] **Edge selectors assigned**: 
+- [ ] **Edge selectors assigned**:
   - `top:0`, `top:1`, ... for top edges
   - `bottom:0`, `bottom:1`, ... for bottom edges
   - `lateral:0`, `lateral:1`, ... for vertical edges
@@ -328,19 +329,19 @@ Before completing this phase, ensure:
 
 ```typescript
 // Example verification test
-test('extrude face selectors survive parameter change', () => {
+test("extrude face selectors survive parameter change", () => {
   const session = new SolidSession();
-  
+
   // Create initial extrude
   const body1 = session.extrude(profile, { distance: 10 });
-  const topRef = session.naming.createFaceRef(body1.getTopFace(), 'e1');
-  
+  const topRef = session.naming.createFaceRef(body1.getTopFace(), "e1");
+
   // Change parameter, rebuild
   const body2 = session.extrude(profile, { distance: 20 });
   const resolved = session.naming.resolveFaceRef(topRef, body2);
-  
+
   expect(resolved).not.toBeNull();
-  expect(resolved.localSelector).toBe('top');
+  expect(resolved.localSelector).toBe("top");
 });
 ```
 
@@ -352,26 +353,26 @@ test('extrude face selectors survive parameter change', () => {
 
 ```typescript
 // Test extrude feature creation
-test('addExtrudeFeature creates extrude element', () => {
+test("addExtrudeFeature creates extrude element", () => {
   const doc = createDocument();
-  addSketchFeature(doc, 's1', 'xy');
-  addExtrudeFeature(doc, 'e1', 's1', 10, 'add');
-  
-  const extrude = findFeature(doc.features, 'e1');
+  addSketchFeature(doc, "s1", "xy");
+  addExtrudeFeature(doc, "e1", "s1", 10, "add");
+
+  const extrude = findFeature(doc.features, "e1");
   expect(extrude).toBeDefined();
-  expect(extrude.getAttribute('distance')).toBe('10');
+  expect(extrude.getAttribute("distance")).toBe("10");
 });
 
 // Test kernel extrude
-test('extrude creates body from rectangle sketch', () => {
+test("extrude creates body from rectangle sketch", () => {
   const session = new SolidSession();
   const sketch = createRectangleSketch(session, 10, 20);
-  
+
   const result = session.extrude(sketch.toProfile(), {
     distance: 5,
-    operation: 'add',
+    operation: "add",
   });
-  
+
   expect(result.ok).toBe(true);
   expect(result.body.getFaces().length).toBe(6); // box has 6 faces
 });
@@ -390,6 +391,7 @@ test('extrude creates body from rectangle sketch', () => {
 ## User Feedback
 
 ### Success Case
+
 - Solid body appears in 3D view
 - Body is shaded with lighting
 - Feature tree updates with extrude node

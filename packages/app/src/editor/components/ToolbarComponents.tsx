@@ -2,9 +2,9 @@
  * Shared toolbar components used by main toolbar and sketch toolbar
  */
 
-import React from 'react';
-import { Tooltip, Separator } from '@base-ui/react';
-import './ToolbarComponents.css';
+import React from "react";
+import { Tooltip, Separator } from "@base-ui/react";
+import "./ToolbarComponents.css";
 
 // ============================================================================
 // ToolbarButton - Icon button with tooltip
@@ -27,10 +27,10 @@ export const ToolbarButton: React.FC<ToolbarButtonProps> = ({
   onClick,
   disabled = false,
   active = false,
-  className = '',
+  className = "",
 }) => {
-  const buttonClass = `toolbar-button ${active ? 'active' : ''} ${disabled ? 'disabled' : ''} ${className}`;
-  
+  const buttonClass = `toolbar-button ${active ? "active" : ""} ${disabled ? "disabled" : ""} ${className}`;
+
   return (
     <Tooltip.Root>
       <Tooltip.Trigger
@@ -67,7 +67,6 @@ interface ToolbarGroupProps {
   className?: string;
 }
 
-export const ToolbarGroup: React.FC<ToolbarGroupProps> = ({ children, className = '' }) => {
+export const ToolbarGroup: React.FC<ToolbarGroupProps> = ({ children, className = "" }) => {
   return <div className={`toolbar-group ${className}`}>{children}</div>;
 };
-

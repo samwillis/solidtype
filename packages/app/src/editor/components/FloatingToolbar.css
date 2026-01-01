@@ -45,7 +45,9 @@
   border-radius: 5px;
   cursor: pointer;
   color: var(--color-icon);
-  transition: background-color 0.1s ease, color 0.1s ease;
+  transition:
+    background-color 0.1s ease,
+    color 0.1s ease;
 }
 
 .floating-toolbar-button:hover:not(.disabled) {

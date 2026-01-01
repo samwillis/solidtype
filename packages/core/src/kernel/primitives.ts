@@ -1,27 +1,22 @@
 /**
  * Primitive Shape Creation
- * 
+ *
  * Creates basic 3D shapes using OCCT's BRepPrimAPI.
  */
 
-import { getOC } from './init.js';
-import { Shape } from './Shape.js';
+import { getOC } from "./init.js";
+import { Shape } from "./Shape.js";
 
 /**
  * Create a box centered at origin or at a corner.
  */
-export function makeBox(
-  width: number, 
-  height: number, 
-  depth: number,
-  centered = false
-): Shape {
+export function makeBox(width: number, height: number, depth: number, centered = false): Shape {
   const oc = getOC();
-  
+
   if (centered) {
-    const halfW = width / 2;  // X
-    const halfH = height / 2; // Y  
-    const halfD = depth / 2;  // Z
+    const halfW = width / 2; // X
+    const halfH = height / 2; // Y
+    const halfD = depth / 2; // Z
     // Points are (X, Y, Z)
     const corner1 = new oc.gp_Pnt_3(-halfW, -halfH, -halfD);
     const corner2 = new oc.gp_Pnt_3(halfW, halfH, halfD);
@@ -33,7 +28,7 @@ export function makeBox(
     box.delete();
     return shape;
   }
-  
+
   // _1 = 3 params (dx, dy, dz) - maps to (width, height, depth) = (X, Y, Z)
   const box = new oc.BRepPrimAPI_MakeBox_1(width, height, depth);
   const shape = new Shape(box.Shape());

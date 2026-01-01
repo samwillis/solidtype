@@ -3,15 +3,11 @@
 Welcome, agent 👋  
 This document tells you how to work inside the SolidType repo.
 
-Before you write *any* code, read:
+Before you write _any_ code, read:
 
 - [`OVERVIEW.md`](OVERVIEW.md) – **What** SolidType is and why it exists.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) – **How** it is structured (packages, layers, data flow).
 - [`/plan/*`](plan/*) – The **phase-by-phase implementation plan** you must follow.
-
-> **Note on historical documents:**
-> - `OCC-REFACTOR.md` – ✅ **COMPLETED** – Documents the OpenCascade.js integration (now done).
-> - `KERNEL-REFACTOR.md` – Superseded by the OpenCascade.js integration.
 
 Treat those documents as the source of truth. If they conflict with existing code, the docs win and the code should be brought back into line.
 
@@ -64,12 +60,14 @@ You are working in a pnpm monorepo with:
 The `@solidtype/core` package now uses OpenCascade.js for all B-Rep operations:
 
 **DO:**
+
 - All modeling operations go through `SolidSession` (the public API)
 - Use the kernel/ module for OCCT wrappers (internal only)
 - Keep the sketch/ module in pure TypeScript (no OCCT dependency)
 - Dispose OCCT objects properly to prevent memory leaks
 
 **DON'T:**
+
 - Never import from `kernel/` in the app - use `SolidSession` instead
 - Never expose OCCT types (TopoDS_Shape, etc.) in the public API
 - Don't add OCCT dependencies to the sketch constraint solver
@@ -160,15 +158,90 @@ Before adding a dependency not listed here:
   ```
 
 * Use clear, descriptive names:
-
-  * `computeFaceNormal`, not `doFaceStuff`.
+  - `computeFaceNormal`, not `doFaceStuff`.
 
 ### 4.4 Style & Formatting
 
-* Honour the repo's existing formatting (Prettier/ESLint configs if present).
-* Use **camelCase** for variables/functions, **PascalCase** for types/classes.
-* Use `const` by default; use `let` only when mutation is necessary.
-* Avoid deeply nested code; extract helper functions instead.
+- Honour the repo's existing formatting (Prettier/ESLint configs if present).
+- Use **camelCase** for variables/functions, **PascalCase** for types/classes.
+- Use `const` by default; use `let` only when mutation is necessary.
+- Avoid deeply nested code; extract helper functions instead.
+
+### 4.5 Formatting & Linting
+
+The project uses **Prettier** for code formatting and **ESLint** for linting. Always ensure your code is properly formatted and passes linting before committing.
+
+#### Running Formatting
+
+Format all files in the project:
+
+```bash
+pnpm format
+```
+
+Format files in a specific package:
+
+```bash
+pnpm --filter @solidtype/core format
+pnpm --filter @solidtype/app format
+```
+
+Check formatting without making changes:
+
+```bash
+pnpm format:check
+```
+
+#### Running Linting
+
+Lint all packages:
+
+```bash
+pnpm lint
+```
+
+Lint and auto-fix issues:
+
+```bash
+pnpm lint:fix
+```
+
+Lint a specific package:
+
+```bash
+pnpm --filter @solidtype/core lint
+pnpm --filter @solidtype/app lint
+```
+
+#### Configuration
+
+- **Prettier** configuration: `.prettierrc.json`
+  - Uses double quotes, semicolons, 100 character line width
+  - Ignores build outputs, node_modules, and generated files (see `.prettierignore`)
+
+- **ESLint** configuration: `eslint.config.mjs`
+  - TypeScript support with `@typescript-eslint`
+  - React support for the app package
+  - Prettier integration to avoid conflicts
+  - Allows TanStack Form's `children` prop pattern (render props)
+
+#### Best Practices
+
+1. **Before committing**: Run `pnpm format && pnpm lint:fix` to ensure all code is properly formatted and lint errors are fixed.
+
+2. **Unused variables**: Prefix with `_` if intentionally unused (e.g., `_field`, `_value`).
+
+3. **TypeScript strictness**:
+   - Avoid `any` types (use `unknown` or proper types instead)
+   - Non-null assertions (`!`) are allowed but should be used sparingly (warnings only)
+
+4. **React patterns**:
+   - TanStack Form's `children` prop pattern is allowed (render props)
+   - Component creation during render is not allowed (move components outside render functions)
+
+5. **Warnings vs Errors**:
+   - Fix all **errors** before committing
+   - **Warnings** (like non-null assertions in tests) are acceptable but should be minimized
 
 ---
 
@@ -176,15 +249,15 @@ Before adding a dependency not listed here:
 
 SolidType is TDD-oriented:
 
-* For every new module or non-trivial function, add **Vitest unit tests** in the same package.
-* Do not add public API without at least basic tests.
-* When you fix a bug, add a test that would fail without the fix.
+- For every new module or non-trivial function, add **Vitest unit tests** in the same package.
+- Do not add public API without at least basic tests.
+- When you fix a bug, add a test that would fail without the fix.
 
 Guidelines:
 
-* Keep tests **fast** and **deterministic**.
-* Prefer **clear, example-based tests** over heavy randomised tests, unless instructed otherwise in `PLAN.md`.
-* Use the namespacing laid out in `ARCHITECTURE.md` (`num`, `geom`, `topo`, `model`, `sketch`, `naming`, `mesh`, `api`).
+- Keep tests **fast** and **deterministic**.
+- Prefer **clear, example-based tests** over heavy randomised tests, unless instructed otherwise in `PLAN.md`.
+- Use the namespacing laid out in `ARCHITECTURE.md` (`num`, `geom`, `topo`, `model`, `sketch`, `naming`, `mesh`, `api`).
 
 ---
 
@@ -195,36 +268,33 @@ Guidelines:
 When implementing:
 
 1. **Stick to the current phase.**
+   - Don't jump ahead unless a later phase is explicitly required to unblock the current one.
 
-   * Don't jump ahead unless a later phase is explicitly required to unblock the current one.
 2. After completing a task from the plan:
+   - Ensure tests pass (`pnpm test`).
+   - Ensure the change matches the described APIs and responsibilities in `ARCHITECTURE.md`.
 
-   * Ensure tests pass (`pnpm test`).
-   * Ensure the change matches the described APIs and responsibilities in `ARCHITECTURE.md`.
 3. If you must deviate:
-
-   * Keep the deviation **minimal**.
-   * Add a clear comment in the code explaining why (and, if possible, point back to the relevant section in `PLAN.md`).
+   - Keep the deviation **minimal**.
+   - Add a clear comment in the code explaining why (and, if possible, point back to the relevant section in `PLAN.md`).
 
 4. **If you make architectural or plan changes**, you MUST update the documentation:
+   - `ARCHITECTURE.md` – for structural changes (new modules, changed APIs, new packages)
+   - `OVERVIEW.md` – for changes to vision, goals, or technical approach
+   - `/plan/*` – for changes to the implementation plan or phase structure
 
-   * `ARCHITECTURE.md` – for structural changes (new modules, changed APIs, new packages)
-   * `OVERVIEW.md` – for changes to vision, goals, or technical approach
-   * `/plan/*` – for changes to the implementation plan or phase structure
-   
    The docs are the source of truth. If you change the code in ways that conflict with the docs, update the docs to match.
 
 ---
 
 ## 7. Things You Should Not Do
 
-* Do **not**:
-
-  * Introduce WASM or native modules.
-  * Add heavy dependencies to `@solidtype/core`.
-  * Tie `@solidtype/core` to browser APIs.
-  * Bypass `naming` for external references (constraints, selections, etc.).
-  * Implement new features without tests.
+- Do **not**:
+  - Introduce WASM or native modules.
+  - Add heavy dependencies to `@solidtype/core`.
+  - Tie `@solidtype/core` to browser APIs.
+  - Bypass `naming` for external references (constraints, selections, etc.).
+  - Implement new features without tests.
 
 If you need functionality that doesn't fit these guidelines, leave a TODO and implement the best compliant version you can.
 
@@ -232,10 +302,10 @@ If you need functionality that doesn't fit these guidelines, leave a TODO and im
 
 ## 8. Summary
 
-* Read `OVERVIEW.md`, `ARCHITECTURE.md`, and `/plan/*` first.
-* Respect package boundaries and layer responsibilities.
-* Write small, well-typed, test-backed TypeScript.
-* Keep `@solidtype/core` clean, deterministic, and environment-neutral.
-* Use the persistent naming and constraint systems as the **backbone**, not an afterthought.
+- Read `OVERVIEW.md`, `ARCHITECTURE.md`, and `/plan/*` first.
+- Respect package boundaries and layer responsibilities.
+- Write small, well-typed, test-backed TypeScript.
+- Keep `@solidtype/core` clean, deterministic, and environment-neutral.
+- Use the persistent naming and constraint systems as the **backbone**, not an afterthought.
 
 If in doubt, favour **clarity and correctness** over cleverness.

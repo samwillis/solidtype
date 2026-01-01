@@ -10,6 +10,7 @@
 ## Implementation Notes
 
 ### What's Done:
+
 - `document.ts` - `BooleanFeature` type with `operation`, `target`, `tool` fields
 - `featureSchemas.ts` - Zod validation schema for boolean operations
 - `featureHelpers.ts` - `addBooleanFeature()` helper function
@@ -18,6 +19,7 @@
 - `Toolbar.tsx` - Boolean dropdown with Union, Subtract, Intersect options
 
 ### Key Implementation Details:
+
 1. **Toolbar Dropdown** - Boolean button shows dropdown with 3 operations
 2. **Body Detection** - Checks for features that create bodies (extrude, revolve)
 3. **Auto-Selection** - Uses last two body-creating features as target/tool
@@ -25,6 +27,7 @@
 5. **Body Consumption** - Tool body is removed from bodyMap after operation
 
 ### Future Enhancements:
+
 - Body selection UI to choose specific target and tool
 - Body visibility toggle in feature tree
 - Multi-body result handling
@@ -69,8 +72,8 @@
 ### Boolean Feature
 
 ```xml
-<boolean 
-  id="b1" 
+<boolean
+  id="b1"
   name="Boolean1"
   operation="union"
   target="e1"
@@ -79,6 +82,7 @@
 ```
 
 Attributes:
+
 - `operation` - `union`, `subtract`, or `intersect`
 - `target` - First body (or body that gets modified)
 - `tool` - Second body (consumed in operation)
@@ -87,10 +91,10 @@ Attributes:
 
 ```typescript
 export interface BooleanFeature extends FeatureBase {
-  type: 'boolean';
-  operation: 'union' | 'subtract' | 'intersect';
-  target: string;  // Feature ID that created target body
-  tool: string;    // Feature ID that created tool body
+  type: "boolean";
+  operation: "union" | "subtract" | "intersect";
+  target: string; // Feature ID that created target body
+  tool: string; // Feature ID that created tool body
 }
 ```
 
@@ -113,7 +117,7 @@ export function BooleanDialog({ operation, onConfirm, onCancel }: BooleanDialogP
   const [stage, setStage] = useState<'target' | 'tool'>('target');
   const [target, setTarget] = useState<string | null>(null);
   const [tool, setTool] = useState<string | null>(null);
-  
+
   useEffect(() => {
     // Listen for body selection
     const unsubscribe = onBodySelected((bodyId, featureId) => {
@@ -126,7 +130,7 @@ export function BooleanDialog({ operation, onConfirm, onCancel }: BooleanDialogP
     });
     return unsubscribe;
   }, [stage]);
-  
+
   return (
     <Dialog open onClose={onCancel}>
       <DialogTitle>
@@ -156,7 +160,7 @@ export function BooleanDialog({ operation, onConfirm, onCancel }: BooleanDialogP
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel}>Cancel</Button>
-        <Button 
+        <Button
           onClick={() => onConfirm(target!, tool!)}
           variant="primary"
           disabled={!target || !tool}
@@ -195,12 +199,12 @@ export function BooleanDialog({ operation, onConfirm, onCancel }: BooleanDialogP
 // Highlight bodies on hover during selection
 function BodySelectionMode({ onSelect }: { onSelect: (featureId: string) => void }) {
   const [hoveredBody, setHoveredBody] = useState<string | null>(null);
-  
+
   const handleMouseMove = (e: MouseEvent) => {
     const hit = raycast(e);
     setHoveredBody(hit?.bodyId ?? null);
   };
-  
+
   const handleClick = (e: MouseEvent) => {
     const hit = raycast(e);
     if (hit?.bodyId) {
@@ -208,14 +212,14 @@ function BodySelectionMode({ onSelect }: { onSelect: (featureId: string) => void
       onSelect(featureId);
     }
   };
-  
+
   return (
     <>
       {/* Hover highlight */}
       {hoveredBody && <BodyHighlight bodyId={hoveredBody} color={0x00ff00} />}
-      
+
       {/* Event capture */}
-      <div 
+      <div
         className="body-selection-overlay"
         onMouseMove={handleMouseMove}
         onClick={handleClick}
@@ -240,16 +244,16 @@ case 'boolean':
   const operation = feature.attributes.operation as 'union' | 'subtract' | 'intersect';
   const targetId = feature.attributes.target;
   const toolId = feature.attributes.tool;
-  
+
   const targetBody = bodyMap.get(targetId);
   const toolBody = bodyMap.get(toolId);
-  
+
   if (!targetBody || !toolBody) {
     throw new Error('Bodies not found for boolean operation');
   }
-  
+
   let result: BooleanResult;
-  
+
   switch (operation) {
     case 'union':
       result = session.union(targetBody, toolBody);
@@ -261,17 +265,17 @@ case 'boolean':
       result = session.intersect(targetBody, toolBody);
       break;
   }
-  
+
   if (!result.ok) {
     throw new Error(result.error.message);
   }
-  
+
   // Replace target body with result
   bodyMap.set(feature.id, result.body);
-  
+
   // Remove tool body (consumed)
   bodyMap.delete(toolId);
-  
+
   return { body: result.body };
 ```
 
@@ -281,12 +285,12 @@ case 'boolean':
 // Handle common boolean errors
 if (result.error) {
   switch (result.error.code) {
-    case 'NO_INTERSECTION':
-      throw new Error('Bodies do not intersect');
-    case 'COINCIDENT_FACES':
-      throw new Error('Bodies have coincident faces - try moving one slightly');
-    case 'TOPOLOGY_ERROR':
-      throw new Error('Boolean operation failed due to topology issues');
+    case "NO_INTERSECTION":
+      throw new Error("Bodies do not intersect");
+    case "COINCIDENT_FACES":
+      throw new Error("Bodies have coincident faces - try moving one slightly");
+    case "TOPOLOGY_ERROR":
+      throw new Error("Boolean operation failed due to topology issues");
   }
 }
 ```
@@ -301,7 +305,7 @@ if (result.error) {
 // Feature tree shows "Bodies" folder with current bodies
 <TreeNode type="folder" name="Bodies">
   {bodies.map(body => (
-    <TreeNode 
+    <TreeNode
       key={body.id}
       type="body"
       name={body.name}
@@ -315,7 +319,7 @@ if (result.error) {
 
 ```typescript
 // Toggle body visibility
-<TreeNode 
+<TreeNode
   type="body"
   name={body.name}
   visible={body.visible}
@@ -331,26 +335,26 @@ if (result.error) {
 
 ```typescript
 // Test union
-test('boolean union combines bodies', () => {
+test("boolean union combines bodies", () => {
   const session = new SolidSession();
-  
+
   const box1 = createBox(session, 10, 10, 10);
   const box2 = createBox(session, 10, 10, 10, { offset: [5, 0, 0] });
-  
+
   const result = session.union(box1, box2);
-  
+
   expect(result.ok).toBe(true);
   // Combined volume should be less than 2 boxes (overlap)
 });
 
 // Test subtract
-test('boolean subtract removes material', () => {
+test("boolean subtract removes material", () => {
   // Create box, subtract smaller box
   // Verify hole created
 });
 
 // Test intersect
-test('boolean intersect keeps overlap', () => {
+test("boolean intersect keeps overlap", () => {
   // Create two overlapping boxes
   // Intersect should only keep overlap region
 });
