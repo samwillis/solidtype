@@ -23,6 +23,10 @@ export function createDocumentSync(documentId: string, doc: Y.Doc) {
 
   const awareness = new Awareness(doc);
 
+  console.log("[yjs-sync] Creating provider for document:", documentId);
+  console.log("[yjs-sync] Document stream URL:", streamUrl);
+  console.log("[yjs-sync] Awareness stream URL:", awarenessUrl);
+
   // Create the unified provider for both document and awareness
   const provider = new DurableStreamsProvider({
     doc,
@@ -34,6 +38,17 @@ export function createDocumentSync(documentId: string, doc: Y.Doc) {
       protocol: awareness,
     },
     connect: false, // We'll connect manually
+  });
+
+  // Add debug listeners
+  provider.on("synced", (synced: boolean) => {
+    console.log("[yjs-sync] Synced event:", synced);
+  });
+  provider.on("status", (status: string) => {
+    console.log("[yjs-sync] Status event:", status);
+  });
+  provider.on("error", (error: Error) => {
+    console.error("[yjs-sync] Error event:", error);
   });
 
   return {

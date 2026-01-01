@@ -2,32 +2,34 @@
  * SolidType awareness provider
  *
  * Wraps Yjs awareness with SolidType-specific state management.
+ * This is a wrapper around an existing Awareness instance from the document sync provider.
  */
 
-import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
-import { DurableStreamsProvider } from "./vendor/y-durable-streams";
 import { type UserAwarenessState, generateUserColor } from "./awareness-state";
 
-const API_BASE = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-
 export class SolidTypeAwareness {
-  private doc: Y.Doc;
   private awareness: Awareness;
-  private provider: DurableStreamsProvider | null = null;
   private localState: UserAwarenessState;
   private listeners: Set<(users: UserAwarenessState[]) => void> = new Set();
-  private documentId: string;
+  private userId: string;
 
+  /**
+   * Create a SolidType awareness wrapper.
+   *
+   * @param awareness - The Awareness instance from the document sync provider (NOT a new one)
+   * @param documentId - The document ID
+   * @param branchId - The branch ID
+   * @param user - The current user info
+   */
   constructor(
-    doc: Y.Doc,
+    awareness: Awareness,
     documentId: string,
     branchId: string,
     user: { id: string; name: string }
   ) {
-    this.doc = doc;
-    this.documentId = documentId;
-    this.awareness = new Awareness(doc);
+    this.awareness = awareness;
+    this.userId = user.id;
 
     // Set initial local state
     this.localState = {
@@ -51,35 +53,19 @@ export class SolidTypeAwareness {
     });
   }
 
-  async connect() {
-    // Create provider with combined doc + awareness streams
-    const docStreamUrl = `${API_BASE}/api/docs/${this.documentId}/stream`;
-    const awarenessStreamUrl = `${API_BASE}/api/docs/${this.documentId}/awareness`;
-
-    this.provider = new DurableStreamsProvider({
-      doc: this.doc,
-      documentStream: {
-        url: docStreamUrl,
-      },
-      awarenessStream: {
-        url: awarenessStreamUrl,
-        protocol: this.awareness,
-      },
-    });
-
-    // Wait for initial sync
-    await new Promise<void>((resolve) => {
-      if (this.provider?.synced) {
-        resolve();
-      } else {
-        this.provider?.once("synced", () => resolve());
-      }
-    });
+  /**
+   * Connect is now a no-op since the awareness is managed by the document sync provider.
+   * Kept for API compatibility.
+   */
+  connect(): void {
+    // No-op - the document sync provider handles connection
   }
 
-  disconnect() {
-    this.provider?.destroy();
-    this.provider = null;
+  /**
+   * Disconnect clears local state but doesn't destroy the awareness.
+   * The document sync provider manages the actual connection.
+   */
+  disconnect(): void {
     this.listeners.clear();
   }
 
@@ -132,15 +118,33 @@ export class SolidTypeAwareness {
   }
 
   /**
-   * Get all connected users (excluding self)
+   * Get all connected users (excluding self by user ID, deduplicated)
+   *
+   * Each browser tab has a unique clientId, but the same user may have
+   * multiple tabs open. We filter by user.id and deduplicate.
    */
   getConnectedUsers(): UserAwarenessState[] {
+    const seenUserIds = new Set<string>();
     const states: UserAwarenessState[] = [];
-    this.awareness.getStates().forEach((state, clientId) => {
-      if (clientId !== this.awareness.clientID && state) {
-        states.push(state as UserAwarenessState);
+
+    // Add our own user ID to the "seen" set so we exclude ourselves
+    seenUserIds.add(this.userId);
+
+    this.awareness.getStates().forEach((state) => {
+      if (!state) return;
+
+      const userState = state as UserAwarenessState;
+      const stateUserId = userState.user?.id;
+
+      // Skip if no user ID or if we've already seen this user
+      if (!stateUserId || seenUserIds.has(stateUserId)) {
+        return;
       }
+
+      seenUserIds.add(stateUserId);
+      states.push(userState);
     });
+
     return states;
   }
 

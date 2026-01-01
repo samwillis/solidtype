@@ -129,6 +129,9 @@ export function KernelProvider({ children }: KernelProviderProps) {
   >({});
 
   useEffect(() => {
+    // Don't create worker until doc is loaded
+    if (!doc) return;
+
     // Create kernel worker
     const worker = new Worker(new URL("../worker/kernel.worker.ts", import.meta.url), {
       type: "module",

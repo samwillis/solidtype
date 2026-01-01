@@ -9,9 +9,29 @@ interface StatusOverlayProps {
 }
 
 const StatusOverlay: React.FC<StatusOverlayProps> = ({ status }) => {
-  const { units } = useDocument();
+  const { units, syncStatus, isCloudDocument, syncError } = useDocument();
   const { mode: sketchMode, sketchMousePos } = useSketch();
   const { sketchSolveInfo, isRebuilding, errors } = useKernel();
+
+  // Get sync status label
+  const getSyncStatus = () => {
+    if (!isCloudDocument) return null;
+
+    switch (syncStatus) {
+      case "connecting":
+        return "Connecting...";
+      case "connected":
+        return "Connected";
+      case "synced":
+        return "Synced";
+      case "error":
+        return syncError?.message || "Sync error";
+      case "disconnected":
+        return "Offline";
+      default:
+        return null;
+    }
+  };
 
   // Get actual status
   const getStatus = () => {
@@ -50,14 +70,32 @@ const StatusOverlay: React.FC<StatusOverlayProps> = ({ status }) => {
   const currentStatus = getStatus();
   const solveStatus = getSolveStatus();
   const coordinates = getCoordinates();
+  const cloudSyncStatus = getSyncStatus();
 
   // Only render if there's something to show
-  if (!currentStatus && !solveStatus && !coordinates) {
+  if (!currentStatus && !solveStatus && !coordinates && !cloudSyncStatus) {
     return null;
   }
 
   return (
     <div className="status-overlay">
+      {cloudSyncStatus && (
+        <div
+          className={`status-overlay-item ${
+            syncStatus === "error"
+              ? "status-error"
+              : syncStatus === "synced"
+                ? "status-synced"
+                : syncStatus === "connecting" || syncStatus === "connected"
+                  ? "status-connecting"
+                  : "status-offline"
+          }`}
+        >
+          {syncStatus === "synced" && <span className="status-sync-indicator">●</span>}
+          {syncStatus === "connecting" && <span className="status-sync-indicator spinning">◐</span>}
+          {cloudSyncStatus}
+        </div>
+      )}
       {currentStatus && (
         <div className={`status-overlay-item ${errors.length > 0 ? "status-error" : ""}`}>
           {currentStatus}

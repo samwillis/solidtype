@@ -4,7 +4,51 @@
  * Proxies Durable Stream requests with proper authorization.
  */
 
-const DURABLE_STREAMS_URL = process.env.DURABLE_STREAMS_URL || "http://localhost:4437";
+const DURABLE_STREAMS_URL = process.env.DURABLE_STREAMS_URL || "http://localhost:3200";
+
+/**
+ * Headers that should be forwarded from Durable Streams responses.
+ * These are essential for the protocol to work correctly.
+ */
+const FORWARDED_HEADERS = [
+  "content-type",
+  "cache-control",
+  "transfer-encoding",
+  "stream-next-offset",
+  "stream-cursor",
+  "stream-up-to-date",
+  "etag",
+  "location",
+];
+
+/**
+ * CORS headers to allow cross-origin access
+ */
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, HEAD, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Expose-Headers":
+    "Stream-Next-Offset, Stream-Cursor, Stream-Up-To-Date, ETag, Content-Type",
+};
+
+/**
+ * Build response headers from a Durable Streams response
+ */
+function buildResponseHeaders(response: Response): HeadersInit {
+  const headers: Record<string, string> = { ...CORS_HEADERS };
+  for (const headerName of FORWARDED_HEADERS) {
+    const value = response.headers.get(headerName);
+    if (value) {
+      headers[headerName] = value;
+    }
+  }
+  // Ensure content-type has a default
+  if (!headers["content-type"]) {
+    headers["content-type"] = "application/octet-stream";
+  }
+  return headers;
+}
 
 /**
  * Proxy a request to Durable Streams
@@ -23,23 +67,52 @@ export async function proxyToDurableStream(
   }
 
   try {
+    // Determine if request has a body (POST and PUT can have bodies)
+    const hasBody = request.method === "POST" || request.method === "PUT";
+
     const response = await fetch(durableUrl.toString(), {
       method: request.method,
       headers: {
         "Content-Type": request.headers.get("Content-Type") || "application/octet-stream",
         Accept: request.headers.get("Accept") || "*/*",
       },
-      body: request.method === "POST" ? request.body : undefined,
+      body: hasBody ? request.body : undefined,
       // @ts-expect-error duplex is needed for streaming request bodies
-      duplex: request.method === "POST" ? "half" : undefined,
+      duplex: hasBody ? "half" : undefined,
     });
+
+    // Handle 404 for GET requests - stream doesn't exist yet
+    // Create the stream with PUT, then retry the GET
+    if (response.status === 404 && request.method === "GET") {
+      // Create the stream with PUT (this is the Durable Streams protocol)
+      const createResponse = await fetch(durableUrl.toString().split("?")[0], {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/octet-stream",
+        },
+      });
+
+      if (createResponse.ok) {
+        // Retry the original GET request now that the stream exists
+        // This preserves the original query params including live=long-poll
+        const retryResponse = await fetch(durableUrl.toString(), {
+          method: "GET",
+          headers: {
+            "Content-Type": request.headers.get("Content-Type") || "application/octet-stream",
+            Accept: request.headers.get("Accept") || "*/*",
+          },
+        });
+
+        return new Response(retryResponse.body, {
+          status: retryResponse.status,
+          headers: buildResponseHeaders(retryResponse),
+        });
+      }
+    }
 
     return new Response(response.body, {
       status: response.status,
-      headers: {
-        "Content-Type": response.headers.get("Content-Type") || "application/octet-stream",
-        "Cache-Control": response.headers.get("Cache-Control") || "no-cache",
-      },
+      headers: buildResponseHeaders(response),
     });
   } catch (error) {
     console.error("Durable Stream proxy error:", error);

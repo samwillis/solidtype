@@ -20,7 +20,7 @@ import {
   LuFileText,
 } from "react-icons/lu";
 import { useSession } from "../lib/auth-client";
-import { generateAvatarColor, getInitials } from "../lib/user-avatar";
+import { Avatar } from "./Avatar";
 import AIPanel from "../editor/components/AIPanel";
 import { AIIcon } from "../editor/components/Icons";
 import { CreateWorkspaceDialog } from "./dialogs/CreateWorkspaceDialog";
@@ -57,8 +57,6 @@ const DashboardPropertiesPanel: React.FC<DashboardPropertiesPanelProps> = ({
   const [showCreateBranch, setShowCreateBranch] = useState(false);
 
   const user = session?.user;
-  const userInitials = user ? getInitials(user.name, user.email) : "?";
-  const userAvatarColor = user ? generateAvatarColor(user.email || user.id) : "#888888";
 
   const ThemeIcon = () => {
     if (themeMode === "light") {
@@ -80,16 +78,18 @@ const DashboardPropertiesPanel: React.FC<DashboardPropertiesPanelProps> = ({
               className="properties-panel-header-icon-button properties-panel-user-avatar"
               onClick={() => setShowUserProfile(true)}
               render={<button aria-label="User Profile" />}
-              style={{ backgroundColor: userAvatarColor, padding: 0 }}
+              style={{ padding: 0 }}
             >
-              <span style={{ fontSize: "11px", fontWeight: 500, color: "white" }}>
-                {userInitials}
-              </span>
+              {user ? (
+                <Avatar user={user} size={28} fontSize={11} />
+              ) : (
+                <Avatar user={{ id: "guest", name: "?" }} size={28} fontSize={11} />
+              )}
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Positioner side="bottom" sideOffset={6}>
                 <Tooltip.Popup className="properties-panel-header-tooltip">
-                  User Profile
+                  {user ? user.name || user.email || "User Profile" : "Sign In"}
                 </Tooltip.Popup>
               </Tooltip.Positioner>
             </Tooltip.Portal>

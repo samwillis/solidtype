@@ -193,7 +193,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
                 validators={{
                   onChange: ({ value }) => {
                     const result = folderSchema.shape.projectId.safeParse(value);
-                    return result.success ? undefined : result.error.errors[0]?.message;
+                    return result.success ? undefined : result.error.issues[0]?.message;
                   },
                 }}
                 children={(field) => (
@@ -268,7 +268,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
                       return "Select a project first";
                     }
                     const result = folderSchema.shape.branchId.safeParse(value);
-                    return result.success ? undefined : result.error.errors[0]?.message;
+                    return result.success ? undefined : result.error.issues[0]?.message;
                   },
                 }}
                 children={(field) => (
@@ -401,7 +401,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
               validators={{
                 onChange: ({ value }) => {
                   const result = folderSchema.shape.name.safeParse(value);
-                  return result.success ? undefined : result.error.errors[0]?.message;
+                  return result.success ? undefined : result.error.issues[0]?.message;
                 },
               }}
               children={(field) => (

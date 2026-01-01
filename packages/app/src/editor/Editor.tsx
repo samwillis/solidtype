@@ -10,16 +10,19 @@ import { KernelProvider } from "./contexts/KernelContext";
 import { SketchProvider } from "./contexts/SketchContext";
 import { SelectionProvider } from "./contexts/SelectionContext";
 import { FeatureEditProvider } from "./contexts/FeatureEditContext";
+import { UserPresence } from "../components/UserPresence";
+import { useFollowing } from "../hooks/useFollowing";
 import "./Editor.css";
 
 // Inner component that uses the document context
 const EditorContent: React.FC = () => {
-  const [aiPanelVisible, setAiPanelVisible] = useState(false);
-  const { undo, redo, canUndo, canRedo } = useDocument();
+  const [_aiPanelVisible, _setAiPanelVisible] = useState(false);
+  const { undo, redo, canUndo, canRedo, awareness, isCloudDocument } = useDocument();
 
-  const toggleAIPanel = () => {
-    setAiPanelVisible((prev) => !prev);
-  };
+  // Following hook for user presence
+  const { connectedUsers, followingUserId, followUser, stopFollowing } = useFollowing({
+    awareness,
+  });
 
   // Keyboard shortcuts for undo/redo
   useEffect(() => {
@@ -57,6 +60,18 @@ const EditorContent: React.FC = () => {
 
             {/* Floating Properties Panel (top right) - always visible */}
             <PropertiesPanel />
+
+            {/* User Presence (top right, below properties panel) - only for cloud documents */}
+            {isCloudDocument && connectedUsers.length > 0 && (
+              <div className="user-presence-container">
+                <UserPresence
+                  connectedUsers={connectedUsers}
+                  followingUserId={followingUserId}
+                  onFollowUser={followUser}
+                  onStopFollowing={stopFollowing}
+                />
+              </div>
+            )}
 
             {/* Floating Toolbar (bottom center) */}
             <FloatingToolbar />

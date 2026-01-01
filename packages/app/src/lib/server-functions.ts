@@ -22,7 +22,7 @@ import {
   documents,
   folders,
 } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, asc } from "drizzle-orm";
 
 // ============================================================================
 // Helper Functions
@@ -467,6 +467,7 @@ export const deleteBranchMutation = createServerFn({ method: "POST" })
 // Document mutations
 export const createDocumentMutation = createServerFn({ method: "POST" })
   .inputValidator((d: { document: any }) => d)
+  // @ts-expect-error - request is provided at runtime by TanStack Start
   .handler(async ({ data, request }) => {
     const session = await requireAuth(request);
 
@@ -538,6 +539,7 @@ export const deleteDocumentMutation = createServerFn({ method: "POST" })
 // Folder mutations
 export const createFolderMutation = createServerFn({ method: "POST" })
   .inputValidator((d: { folder: any }) => d)
+  // @ts-expect-error - request is provided at runtime by TanStack Start
   .handler(async ({ data, request }) => {
     const session = await requireAuth(request);
 
@@ -589,6 +591,7 @@ export const deleteFolderMutation = createServerFn({ method: "POST" })
 // Workspace mutations
 export const createWorkspaceMutation = createServerFn({ method: "POST" })
   .inputValidator((d: { workspace: any }) => d)
+  // @ts-expect-error - request is provided at runtime by TanStack Start
   .handler(async ({ data, request }) => {
     const session = await requireAuth(request);
 
@@ -629,6 +632,7 @@ export const deleteWorkspaceMutation = createServerFn({ method: "POST" })
 // Project mutations
 export const createProjectMutation = createServerFn({ method: "POST" })
   .inputValidator((d: { project: any }) => d)
+  // @ts-expect-error - request is provided at runtime by TanStack Start
   .handler(async ({ data, request }) => {
     const session = await requireAuth(request);
 
@@ -699,6 +703,7 @@ export const createBranchWithContentMutation = createServerFn({ method: "POST" }
     (d: { projectId: string; parentBranchId: string; name: string; description: string | null }) =>
       d
   )
+  // @ts-expect-error - request is provided at runtime by TanStack Start
   .handler(async ({ data, request }) => {
     const session = await requireAuth(request);
 
@@ -802,23 +807,24 @@ export const createBranchWithContentMutation = createServerFn({ method: "POST" }
 // Helper functions for fetching data for dialogs
 export const getBranchesForProject = createServerFn({ method: "POST" })
   .inputValidator((d: { projectId: string }) => d)
+  // @ts-expect-error - request is provided at runtime by TanStack Start
   .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+    await requireAuth(request); // Verify authentication
 
     const projectBranches = await db
       .select()
       .from(branches)
       .where(eq(branches.projectId, data.projectId))
-      .orderBy(branches.isMain, "desc")
-      .orderBy(branches.createdAt, "desc");
+      .orderBy(desc(branches.isMain), desc(branches.createdAt));
 
     return { data: projectBranches };
   });
 
 export const getFoldersForBranch = createServerFn({ method: "POST" })
   .inputValidator((d: { projectId: string; branchId: string; parentId?: string | null }) => d)
+  // @ts-expect-error - request is provided at runtime by TanStack Start
   .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+    await requireAuth(request); // Verify authentication
 
     const conditions = [eq(folders.projectId, data.projectId), eq(folders.branchId, data.branchId)];
 
@@ -834,8 +840,214 @@ export const getFoldersForBranch = createServerFn({ method: "POST" })
       .select()
       .from(folders)
       .where(and(...conditions))
-      .orderBy(folders.sortOrder)
-      .orderBy(folders.name);
+      .orderBy(asc(folders.sortOrder), asc(folders.name));
 
     return { data: branchFolders };
   });
+
+/**
+ * Merge a branch into another branch
+ * Uses Yjs CRDT merge with "edit wins" strategy
+ */
+export const mergeBranchMutation = createServerFn({ method: "POST" })
+  .inputValidator((d: { sourceBranchId: string; targetBranchId: string }) => d)
+  // @ts-expect-error - request is provided at runtime by TanStack Start
+  .handler(async ({ data, request }) => {
+    const session = await requireAuth(request);
+
+    const { sourceBranchId, targetBranchId } = data;
+
+    // Get source branch
+    const sourceBranch = await db.query.branches.findFirst({
+      where: eq(branches.id, sourceBranchId),
+    });
+
+    if (!sourceBranch) {
+      throw new Error("Source branch not found");
+    }
+
+    // Get all documents from both branches
+    const sourceDocs = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.branchId, sourceBranchId));
+
+    const targetDocs = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.branchId, targetBranchId));
+
+    const sourceDocsMap = new Map(sourceDocs.map((d) => [d.baseDocumentId || d.id, d]));
+    const targetDocsMap = new Map(targetDocs.map((d) => [d.baseDocumentId || d.id, d]));
+
+    const results: Array<{ docId: string; action: string }> = [];
+
+    // Process each document in source branch
+    for (const [baseDocId, sourceDoc] of sourceDocsMap) {
+      const targetDoc = targetDocsMap.get(baseDocId);
+
+      if (!targetDoc) {
+        // Document created in source branch - copy to target
+        const newDocId = crypto.randomUUID();
+        const newDurableStreamId = `project/${sourceDoc.projectId}/doc/${newDocId}/branch/${targetBranchId}`;
+
+        await db.insert(documents).values({
+          id: newDocId,
+          projectId: sourceDoc.projectId,
+          branchId: targetBranchId,
+          baseDocumentId: baseDocId,
+          folderId: null, // TODO: Map folder IDs
+          name: sourceDoc.name,
+          type: sourceDoc.type,
+          durableStreamId: newDurableStreamId,
+          featureCount: sourceDoc.featureCount,
+          sortOrder: sourceDoc.sortOrder,
+          createdBy: session.user.id,
+        });
+
+        // Copy Yjs stream
+        if (sourceDoc.durableStreamId) {
+          await copyYjsStream(sourceDoc.durableStreamId, newDurableStreamId);
+        }
+
+        results.push({ docId: newDocId, action: "created" });
+      } else if (targetDoc.isDeleted && !sourceDoc.isDeleted) {
+        // Deleted in target but exists in source - RESTORE (edit wins)
+        await db
+          .update(documents)
+          .set({
+            isDeleted: false,
+            deletedAt: null,
+            deletedBy: null,
+          })
+          .where(eq(documents.id, targetDoc.id));
+
+        // Merge Yjs streams
+        if (sourceDoc.durableStreamId && targetDoc.durableStreamId) {
+          await mergeYjsStreams(sourceDoc.durableStreamId, targetDoc.durableStreamId);
+        }
+
+        results.push({ docId: targetDoc.id, action: "restored" });
+      } else if (!sourceDoc.isDeleted && !targetDoc.isDeleted) {
+        // Both exist - merge Yjs states
+        if (sourceDoc.durableStreamId && targetDoc.durableStreamId) {
+          await mergeYjsStreams(sourceDoc.durableStreamId, targetDoc.durableStreamId);
+        }
+        results.push({ docId: targetDoc.id, action: "merged" });
+      }
+    }
+
+    // Mark source branch as merged
+    await db
+      .update(branches)
+      .set({
+        mergedAt: new Date(),
+        mergedBy: session.user.id,
+        mergedIntoBranchId: targetBranchId,
+      })
+      .where(eq(branches.id, sourceBranchId));
+
+    const txid = await getCurrentTxid();
+    return { data: { branch: sourceBranch, results }, txid };
+  });
+
+// Helper functions for Yjs stream operations
+const DURABLE_STREAMS_URL = process.env.DURABLE_STREAMS_URL || "http://localhost:3200";
+
+async function copyYjsStream(sourceStreamId: string, targetStreamId: string) {
+  try {
+    const sourceUrl = `${DURABLE_STREAMS_URL}/v1/stream/${sourceStreamId}?offset=-1`;
+    const sourceRes = await fetch(sourceUrl);
+
+    if (!sourceRes.ok) {
+      console.warn("Source stream not found, skipping copy");
+      return;
+    }
+
+    const data = await sourceRes.json();
+    if (!data.items || data.items.length === 0) return;
+
+    // Reconstruct full state and write to target
+    const Y = await import("yjs");
+    const doc = new Y.Doc();
+
+    for (const item of data.items) {
+      const update = decodeYjsUpdate(item);
+      if (update) Y.applyUpdate(doc, update);
+    }
+
+    const fullState = Y.encodeStateAsUpdate(doc);
+    const base64 = btoa(String.fromCharCode(...fullState));
+
+    await fetch(`${DURABLE_STREAMS_URL}/v1/stream/${targetStreamId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: base64 }),
+    });
+  } catch (error) {
+    console.error("Failed to copy Yjs stream:", error);
+  }
+}
+
+async function mergeYjsStreams(sourceStreamId: string, targetStreamId: string) {
+  try {
+    const Y = await import("yjs");
+
+    // Load source doc
+    const sourceUrl = `${DURABLE_STREAMS_URL}/v1/stream/${sourceStreamId}?offset=-1`;
+    const sourceRes = await fetch(sourceUrl);
+    if (!sourceRes.ok) return;
+
+    const sourceData = await sourceRes.json();
+    const sourceDoc = new Y.Doc();
+    if (sourceData.items) {
+      for (const item of sourceData.items) {
+        const update = decodeYjsUpdate(item);
+        if (update) Y.applyUpdate(sourceDoc, update);
+      }
+    }
+
+    // Load target doc
+    const targetUrl = `${DURABLE_STREAMS_URL}/v1/stream/${targetStreamId}?offset=-1`;
+    const targetRes = await fetch(targetUrl);
+    if (!targetRes.ok) return;
+
+    const targetData = await targetRes.json();
+    const targetDoc = new Y.Doc();
+    if (targetData.items) {
+      for (const item of targetData.items) {
+        const update = decodeYjsUpdate(item);
+        if (update) Y.applyUpdate(targetDoc, update);
+      }
+    }
+
+    // Compute diff: changes in source that target doesn't have
+    const diff = Y.encodeStateAsUpdate(sourceDoc, Y.encodeStateVector(targetDoc));
+
+    // Append diff to target if there are changes
+    if (diff.length > 0) {
+      const base64 = btoa(String.fromCharCode(...diff));
+      await fetch(targetUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: base64 }),
+      });
+    }
+  } catch (error) {
+    console.error("Failed to merge Yjs streams:", error);
+  }
+}
+
+function decodeYjsUpdate(item: unknown): Uint8Array | null {
+  if (typeof item === "string") {
+    try {
+      const binary = atob(item);
+      return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    } catch {
+      return null;
+    }
+  } else if (item && typeof item === "object" && "data" in item) {
+    return new Uint8Array(item.data as ArrayBuffer);
+  }
+  return null;
+}

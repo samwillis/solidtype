@@ -82,6 +82,20 @@
   height: 16px;
 }
 
+/* User avatar button - circular, no square background on hover */
+.properties-panel-header-icon-button.properties-panel-user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.properties-panel-header-icon-button.properties-panel-user-avatar:hover {
+  background: transparent;
+  opacity: 0.9;
+  transform: scale(1.05);
+}
+
 .properties-panel-header-button {
   height: 28px; /* Consistent button height */
   padding: 0 12px;

@@ -102,7 +102,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
               validators={{
                 onChange: ({ value }) => {
                   const result = workspaceSchema.shape.name.safeParse(value);
-                  return result.success ? undefined : result.error.errors[0]?.message;
+                  return result.success ? undefined : result.error.issues[0]?.message;
                 },
               }}
               children={(field) => (
@@ -133,7 +133,7 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
                 onChange: ({ value }) => {
                   if (!value) return undefined;
                   const result = workspaceSchema.shape.description.safeParse(value);
-                  return result.success ? undefined : result.error.errors[0]?.message;
+                  return result.success ? undefined : result.error.issues[0]?.message;
                 },
               }}
               children={(field) => (

@@ -1,0 +1,125 @@
+/* User Presence Component Styles */
+
+.user-presence {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.user-presence-avatar-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+}
+
+.user-presence-avatar-wrapper:hover {
+  transform: scale(1.1);
+}
+
+.user-presence-avatar-wrapper:hover .avatar {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.user-presence-avatar-wrapper.following .avatar {
+  box-shadow: 0 0 0 2px var(--color-primary-transparent);
+}
+
+/* Legacy class for +N more button */
+.user-presence-avatar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  margin: 0;
+}
+
+.user-presence-avatar-initials {
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.user-presence-following-indicator {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.user-presence-more {
+  background: var(--color-muted-bg);
+  color: var(--color-text);
+}
+
+.user-presence-more .user-presence-avatar-initials {
+  color: var(--color-text);
+  text-shadow: none;
+}
+
+/* Tooltip styles */
+.user-presence-tooltip {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 12px;
+  z-index: 1000;
+}
+
+.user-presence-tooltip-name {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.user-presence-tooltip-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.user-presence-tooltip-status {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-primary);
+  font-size: 11px;
+}
+
+.user-presence-tooltip-user {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.user-presence-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}

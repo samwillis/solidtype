@@ -37,7 +37,7 @@ function LoginPage() {
       } else {
         navigate({ to: "/dashboard" });
       }
-    } catch (err) {
+    } catch (_err) {
       setError("An unexpected error occurred");
     } finally {
       setLoading(false);

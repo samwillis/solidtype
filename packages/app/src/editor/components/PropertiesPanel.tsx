@@ -33,6 +33,9 @@ import { useTheme } from "../contexts/ThemeContext";
 import { Tooltip } from "@base-ui/react";
 import AIPanel from "./AIPanel";
 import { AIIcon } from "./Icons";
+import { Avatar } from "../../components/Avatar";
+import { UserProfileDialog } from "../../components/dialogs/UserProfileDialog";
+import { useSession } from "../../lib/auth-client";
 import "./PropertiesPanel.css";
 
 // ============================================================================
@@ -1115,7 +1118,12 @@ const PropertiesPanel: React.FC = () => {
   const { editMode, updateFormData, acceptEdit, cancelEdit, isEditing } = useFeatureEdit();
   const { state: viewerState, actions: viewerActions } = useViewer();
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
+  const { data: session } = useSession();
   const [showAIChat, setShowAIChat] = useState(false);
+  const [showUserProfile, setShowUserProfile] = useState(false);
+
+  // Get current user for avatar
+  const user = session?.user;
 
   // Get axis candidates for revolve
   const axisCandidates = useMemo(() => {
@@ -1137,7 +1145,7 @@ const PropertiesPanel: React.FC = () => {
 
   const handleUpdate = useCallback(
     (updates: Record<string, string | number | boolean>) => {
-      if (!effectiveFeature) return;
+      if (!effectiveFeature || !doc) return;
 
       // Update the feature in Yjs
       const featureMap = doc.featuresById.get(effectiveFeature.id);
@@ -1160,25 +1168,32 @@ const PropertiesPanel: React.FC = () => {
           <Tooltip.Root>
             <Tooltip.Trigger
               delay={300}
-              className="properties-panel-header-icon-button"
-              onClick={() => {}}
-              render={<button aria-label="User" />}
+              className="properties-panel-header-icon-button properties-panel-user-avatar"
+              onClick={() => setShowUserProfile(true)}
+              render={<button aria-label="User Profile" />}
+              style={{ padding: 0 }}
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
+              {user ? (
+                <Avatar user={user} size={28} fontSize={11} />
+              ) : (
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              )}
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Positioner side="bottom" sideOffset={6}>
-                <Tooltip.Popup className="properties-panel-header-tooltip">User</Tooltip.Popup>
+                <Tooltip.Popup className="properties-panel-header-tooltip">
+                  {user ? user.name || user.email || "User Profile" : "Sign In"}
+                </Tooltip.Popup>
               </Tooltip.Positioner>
             </Tooltip.Portal>
           </Tooltip.Root>
@@ -1464,10 +1479,13 @@ const PropertiesPanel: React.FC = () => {
   const content = showAIChat ? <AIPanel /> : renderProperties();
 
   return (
-    <div className="properties-panel properties-panel-floating">
-      {renderHeader()}
-      {content && <div className="properties-panel-content">{content}</div>}
-    </div>
+    <>
+      <div className="properties-panel properties-panel-floating">
+        {renderHeader()}
+        {content && <div className="properties-panel-content">{content}</div>}
+      </div>
+      <UserProfileDialog open={showUserProfile} onOpenChange={setShowUserProfile} />
+    </>
   );
 };
 

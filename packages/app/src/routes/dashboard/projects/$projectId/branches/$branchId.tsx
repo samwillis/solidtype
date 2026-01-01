@@ -31,6 +31,7 @@ import {
   LuEllipsis,
   LuTrash2,
   LuMove,
+  LuGitMerge,
 } from "react-icons/lu";
 import {
   projectsCollection,
@@ -50,6 +51,7 @@ import DashboardPropertiesPanel from "../../../../../components/DashboardPropert
 import { ProjectSettingsDialog } from "../../../../../components/dialogs/ProjectSettingsDialog";
 import { MoveDialog } from "../../../../../components/dialogs/MoveDialog";
 import { DeleteConfirmDialog } from "../../../../../components/dialogs/DeleteConfirmDialog";
+import { MergeBranchDialog } from "../../../../../components/dialogs/MergeBranchDialog";
 import "../../../../../styles/dashboard.css";
 
 // Format time ago helper
@@ -110,6 +112,7 @@ function BranchView() {
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showMergeBranch, setShowMergeBranch] = useState(false);
   const [moveItem, setMoveItem] = useState<{
     id: string;
     type: "document" | "folder";
@@ -368,6 +371,17 @@ function BranchView() {
               >
                 <LuGitNetwork size={14} />
               </button>
+
+              {/* Merge Branch button - only show for non-main branches */}
+              {currentBranch && !currentBranch.is_main && !currentBranch.merged_at && (
+                <button
+                  className="dashboard-view-branches-btn dashboard-merge-btn"
+                  onClick={() => setShowMergeBranch(true)}
+                  title="Merge this branch"
+                >
+                  <LuGitMerge size={14} />
+                </button>
+              )}
             </div>
 
             {/* Separator */}
@@ -684,6 +698,23 @@ function BranchView() {
           itemType={deleteItem.type}
           itemName={deleteItem.name}
           onConfirm={handleDelete}
+        />
+      )}
+
+      {/* Merge Branch Dialog */}
+      {currentBranch && !currentBranch.is_main && (
+        <MergeBranchDialog
+          open={showMergeBranch}
+          onOpenChange={setShowMergeBranch}
+          projectId={projectId}
+          sourceBranchId={branchId}
+          onSuccess={() => {
+            // Navigate to main branch or refresh
+            const mainBranch = branches?.find((b) => b.is_main);
+            if (mainBranch) {
+              navigate({ to: `/dashboard/projects/${projectId}/branches/${mainBranch.id}` });
+            }
+          }}
         />
       )}
     </>

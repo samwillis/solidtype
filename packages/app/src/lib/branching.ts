@@ -10,7 +10,7 @@ import { branches, documents, folders } from "../db/schema";
 import { eq } from "drizzle-orm";
 import type { Branch, Document } from "../db/schema";
 
-const DURABLE_STREAMS_URL = process.env.DURABLE_STREAMS_URL || "http://localhost:4437";
+const DURABLE_STREAMS_URL = process.env.DURABLE_STREAMS_URL || "http://localhost:3200";
 
 /**
  * Create a new branch from an existing branch

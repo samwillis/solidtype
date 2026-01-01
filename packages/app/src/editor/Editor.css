@@ -57,10 +57,22 @@
   color: var(--color-text-muted);
 }
 
+/* User Presence container */
+.user-presence-container {
+  position: absolute;
+  top: 12px;
+  right: 300px; /* Offset from properties panel */
+  z-index: 100;
+}
+
 /* Responsive adjustments */
 @media (max-width: 800px) {
   .resizable-panel-right {
     display: none;
+  }
+
+  .user-presence-container {
+    right: 12px;
   }
 }
 

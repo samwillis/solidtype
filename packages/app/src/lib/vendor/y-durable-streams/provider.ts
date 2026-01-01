@@ -268,26 +268,39 @@ export class DurableStreamsProvider extends ObservableV2<DurableStreamsProviderE
 
       // Apply updates from the server (lib0 VarUint8Array framing)
       if (chunk.data.length > 0) {
+        console.debug(
+          `[y-durable-streams] Received data chunk, size=${chunk.data.length}, offset=${chunk.offset}`
+        );
         const decoder = decoding.createDecoder(chunk.data);
+        let updateCount = 0;
         while (decoding.hasContent(decoder)) {
           try {
             const update = decoding.readVarUint8Array(decoder);
+            console.debug(
+              `[y-durable-streams] Applying update #${++updateCount}, size=${update.length}`
+            );
             Y.applyUpdate(this.doc, update, `server`);
           } catch (err) {
             console.debug(`[y-durable-streams] Invalid update in document stream, skipping:`, err);
             break;
           }
         }
+        console.debug(`[y-durable-streams] Applied ${updateCount} updates from chunk`);
+      } else {
+        console.debug(`[y-durable-streams] Received empty chunk (stream is new/empty)`);
       }
 
       // Handle up-to-date signal
       if (chunk.upToDate) {
+        console.debug(`[y-durable-streams] Received up-to-date signal`);
         if (!this.sendingDocumentChanges) {
           this.synced = true;
         }
         this.connected = true;
       }
     });
+
+    console.debug(`[y-durable-streams] Document stream connected, subscribed to updates`);
   }
 
   // ---- Awareness stream ----
@@ -397,6 +410,12 @@ export class DurableStreamsProvider extends ObservableV2<DurableStreamsProviderE
 
   private async sendDocumentChanges(): Promise<void> {
     if (!this.connected || this.sendingDocumentChanges || !this.documentStream) {
+      console.debug(
+        `[y-durable-streams] sendDocumentChanges skipped:`,
+        `connected=${this.connected}`,
+        `sending=${this.sendingDocumentChanges}`,
+        `hasStream=${!!this.documentStream}`
+      );
       return;
     }
 
@@ -415,7 +434,9 @@ export class DurableStreamsProvider extends ObservableV2<DurableStreamsProviderE
         // Frame with lib0 VarUint8Array encoding
         const encoder = encoding.createEncoder();
         encoding.writeVarUint8Array(encoder, lastSending);
+        console.debug(`[y-durable-streams] Sending document update, size=${lastSending.length}`);
         await this.documentStream.append(encoding.toUint8Array(encoder));
+        console.debug(`[y-durable-streams] Document update sent successfully`);
         lastSending = null; // Clear on success
       }
       this.synced = true;

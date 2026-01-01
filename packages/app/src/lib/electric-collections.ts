@@ -220,20 +220,20 @@ export const documentsCollection = createCollection(
         ...newDoc,
       };
 
-      // Remove folderId if it's empty/null/undefined
+      // Remove folder_id if it's empty/null/undefined
       if (
-        !newDoc.folderId ||
-        (typeof newDoc.folderId === "string" && newDoc.folderId.trim() === "")
+        !newDoc.folder_id ||
+        (typeof newDoc.folder_id === "string" && newDoc.folder_id.trim() === "")
       ) {
-        delete normalizedDoc.folderId;
+        delete normalizedDoc.folder_id;
       }
 
-      // Remove durableStreamId if it's empty/null/undefined (will be set after creation)
+      // Remove durable_stream_id if it's empty/null/undefined (will be set after creation)
       if (
-        !newDoc.durableStreamId ||
-        (typeof newDoc.durableStreamId === "string" && newDoc.durableStreamId.trim() === "")
+        !newDoc.durable_stream_id ||
+        (typeof newDoc.durable_stream_id === "string" && newDoc.durable_stream_id.trim() === "")
       ) {
-        delete normalizedDoc.durableStreamId;
+        delete normalizedDoc.durable_stream_id;
       }
 
       const { txid } = await createDocumentMutation({ data: { document: normalizedDoc } });

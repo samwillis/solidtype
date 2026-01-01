@@ -5,6 +5,7 @@
 import { useFollowing } from "../../hooks/useFollowing";
 import type { SolidTypeAwareness } from "../../lib/awareness-provider";
 import type { UserAwarenessState } from "../../lib/awareness-state";
+import { Avatar } from "../../components/Avatar";
 import "./UserPresence.css";
 
 interface UserPresenceProps {
@@ -24,27 +25,33 @@ export function UserPresence({ awareness, onCameraChange }: UserPresenceProps) {
 
   return (
     <div className="user-presence">
-      {connectedUsers.map((user) => (
-        <button
-          key={user.user.id}
-          className={`user-avatar ${followingUserId === user.user.id ? "following" : ""}`}
-          style={{
-            borderColor: user.user.color,
-            backgroundColor: followingUserId === user.user.id ? user.user.color : undefined,
-          }}
-          onClick={() =>
-            followingUserId === user.user.id ? stopFollowing() : followUser(user.user.id)
-          }
-          title={`${user.user.name}${followingUserId === user.user.id ? " (following)" : ""}`}
-        >
-          <span className="user-avatar-initial">{user.user.name[0]?.toUpperCase() || "?"}</span>
-          {followingUserId === user.user.id && (
-            <span className="following-indicator">
-              <EyeIcon />
-            </span>
-          )}
-        </button>
-      ))}
+      {connectedUsers.map((userState) => {
+        const isFollowing = followingUserId === userState.user.id;
+        return (
+          <div
+            key={userState.user.id}
+            className={`user-presence-item ${isFollowing ? "following" : ""}`}
+          >
+            <Avatar
+              user={{
+                id: userState.user.id,
+                name: userState.user.name,
+                color: userState.user.color,
+              }}
+              size={32}
+              highlighted={isFollowing}
+              highlightColor={userState.user.color}
+              onClick={() => (isFollowing ? stopFollowing() : followUser(userState.user.id))}
+              title={`${userState.user.name}${isFollowing ? " (following)" : ""}`}
+            />
+            {isFollowing && (
+              <span className="following-indicator">
+                <EyeIcon />
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
