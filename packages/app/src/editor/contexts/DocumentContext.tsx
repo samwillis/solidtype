@@ -24,6 +24,7 @@ import {
   addExtrudeFeature,
   addRevolveFeature,
   addBooleanFeature,
+  addOffsetPlane as addOffsetPlaneFeature,
   deleteFeature,
   renameFeature,
 } from "../document/featureHelpers";
@@ -70,6 +71,8 @@ interface DocumentContextValue {
     target: string,
     tool: string
   ) => string;
+  /** Add an offset plane from a datum plane or face */
+  addOffsetPlane: (basePlaneId: string, offset: number, name?: string) => string;
   getFeatureById: (id: string) => Feature | null;
   deleteFeature: (id: string) => boolean;
   renameFeature: (id: string, name: string) => boolean;
@@ -416,6 +419,18 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
     [doc]
   );
 
+  const addOffsetPlane = useCallback(
+    (basePlaneId: string, offset: number, name?: string) => {
+      if (!doc) return "";
+      return addOffsetPlaneFeature(doc, {
+        baseRef: { kind: "planeFeatureId", ref: basePlaneId },
+        offset,
+        name,
+      });
+    },
+    [doc]
+  );
+
   const getFeatureById = useCallback(
     (id: string): Feature | null => {
       if (!doc) return null;
@@ -495,6 +510,7 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
     addExtrude,
     addRevolve,
     addBoolean,
+    addOffsetPlane,
     getFeatureById,
     deleteFeature: handleDeleteFeature,
     renameFeature: handleRenameFeature,

@@ -142,6 +142,7 @@ const Viewer: React.FC = () => {
   const constraintLabelsGroupRef = useRef<THREE.Group | null>(null);
   const planesGroupRef = useRef<THREE.Group | null>(null);
   const originGroupRef = useRef<THREE.Group | null>(null);
+  const faceHighlightGroupRef = useRef<THREE.Group | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
 
   const { theme } = useTheme();
@@ -153,6 +154,8 @@ const Viewer: React.FC = () => {
     clearSelection: clearFaceSelection,
     selectedFeatureId,
     hoveredFeatureId,
+    selectedFaces,
+    hover,
   } = useSelection();
   const {
     mode: sketchMode,
@@ -174,6 +177,7 @@ const Viewer: React.FC = () => {
     toggleConstraintSelection,
     clearSelection: clearSketchSelection,
     deleteSelectedItems,
+    toggleConstruction,
   } = useSketch();
   const { doc, features, units, awareness } = useDocument();
 
@@ -533,6 +537,12 @@ const Viewer: React.FC = () => {
           e.preventDefault();
           deleteSelectedItems();
         }
+      } else if (e.key === "x" || e.key === "X") {
+        // Toggle construction mode on selected lines
+        if (selectedLines.size > 0) {
+          e.preventDefault();
+          toggleConstruction();
+        }
       }
     };
 
@@ -545,6 +555,7 @@ const Viewer: React.FC = () => {
     selectedLines,
     selectedConstraints,
     deleteSelectedItems,
+    toggleConstruction,
   ]);
 
   // Constraint value update
@@ -708,6 +719,179 @@ const Viewer: React.FC = () => {
 
     needsRenderRef.current = true;
   }, [meshes, bodies, sceneReady]);
+
+  // Render 3D face/edge selection highlights
+  useEffect(() => {
+    const faceHighlightGroup = faceHighlightGroupRef.current;
+    if (!faceHighlightGroup || !sceneReady) return;
+
+    // Clear existing highlights
+    while (faceHighlightGroup.children.length > 0) {
+      const child = faceHighlightGroup.children[0];
+      faceHighlightGroup.remove(child);
+      if ("geometry" in child && child.geometry) {
+        (child.geometry as THREE.BufferGeometry).dispose();
+      }
+      if ("material" in child && child.material) {
+        const material = child.material as THREE.Material | THREE.Material[];
+        if (Array.isArray(material)) material.forEach((m) => m.dispose());
+        else material.dispose();
+      }
+    }
+
+    // Helper to extract triangles for a specific face from a mesh
+    const extractFaceTriangles = (
+      meshData: {
+        positions: Float32Array;
+        normals: Float32Array;
+        indices: Uint32Array;
+        faceMap?: Uint32Array;
+      },
+      targetFaceIndex: number
+    ): { positions: Float32Array; normals: Float32Array; indices: Uint32Array } | null => {
+      if (!meshData.faceMap) return null;
+
+      // Collect triangle indices that belong to this face
+      const triangleIndices: number[] = [];
+      for (let i = 0; i < meshData.faceMap.length; i++) {
+        if (meshData.faceMap[i] === targetFaceIndex) {
+          triangleIndices.push(i);
+        }
+      }
+
+      if (triangleIndices.length === 0) return null;
+
+      // Build new geometry with just these triangles
+      // First, collect unique vertex indices
+      const vertexMap = new Map<number, number>();
+      const newPositions: number[] = [];
+      const newNormals: number[] = [];
+      const newIndices: number[] = [];
+
+      for (const triIdx of triangleIndices) {
+        const i0 = meshData.indices[triIdx * 3];
+        const i1 = meshData.indices[triIdx * 3 + 1];
+        const i2 = meshData.indices[triIdx * 3 + 2];
+
+        for (const originalIdx of [i0, i1, i2]) {
+          if (!vertexMap.has(originalIdx)) {
+            const newIdx = newPositions.length / 3;
+            vertexMap.set(originalIdx, newIdx);
+            newPositions.push(
+              meshData.positions[originalIdx * 3],
+              meshData.positions[originalIdx * 3 + 1],
+              meshData.positions[originalIdx * 3 + 2]
+            );
+            newNormals.push(
+              meshData.normals[originalIdx * 3],
+              meshData.normals[originalIdx * 3 + 1],
+              meshData.normals[originalIdx * 3 + 2]
+            );
+          }
+          newIndices.push(vertexMap.get(originalIdx)!);
+        }
+      }
+
+      return {
+        positions: new Float32Array(newPositions),
+        normals: new Float32Array(newNormals),
+        indices: new Uint32Array(newIndices),
+      };
+    };
+
+    // Render hover highlight (if hovering over a face)
+    if (hover && hover.type === "face") {
+      const meshData = meshes.get(hover.bodyId);
+      if (meshData) {
+        const faceGeom = extractFaceTriangles(meshData, hover.index);
+        if (faceGeom) {
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute("position", new THREE.BufferAttribute(faceGeom.positions, 3));
+          geometry.setAttribute("normal", new THREE.BufferAttribute(faceGeom.normals, 3));
+          geometry.setIndex(new THREE.BufferAttribute(faceGeom.indices, 1));
+
+          const material = new THREE.MeshBasicMaterial({
+            color: 0x00ff88,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide,
+            depthTest: true,
+            depthWrite: false,
+          });
+
+          const highlightMesh = new THREE.Mesh(geometry, material);
+          highlightMesh.name = `hover-face-${hover.bodyId}-${hover.index}`;
+          highlightMesh.renderOrder = 100;
+          faceHighlightGroup.add(highlightMesh);
+        }
+      }
+    }
+
+    // Render selected faces
+    for (const selected of selectedFaces) {
+      // Skip if this face is also being hovered (to avoid double-render)
+      if (
+        hover &&
+        hover.type === "face" &&
+        hover.bodyId === selected.bodyId &&
+        hover.index === selected.faceIndex
+      ) {
+        // Render with combined selection+hover style
+        const meshData = meshes.get(selected.bodyId);
+        if (meshData) {
+          const faceGeom = extractFaceTriangles(meshData, selected.faceIndex);
+          if (faceGeom) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute("position", new THREE.BufferAttribute(faceGeom.positions, 3));
+            geometry.setAttribute("normal", new THREE.BufferAttribute(faceGeom.normals, 3));
+            geometry.setIndex(new THREE.BufferAttribute(faceGeom.indices, 1));
+
+            const material = new THREE.MeshBasicMaterial({
+              color: 0x00ffaa,
+              transparent: true,
+              opacity: 0.5,
+              side: THREE.DoubleSide,
+              depthTest: true,
+              depthWrite: false,
+            });
+
+            const highlightMesh = new THREE.Mesh(geometry, material);
+            highlightMesh.name = `selected-hover-face-${selected.bodyId}-${selected.faceIndex}`;
+            highlightMesh.renderOrder = 100;
+            faceHighlightGroup.add(highlightMesh);
+          }
+        }
+        continue;
+      }
+
+      const meshData = meshes.get(selected.bodyId);
+      if (meshData) {
+        const faceGeom = extractFaceTriangles(meshData, selected.faceIndex);
+        if (faceGeom) {
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute("position", new THREE.BufferAttribute(faceGeom.positions, 3));
+          geometry.setAttribute("normal", new THREE.BufferAttribute(faceGeom.normals, 3));
+          geometry.setIndex(new THREE.BufferAttribute(faceGeom.indices, 1));
+
+          const material = new THREE.MeshBasicMaterial({
+            color: 0x4488ff,
+            transparent: true,
+            opacity: 0.4,
+            side: THREE.DoubleSide,
+            depthTest: true,
+            depthWrite: false,
+          });
+
+          const highlightMesh = new THREE.Mesh(geometry, material);
+          highlightMesh.name = `selected-face-${selected.bodyId}-${selected.faceIndex}`;
+          highlightMesh.renderOrder = 100;
+          faceHighlightGroup.add(highlightMesh);
+        }
+      }
+    }
+
+    needsRenderRef.current = true;
+  }, [meshes, selectedFaces, hover, sceneReady]);
 
   // Render datum planes
   useEffect(() => {
@@ -1071,20 +1255,31 @@ const Viewer: React.FC = () => {
         pointMap.set(point.id, { x: point.x, y: point.y });
       }
 
-      const createLine2 = (positions: number[], lineColor: number): Line2 => {
+      const createLine2 = (
+        positions: number[],
+        lineColor: number,
+        dashed: boolean = false
+      ): Line2 => {
         const geometry = new LineGeometry();
         geometry.setPositions(positions);
         const material = new LineMaterial({
           color: lineColor,
-          linewidth: 1.5,
+          linewidth: dashed ? 1.2 : 1.5,
           resolution: rendererSize || new THREE.Vector2(800, 600),
           depthTest: false,
+          dashed: dashed,
+          dashScale: 10,
+          dashSize: 2,
+          gapSize: 1.5,
         });
         const line = new Line2(geometry, material);
         line.computeLineDistances();
         line.renderOrder = 2;
         return line;
       };
+
+      // Construction geometry color (orange-ish)
+      const constructionColor = 0xff8800;
 
       // Draw lines
       for (const entity of sketchData.entities) {
@@ -1102,7 +1297,10 @@ const Viewer: React.FC = () => {
               endWorld.y,
               endWorld.z,
             ];
-            sketchGroup.add(createLine2(positions, color));
+            const isConstruction = (entity as { construction?: boolean }).construction === true;
+            sketchGroup.add(
+              createLine2(positions, isConstruction ? constructionColor : color, isConstruction)
+            );
           }
         } else if (entity.type === "arc") {
           const startPoint = pointMap.get(entity.start);
@@ -1145,7 +1343,10 @@ const Viewer: React.FC = () => {
                 positions.push(worldPos.x, worldPos.y, worldPos.z);
               }
             }
-            sketchGroup.add(createLine2(positions, color));
+            const isConstruction = (entity as { construction?: boolean }).construction === true;
+            sketchGroup.add(
+              createLine2(positions, isConstruction ? constructionColor : color, isConstruction)
+            );
           }
         }
       }
@@ -1991,6 +2192,13 @@ const Viewer: React.FC = () => {
     originGroup.renderOrder = 0;
     scene.add(originGroup);
     originGroupRef.current = originGroup;
+
+    // Group for 3D face/edge selection highlights
+    const faceHighlightGroup = new THREE.Group();
+    faceHighlightGroup.name = "face-highlights";
+    faceHighlightGroup.renderOrder = 2; // Render on top of meshes
+    scene.add(faceHighlightGroup);
+    faceHighlightGroupRef.current = faceHighlightGroup;
 
     // Mark scene as ready so mesh/sketch effects can run
     setSceneReady(true);

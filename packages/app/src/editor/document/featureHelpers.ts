@@ -303,6 +303,78 @@ export function addBooleanFeature(doc: SolidTypeDoc, options: BooleanFeatureOpti
   return id;
 }
 
+/**
+ * Options for creating an offset plane
+ */
+export interface OffsetPlaneOptions {
+  /** Reference to the base plane or face */
+  baseRef: SketchPlaneRef;
+  /** Offset distance (positive = along normal, negative = opposite) */
+  offset: number;
+  /** Optional name */
+  name?: string;
+  /** Optional plane dimensions */
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Create a new offset plane from a datum plane or face
+ */
+export function addOffsetPlane(doc: SolidTypeDoc, options: OffsetPlaneOptions): string {
+  const id = uuid();
+  const DEFAULT_WIDTH = 100;
+  const DEFAULT_HEIGHT = 100;
+
+  // Get base plane normal and origin
+  let normal: [number, number, number] = [0, 0, 1];
+  let origin: [number, number, number] = [0, 0, 0];
+  let xDir: [number, number, number] = [1, 0, 0];
+
+  if (options.baseRef.kind === "planeFeatureId") {
+    // Get from existing plane feature
+    const basePlane = doc.featuresById.get(options.baseRef.ref);
+    if (basePlane) {
+      const baseNormal = basePlane.get("normal") as [number, number, number] | undefined;
+      const baseOrigin = basePlane.get("origin") as [number, number, number] | undefined;
+      const baseXDir = basePlane.get("xDir") as [number, number, number] | undefined;
+      if (baseNormal) normal = baseNormal;
+      if (baseOrigin) origin = baseOrigin;
+      if (baseXDir) xDir = baseXDir;
+    }
+  }
+  // For face refs, we'll need to resolve the face normal at runtime in the kernel
+  // For now, just use default normal
+
+  // Calculate offset origin
+  const offsetOrigin: [number, number, number] = [
+    origin[0] + normal[0] * options.offset,
+    origin[1] + normal[1] * options.offset,
+    origin[2] + normal[2] * options.offset,
+  ];
+
+  doc.ydoc.transact(() => {
+    const plane = createFeatureMap();
+    doc.featuresById.set(id, plane);
+
+    setMapProperties(plane, {
+      id,
+      type: "plane",
+      name: options.name ?? `Offset Plane ${doc.featureOrder.length}`,
+      normal,
+      origin: offsetOrigin,
+      xDir,
+      visible: true,
+      width: options.width ?? DEFAULT_WIDTH,
+      height: options.height ?? DEFAULT_HEIGHT,
+    });
+
+    doc.featureOrder.push([id]);
+  });
+
+  return id;
+}
+
 // ============================================================================
 // Sketch Data Manipulation
 // ============================================================================
@@ -404,7 +476,12 @@ export function addPointToSketch(
 /**
  * Add a line to a sketch
  */
-export function addLineToSketch(sketchMap: Y.Map<unknown>, startId: string, endId: string): string {
+export function addLineToSketch(
+  sketchMap: Y.Map<unknown>,
+  startId: string,
+  endId: string,
+  construction?: boolean
+): string {
   const id = uuid();
 
   const dataMap = sketchMap.get("data") as Y.Map<unknown>;
@@ -417,8 +494,33 @@ export function addLineToSketch(sketchMap: Y.Map<unknown>, startId: string, endI
   line.set("type", "line");
   line.set("start", startId);
   line.set("end", endId);
+  if (construction) {
+    line.set("construction", true);
+  }
 
   return id;
+}
+
+/**
+ * Toggle construction mode on a sketch entity (line or arc)
+ */
+export function toggleEntityConstruction(
+  sketchMap: Y.Map<unknown>,
+  entityId: string
+): boolean | null {
+  const dataMap = sketchMap.get("data") as Y.Map<unknown>;
+  const entitiesById = getEntitiesById(dataMap);
+  const entity = entitiesById.get(entityId) as Y.Map<unknown> | undefined;
+  if (!entity) return null;
+
+  const current = entity.get("construction") as boolean | undefined;
+  const newValue = !current;
+  if (newValue) {
+    entity.set("construction", true);
+  } else {
+    entity.delete("construction");
+  }
+  return newValue;
 }
 
 /**

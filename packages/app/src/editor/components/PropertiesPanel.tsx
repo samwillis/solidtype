@@ -910,7 +910,7 @@ function ExtrudeEditForm({ data, onUpdate, onAccept, onCancel }: ExtrudeEditForm
 
 interface RevolveEditFormProps {
   data: RevolveFormData;
-  axisCandidates: Array<{ id: string }>;
+  axisCandidates: Array<{ id: string; label: string }>;
   onUpdate: (updates: Partial<RevolveFormData>) => void;
   onAccept: () => void;
   onCancel: () => void;
@@ -1000,7 +1000,7 @@ function RevolveEditForm({
                   onChange={(axis) => field.handleChange(axis)}
                   options={
                     axisCandidates.length > 0
-                      ? axisCandidates.map((l) => ({ value: l.id, label: l.id }))
+                      ? axisCandidates.map((l) => ({ value: l.id, label: l.label }))
                       : [{ value: "", label: "No lines in sketch" }]
                   }
                   disabled={axisCandidates.length === 0}
@@ -1125,14 +1125,27 @@ const PropertiesPanel: React.FC = () => {
   // Get current user for avatar
   const user = session?.user;
 
-  // Get axis candidates for revolve
+  // Get axis candidates for revolve - prioritize construction lines
   const axisCandidates = useMemo(() => {
     if (editMode.type !== "revolve") return [];
     const sketch = getFeatureById(editMode.sketchId);
     if (!sketch || sketch.type !== "sketch" || !sketch.data) return [];
-    return Object.values(sketch.data.entitiesById).filter(
+    const lines = Object.values(sketch.data.entitiesById).filter(
       (e): e is SketchLine => e.type === "line"
     );
+    // Sort: construction lines first, then by id
+    lines.sort((a, b) => {
+      const aConst = a.construction === true;
+      const bConst = b.construction === true;
+      if (aConst && !bConst) return -1;
+      if (!aConst && bConst) return 1;
+      return a.id.localeCompare(b.id);
+    });
+    // Add friendly labels
+    return lines.map((line, idx) => ({
+      ...line,
+      label: line.construction ? `Axis Line ${idx + 1} (construction)` : `Line ${idx + 1}`,
+    }));
   }, [editMode, getFeatureById]);
 
   // Get the selected feature

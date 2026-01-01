@@ -46,8 +46,10 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
     canApplyConstraint,
     applyConstraint,
     clearSelection: clearSketchSelection,
+    toggleConstruction,
+    hasSelectedEntities,
   } = useSketch();
-  const { undo, redo, canUndo, canRedo, features, addBoolean } = useDocument();
+  const { undo, redo, canUndo, canRedo, features, addBoolean, addOffsetPlane } = useDocument();
   const { selectedFeatureId, selectFeature, clearSelection } = useSelection();
   const { exportStl, exportJson, bodies, sketchPlaneTransforms } = useKernel();
   const { startExtrudeEdit, startRevolveEdit, isEditing } = useFeatureEdit();
@@ -151,6 +153,25 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
     }
     return null;
   }, [selectedFeatureId, features]);
+
+  // Get selected datum plane for offset plane creation
+  const selectedDatumPlane = useMemo(() => {
+    if (!selectedFeatureId) return null;
+    const feature = features.find((f) => f.id === selectedFeatureId);
+    if (feature?.type === "plane") {
+      return feature;
+    }
+    return null;
+  }, [selectedFeatureId, features]);
+
+  // Handle creating an offset plane
+  const handleCreateOffsetPlane = useCallback(
+    (offset: number) => {
+      if (!selectedDatumPlane) return;
+      addOffsetPlane(selectedDatumPlane.id, offset);
+    },
+    [selectedDatumPlane, addOffsetPlane]
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -442,6 +463,28 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
               </Menu.Portal>
             </Menu.Root>
 
+            {/* Construction mode toggle */}
+            <Tooltip.Root>
+              <Tooltip.Trigger
+                delay={300}
+                className={`floating-toolbar-button ${hasSelectedEntities() ? "" : "disabled"}`}
+                onClick={() => hasSelectedEntities() && toggleConstruction()}
+                disabled={!hasSelectedEntities()}
+                render={<button aria-label="Toggle Construction" />}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="3" y1="12" x2="21" y2="12" strokeDasharray="4 2" />
+                </svg>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Positioner side="top" sideOffset={6}>
+                  <Tooltip.Popup className="floating-toolbar-tooltip">
+                    Toggle Construction (X)
+                  </Tooltip.Popup>
+                </Tooltip.Positioner>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+
             {/* Sketch mode actions: Normal to Sketch, Accept, Cancel */}
             <div className="floating-toolbar-separator" />
             <div className="floating-toolbar-group">
@@ -538,22 +581,58 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
               </Tooltip.Root>
-              <Tooltip.Root>
-                <Tooltip.Trigger
-                  delay={300}
-                  className="floating-toolbar-button disabled"
-                  render={<button aria-label="Plane" disabled />}
-                >
-                  <PlaneIcon />
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Positioner side="top" sideOffset={6}>
-                    <Tooltip.Popup className="floating-toolbar-tooltip">
-                      Plane (coming soon)
-                    </Tooltip.Popup>
-                  </Tooltip.Positioner>
-                </Tooltip.Portal>
-              </Tooltip.Root>
+              {/* Plane Creation Dropdown */}
+              <Menu.Root>
+                <Tooltip.Root>
+                  <Tooltip.Trigger
+                    delay={300}
+                    render={
+                      <Menu.Trigger
+                        className={`floating-toolbar-button ${!selectedDatumPlane ? "disabled" : ""}`}
+                        aria-label="Plane"
+                        disabled={!selectedDatumPlane}
+                      >
+                        <PlaneIcon />
+                        <ChevronDownIcon />
+                      </Menu.Trigger>
+                    }
+                  />
+                  <Tooltip.Portal>
+                    <Tooltip.Positioner side="top" sideOffset={6}>
+                      <Tooltip.Popup className="floating-toolbar-tooltip">
+                        Create Plane {selectedDatumPlane ? "" : "(select a plane first)"}
+                      </Tooltip.Popup>
+                    </Tooltip.Positioner>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+                <Menu.Portal>
+                  <Menu.Positioner sideOffset={4}>
+                    <Menu.Popup className="floating-toolbar-dropdown">
+                      <Menu.Item
+                        className="floating-toolbar-dropdown-item"
+                        onClick={() => handleCreateOffsetPlane(10)}
+                      >
+                        <PlaneIcon />
+                        <span>Offset Plane (+10mm)</span>
+                      </Menu.Item>
+                      <Menu.Item
+                        className="floating-toolbar-dropdown-item"
+                        onClick={() => handleCreateOffsetPlane(-10)}
+                      >
+                        <PlaneIcon />
+                        <span>Offset Plane (-10mm)</span>
+                      </Menu.Item>
+                      <Menu.Item
+                        className="floating-toolbar-dropdown-item"
+                        onClick={() => handleCreateOffsetPlane(50)}
+                      >
+                        <PlaneIcon />
+                        <span>Offset Plane (+50mm)</span>
+                      </Menu.Item>
+                    </Menu.Popup>
+                  </Menu.Positioner>
+                </Menu.Portal>
+              </Menu.Root>
             </div>
 
             <div className="floating-toolbar-separator" />

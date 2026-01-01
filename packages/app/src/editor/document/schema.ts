@@ -78,6 +78,8 @@ export const SketchLineSchema = z
     type: z.literal("line"),
     start: UUID,
     end: UUID,
+    /** Whether this is construction geometry (for reference only, not part of profile) */
+    construction: z.boolean().optional(),
   })
   .strict();
 
@@ -91,6 +93,8 @@ export const SketchArcSchema = z
     end: UUID,
     center: UUID,
     ccw: z.boolean(),
+    /** Whether this is construction geometry (for reference only, not part of profile) */
+    construction: z.boolean().optional(),
   })
   .strict();
 

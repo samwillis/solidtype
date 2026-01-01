@@ -15,6 +15,7 @@ import {
   getSketchDataAsArrays,
   setSketchData,
   updatePointPosition,
+  toggleEntityConstruction,
   type NewSketchConstraint,
 } from "../document/featureHelpers";
 import type { SketchData, SketchPoint, SketchLine, DatumPlaneRole } from "../document/schema";
@@ -109,6 +110,10 @@ interface SketchContextValue {
   canApplyConstraint: (type: ConstraintType) => boolean;
   applyConstraint: (type: ConstraintType) => void;
   getSketchData: () => SketchData | null;
+
+  // Construction geometry helpers
+  toggleConstruction: () => void;
+  hasSelectedEntities: () => boolean;
 }
 
 // ============================================================================
@@ -673,6 +678,21 @@ export function SketchProvider({ children }: SketchProviderProps) {
     [getSketchDataFn, selectedPoints, selectedLines, addConstraint, clearSelection]
   );
 
+  // Check if there are selected entities (lines or arcs)
+  const hasSelectedEntities = useCallback((): boolean => {
+    return selectedLines.size > 0;
+  }, [selectedLines]);
+
+  // Toggle construction mode on selected entities
+  const toggleConstruction = useCallback((): void => {
+    const sketch = getSketchElement();
+    if (!sketch) return;
+
+    for (const lineId of selectedLines) {
+      toggleEntityConstruction(sketch, lineId);
+    }
+  }, [getSketchElement, selectedLines]);
+
   const value: SketchContextValue = {
     mode,
     sketchMousePos,
@@ -711,6 +731,9 @@ export function SketchProvider({ children }: SketchProviderProps) {
     canApplyConstraint,
     applyConstraint,
     getSketchData: getSketchDataFn,
+    // Construction geometry helpers
+    toggleConstruction,
+    hasSelectedEntities,
   };
 
   return <SketchContext.Provider value={value}>{children}</SketchContext.Provider>;
