@@ -1,157 +1,247 @@
 # Phase 27 Implementation Status
 
-**Last Updated:** 2025-01-01
+**Last Updated:** 2026-01-01
 
-## ✅ Completed
+## Summary
 
-### Phase 27a: Database & Auth Foundation
+Phase 27 is approximately **70% complete**. The major infrastructure is in place (database, auth, Electric sync, branching logic), but the critical document loading flow is not implemented, blocking the end-to-end workflow.
 
-- ✅ Drizzle ORM with PostgreSQL configured
-- ✅ All database schemas defined (users, workspaces, projects, branches, folders, documents)
-- ✅ better-auth integrated with Drizzle adapter
-- ✅ Auth routes and middleware implemented
-- ✅ Login/signup UI pages working
+---
+
+## ✅ Phase 27a: Database & Auth Foundation - COMPLETE
+
+- ✅ Drizzle ORM with PostgreSQL configured (`lib/db.ts`, `db/schema/*`)
+- ✅ All database schemas defined (users, workspaces, projects, branches, documents, folders)
+- ✅ better-auth integrated with Drizzle adapter (`lib/auth.ts`, `lib/auth-client.ts`)
+- ✅ Auth routes and middleware (`routes/api/auth/$.ts`, `lib/auth-middleware.ts`)
+- ✅ Login/signup UI pages working (`routes/login.tsx`, `routes/signup.tsx`)
 - ✅ Protected routes require authentication
-- ✅ **Fixed:** Automatic "main" branch creation when creating projects (wrapped in transaction)
-- ✅ **Fixed:** Automatic "My first project" creation when user signs up
+- ✅ Auto-create "main" branch when creating projects (in transaction)
+- ✅ Docker Compose with Postgres, Electric, and Durable Streams
 
-### Phase 27b: Workspaces & Projects
+---
 
-- ✅ Workspace CRUD (create, read, update, delete) server functions
-- ✅ Project CRUD (create, read, update, delete) server functions
+## ✅ Phase 27b: Workspaces & Projects - MOSTLY COMPLETE
+
+- ✅ Workspace CRUD server functions (`lib/server-functions.ts`)
+- ✅ Project CRUD server functions
+- ✅ Folder CRUD server functions
+- ✅ Document CRUD server functions
 - ✅ Workspace and project list UIs (dashboard)
 - ✅ Permission checking utilities (`lib/permissions.ts`)
-- ✅ Create dialogs for workspaces, projects, folders, documents
-- ✅ **Fixed:** Files and folders now display in project view (grid/list)
-- ✅ **Fixed:** Navigation to editor from dashboard with document ID
+- ✅ Create dialogs for all entities (workspace, project, folder, document)
+- ✅ Delete dialogs and functionality (`DeleteConfirmDialog.tsx`)
+- ✅ Move dialog for documents/folders (`MoveDialog.tsx`)
+- ⚠️ Edit dialogs are stubs only (WorkspaceSettingsDialog, ProjectSettingsDialog say "coming soon")
+- ❌ Permission/member management UI not started
 
-### Phase 27c: Electric Sync Integration
+---
 
-- ✅ Electric container configured
-- ✅ Electric shapes configured for workspaces, projects, branches, documents, folders
-- ✅ TanStack DB integrated with Electric
-- ✅ Live queries working for all collections
-- ✅ Optimistic mutations implemented via server functions
+## ✅ Phase 27c: Electric Sync Integration - COMPLETE
 
-### Phase 27d: Durable Streams for Yjs
+- ✅ Electric container configured (`docker-compose.yml`)
+- ✅ Electric shapes for all collections (`lib/electric-collections.ts`)
+- ✅ TanStack DB integrated with Electric collections
+- ✅ Live queries working for workspaces, projects, branches, documents, folders
+- ✅ Optimistic mutations via server functions with txid reconciliation
+- ✅ Shape proxy routes (`routes/api/shapes/*`)
+- ✅ Subquery-based authorization in shape WHERE clauses
 
-- ⚠️ **PARTIAL:** Durable Streams server configured in Docker
-- ⚠️ **PARTIAL:** Yjs provider structure exists but needs integration with document loading
-- ❌ Document loading from Durable Streams not yet implemented
+---
 
-## 🔄 In Progress
+## ⚠️ Phase 27d: Durable Streams for Yjs - PARTIAL (BLOCKING)
 
-### Editor Document Loading
+**What's Done:**
+- ✅ Durable Streams container configured (`docker-compose.yml` - port 3200)
+- ✅ y-durable-streams provider vendored (`lib/vendor/y-durable-streams/provider.ts`)
+- ✅ `yjs-sync.ts` helper with `createDocumentSync()` function
+- ✅ `SolidTypeAwareness` provider (`lib/awareness-provider.ts`)
+- ✅ `durableStreamId` field in documents table with proper format
 
-- ✅ Editor route accepts `documentId` parameter
-- ✅ DocumentProvider accepts `documentId` prop
-- ⚠️ **TODO:** Implement document loading from database/Durable Streams when `documentId` is provided
-- ⚠️ **TODO:** Sync Yjs document with Durable Streams on document open
+**What's Missing (CRITICAL):**
+- ❌ **API routes for document streams** - `/api/docs/:docId/stream` does not exist
+- ❌ **API routes for awareness** - `/api/docs/:docId/awareness` does not exist
+- ❌ **Document loading in DocumentProvider** - currently ignores `documentId` prop
+- ❌ **Durable Streams proxy** - `lib/durable-stream-proxy.ts` exists but routes don't use it
 
-## ❌ Missing / Not Started
+**The Gap:**
+```typescript
+// DocumentContext.tsx line 77 - always creates new doc, ignores documentId
+const doc = useMemo(() => createDocument(), []);
+```
 
-### Branching UI
+Should load from database and sync with Durable Streams when `documentId` is provided.
 
-- ❌ UI to create branches from project view
-- ❌ UI to merge branches
-- ✅ Branch visualization component exists (tree view)
-- ✅ Branch mutations exist (server functions)
-- ✅ Branching logic exists (`lib/branching.ts`)
+---
 
-### Edit/Delete UI
+## ⚠️ Phase 27e: Branching - PARTIAL
 
-- ❌ Edit dialogs for workspaces, projects, folders, documents
-- ❌ Delete buttons/confirmations in UI
-- ✅ Delete server functions exist (but not used in UI)
+**What's Done:**
+- ✅ Branch table and schema (`db/schema/branches.ts`)
+- ✅ Branch CRUD server functions
+- ✅ `createBranchWithContentMutation` - copies folders/documents to new branch
+- ✅ `createBranch` function with folder/document copying (`lib/branching.ts`)
+- ✅ `mergeBranch` function with "edit wins" strategy
+- ✅ `forkDurableStream` and `mergeYjsDocument` logic
+- ✅ `CreateBranchDialog` component
+- ✅ `BranchVisualization` component (tree view)
+- ✅ Branch dropdown in project view
 
-### Permission Management UI
+**What's Missing:**
+- ⚠️ Create branch button in UI (dialog exists but not accessible from main UI)
+- ❌ Merge branch UI/button
+- ❌ Branch stream forking untested (depends on working stream routes)
 
-- ❌ UI to add/remove workspace members
-- ❌ UI to add/remove project members
-- ❌ UI to change roles (owner, admin, member, guest)
-- ❌ UI to set `canEdit` permissions
-- ✅ Permission checking logic exists (`lib/permissions.ts`)
+---
 
-### Following & Presence (Phase 27f)
+## ⚠️ Phase 27f: Following & Presence - PARTIAL
 
-- ❌ SolidTypeAwareness provider implementation
-- ❌ Camera/selection/cursor state in awareness
-- ❌ useFollowing hook
-- ❌ UserPresence component (avatar bar)
-- ❌ UserCursors3D for 3D view
-- ❌ SketchCursors for 2D sketch mode
-- ❌ Smooth camera animation when following
+**What's Done:**
+- ✅ `UserAwarenessState` type definition (`lib/awareness-state.ts`)
+- ✅ `generateUserColor` utility
+- ✅ `SolidTypeAwareness` class with full API
+- ✅ `useFollowing` hook
 
-## 🔧 Current State Summary
+**What's Missing:**
+- ❌ `UserPresence` component (avatar bar)
+- ❌ `UserCursors3D` component
+- ❌ `SketchCursors` component
+- ❌ Integration with viewer (camera sync, selection highlighting)
+- ❌ Awareness stream routes
 
-### What Works Now
+---
 
-1. **User can:**
-   - ✅ Sign up / log in
-   - ✅ See their workspaces and projects in dashboard
-   - ✅ Create workspaces, projects, folders, documents
-   - ✅ View files and folders in project view
-   - ✅ Navigate to editor (but document loading not implemented yet)
-   - ✅ See branch visualization
+## ❌ Phase 27g: Full Integration - BLOCKED
 
-2. **What's Missing for Full Workflow:**
+Cannot complete until Phase 27d is done. The critical path is:
 
-   **Critical Blockers:**
-   - ❌ **Editor document loading:** Editor doesn't load documents from database yet
-   - ❌ **Yjs sync:** Documents not synced with Durable Streams
-   - ❌ **Edit entities:** Can't edit workspace/project/document names, descriptions
-   - ❌ **Delete entities:** No UI to delete workspaces/projects/documents
-   - ❌ **Create branches:** No UI button/dialog to create branches
-   - ❌ **Merge branches:** No UI to merge branches
-   - ❌ **Permission management:** Can't add members or change permissions via UI
+1. Implement `/api/docs/:docId/stream` route
+2. Implement `/api/docs/:docId/awareness` route  
+3. Update `DocumentProvider` to:
+   - Accept `documentId` prop
+   - Load document metadata from database
+   - Connect to Durable Streams for Yjs sync
+   - Connect awareness provider
 
-### Next Priority Tasks
+---
 
-1. **High Priority (Blocking Core Workflow):**
-   - Implement document loading in DocumentProvider (load from database, sync with Durable Streams)
-   - Add edit dialogs for all entities
-   - Add delete functionality in UI
+## What Works Now (End User Perspective)
 
-2. **Medium Priority (Enhances Workflow):**
-   - Add branch creation UI
-   - Add branch merge UI
-   - Add permission management UI
+1. ✅ Sign up / log in / log out
+2. ✅ View workspaces in dashboard
+3. ✅ Create workspaces
+4. ✅ View projects in workspace
+5. ✅ Create projects (auto-creates main branch)
+6. ✅ View branches in project
+7. ✅ View files/folders in branch
+8. ✅ Create folders
+9. ✅ Create documents
+10. ✅ Delete documents/folders
+11. ✅ Move documents/folders
+12. ✅ Switch between branches (dropdown)
+13. ✅ View branch visualization (tree)
+14. ✅ Click document → navigate to editor (but shows blank doc)
 
-3. **Low Priority (Nice to Have):**
-   - Implement following & presence features
-   - Polish UI/UX
+**What's Broken:**
+- ❌ Editor always shows blank document (doesn't load saved content)
+- ❌ Changes in editor are not persisted
+- ❌ Multi-user collaboration doesn't work
+- ❌ Presence indicators don't appear
 
-## 📝 Implementation Notes
+---
 
-### Fixed Issues
+## Next Priority Tasks
 
-1. ✅ Main branch now automatically created when project is created (wrapped in transaction)
-2. ✅ "My first project" automatically created on user signup
-3. ✅ Files and folders now display in project view with click handlers
-4. ✅ Navigation to editor from dashboard works (passes documentId)
+### 1. Critical Path (Unblock Document Loading)
 
-### Technical Debt
+```
+[ ] Create /api/docs/$docId/stream.ts route
+    - GET: proxy to Durable Streams for reading
+    - POST: proxy to Durable Streams for writing
+    - Verify document access permissions
+    
+[ ] Create /api/docs/$docId/awareness.ts route
+    - Same pattern as stream route
+    
+[ ] Update DocumentProvider to load documents
+    - When documentId is provided:
+      1. Load document metadata from DB (via server function)
+      2. Create Y.Doc
+      3. Connect to Durable Streams via yjs-sync
+      4. Wait for initial sync
+      5. Use loaded doc for editing
+    - When no documentId:
+      - Create new local-only document (current behavior)
+```
 
-- DocumentProvider currently creates a new document every time - needs to load from database when `documentId` is provided
-- Durable Streams integration partially complete - needs full Yjs sync implementation
-- Some server functions exist but aren't wired up to UI (delete, update)
+### 2. Medium Priority (Complete Core Features)
 
-## 🎯 To Complete Phase 27
+```
+[ ] Wire up Create Branch button in project view UI
+[ ] Add Merge Branch button and confirmation dialog
+[ ] Implement workspace/project settings dialogs (edit name, description)
+[ ] Add member management UI (invite, roles)
+```
 
-### Minimum Viable Implementation
+### 3. Lower Priority (Polish)
 
-1. ✅ User auth and workspace/project creation
-2. ✅ View files and folders
-3. ⚠️ Open and edit documents (document loading needed)
-4. ❌ Edit workspace/project/document properties
-5. ❌ Delete entities
-6. ❌ Create and merge branches
-7. ❌ Manage permissions
+```
+[ ] Implement UserPresence component
+[ ] Implement UserCursors3D
+[ ] Implement SketchCursors
+[ ] Camera sync when following user
+[ ] Selection highlighting for other users
+```
 
-### Full Phase 27 Implementation
+---
 
-1. All of above, plus:
-   - Following & presence
-   - Branch visualization improvements
-   - Permission UI complete
-   - Full Durable Streams integration
+## Technical Notes
+
+### Docker Services
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| Postgres | 54321 (host) → 5432 (container) | Database |
+| Electric | 3100 (host) → 3000 (container) | Real-time sync |
+| Durable Streams | 3200 | Yjs document persistence |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `lib/server-functions.ts` | All CRUD operations |
+| `lib/electric-collections.ts` | TanStack DB + Electric collections |
+| `lib/vendor/y-durable-streams/provider.ts` | Yjs sync provider |
+| `lib/yjs-sync.ts` | High-level Yjs sync helpers |
+| `lib/awareness-provider.ts` | Presence/awareness wrapper |
+| `lib/branching.ts` | Branch create/merge logic |
+| `editor/contexts/DocumentContext.tsx` | **Needs update for loading** |
+
+### API Routes Structure
+
+```
+/api/auth/$           - better-auth handler
+/api/shapes/
+  workspaces/         - Electric shape for workspaces
+  projects/           - Electric shape for projects  
+  branches/           - Electric shape for branches
+  documents/          - Electric shape for documents
+  folders/            - Electric shape for folders
+/api/docs/            - **MISSING: Durable Streams proxy**
+  $docId/stream       - Document stream (not implemented)
+  $docId/awareness    - Awareness stream (not implemented)
+```
+
+---
+
+## Estimate to Complete
+
+| Phase | Effort | Blockers |
+|-------|--------|----------|
+| 27d (Durable Streams) | 4-6 hours | None |
+| 27e (Branching UI) | 2-3 hours | None |
+| 27f (Presence UI) | 4-6 hours | Requires 27d |
+| 27g (Integration) | 2-4 hours | Requires 27d |
+| Settings/Members UI | 4-6 hours | None |
+
+**Total remaining: ~16-25 hours of development work**
