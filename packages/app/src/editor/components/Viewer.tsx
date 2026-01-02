@@ -24,6 +24,9 @@ import {
 } from "../document/featureHelpers";
 import type {
   SketchLine,
+  SketchArc,
+  SketchCircle,
+  SketchEntity,
   SketchConstraint,
   PlaneFeature,
   OriginFeature,
@@ -216,6 +219,7 @@ const Viewer: React.FC = () => {
     addArc,
     addCircle,
     addRectangle,
+    addAngledRectangle,
     addConstraint,
     findNearbyPoint,
     setSketchMousePos,
@@ -245,6 +249,12 @@ const Viewer: React.FC = () => {
     y: number;
     id?: string;
   } | null>(null);
+  // Second point for 3-point tools (like 3-point rectangle)
+  const [tempSecondPoint, setTempSecondPoint] = useState<{
+    x: number;
+    y: number;
+    id?: string;
+  } | null>(null);
   // Chain mode: tracks the last endpoint for continuous line drawing
   const [chainLastEndpoint, setChainLastEndpoint] = useState<{
     x: number;
@@ -262,6 +272,13 @@ const Viewer: React.FC = () => {
     x: number;
     y: number;
     id?: string;
+  } | null>(null);
+  // Tangent arc source: the line/arc we're drawing tangent from
+  const [tangentSource, setTangentSource] = useState<{
+    lineId: string;
+    pointId: string; // The endpoint we're starting from
+    direction: { x: number; y: number }; // Tangent direction at the endpoint
+    point: { x: number; y: number };
   } | null>(null);
   const [circleCenterPoint, setCircleCenterPoint] = useState<{
     x: number;
@@ -293,6 +310,10 @@ const Viewer: React.FC = () => {
     corner1: { x: number; y: number };
     corner2: { x: number; y: number };
   } | null>(null);
+  // For angled rectangle (4 corners, not axis-aligned)
+  const [previewPolygon, setPreviewPolygon] = useState<
+    { x: number; y: number }[] | null
+  >(null);
 
   // Snap target for visual indicator when hovering near a snap-able point
   const [snapTarget, setSnapTarget] = useState<{
@@ -345,6 +366,13 @@ const Viewer: React.FC = () => {
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingViewRef = useRef(false);
   const DRAG_THRESHOLD = 5;
+
+  // Box selection state (for select tool drag to multi-select)
+  const [boxSelection, setBoxSelection] = useState<{
+    start: { x: number; y: number }; // Screen coords
+    current: { x: number; y: number }; // Screen coords
+    mode: "window" | "crossing"; // window = left-to-right (only inside), crossing = right-to-left (intersecting)
+  } | null>(null);
 
   // Ref to track sketch mode for use in mouse handlers (to prevent rotation during sketch)
   const sketchModeRef = useRef(sketchMode);
@@ -633,9 +661,11 @@ const Viewer: React.FC = () => {
   useEffect(() => {
     // Reset all draft state when sketch mode or tool changes
     setTempStartPoint(null);
+    setTempSecondPoint(null);
     setChainLastEndpoint(null);
     setArcStartPoint(null);
     setArcEndPoint(null);
+    setTangentSource(null);
     setArcCenterPoint(null);
     setCircleCenterPoint(null);
     setInferenceIndicator(null);
@@ -661,6 +691,7 @@ const Viewer: React.FC = () => {
     setPreviewCircle(null);
     setPreviewArc(null);
     setPreviewRect(null);
+    setPreviewPolygon(null);
     setInferenceIndicator(null);
 
     // LINE TOOL: Use chain endpoint if available, otherwise temp start
@@ -699,6 +730,45 @@ const Viewer: React.FC = () => {
         corner1: { x: cx - halfW, y: cy - halfH },
         corner2: { x: cx + halfW, y: cy + halfH },
       });
+    }
+
+    // RECTANGLE TOOL (3-POINT): Angled rectangle defined by edge + width
+    else if (sketchMode.activeTool === "rectangle3Point") {
+      setPreviewPolygon(null); // Reset
+      if (tempStartPoint && !tempSecondPoint) {
+        // Step 1→2: Show line from first corner to cursor (defines edge)
+        setPreviewLine({
+          start: { x: tempStartPoint.x, y: tempStartPoint.y },
+          end: { x: sketchPos.x, y: sketchPos.y },
+        });
+      } else if (tempStartPoint && tempSecondPoint) {
+        // Step 2→3: Show full rectangle preview with cursor defining width
+        // Calculate the rectangle corners based on edge vector and width
+        const edgeX = tempSecondPoint.x - tempStartPoint.x;
+        const edgeY = tempSecondPoint.y - tempStartPoint.y;
+        const edgeLen = Math.hypot(edgeX, edgeY);
+        if (edgeLen > 0.01) {
+          // Unit vector along edge
+          const ux = edgeX / edgeLen;
+          const uy = edgeY / edgeLen;
+          // Perpendicular unit vector (to the left of the edge direction)
+          const px = -uy;
+          const py = ux;
+          // Calculate signed width (distance from edge to cursor perpendicular to edge)
+          const toCursorX = sketchPos.x - tempStartPoint.x;
+          const toCursorY = sketchPos.y - tempStartPoint.y;
+          const width = toCursorX * px + toCursorY * py;
+
+          // Four corners of the angled rectangle (in order for closed polygon)
+          const c1 = { x: tempStartPoint.x, y: tempStartPoint.y };
+          const c2 = { x: tempSecondPoint.x, y: tempSecondPoint.y };
+          const c3 = { x: tempSecondPoint.x + width * px, y: tempSecondPoint.y + width * py };
+          const c4 = { x: tempStartPoint.x + width * px, y: tempStartPoint.y + width * py };
+
+          setPreviewPolygon([c1, c2, c3, c4, c1]); // Close the polygon
+          setPreviewLine(null);
+        }
+      }
     }
 
     // CIRCLE TOOL: Show circle preview from center with radius to cursor
@@ -745,6 +815,39 @@ const Viewer: React.FC = () => {
           end: sketchPos,
           bulge: arcCenterPoint,
         });
+      }
+    }
+
+    // TANGENT ARC TOOL
+    else if (sketchMode.activeTool === "arcTangent" && tangentSource) {
+      // Show tangent arc preview from source point to cursor
+      const P = tangentSource.point;
+      const E = sketchPos;
+      const T = tangentSource.direction;
+
+      // Calculate the arc center using tangent constraint
+      const N = { x: -T.y, y: T.x };
+      const M = { x: (P.x + E.x) / 2, y: (P.y + E.y) / 2 };
+      const PE = { x: E.x - P.x, y: E.y - P.y };
+      const PElen = Math.hypot(PE.x, PE.y);
+
+      if (PElen > 0.01) {
+        const perpPE = { x: -PE.y / PElen, y: PE.x / PElen };
+        const det = N.x * (-perpPE.y) - N.y * (-perpPE.x);
+
+        if (Math.abs(det) > 1e-10) {
+          const dx = M.x - P.x;
+          const dy = M.y - P.y;
+          const s = (dx * (-perpPE.y) - dy * (-perpPE.x)) / det;
+          const center = { x: P.x + s * N.x, y: P.y + s * N.y };
+
+          // Use bulge as the center for preview rendering (centerpoint arc style)
+          setPreviewArc({
+            start: P,
+            end: E,
+            bulge: center, // Using center as the bulge for preview
+          });
+        }
       }
     }
 
@@ -893,6 +996,7 @@ const Viewer: React.FC = () => {
         setArcStartPoint(null);
         setArcEndPoint(null);
         setArcCenterPoint(null);
+        setTangentSource(null);
         setCircleCenterPoint(null);
         setInferenceIndicator(null);
         setPreviewCircle(null);
@@ -1921,6 +2025,32 @@ const Viewer: React.FC = () => {
         sketchGroup.add(rect);
       }
 
+      // Render preview polygon (green dashed) - for angled rectangles
+      if (previewPolygon && previewPolygon.length >= 3 && sketchMode.planeId) {
+        const positions: number[] = [];
+        for (const pt of previewPolygon) {
+          const worldPt = toWorldCoord(pt.x, pt.y);
+          positions.push(worldPt.x, worldPt.y, worldPt.z);
+        }
+
+        const geometry = new LineGeometry();
+        geometry.setPositions(positions);
+        const material = new LineMaterial({
+          color: 0x00ff00,
+          linewidth: 2,
+          resolution: rendererSize || new THREE.Vector2(800, 600),
+          depthTest: false,
+          dashed: true,
+          dashScale: 10,
+          dashSize: 3,
+          gapSize: 3,
+        });
+        const polygon = new Line2(geometry, material);
+        polygon.computeLineDistances();
+        polygon.renderOrder = 3;
+        sketchGroup.add(polygon);
+      }
+
       // Render preview arc (green dashed) - 3 point arc through start, bulge, end
       if (previewArc && sketchMode.planeId) {
         const { start, end, bulge } = previewArc;
@@ -2170,12 +2300,12 @@ const Viewer: React.FC = () => {
       );
     };
 
-    // Draw selection highlights for selected lines (yellow glow)
+    // Draw selection highlights for selected entities (yellow glow)
     for (const entity of sketch.entities) {
+      if (!selectedLines.has(entity.id)) continue;
+
       if (entity.type === "line") {
         const line = entity as SketchLine;
-        if (!selectedLines.has(line.id)) continue;
-
         const startPoint = sketch.points.find((p) => p.id === line.start);
         const endPoint = sketch.points.find((p) => p.id === line.end);
         if (!startPoint || !endPoint) continue;
@@ -2204,6 +2334,83 @@ const Viewer: React.FC = () => {
         selLine.computeLineDistances();
         selLine.renderOrder = 1; // Below main sketch lines
         selectionGroup.add(selLine);
+      } else if (entity.type === "arc") {
+        // Arc selection highlight
+        const arc = entity as SketchArc;
+        const startPoint = sketch.points.find((p) => p.id === arc.start);
+        const endPoint = sketch.points.find((p) => p.id === arc.end);
+        const centerPoint = sketch.points.find((p) => p.id === arc.center);
+        if (!startPoint || !endPoint || !centerPoint) continue;
+
+        const radius = Math.hypot(startPoint.x - centerPoint.x, startPoint.y - centerPoint.y);
+        const startAngle = Math.atan2(startPoint.y - centerPoint.y, startPoint.x - centerPoint.x);
+        const endAngle = Math.atan2(endPoint.y - centerPoint.y, endPoint.x - centerPoint.x);
+
+        let sweep = endAngle - startAngle;
+        if (arc.ccw) {
+          if (sweep <= 0) sweep += Math.PI * 2;
+        } else {
+          if (sweep >= 0) sweep -= Math.PI * 2;
+        }
+
+        const segments = 32;
+        const positions: number[] = [];
+        for (let i = 0; i <= segments; i++) {
+          const t = i / segments;
+          const angle = startAngle + t * sweep;
+          const worldPos = toWorld(
+            centerPoint.x + radius * Math.cos(angle),
+            centerPoint.y + radius * Math.sin(angle)
+          );
+          positions.push(worldPos.x, worldPos.y, worldPos.z);
+        }
+
+        const geometry = new LineGeometry();
+        geometry.setPositions(positions);
+        const material = new LineMaterial({
+          color: 0xffff00,
+          linewidth: 6,
+          resolution: rendererSize || new THREE.Vector2(800, 600),
+          depthTest: false,
+          transparent: true,
+          opacity: 0.6,
+        });
+        const selArc = new Line2(geometry, material);
+        selArc.computeLineDistances();
+        selArc.renderOrder = 1;
+        selectionGroup.add(selArc);
+      } else if (entity.type === "circle") {
+        // Circle selection highlight
+        const circle = entity as SketchCircle;
+        const centerPoint = sketch.points.find((p) => p.id === circle.center);
+        if (!centerPoint) continue;
+
+        const radius = circle.radius;
+        const segments = 64;
+        const positions: number[] = [];
+        for (let i = 0; i <= segments; i++) {
+          const angle = (i / segments) * Math.PI * 2;
+          const worldPos = toWorld(
+            centerPoint.x + radius * Math.cos(angle),
+            centerPoint.y + radius * Math.sin(angle)
+          );
+          positions.push(worldPos.x, worldPos.y, worldPos.z);
+        }
+
+        const geometry = new LineGeometry();
+        geometry.setPositions(positions);
+        const material = new LineMaterial({
+          color: 0xffff00,
+          linewidth: 6,
+          resolution: rendererSize || new THREE.Vector2(800, 600),
+          depthTest: false,
+          transparent: true,
+          opacity: 0.6,
+        });
+        const selCircle = new Line2(geometry, material);
+        selCircle.computeLineDistances();
+        selCircle.renderOrder = 1;
+        selectionGroup.add(selCircle);
       }
     }
 
@@ -3063,11 +3270,12 @@ const Viewer: React.FC = () => {
           setChainLastEndpoint(null);
           setTempStartPoint(null);
           setInferenceIndicator(null);
-        } else if (tool === "arc" || tool === "arcCenterpoint") {
+        } else if (tool === "arc" || tool === "arcCenterpoint" || tool === "arcTangent") {
           // Cancel arc in progress
           setArcStartPoint(null);
           setArcEndPoint(null);
           setArcCenterPoint(null);
+          setTangentSource(null);
           setPreviewArc(null);
         } else if (tool === "circle") {
           // Cancel circle in progress
@@ -3306,6 +3514,17 @@ const Viewer: React.FC = () => {
         }
       }
 
+      // Update box selection if active
+      if (boxSelection && isDraggingViewRef.current) {
+        const dx = cx - boxSelection.start.x;
+        // Determine selection mode based on drag direction
+        // Left-to-right = window (only inside), right-to-left = crossing (intersecting)
+        const mode = dx >= 0 ? "window" : "crossing";
+        setBoxSelection((prev) =>
+          prev ? { ...prev, current: { x: cx, y: cy }, mode } : null
+        );
+      }
+
       // Update sketch coordinates using 3D ray casting
       const sketchCoords = screenToSketch(e.clientX, e.clientY, sketchMode.planeId!);
       if (sketchCoords) {
@@ -3351,6 +3570,8 @@ const Viewer: React.FC = () => {
         if (
           sketchMode.activeTool === "line" ||
           sketchMode.activeTool === "arc" ||
+          sketchMode.activeTool === "arcCenterpoint" ||
+          sketchMode.activeTool === "arcTangent" ||
           sketchMode.activeTool === "circle" ||
           sketchMode.activeTool === "rectangle"
         ) {
@@ -3371,9 +3592,11 @@ const Viewer: React.FC = () => {
             if (nearbyPoint) {
               setHoveredDraggable({ type: "point", id: nearbyPoint.id });
             } else {
-              const nearbyLine = findNearbyLineInSketch(sketch, snapped.x, snapped.y, tol);
-              if (nearbyLine) {
-                setHoveredDraggable({ type: "line", id: nearbyLine.id });
+              // Check for nearby entity (line, arc, or circle)
+              const nearbyEntity = findNearestEntityInSketch(sketch, snapped.x, snapped.y, tol);
+              if (nearbyEntity) {
+                // Use "line" type for hover feedback for all entity types (same cursor)
+                setHoveredDraggable({ type: "line", id: nearbyEntity.entity.id });
               } else {
                 setHoveredDraggable(null);
               }
@@ -3441,6 +3664,14 @@ const Viewer: React.FC = () => {
               }
               return;
             }
+
+            // Click on empty space - start box selection
+            const screenPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            setBoxSelection({
+              start: screenPos,
+              current: screenPos,
+              mode: "window", // Will be updated based on drag direction
+            });
           }
         }
       }
@@ -3452,6 +3683,7 @@ const Viewer: React.FC = () => {
 
       const wasDragging = isDraggingViewRef.current;
       const wasDraggingEntity = draggingEntity !== null;
+      const wasBoxSelecting = boxSelection !== null;
       mouseDownPosRef.current = null;
       isDraggingViewRef.current = false;
 
@@ -3461,7 +3693,8 @@ const Viewer: React.FC = () => {
       }
 
       // If we were dragging (rotating view or entity), don't trigger tool action
-      if (wasDragging) return;
+      // BUT allow box selection to complete
+      if (wasDragging && !wasBoxSelecting) return;
 
       // If no tool is active (tool is 'none'), don't handle sketch clicks
       if (sketchMode.activeTool === "none") return;
@@ -3482,6 +3715,98 @@ const Viewer: React.FC = () => {
       if (sketchMode.activeTool === "select") {
         const sketch = getSketch();
         if (!sketch) return;
+
+        // Handle box selection completion
+        if (boxSelection && wasDragging) {
+          const { start, current, mode } = boxSelection;
+          setBoxSelection(null);
+
+          // Calculate selection box bounds in screen coordinates
+          const minX = Math.min(start.x, current.x);
+          const maxX = Math.max(start.x, current.x);
+          const minY = Math.min(start.y, current.y);
+          const maxY = Math.max(start.y, current.y);
+
+          // Convert selection box corners to sketch coordinates
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (!rect) return;
+
+          const topLeft = screenToSketch(minX + rect.left, minY + rect.top, sketchMode.planeId!);
+          const bottomRight = screenToSketch(maxX + rect.left, maxY + rect.top, sketchMode.planeId!);
+          if (!topLeft || !bottomRight) return;
+
+          const boxMinX = Math.min(topLeft.x, bottomRight.x);
+          const boxMaxX = Math.max(topLeft.x, bottomRight.x);
+          const boxMinY = Math.min(topLeft.y, bottomRight.y);
+          const boxMaxY = Math.max(topLeft.y, bottomRight.y);
+
+          // Select entities based on mode
+          const newSelectedPoints = new Set<string>();
+          const newSelectedLines = new Set<string>();
+
+          // Check points
+          for (const point of sketch.points) {
+            const inside = point.x >= boxMinX && point.x <= boxMaxX &&
+                          point.y >= boxMinY && point.y <= boxMaxY;
+            if (inside) {
+              newSelectedPoints.add(point.id);
+            }
+          }
+
+          // Check entities (lines, arcs, circles)
+          for (const entity of sketch.entities) {
+            let shouldSelect = false;
+
+            if (entity.type === "line") {
+              const startPt = sketch.points.find((p) => p.id === entity.start);
+              const endPt = sketch.points.find((p) => p.id === entity.end);
+              if (startPt && endPt) {
+                const startInside = startPt.x >= boxMinX && startPt.x <= boxMaxX &&
+                                   startPt.y >= boxMinY && startPt.y <= boxMaxY;
+                const endInside = endPt.x >= boxMinX && endPt.x <= boxMaxX &&
+                                 endPt.y >= boxMinY && endPt.y <= boxMaxY;
+                if (mode === "window") {
+                  // Window: both endpoints must be inside
+                  shouldSelect = startInside && endInside;
+                } else {
+                  // Crossing: at least one endpoint inside, or line intersects box
+                  shouldSelect = startInside || endInside ||
+                    lineIntersectsBox(startPt, endPt, boxMinX, boxMinY, boxMaxX, boxMaxY);
+                }
+              }
+            } else if (entity.type === "arc" || entity.type === "circle") {
+              // For arcs and circles, use center point for simplicity
+              const center = sketch.points.find((p) => p.id === (entity as SketchArc | SketchCircle).center);
+              if (center) {
+                const centerInside = center.x >= boxMinX && center.x <= boxMaxX &&
+                                    center.y >= boxMinY && center.y <= boxMaxY;
+                if (mode === "window") {
+                  // For window mode, check if entire arc/circle is inside
+                  // Simplified: just check center
+                  shouldSelect = centerInside;
+                } else {
+                  // For crossing mode, check if center is inside or arc intersects box
+                  shouldSelect = centerInside; // Simplified for now
+                }
+              }
+            }
+
+            if (shouldSelect) {
+              newSelectedLines.add(entity.id);
+            }
+          }
+
+          // Apply selection (add to existing if Ctrl/Shift held)
+          if (e.ctrlKey || e.metaKey || e.shiftKey) {
+            setSelectedPoints((prev) => new Set([...prev, ...newSelectedPoints]));
+            setSelectedLines((prev) => new Set([...prev, ...newSelectedLines]));
+          } else {
+            setSelectedPoints(newSelectedPoints);
+            setSelectedLines(newSelectedLines);
+            setSelectedConstraints(new Set());
+          }
+          return;
+        }
 
         const tol = POINT_MERGE_TOLERANCE_MM;
         const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, tol);
@@ -3510,25 +3835,27 @@ const Viewer: React.FC = () => {
           return;
         }
 
-        const nearbyLine = findNearbyLineInSketch(sketch, snappedPos.x, snappedPos.y, tol);
-        if (nearbyLine) {
+        // Check for nearby entity (line, arc, or circle)
+        const nearbyEntity = findNearestEntityInSketch(sketch, snappedPos.x, snappedPos.y, tol);
+        if (nearbyEntity) {
+          const entityId = nearbyEntity.entity.id;
           if (e.ctrlKey || e.metaKey) {
             // Ctrl+click: toggle selection (preserves other selections)
             setSelectedLines((prev) => {
               const next = new Set(prev);
-              if (next.has(nearbyLine.id)) {
-                next.delete(nearbyLine.id);
+              if (next.has(entityId)) {
+                next.delete(entityId);
               } else {
-                next.add(nearbyLine.id);
+                next.add(entityId);
               }
               return next;
             });
           } else if (e.shiftKey) {
             // Shift+click: add to selection (preserves other selections)
-            setSelectedLines((prev) => new Set([...prev, nearbyLine.id]));
+            setSelectedLines((prev) => new Set([...prev, entityId]));
           } else {
             // Plain click: select only this (clear all others)
-            setSelectedLines(new Set([nearbyLine.id]));
+            setSelectedLines(new Set([entityId]));
             setSelectedPoints(new Set());
             setSelectedConstraints(new Set());
           }
@@ -3544,11 +3871,40 @@ const Viewer: React.FC = () => {
 
       if (sketchMode.activeTool === "point") {
         // Point tool: single click to add a point
+        // First check if we're clicking on an existing point
         const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
-        if (!nearbyPoint) {
-          // Only add a new point if not clicking on an existing one
-          addPoint(snappedPos.x, snappedPos.y);
+        if (nearbyPoint) {
+          // Don't add a duplicate point
+          return;
         }
+
+        // Check if we're near an entity (line/arc/circle) and should snap to it
+        const sketch = getSketch();
+        if (sketch) {
+          const nearestEntity = findNearestEntityInSketch(
+            sketch,
+            snappedPos.x,
+            snappedPos.y,
+            POINT_MERGE_TOLERANCE_MM
+          );
+
+          if (nearestEntity) {
+            // Add a point at the closest position on the entity
+            const pointId = addPoint(nearestEntity.closestPoint.x, nearestEntity.closestPoint.y);
+            if (pointId) {
+              // Add appropriate constraint based on entity type
+              if (nearestEntity.entity.type === "line") {
+                addConstraint({ type: "pointOnLine", point: pointId, line: nearestEntity.entity.id });
+              } else if (nearestEntity.entity.type === "arc" || nearestEntity.entity.type === "circle") {
+                addConstraint({ type: "pointOnArc", point: pointId, arc: nearestEntity.entity.id });
+              }
+            }
+            return;
+          }
+        }
+
+        // Not near any entity - add a free point
+        addPoint(snappedPos.x, snappedPos.y);
         return;
       }
 
@@ -3642,8 +3998,9 @@ const Viewer: React.FC = () => {
             const centerId = addPoint(circleInfo.x, circleInfo.y);
 
             if (startId && endId && centerId) {
-              // Determine CCW based on the bulge point position
-              const ccw = isCounterClockwise(arcStartPoint, arcEndPoint, clickPoint);
+              // Determine CCW based on where the bulge point is relative to center
+              const center = { x: circleInfo.x, y: circleInfo.y };
+              const ccw = shouldArcBeCCW(arcStartPoint, arcEndPoint, clickPoint, center);
               addArc(startId, endId, centerId, ccw);
             }
           }
@@ -3674,14 +4031,173 @@ const Viewer: React.FC = () => {
           const endId = clickPoint.id ?? addPoint(clickPoint.x, clickPoint.y);
 
           if (centerId && startId && endId) {
-            // Determine CCW based on cursor position relative to center-start line
-            const ccw = isCounterClockwise(arcCenterPoint, arcStartPoint, clickPoint);
+            // Determine CCW: go the short way from start to end around center
+            const ccw = shouldCenterpointArcBeCCW(arcCenterPoint, arcStartPoint, clickPoint);
             addArc(startId, endId, centerId, ccw);
           }
 
           // Reset for next arc
           setArcCenterPoint(null);
           setArcStartPoint(null);
+        }
+        return;
+      }
+
+      if (sketchMode.activeTool === "arcTangent") {
+        // Tangent arc: click endpoint of line/arc → click end point
+        // Arc is tangent to the source line/arc at the start point
+        const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
+
+        if (!tangentSource) {
+          // First click: must be at an endpoint of a line or arc
+          if (!nearbyPoint?.id) {
+            // Must click on an existing point that is an endpoint
+            return;
+          }
+
+          // Find if this point is an endpoint of any line or arc
+          const sketch = getSketch();
+          if (!sketch) return;
+
+          let foundSource: {
+            entityId: string;
+            entityType: "line" | "arc";
+            direction: { x: number; y: number };
+          } | null = null;
+
+          for (const entity of sketch.entities) {
+            if (entity.type === "line") {
+              const startPt = sketch.points.find((p) => p.id === entity.start);
+              const endPt = sketch.points.find((p) => p.id === entity.end);
+              if (!startPt || !endPt) continue;
+
+              if (entity.start === nearbyPoint.id) {
+                // Point is the start of this line - tangent goes toward start (opposite of line direction)
+                const dx = startPt.x - endPt.x;
+                const dy = startPt.y - endPt.y;
+                const len = Math.hypot(dx, dy);
+                if (len > 0) {
+                  foundSource = {
+                    entityId: entity.id,
+                    entityType: "line",
+                    direction: { x: dx / len, y: dy / len },
+                  };
+                  break;
+                }
+              } else if (entity.end === nearbyPoint.id) {
+                // Point is the end of this line - tangent continues in line direction
+                const dx = endPt.x - startPt.x;
+                const dy = endPt.y - startPt.y;
+                const len = Math.hypot(dx, dy);
+                if (len > 0) {
+                  foundSource = {
+                    entityId: entity.id,
+                    entityType: "line",
+                    direction: { x: dx / len, y: dy / len },
+                  };
+                  break;
+                }
+              }
+            }
+            // TODO: Handle arcs - tangent direction is perpendicular to radius at the point
+          }
+
+          if (!foundSource) {
+            // Point is not an endpoint of any line/arc
+            return;
+          }
+
+          setTangentSource({
+            lineId: foundSource.entityId,
+            pointId: nearbyPoint.id,
+            direction: foundSource.direction,
+            point: { x: nearbyPoint.x, y: nearbyPoint.y },
+          });
+        } else {
+          // Second click: end point of the tangent arc
+          // Calculate center such that arc is tangent to the source
+          const endPoint = nearbyPoint
+            ? { x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id }
+            : { x: snappedPos.x, y: snappedPos.y };
+
+          // For a tangent arc from P with tangent direction T to end point E:
+          // The center lies on the line perpendicular to T at P, and also on the
+          // perpendicular bisector of segment PE.
+          // 
+          // Perpendicular to T at P: P + s * (-T.y, T.x) for some s
+          // Perpendicular bisector of PE: midpoint M + t * perpendicular to PE
+          // 
+          // Solve for intersection:
+          const P = tangentSource.point;
+          const E = endPoint;
+          const T = tangentSource.direction;
+
+          // Perpendicular to tangent (normal direction)
+          const N = { x: -T.y, y: T.x };
+
+          // Midpoint of PE
+          const M = { x: (P.x + E.x) / 2, y: (P.y + E.y) / 2 };
+
+          // Direction of PE
+          const PE = { x: E.x - P.x, y: E.y - P.y };
+          const PElen = Math.hypot(PE.x, PE.y);
+
+          if (PElen < 0.01) {
+            setTangentSource(null);
+            return;
+          }
+
+          // Perpendicular to PE (for bisector direction)
+          const perpPE = { x: -PE.y / PElen, y: PE.x / PElen };
+
+          // Line 1: P + s * N (perpendicular to tangent at P)
+          // Line 2: M + t * perpPE (perpendicular bisector of PE)
+          // Solve: P + s * N = M + t * perpPE
+          // s * N.x - t * perpPE.x = M.x - P.x
+          // s * N.y - t * perpPE.y = M.y - P.y
+
+          // Use Cramer's rule
+          const det = N.x * (-perpPE.y) - N.y * (-perpPE.x);
+          if (Math.abs(det) < 1e-10) {
+            // Lines are parallel - can't form tangent arc (end point is on tangent line)
+            setTangentSource(null);
+            return;
+          }
+
+          const dx = M.x - P.x;
+          const dy = M.y - P.y;
+          const s = (dx * (-perpPE.y) - dy * (-perpPE.x)) / det;
+
+          // Center of the arc
+          const center = {
+            x: P.x + s * N.x,
+            y: P.y + s * N.y,
+          };
+
+          // Create the arc
+          const startId = tangentSource.pointId;
+          const endId = endPoint.id ?? addPoint(endPoint.x, endPoint.y);
+          const centerId = addPoint(center.x, center.y);
+
+          if (startId && endId && centerId) {
+            // Determine CCW: the arc should curve away from the tangent direction
+            // If s > 0, center is to the left of tangent direction (CCW)
+            // If s < 0, center is to the right (CW)
+            const ccw = s > 0;
+            const arcId = addArc(startId, endId, centerId, ccw);
+
+            // Add tangent constraint between the arc and the source line
+            if (arcId) {
+              addConstraint({
+                type: "tangent",
+                line: tangentSource.lineId,
+                arc: arcId,
+                connectionPoint: tangentSource.pointId,
+              });
+            }
+          }
+
+          setTangentSource(null);
         }
         return;
       }
@@ -3790,6 +4306,55 @@ const Viewer: React.FC = () => {
           }
 
           setTempStartPoint(null);
+        }
+        return;
+      }
+
+      if (sketchMode.activeTool === "rectangle3Point") {
+        // 3-point angled rectangle: corner A, corner B (defines edge), third point (defines width)
+        const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
+        const clickPoint = nearbyPoint
+          ? { x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined }
+          : { x: snappedPos.x, y: snappedPos.y };
+
+        if (!tempStartPoint) {
+          // First click - set corner A
+          setTempStartPoint(clickPoint);
+        } else if (!tempSecondPoint) {
+          // Second click - set corner B (defines one edge)
+          setTempSecondPoint(clickPoint);
+        } else {
+          // Third click - defines width via perpendicular distance
+          const edgeX = tempSecondPoint.x - tempStartPoint.x;
+          const edgeY = tempSecondPoint.y - tempStartPoint.y;
+          const edgeLen = Math.hypot(edgeX, edgeY);
+
+          if (edgeLen > 0.01) {
+            // Unit vector along edge
+            const ux = edgeX / edgeLen;
+            const uy = edgeY / edgeLen;
+            // Perpendicular unit vector
+            const px = -uy;
+            const py = ux;
+            // Calculate signed width
+            const toCursorX = clickPoint.x - tempStartPoint.x;
+            const toCursorY = clickPoint.y - tempStartPoint.y;
+            const width = toCursorX * px + toCursorY * py;
+
+            if (Math.abs(width) > 0.01) {
+              // Four corners of the angled rectangle
+              const c1 = tempStartPoint;
+              const c2 = tempSecondPoint;
+              const c3 = { x: tempSecondPoint.x + width * px, y: tempSecondPoint.y + width * py };
+              const c4 = { x: tempStartPoint.x + width * px, y: tempStartPoint.y + width * py };
+
+              // Add the angled rectangle
+              addAngledRectangle(c1, c2, c3, c4);
+            }
+          }
+
+          setTempStartPoint(null);
+          setTempSecondPoint(null);
         }
         return;
       }
@@ -3932,22 +4497,87 @@ const Viewer: React.FC = () => {
           }}
         />
       )}
+      {/* Box selection overlay */}
+      {boxSelection && (
+        <div
+          style={{
+            position: "absolute",
+            left: Math.min(boxSelection.start.x, boxSelection.current.x),
+            top: Math.min(boxSelection.start.y, boxSelection.current.y),
+            width: Math.abs(boxSelection.current.x - boxSelection.start.x),
+            height: Math.abs(boxSelection.current.y - boxSelection.start.y),
+            border: `2px ${boxSelection.mode === "window" ? "solid" : "dashed"} #00aaff`,
+            backgroundColor:
+              boxSelection.mode === "window"
+                ? "rgba(0, 170, 255, 0.1)"
+                : "rgba(0, 255, 170, 0.1)",
+            pointerEvents: "none",
+            zIndex: 1000,
+          }}
+        />
+      )}
     </div>
   );
 };
 
 // Helper functions for sketch editing
 
-function isCounterClockwise(
+/**
+ * Determine if an arc from start to end should go CCW to pass through a bulge point.
+ * All three points (start, end, bulge) are on the arc.
+ * Returns true if going CCW from start to end passes through bulge.
+ */
+function shouldArcBeCCW(
   start: { x: number; y: number },
   end: { x: number; y: number },
-  third: { x: number; y: number }
+  bulge: { x: number; y: number },
+  center: { x: number; y: number }
 ): boolean {
-  const v1x = end.x - start.x;
-  const v1y = end.y - start.y;
-  const v2x = third.x - start.x;
-  const v2y = third.y - start.y;
-  return v1x * v2y - v1y * v2x > 0;
+  // Calculate angles from center to each point
+  const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
+  const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
+  const bulgeAngle = Math.atan2(bulge.y - center.y, bulge.x - center.x);
+
+  // Normalize angles to [0, 2π)
+  const normalize = (a: number) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const sA = normalize(startAngle);
+  const eA = normalize(endAngle);
+  const bA = normalize(bulgeAngle);
+
+  // Check if bulge is between start and end going CCW (increasing angle)
+  // CCW sweep from start: start → bulge → end
+  const ccwSweepToBulge = normalize(bA - sA);
+  const ccwSweepToEnd = normalize(eA - sA);
+
+  // If bulge is encountered before end when going CCW, use CCW
+  // (bulge angle from start < end angle from start, both in CCW direction)
+  return ccwSweepToBulge < ccwSweepToEnd;
+}
+
+/**
+ * Determine if an arc from start to end around center should go CCW.
+ * For centerpoint arcs: the end point determines direction.
+ * Returns true if going CCW from start reaches end via the shorter arc.
+ */
+function shouldCenterpointArcBeCCW(
+  center: { x: number; y: number },
+  start: { x: number; y: number },
+  end: { x: number; y: number }
+): boolean {
+  // Calculate angles from center
+  const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
+  const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
+
+  // Calculate sweep in CCW direction (positive angle)
+  let ccwSweep = endAngle - startAngle;
+  if (ccwSweep <= 0) ccwSweep += 2 * Math.PI;
+
+  // Calculate sweep in CW direction (negative angle, made positive)
+  const cwSweep = 2 * Math.PI - ccwSweep;
+
+  // Use the direction with the shorter sweep
+  // This is the intuitive behavior: the arc goes the "short way" to the end point
+  return ccwSweep <= cwSweep;
 }
 
 function findNearbyLineInSketch(
@@ -3996,6 +4626,212 @@ function pointSegmentDistanceSquared(
   const dx = p[0] - cx;
   const dy = p[1] - cy;
   return dx * dx + dy * dy;
+}
+
+/**
+ * Result of finding the nearest entity to a point
+ */
+interface NearestEntityResult {
+  entity: SketchEntity;
+  closestPoint: { x: number; y: number };
+  distance: number;
+}
+
+/**
+ * Find the nearest entity (line, arc, or circle) to a given point
+ * Returns the entity, the closest point on it, and the distance
+ */
+function findNearestEntityInSketch(
+  sketch: SketchData,
+  x: number,
+  y: number,
+  tolerance: number
+): NearestEntityResult | null {
+  let best: NearestEntityResult | null = null;
+
+  for (const entity of sketch.entities) {
+    if (entity.type === "line") {
+      const line = entity as SketchLine;
+      const a = sketch.points.find((pt) => pt.id === line.start);
+      const b = sketch.points.find((pt) => pt.id === line.end);
+      if (!a || !b) continue;
+
+      // Find closest point on line segment
+      const abx = b.x - a.x;
+      const aby = b.y - a.y;
+      const apx = x - a.x;
+      const apy = y - a.y;
+      const abLen2 = abx * abx + aby * aby;
+
+      let closest: { x: number; y: number };
+      if (abLen2 === 0) {
+        closest = { x: a.x, y: a.y };
+      } else {
+        let t = (apx * abx + apy * aby) / abLen2;
+        t = Math.max(0, Math.min(1, t));
+        closest = { x: a.x + t * abx, y: a.y + t * aby };
+      }
+
+      const dx = x - closest.x;
+      const dy = y - closest.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist <= tolerance && (!best || dist < best.distance)) {
+        best = { entity, closestPoint: closest, distance: dist };
+      }
+    } else if (entity.type === "arc") {
+      const arc = entity as SketchArc;
+      const center = sketch.points.find((pt) => pt.id === arc.center);
+      const start = sketch.points.find((pt) => pt.id === arc.start);
+      if (!center || !start) continue;
+
+      const radius = Math.hypot(start.x - center.x, start.y - center.y);
+      if (radius < 0.001) continue;
+
+      // Find closest point on circle (radial projection from center)
+      const dx = x - center.x;
+      const dy = y - center.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 0.001) continue; // Point is at center, can't project
+
+      const closest = {
+        x: center.x + (dx / dist) * radius,
+        y: center.y + (dy / dist) * radius,
+      };
+
+      // Check if closest point is within arc bounds
+      const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
+      const end = sketch.points.find((pt) => pt.id === arc.end);
+      if (!end) continue;
+      const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
+      const closestAngle = Math.atan2(closest.y - center.y, closest.x - center.x);
+
+      // Check if closestAngle is between startAngle and endAngle (respecting ccw)
+      const normalize = (a: number) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      const sA = normalize(startAngle);
+      const eA = normalize(endAngle);
+      const cA = normalize(closestAngle);
+
+      let isOnArc = false;
+      if (arc.ccw) {
+        // CCW: sweep from start to end going counterclockwise
+        const sweep = normalize(eA - sA);
+        const toClosest = normalize(cA - sA);
+        isOnArc = toClosest <= sweep;
+      } else {
+        // CW: sweep from start to end going clockwise (negative direction)
+        const sweep = normalize(sA - eA);
+        const toClosest = normalize(sA - cA);
+        isOnArc = toClosest <= sweep;
+      }
+
+      if (!isOnArc) continue;
+
+      const distToArc = Math.abs(dist - radius);
+      if (distToArc <= tolerance && (!best || distToArc < best.distance)) {
+        best = { entity, closestPoint: closest, distance: distToArc };
+      }
+    } else if (entity.type === "circle") {
+      const circle = entity as SketchCircle;
+      const center = sketch.points.find((pt) => pt.id === circle.center);
+      if (!center) continue;
+
+      const radius = circle.radius;
+      if (radius < 0.001) continue;
+
+      // Find closest point on circle
+      const dx = x - center.x;
+      const dy = y - center.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 0.001) continue; // Point is at center
+
+      const closest = {
+        x: center.x + (dx / dist) * radius,
+        y: center.y + (dy / dist) * radius,
+      };
+
+      const distToCircle = Math.abs(dist - radius);
+      if (distToCircle <= tolerance && (!best || distToCircle < best.distance)) {
+        best = { entity, closestPoint: closest, distance: distToCircle };
+      }
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Check if a line segment intersects a box (for box selection)
+ */
+function lineIntersectsBox(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number
+): boolean {
+  // Cohen-Sutherland line clipping algorithm outcode
+  const INSIDE = 0;
+  const LEFT = 1;
+  const RIGHT = 2;
+  const BOTTOM = 4;
+  const TOP = 8;
+
+  const computeOutCode = (x: number, y: number): number => {
+    let code = INSIDE;
+    if (x < minX) code |= LEFT;
+    else if (x > maxX) code |= RIGHT;
+    if (y < minY) code |= BOTTOM;
+    else if (y > maxY) code |= TOP;
+    return code;
+  };
+
+  let x0 = start.x,
+    y0 = start.y,
+    x1 = end.x,
+    y1 = end.y;
+  let outcode0 = computeOutCode(x0, y0);
+  let outcode1 = computeOutCode(x1, y1);
+
+  while (true) {
+    if (!(outcode0 | outcode1)) {
+      // Both points inside
+      return true;
+    } else if (outcode0 & outcode1) {
+      // Both points share an outside zone - no intersection
+      return false;
+    } else {
+      // At least one endpoint is outside - clip to box edge
+      const outcodeOut = outcode0 !== 0 ? outcode0 : outcode1;
+      let x = 0,
+        y = 0;
+
+      if (outcodeOut & TOP) {
+        x = x0 + ((x1 - x0) * (maxY - y0)) / (y1 - y0);
+        y = maxY;
+      } else if (outcodeOut & BOTTOM) {
+        x = x0 + ((x1 - x0) * (minY - y0)) / (y1 - y0);
+        y = minY;
+      } else if (outcodeOut & RIGHT) {
+        y = y0 + ((y1 - y0) * (maxX - x0)) / (x1 - x0);
+        x = maxX;
+      } else if (outcodeOut & LEFT) {
+        y = y0 + ((y1 - y0) * (minX - x0)) / (x1 - x0);
+        x = minX;
+      }
+
+      if (outcodeOut === outcode0) {
+        x0 = x;
+        y0 = y;
+        outcode0 = computeOutCode(x0, y0);
+      } else {
+        x1 = x;
+        y1 = y;
+        outcode1 = computeOutCode(x1, y1);
+      }
+    }
+  }
 }
 
 export default Viewer;

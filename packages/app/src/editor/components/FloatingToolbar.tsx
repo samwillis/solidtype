@@ -70,10 +70,12 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
         | "line"
         | "arc"
         | "arcCenterpoint"
+        | "arcTangent"
         | "circle"
         | "circle3Point"
         | "rectangle"
         | "rectangleCenter"
+        | "rectangle3Point"
     ) => {
       if (mode.activeTool === tool) {
         setTool("none");
@@ -387,9 +389,15 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
               <Tooltip.Root>
                 <Tooltip.Trigger
                   delay={300}
-                  className={`floating-toolbar-button ${mode.activeTool === "arc" || mode.activeTool === "arcCenterpoint" ? "active" : ""}`}
+                  className={`floating-toolbar-button ${mode.activeTool === "arc" || mode.activeTool === "arcCenterpoint" || mode.activeTool === "arcTangent" ? "active" : ""}`}
                   onClick={() =>
-                    toggleTool(mode.activeTool === "arcCenterpoint" ? "arcCenterpoint" : "arc")
+                    toggleTool(
+                      mode.activeTool === "arcCenterpoint"
+                        ? "arcCenterpoint"
+                        : mode.activeTool === "arcTangent"
+                          ? "arcTangent"
+                          : "arc"
+                    )
                   }
                   render={<button aria-label="Arc" />}
                 >
@@ -398,7 +406,11 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                 <Tooltip.Portal>
                   <Tooltip.Positioner side="top" sideOffset={6}>
                     <Tooltip.Popup className="floating-toolbar-tooltip">
-                      {mode.activeTool === "arcCenterpoint" ? "Arc (Centerpoint)" : "Arc (3-Point)"}
+                      {mode.activeTool === "arcCenterpoint"
+                        ? "Arc (Centerpoint)"
+                        : mode.activeTool === "arcTangent"
+                          ? "Arc (Tangent)"
+                          : "Arc (3-Point)"}
                     </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
@@ -424,6 +436,12 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                         onClick={() => setTool("arcCenterpoint")}
                       >
                         Centerpoint Arc (Center → Start → End)
+                      </Menu.Item>
+                      <Menu.Item
+                        className="floating-toolbar-menu-item"
+                        onClick={() => setTool("arcTangent")}
+                      >
+                        Tangent Arc (Click endpoint, then end)
                       </Menu.Item>
                     </Menu.Popup>
                   </Menu.Positioner>
@@ -483,10 +501,14 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
               <Tooltip.Root>
                 <Tooltip.Trigger
                   delay={300}
-                  className={`floating-toolbar-button ${mode.activeTool === "rectangle" || mode.activeTool === "rectangleCenter" ? "active" : ""}`}
+                  className={`floating-toolbar-button ${mode.activeTool === "rectangle" || mode.activeTool === "rectangleCenter" || mode.activeTool === "rectangle3Point" ? "active" : ""}`}
                   onClick={() =>
                     toggleTool(
-                      mode.activeTool === "rectangleCenter" ? "rectangleCenter" : "rectangle"
+                      mode.activeTool === "rectangleCenter"
+                        ? "rectangleCenter"
+                        : mode.activeTool === "rectangle3Point"
+                          ? "rectangle3Point"
+                          : "rectangle"
                     )
                   }
                   render={<button aria-label="Rectangle" />}
@@ -498,7 +520,9 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                     <Tooltip.Popup className="floating-toolbar-tooltip">
                       {mode.activeTool === "rectangleCenter"
                         ? "Rectangle (Center)"
-                        : "Rectangle (Corner)"}
+                        : mode.activeTool === "rectangle3Point"
+                          ? "Rectangle (3-Point)"
+                          : "Rectangle (Corner)"}
                     </Tooltip.Popup>
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
@@ -524,6 +548,12 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                         onClick={() => setTool("rectangleCenter")}
                       >
                         Center Rectangle (Click center, then corner)
+                      </Menu.Item>
+                      <Menu.Item
+                        className="floating-toolbar-menu-item"
+                        onClick={() => setTool("rectangle3Point")}
+                      >
+                        3-Point Rectangle (Edge + Width, any angle)
                       </Menu.Item>
                     </Menu.Popup>
                   </Menu.Positioner>

@@ -52,6 +52,8 @@ export type SketchTool =
   | "circle" // Centerpoint circle
   | "circle3Point" // 3-point circle
   | "rectangle" // Corner-corner rectangle
+  | "rectangleCenter" // Center rectangle
+  | "rectangle3Point" // 3-point angled rectangle (corner A → corner B → width)
   | "rectangleCenter"; // Center-corner rectangle
 
 export interface SketchModeState {
@@ -103,6 +105,13 @@ interface SketchContextValue {
   findNearbyPoint: (x: number, y: number, tolerance: number) => SketchPoint | null;
   /** Draw a rectangle from corner (x1, y1) to corner (x2, y2) */
   addRectangle: (x1: number, y1: number, x2: number, y2: number) => void;
+  /** Draw an angled (non-axis-aligned) rectangle with 4 corner points */
+  addAngledRectangle: (
+    c1: { x: number; y: number; id?: string },
+    c2: { x: number; y: number; id?: string },
+    c3: { x: number; y: number; id?: string },
+    c4: { x: number; y: number; id?: string }
+  ) => void;
   addConstraint: (constraint: NewSketchConstraint) => string | null;
 
   // Selection state for constraints
@@ -455,6 +464,43 @@ export function SketchProvider({ children }: SketchProviderProps) {
     [getSketchElement]
   );
 
+  /**
+   * Add an angled rectangle with 4 corner points (not axis-aligned)
+   * Corners should be in order: c1 -> c2 -> c3 -> c4 -> c1
+   */
+  const addAngledRectangle = useCallback(
+    (
+      c1: { x: number; y: number; id?: string },
+      c2: { x: number; y: number; id?: string },
+      c3: { x: number; y: number; id?: string },
+      c4: { x: number; y: number; id?: string }
+    ) => {
+      const sketch = getSketchElement();
+      if (!sketch) return;
+
+      // Add 4 corner points (using existing if id provided)
+      const p1 = c1.id ?? addPointToSketch(sketch, c1.x, c1.y);
+      const p2 = c2.id ?? addPointToSketch(sketch, c2.x, c2.y);
+      const p3 = c3.id ?? addPointToSketch(sketch, c3.x, c3.y);
+      const p4 = c4.id ?? addPointToSketch(sketch, c4.x, c4.y);
+
+      // Add 4 lines forming the rectangle
+      const l1 = addLineToSketch(sketch, p1, p2); // edge 1 (c1 -> c2)
+      const l2 = addLineToSketch(sketch, p2, p3); // edge 2 (c2 -> c3)
+      const l3 = addLineToSketch(sketch, p3, p4); // edge 3 (c3 -> c4)
+      const l4 = addLineToSketch(sketch, p4, p1); // edge 4 (c4 -> c1)
+
+      // Add constraints for rectangle shape:
+      // - Opposite edges are parallel
+      // - All corners are perpendicular
+      addConstraintToSketch(sketch, { type: "parallel", lines: [l1, l3] }); // edge 1 || edge 3
+      addConstraintToSketch(sketch, { type: "parallel", lines: [l2, l4] }); // edge 2 || edge 4
+      addConstraintToSketch(sketch, { type: "perpendicular", lines: [l1, l2] }); // edge 1 ⊥ edge 2
+      // One perpendicular constraint is enough - the parallel constraints will ensure the rest
+    },
+    [getSketchElement]
+  );
+
   const addConstraint = useCallback(
     (constraint: NewSketchConstraint): string | null => {
       const sketch = getSketchElement();
@@ -790,6 +836,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     updatePointPosition: handleUpdatePointPosition,
     findNearbyPoint,
     addRectangle,
+    addAngledRectangle,
     addConstraint,
     // Selection state
     selectedPoints,

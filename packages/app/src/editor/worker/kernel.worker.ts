@@ -35,6 +35,8 @@ import {
   equalLength,
   tangent,
   symmetric,
+  pointOnLine,
+  pointOnArc,
   exportMeshesToStl,
   type Mesh,
 } from "@solidtype/core";
@@ -658,6 +660,22 @@ function interpretSketch(
         const axisId = entityIdMap.get(c.axis);
         if (p1 !== undefined && p2 !== undefined && axisId !== undefined) {
           sketch.addConstraint(symmetric(p1, p2, axisId));
+        }
+        break;
+      }
+      case "pointOnLine": {
+        const pid = pointIdMap.get(c.point);
+        const lid = entityIdMap.get(c.line);
+        if (pid !== undefined && lid !== undefined) {
+          sketch.addConstraint(pointOnLine(pid, lid));
+        }
+        break;
+      }
+      case "pointOnArc": {
+        const pid = pointIdMap.get(c.point);
+        const arcId = entityIdMap.get(c.arc);
+        if (pid !== undefined && arcId !== undefined) {
+          sketch.addConstraint(pointOnArc(pid, arcId));
         }
         break;
       }

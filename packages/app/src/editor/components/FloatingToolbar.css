@@ -28,9 +28,13 @@
 
 .floating-toolbar-separator {
   width: 1px;
-  height: 24px;
-  background: var(--color-border);
-  margin: 0 4px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 6px;
+}
+
+[data-theme="light"] .floating-toolbar-separator {
+  background: rgba(0, 0, 0, 0.12);
 }
 
 .floating-toolbar-button {
@@ -308,27 +312,38 @@
   display: flex;
   align-items: center;
   gap: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 1px;
+}
+
+[data-theme="light"] .floating-toolbar-button-group {
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .floating-toolbar-button-group .floating-toolbar-button {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+  border-radius: 5px 0 0 5px;
+  height: 26px;
+  width: 26px;
+}
+
+.floating-toolbar-button-group .floating-toolbar-button.active {
+  background: var(--color-accent-bg);
 }
 
 .floating-toolbar-flyout-trigger {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 28px;
+  width: 14px;
+  height: 26px;
   padding: 0;
   background: transparent;
   border: none;
-  border-left: 1px solid var(--color-border);
   border-radius: 0 5px 5px 0;
   cursor: pointer;
   color: var(--color-icon);
-  opacity: 0.6;
+  opacity: 0.5;
   transition:
     background-color 0.1s ease,
     opacity 0.1s ease;

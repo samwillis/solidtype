@@ -221,6 +221,25 @@ export const SymmetricConstraintSchema = z
   })
   .strict();
 
+export const PointOnLineConstraintSchema = z
+  .object({
+    id: UUID,
+    type: z.literal("pointOnLine"),
+    point: UUID,
+    line: UUID,
+  })
+  .strict();
+
+export const PointOnArcConstraintSchema = z
+  .object({
+    id: UUID,
+    type: z.literal("pointOnArc"),
+    point: UUID,
+    /** Arc or circle entity ID */
+    arc: UUID,
+  })
+  .strict();
+
 export const SketchConstraintSchema = z.union([
   HorizontalConstraintSchema,
   VerticalConstraintSchema,
@@ -233,6 +252,8 @@ export const SketchConstraintSchema = z.union([
   EqualLengthConstraintSchema,
   TangentConstraintSchema,
   SymmetricConstraintSchema,
+  PointOnLineConstraintSchema,
+  PointOnArcConstraintSchema,
 ]);
 
 export type SketchConstraint = z.infer<typeof SketchConstraintSchema>;
