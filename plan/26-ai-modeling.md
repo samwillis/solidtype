@@ -591,66 +591,107 @@ export async function applyChangesWithRecovery(
 
 ## 8. Tool Approval Rules
 
-```typescript
-export const MODELING_TOOL_APPROVAL: Record<string, ApprovalLevel> = {
-  // Auto (read-only)
-  getCurrentSelection: "auto",
-  getModelContext: "auto",
-  findFaces: "auto",
-  findEdges: "auto",
-  measureDistance: "auto",
-  getBoundingBox: "auto",
+**Note:** Modeling tool approval rules are defined in the unified registry in Phase 23 (`packages/app/src/lib/ai/approval.ts`).
 
-  // Notify (creates things)
-  createExtrude: "notify",
-  createRevolve: "notify",
-  createFillet: "notify",
-  createChamfer: "notify",
-  createLinearPattern: "notify",
-  createCircularPattern: "notify",
-  createBox: "notify",
-  createCylinder: "notify",
-  createHole: "notify",
-  createPocket: "notify",
-  createBoss: "notify",
-  createShell: "notify",
+**Default behavior:** All modeling tools auto-execute without confirmation.
 
-  // Confirm (modifies or deletes)
-  modifyFeature: "confirm",
-  deleteFeature: "confirm",
-  reorderFeature: "confirm",
-  suppressFeature: "confirm",
-  renameFeature: "auto",
-};
-```
+| Tool | Approval Level |
+|------|----------------|
+| All modeling tools | `auto` (default) |
+
+**Rationale:** All modeling operations are undoable via Yjs, so there's no need for confirmation dialogs. Users can always undo any AI-made changes with Ctrl+Z.
+
+See Phase 23 `MODELING_TOOL_APPROVAL` for the authoritative source.
 
 ---
 
 ## 9. Editor AI Panel Integration
 
+The AI panel uses the same `AIChat` component, but the editor context (selection, kernel state) is accessed via React Context on the server side, not passed as props.
+
 ```typescript
 // packages/app/src/editor/components/AIPanel.tsx
 import { useDocument } from "../contexts/DocumentContext";
-import { useSelection } from "../contexts/SelectionContext";
-import { useKernel } from "../contexts/KernelContext";
 import { AIChat } from "../../components/ai/AIChat";
+import { AgentStatus } from "../../components/ai/AgentStatus";
+import { useAgent } from "../../hooks/useAgent";
 import "./AIPanel.css";
 
 export function AIPanel() {
-  const { documentId } = useDocument();
-  const { selection } = useSelection();
-  const { kernelState } = useKernel();
+  const { documentId, projectId, awareness } = useDocument();
+
+  // Optional: spawn an agent for background modeling
+  const agent = useAgent({
+    sessionId: `editor-${documentId}`,
+    documentId,
+    projectId,
+    awareness,
+  });
 
   return (
     <div className="editor-ai-panel">
+      {/* Agent status indicator (shows when agent is spawned) */}
+      {agent.isSpawned && (
+        <AgentStatus
+          identity={agent.identity}
+          state={agent.state}
+          onTerminate={agent.terminate}
+        />
+      )}
+
+      {/* Main chat interface - userId handled via auth context */}
       <AIChat
         context="editor"
         documentId={documentId}
-        // Pass additional context for tools
-        editorContext={{ selection, kernelState }}
+        projectId={projectId}
       />
+
+      {/* Agent spawn button (when not active) */}
+      {!agent.isSpawned && (
+        <button
+          className="ai-panel-spawn-agent"
+          onClick={agent.spawn}
+        >
+          Start AI Agent
+        </button>
+      )}
     </div>
   );
+}
+```
+
+### Editor Context Provider for AI
+
+The server-side tools access editor state via a context provider:
+
+```typescript
+// packages/app/src/lib/ai/editor-context.ts
+import { AsyncLocalStorage } from "async_hooks";
+
+interface EditorContext {
+  documentId: string;
+  selection: string[];
+  kernelState: "ready" | "busy" | "error";
+}
+
+// AsyncLocalStorage for server-side context
+export const editorContextStorage = new AsyncLocalStorage<EditorContext>();
+
+/**
+ * Run a function with editor context available
+ */
+export function withEditorContext<T>(
+  context: EditorContext,
+  fn: () => T | Promise<T>
+): T | Promise<T> {
+  return editorContextStorage.run(context, fn);
+}
+
+/**
+ * Get current editor context (for use in tool implementations)
+ */
+export function getEditorContext(): EditorContext | undefined {
+  return editorContextStorage.getStore();
 }
 ```
 
@@ -659,7 +700,9 @@ export function AIPanel() {
 ## 10. Export All Modeling Tools
 
 ```typescript
-// packages/app/src/lib/ai/tools/modeling.ts
+// packages/app/src/lib/ai/tools/modeling-impl.ts
+import { getEditorContext } from "../editor-context";
+import { loadDocument } from "../../document-loader";
 
 export const modelingToolDefs = [
   ...modelingQueryToolDefs,
@@ -668,8 +711,19 @@ export const modelingToolDefs = [
   ...helperToolDefs,
 ];
 
-export async function getModelingTools(doc: SolidTypeDoc, kernelState: KernelState) {
-  return modelingToolDefs.map((def) => def.server(/* implementation */));
+/**
+ * Factory function to create modeling server tools.
+ * Called from /api/ai/chat with documentId.
+ * Loads document and accesses kernel state via editor context.
+ */
+export async function getModelingTools(documentId: string) {
+  const doc = await loadDocument(documentId);
+  const editorContext = getEditorContext(); // From AsyncLocalStorage
+
+  return modelingToolDefs.map((def) => {
+    // Implementation uses doc and editorContext from closure
+    return def.server(/* implementation */);
+  });
 }
 ```
 

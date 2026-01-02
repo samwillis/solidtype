@@ -556,18 +556,31 @@ export const sketchToolDefs = [
 
 ## 3. Tool Implementations
 
+The tool implementation factory takes `documentId` and loads the document + editor context as needed.
+
 ```typescript
 // packages/app/src/lib/ai/tools/sketch-impl.ts
 import { sketchToolDefs } from "./sketch";
 import { v4 as uuid } from "uuid";
 import * as Y from "yjs";
+import { getEditorContext } from "../editor-context";
+import { loadDocument } from "../../document-loader";
 
-export function getSketchTools(doc: SolidTypeDoc, sketchContext: SketchContext) {
+/**
+ * Factory function to create sketch server tools.
+ * Called from /api/ai/chat with documentId.
+ */
+export async function getSketchTools(documentId: string) {
+  const doc = await loadDocument(documentId);
+  const editorContext = getEditorContext(); // From AsyncLocalStorage
+
   return sketchToolDefs.map((def) => {
     switch (def.name) {
       case "addLine":
         return def.server(async ({ start, end, startPointId, endPointId }) => {
-          const sketchData = getActiveSketchData(doc, sketchContext.activeSketchId);
+          // Get active sketch from editor context or find it in document
+          const activeSketchId = editorContext?.activeSketchId;
+          const sketchData = getActiveSketchData(doc, activeSketchId);
 
           // Create or reuse points
           const startPt = startPointId || uuid();
@@ -725,34 +738,17 @@ export const createSymmetricProfileDef = toolDefinition({
 
 ## 5. Tool Approval Rules
 
-```typescript
-// Add to packages/app/src/lib/ai/approval.ts
+**Note:** Sketch tool approval rules are defined in the unified registry in Phase 23 (`packages/app/src/lib/ai/approval.ts`).
 
-export const SKETCH_TOOL_APPROVAL: Record<string, ApprovalLevel> = {
-  // Auto (read-only)
-  getSketchStatus: "auto",
+**Default behavior:** All sketch tools auto-execute without confirmation.
 
-  // Notify (creates things)
-  createSketch: "notify",
-  enterSketch: "auto",
-  exitSketch: "auto",
-  addLine: "notify",
-  addCircle: "notify",
-  addArc: "notify",
-  addRectangle: "notify",
-  addPolygon: "notify",
-  addSlot: "notify",
-  addConstraint: "notify",
+| Tool | Approval Level |
+|------|----------------|
+| All sketch tools | `auto` (default) |
 
-  // Confirm (modifies or deletes)
-  movePoint: "confirm",
-  mergePoints: "confirm",
-  removeConstraint: "confirm",
-  modifyConstraintValue: "confirm",
-  deleteEntity: "confirm",
-  deletePoint: "confirm",
-};
-```
+**Rationale:** All sketch operations are undoable via Yjs, so there's no need for confirmation dialogs. Users can always undo any AI-made changes.
+
+See Phase 23 `SKETCH_TOOL_APPROVAL` for the authoritative source.
 
 ---
 

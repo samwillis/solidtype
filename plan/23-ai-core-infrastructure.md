@@ -247,18 +247,39 @@ export function getChatStreamId(sessionId: string): string {
 
 ### Session Server Functions
 
+**Important:** All session functions derive `userId` from server-side auth context, never from client input. This prevents users from accessing other users' sessions.
+
 ```typescript
 // packages/app/src/lib/ai/session-functions.ts
 import { createServerFn } from "@tanstack/react-start";
+import { getWebRequest } from "@tanstack/react-start/server";
+import { auth } from "../../lib/auth"; // better-auth instance
 import { db } from "../db";
 import { aiChatSessions } from "../../db/schema";
 import { eq, and, desc } from "drizzle-orm";
 
-// List user's chat sessions
+/**
+ * Helper to get authenticated user ID from request.
+ * Throws if not authenticated.
+ */
+async function getAuthUserId(): Promise<string> {
+  const request = getWebRequest();
+  const session = await auth.api.getSession({ headers: request.headers });
+
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized: No authenticated session");
+  }
+
+  return session.user.id;
+}
+
+// List user's chat sessions (userId derived from auth, not input)
 export const listChatSessions = createServerFn({ method: "GET" })
-  .inputValidator((d: { userId: string; context?: "dashboard" | "editor"; limit?: number }) => d)
+  .inputValidator((d: { context?: "dashboard" | "editor"; limit?: number }) => d)
   .handler(async ({ data }) => {
-    const conditions = [eq(aiChatSessions.userId, data.userId)];
+    const userId = await getAuthUserId();
+
+    const conditions = [eq(aiChatSessions.userId, userId)];
     if (data.context) {
       conditions.push(eq(aiChatSessions.context, data.context));
     }
@@ -272,11 +293,10 @@ export const listChatSessions = createServerFn({ method: "GET" })
     return sessions;
   });
 
-// Create a new chat session
+// Create a new chat session (userId derived from auth)
 export const createChatSession = createServerFn({ method: "POST" })
   .inputValidator(
     (d: {
-      userId: string;
       context: "dashboard" | "editor";
       documentId?: string;
       projectId?: string;
@@ -284,6 +304,7 @@ export const createChatSession = createServerFn({ method: "POST" })
     }) => d
   )
   .handler(async ({ data }) => {
+    const userId = await getAuthUserId();
     const sessionId = crypto.randomUUID();
     const durableStreamId = `ai-chat/${sessionId}`;
 
@@ -291,7 +312,7 @@ export const createChatSession = createServerFn({ method: "POST" })
       .insert(aiChatSessions)
       .values({
         id: sessionId,
-        userId: data.userId,
+        userId,
         context: data.context,
         documentId: data.documentId,
         projectId: data.projectId,
@@ -303,18 +324,19 @@ export const createChatSession = createServerFn({ method: "POST" })
     return session;
   });
 
-// Update session metadata (title, message count, etc.)
+// Update session metadata (userId derived from auth, ownership verified)
 export const updateChatSession = createServerFn({ method: "POST" })
   .inputValidator(
     (d: {
       sessionId: string;
-      userId: string;
       title?: string;
       messageCount?: number;
       status?: "active" | "archived" | "error";
     }) => d
   )
   .handler(async ({ data }) => {
+    const userId = await getAuthUserId();
+
     const updates: Partial<typeof aiChatSessions.$inferInsert> = {
       updatedAt: new Date(),
     };
@@ -325,44 +347,58 @@ export const updateChatSession = createServerFn({ method: "POST" })
     }
     if (data.status !== undefined) updates.status = data.status;
 
+    // WHERE clause includes userId to ensure ownership
     const [session] = await db
       .update(aiChatSessions)
       .set(updates)
       .where(
-        and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, data.userId))
+        and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, userId))
       )
       .returning();
+
+    if (!session) {
+      throw new Error("Session not found or access denied");
+    }
 
     return session;
   });
 
-// Archive/delete a chat session
+// Archive a chat session (userId derived from auth)
 export const archiveChatSession = createServerFn({ method: "POST" })
-  .inputValidator((d: { sessionId: string; userId: string }) => d)
+  .inputValidator((d: { sessionId: string }) => d)
   .handler(async ({ data }) => {
-    await db
+    const userId = await getAuthUserId();
+
+    const result = await db
       .update(aiChatSessions)
       .set({ status: "archived", updatedAt: new Date() })
       .where(
-        and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, data.userId))
-      );
+        and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, userId))
+      )
+      .returning();
+
+    if (result.length === 0) {
+      throw new Error("Session not found or access denied");
+    }
 
     return { success: true };
   });
 
-// Get a specific session
+// Get a specific session (userId derived from auth)
 export const getChatSession = createServerFn({ method: "GET" })
-  .inputValidator((d: { sessionId: string; userId: string }) => d)
+  .inputValidator((d: { sessionId: string }) => d)
   .handler(async ({ data }) => {
+    const userId = await getAuthUserId();
+
     const session = await db.query.aiChatSessions.findFirst({
       where: and(
         eq(aiChatSessions.id, data.sessionId),
-        eq(aiChatSessions.userId, data.userId)
+        eq(aiChatSessions.userId, userId)
       ),
     });
 
     if (!session) {
-      throw new Error("Session not found");
+      throw new Error("Session not found or access denied");
     }
 
     return session;
@@ -415,53 +451,166 @@ export function createDurableStreamAdapter(sessionId: string): ConnectionAdapter
 
 ## 5. Durable Stream Persistence
 
+The persistence layer uses lib0 binary encoding for efficient storage, with proper round-trip support.
+
+### Message Types
+
+```typescript
+// packages/app/src/lib/ai/persistence-types.ts
+import { z } from "zod";
+
+/**
+ * Stream chunk types stored in Durable Stream
+ */
+export const StreamChunkSchema = z.discriminatedUnion("type", [
+  // User message
+  z.object({
+    type: z.literal("user-message"),
+    id: z.string(),
+    content: z.string(),
+    timestamp: z.string().datetime(),
+  }),
+  // Assistant text chunk (streaming)
+  z.object({
+    type: z.literal("assistant-chunk"),
+    messageId: z.string(),
+    content: z.string(),
+    timestamp: z.string().datetime(),
+  }),
+  // Assistant message complete
+  z.object({
+    type: z.literal("assistant-complete"),
+    messageId: z.string(),
+    timestamp: z.string().datetime(),
+  }),
+  // Tool call
+  z.object({
+    type: z.literal("tool-call"),
+    id: z.string(),
+    messageId: z.string(),
+    name: z.string(),
+    arguments: z.record(z.unknown()),
+    timestamp: z.string().datetime(),
+  }),
+  // Tool result
+  z.object({
+    type: z.literal("tool-result"),
+    toolCallId: z.string(),
+    messageId: z.string(),
+    result: z.unknown(),
+    error: z.string().optional(),
+    timestamp: z.string().datetime(),
+  }),
+]);
+
+export type StreamChunk = z.infer<typeof StreamChunkSchema>;
+```
+
+### Encoding/Decoding
+
 ```typescript
 // packages/app/src/lib/ai/persistence.ts
-import { getChatStreamId } from "./session";
+import { getChatStreamId, type ChatMessage } from "./session";
+import { StreamChunkSchema, type StreamChunk } from "./persistence-types";
 import * as encoding from "lib0/encoding";
+import * as decoding from "lib0/decoding";
 
 const DURABLE_STREAMS_URL = import.meta.env.VITE_DURABLE_STREAMS_URL || "http://localhost:8787";
 
-export async function persistToDurableStream(
-  sessionId: string,
-  stream: ReadableStream<StreamChunk>
-): Promise<void> {
-  const streamId = getChatStreamId(sessionId);
-  const reader = stream.getReader();
-
+/**
+ * Encode a single chunk to binary
+ */
+function encodeChunk(chunk: StreamChunk): Uint8Array {
   const encoder = encoding.createEncoder();
+  const json = JSON.stringify(chunk);
+  encoding.writeVarString(encoder, json);
+  return encoding.toUint8Array(encoder);
+}
+
+/**
+ * Decode chunks from binary data
+ */
+function decodeChunks(data: Uint8Array): StreamChunk[] {
+  const chunks: StreamChunk[] = [];
+  const decoder = decoding.createDecoder(data);
+
+  while (decoder.pos < data.length) {
+    try {
+      const json = decoding.readVarString(decoder);
+      const parsed = JSON.parse(json);
+      const result = StreamChunkSchema.safeParse(parsed);
+      if (result.success) {
+        chunks.push(result.data);
+      } else {
+        console.warn("Invalid chunk in stream:", result.error);
+      }
+    } catch (e) {
+      // End of valid data
+      break;
+    }
+  }
+
+  return chunks;
+}
+
+/**
+ * Persist a single chunk to the Durable Stream
+ */
+export async function persistChunk(sessionId: string, chunk: StreamChunk): Promise<void> {
+  const streamId = getChatStreamId(sessionId);
+  const data = encodeChunk(chunk);
+
+  await fetch(`${DURABLE_STREAMS_URL}/v1/stream/${streamId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: data,
+  });
+}
+
+/**
+ * Persist streaming response chunks as they arrive
+ */
+export async function persistStreamingResponse(
+  sessionId: string,
+  messageId: string,
+  stream: ReadableStream<string>
+): Promise<void> {
+  const reader = stream.getReader();
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      // Encode chunk as JSON with framing
-      const chunkJson = JSON.stringify({
-        ...value,
+      await persistChunk(sessionId, {
+        type: "assistant-chunk",
+        messageId,
+        content: value,
         timestamp: new Date().toISOString(),
       });
-      encoding.writeVarString(encoder, chunkJson);
     }
 
-    const data = encoding.toUint8Array(encoder);
-
-    // Write to Durable Stream
-    await fetch(`${DURABLE_STREAMS_URL}/v1/stream/${streamId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/octet-stream" },
-      body: data,
+    await persistChunk(sessionId, {
+      type: "assistant-complete",
+      messageId,
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to persist chat to Durable Stream:", error);
+    console.error("Failed to persist streaming response:", error);
+    throw error;
   }
 }
 
+/**
+ * Load and reconstruct chat history from Durable Stream
+ */
 export async function loadChatHistory(sessionId: string): Promise<ChatMessage[]> {
   const streamId = getChatStreamId(sessionId);
 
   try {
-    const response = await fetch(`${DURABLE_STREAMS_URL}/v1/stream/${streamId}?offset=-1`);
+    const response = await fetch(`${DURABLE_STREAMS_URL}/v1/stream/${streamId}?offset=-1`, {
+      headers: { Accept: "application/octet-stream" },
+    });
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -470,17 +619,82 @@ export async function loadChatHistory(sessionId: string): Promise<ChatMessage[]>
       throw new Error(`Failed to load chat history: ${response.statusText}`);
     }
 
-    const data = await response.json();
-    const messages: ChatMessage[] = [];
+    const buffer = await response.arrayBuffer();
+    const data = new Uint8Array(buffer);
+    const chunks = decodeChunks(data);
 
     // Reconstruct messages from chunks
-    // ... decode and aggregate chunks into messages
-
-    return messages;
+    return reconstructMessages(chunks);
   } catch (error) {
     console.error("Failed to load chat history:", error);
     return [];
   }
+}
+
+/**
+ * Reconstruct ChatMessage array from stream chunks
+ */
+function reconstructMessages(chunks: StreamChunk[]): ChatMessage[] {
+  const messages: ChatMessage[] = [];
+  const assistantMessages = new Map<string, { content: string; toolCalls: any[] }>();
+
+  for (const chunk of chunks) {
+    switch (chunk.type) {
+      case "user-message":
+        messages.push({
+          id: chunk.id,
+          role: "user",
+          content: chunk.content,
+          timestamp: chunk.timestamp,
+        });
+        break;
+
+      case "assistant-chunk": {
+        const existing = assistantMessages.get(chunk.messageId) || { content: "", toolCalls: [] };
+        existing.content += chunk.content;
+        assistantMessages.set(chunk.messageId, existing);
+        break;
+      }
+
+      case "assistant-complete": {
+        const msg = assistantMessages.get(chunk.messageId);
+        if (msg) {
+          messages.push({
+            id: chunk.messageId,
+            role: "assistant",
+            content: msg.content,
+            toolCalls: msg.toolCalls.length > 0 ? msg.toolCalls : undefined,
+            timestamp: chunk.timestamp,
+          });
+          assistantMessages.delete(chunk.messageId);
+        }
+        break;
+      }
+
+      case "tool-call": {
+        const msg = assistantMessages.get(chunk.messageId) || { content: "", toolCalls: [] };
+        msg.toolCalls.push({
+          id: chunk.id,
+          name: chunk.name,
+          arguments: chunk.arguments,
+        });
+        assistantMessages.set(chunk.messageId, msg);
+        break;
+      }
+
+      case "tool-result":
+        messages.push({
+          id: chunk.toolCallId,
+          role: "tool",
+          content: JSON.stringify(chunk.result),
+          toolResults: [{ toolCallId: chunk.toolCallId, result: chunk.result }],
+          timestamp: chunk.timestamp,
+        });
+        break;
+    }
+  }
+
+  return messages;
 }
 ```
 
@@ -488,39 +702,121 @@ export async function loadChatHistory(sessionId: string): Promise<ChatMessage[]>
 
 ## 6. Server API Route
 
+The API route handles authentication, sets up editor context for tools, and persists messages properly.
+
 ```typescript
 // packages/app/src/routes/api/ai/chat.ts
-import { json, createAPIFileRoute } from "@tanstack/react-start/api";
-import { chat, toServerSentEventsStream, toServerSentEventsResponse } from "@tanstack/ai";
+import { createAPIFileRoute } from "@tanstack/react-start/api";
+import { getWebRequest } from "@tanstack/react-start/server";
+import { chat, toServerSentEventsResponse } from "@tanstack/ai";
+import { auth } from "../../../lib/auth";
 import { getAdapter } from "../../../lib/ai/adapter";
-import { getDashboardTools, getEditorTools } from "../../../lib/ai/tools";
-import { buildSystemPrompt } from "../../../lib/ai/prompts";
-import { persistToDurableStream } from "../../../lib/ai/persistence";
+import { getDashboardTools } from "../../../lib/ai/tools/dashboard-impl";
+import { getSketchTools } from "../../../lib/ai/tools/sketch-impl";
+import { getModelingTools } from "../../../lib/ai/tools/modeling-impl";
+import { buildDashboardSystemPrompt } from "../../../lib/ai/prompts/dashboard";
+import { buildEditorSystemPrompt } from "../../../lib/ai/prompts/editor";
+import { persistChunk, persistStreamingResponse } from "../../../lib/ai/persistence";
+import { withEditorContext } from "../../../lib/ai/editor-context";
+import type { StreamChunk } from "../../../lib/ai/persistence-types";
+import { v4 as uuid } from "uuid";
 
 export const Route = createAPIFileRoute("/api/ai/chat")({
   POST: async ({ request }) => {
-    const { sessionId, messages, context, documentId } = await request.json();
+    // Get authenticated user from session
+    const webRequest = getWebRequest();
+    const session = await auth.api.getSession({ headers: webRequest.headers });
 
-    // Get appropriate tools based on context
-    const tools =
-      context === "dashboard" ? await getDashboardTools() : await getEditorTools(documentId);
+    if (!session?.user?.id) {
+      return new Response("Unauthorized", { status: 401 });
+    }
 
-    // Create chat stream with agentic loop
-    const stream = await chat({
-      adapter: getAdapter(),
-      messages,
-      tools,
-      system: await buildSystemPrompt(context, documentId),
-    });
+    const userId = session.user.id;
+    const { sessionId, messages, context, documentId, projectId } = await request.json();
 
-    // Tee stream: one for response, one for persistence
-    const [responseStream, persistenceStream] = stream.tee();
+    // Persist user message first
+    const userMessage = messages[messages.length - 1];
+    if (userMessage?.role === "user") {
+      await persistChunk(sessionId, {
+        type: "user-message",
+        id: uuid(),
+        content: userMessage.content,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
-    // Persist to Durable Stream (fire and forget)
-    persistToDurableStream(sessionId, persistenceStream).catch(console.error);
+    // Get appropriate tools and system prompt based on context
+    let tools;
+    let systemPrompt;
 
-    // Return SSE response
-    return toServerSentEventsResponse(responseStream);
+    if (context === "dashboard") {
+      tools = await getDashboardTools(userId);
+      systemPrompt = buildDashboardSystemPrompt(userId, projectId);
+    } else {
+      // Editor context - combine sketch and modeling tools
+      const sketchTools = await getSketchTools(documentId);
+      const modelingTools = await getModelingTools(documentId);
+      tools = [...sketchTools, ...modelingTools];
+      systemPrompt = await buildEditorSystemPrompt(documentId);
+    }
+
+    // Wrap in editor context for tool implementations
+    const runChat = async () => {
+      const messageId = uuid();
+
+      // Create chat stream with agentic loop
+      const stream = await chat({
+        adapter: getAdapter(),
+        messages,
+        tools,
+        system: systemPrompt,
+        onToolCall: async (toolCall) => {
+          // Persist tool call
+          await persistChunk(sessionId, {
+            type: "tool-call",
+            id: toolCall.id,
+            messageId,
+            name: toolCall.name,
+            arguments: toolCall.arguments as Record<string, unknown>,
+            timestamp: new Date().toISOString(),
+          });
+        },
+        onToolResult: async (toolResult) => {
+          // Persist tool result
+          await persistChunk(sessionId, {
+            type: "tool-result",
+            toolCallId: toolResult.toolCallId,
+            messageId,
+            result: toolResult.result,
+            error: toolResult.error,
+            timestamp: new Date().toISOString(),
+          });
+        },
+      });
+
+      // Tee stream: one for response, one for persistence
+      const [responseStream, persistenceStream] = stream.tee();
+
+      // Persist assistant response chunks (fire and forget)
+      persistStreamingResponse(sessionId, messageId, persistenceStream).catch(console.error);
+
+      // Return SSE response
+      return toServerSentEventsResponse(responseStream);
+    };
+
+    // Run with editor context if in editor mode
+    if (context === "editor" && documentId) {
+      return withEditorContext(
+        {
+          documentId,
+          selection: [], // Will be passed from client in future
+          kernelState: "ready",
+        },
+        runChat
+      );
+    }
+
+    return runChat();
   },
 });
 ```
@@ -529,21 +825,48 @@ export const Route = createAPIFileRoute("/api/ai/chat")({
 
 ## 7. Tool Registry Pattern
 
+Tool definitions are in phase-specific files. The registry re-exports and provides factory functions that inject context.
+
 ```typescript
 // packages/app/src/lib/ai/tools/index.ts
-import { toolDefinition, type ServerTool } from "@tanstack/ai";
-import { dashboardTools } from "./dashboard";
-import { sketchTools } from "./sketch";
-import { modelingTools } from "./modeling";
+// Re-export tool definition types and factories
 
-export async function getDashboardTools(): Promise<ServerTool[]> {
-  return dashboardTools.map((def) => def.server(/* implementation */));
-}
+// Tool definitions (schemas only)
+export { dashboardToolDefs } from "./dashboard";
+export { sketchToolDefs } from "./sketch";
+export { modelingToolDefs } from "./modeling";
 
-export async function getEditorTools(documentId?: string): Promise<ServerTool[]> {
-  return [...sketchTools, ...modelingTools].map((def) =>
-    def.server(/* implementation with documentId context */)
-  );
+// Tool implementations (server-side)
+export { getDashboardTools } from "./dashboard-impl";
+export { getSketchTools } from "./sketch-impl";
+export { getModelingTools } from "./modeling-impl";
+
+// Client tools (browser-side navigation/UI)
+export { dashboardClientTools, editorClientTools } from "./client-tools";
+```
+
+### Tool Implementation Pattern
+
+Each phase defines:
+1. `*ToolDefs` - Zod schemas and tool definitions (shared)
+2. `get*Tools(context)` - Factory that creates server tool implementations
+
+```typescript
+// Example pattern from dashboard-impl.ts (Phase 24)
+import { dashboardToolDefs } from "./dashboard";
+import type { ServerTool } from "@tanstack/ai";
+
+export async function getDashboardTools(userId: string): Promise<ServerTool[]> {
+  return dashboardToolDefs.map((def) => {
+    switch (def.name) {
+      case "listWorkspaces":
+        return def.server(async () => {
+          // Implementation uses userId from closure
+          // ...
+        });
+      // ... other tools
+    }
+  });
 }
 ```
 
@@ -1623,14 +1946,174 @@ export function AgentStatus({ identity, state, onSpawn, onTerminate }: AgentStat
 
 ---
 
-## 9. React Hook: useAIChat
+## 9. Auth Context Hook
+
+The AI chat system gets the authenticated user from context, not props. This ensures:
+- No userId can be spoofed from client
+- Consistent auth handling across dashboard and editor
+
+```typescript
+// packages/app/src/hooks/useAuth.ts
+import { useSession } from "../lib/auth-client"; // better-auth React hooks
+
+/**
+ * Hook to get current authenticated user.
+ * Returns null if not authenticated.
+ */
+export function useAuth() {
+  const { data: session, isPending } = useSession();
+
+  return {
+    user: session?.user ?? null,
+    userId: session?.user?.id ?? null,
+    isAuthenticated: !!session?.user,
+    isLoading: isPending,
+  };
+}
+```
+
+---
+
+## 10. Client Tools (Dashboard + Editor)
+
+```typescript
+// packages/app/src/lib/ai/tools/client-tools.ts
+import { toolDefinition } from "@tanstack/ai";
+import { z } from "zod";
+
+// ============ Dashboard Client Tools ============
+
+export const navigateToProjectClient = toolDefinition({
+  name: "navigateToProject",
+  description: "Navigate the user to a specific project",
+  inputSchema: z.object({ projectId: z.string() }),
+  outputSchema: z.object({ success: z.boolean() }),
+}).client(({ projectId }, { navigate }) => {
+  navigate({ to: `/dashboard/projects/${projectId}` });
+  return { success: true };
+});
+
+export const navigateToDocumentClient = toolDefinition({
+  name: "navigateToDocument",
+  description: "Open a document in the editor",
+  inputSchema: z.object({ documentId: z.string() }),
+  outputSchema: z.object({ success: z.boolean() }),
+}).client(({ documentId }, { navigate }) => {
+  navigate({ to: "/editor", search: { doc: documentId } });
+  return { success: true };
+});
+
+export const dashboardClientTools = [
+  navigateToProjectClient,
+  navigateToDocumentClient,
+];
+
+// ============ Editor Client Tools ============
+
+export const panToEntityClient = toolDefinition({
+  name: "panToEntity",
+  description: "Pan the 3D view to focus on a specific entity",
+  inputSchema: z.object({
+    entityId: z.string(),
+    zoom: z.boolean().optional(),
+  }),
+  outputSchema: z.object({ success: z.boolean() }),
+}).client(({ entityId, zoom }, { editor }) => {
+  editor.view.panToEntity(entityId, { zoom: zoom ?? true });
+  return { success: true };
+});
+
+export const selectEntityClient = toolDefinition({
+  name: "selectEntity",
+  description: "Select an entity in the editor",
+  inputSchema: z.object({
+    entityId: z.string(),
+    addToSelection: z.boolean().optional(),
+  }),
+  outputSchema: z.object({ success: z.boolean() }),
+}).client(({ entityId, addToSelection }, { editor }) => {
+  if (addToSelection) {
+    editor.selection.add(entityId);
+  } else {
+    editor.selection.set([entityId]);
+  }
+  return { success: true };
+});
+
+export const enterSketchModeClient = toolDefinition({
+  name: "enterSketchMode",
+  description: "Enter sketch editing mode for a specific sketch",
+  inputSchema: z.object({ sketchId: z.string() }),
+  outputSchema: z.object({ success: z.boolean() }),
+}).client(({ sketchId }, { editor }) => {
+  editor.enterSketchMode(sketchId);
+  return { success: true };
+});
+
+export const exitSketchModeClient = toolDefinition({
+  name: "exitSketchMode",
+  description: "Exit sketch editing mode",
+  inputSchema: z.object({}),
+  outputSchema: z.object({ success: z.boolean() }),
+}).client(({}, { editor }) => {
+  editor.exitSketchMode();
+  return { success: true };
+});
+
+export const setViewOrientationClient = toolDefinition({
+  name: "setViewOrientation",
+  description: "Set the 3D view orientation",
+  inputSchema: z.object({
+    orientation: z.enum(["front", "back", "top", "bottom", "left", "right", "iso"]),
+  }),
+  outputSchema: z.object({ success: z.boolean() }),
+}).client(({ orientation }, { editor }) => {
+  editor.view.setOrientation(orientation);
+  return { success: true };
+});
+
+export const undoClient = toolDefinition({
+  name: "undo",
+  description: "Undo the last operation",
+  inputSchema: z.object({}),
+  outputSchema: z.object({ success: z.boolean() }),
+}).client(({}, { editor }) => {
+  editor.undo();
+  return { success: true };
+});
+
+export const redoClient = toolDefinition({
+  name: "redo",
+  description: "Redo the last undone operation",
+  inputSchema: z.object({}),
+  outputSchema: z.object({ success: z.boolean() }),
+}).client(({}, { editor }) => {
+  editor.redo();
+  return { success: true };
+});
+
+export const editorClientTools = [
+  panToEntityClient,
+  selectEntityClient,
+  enterSketchModeClient,
+  exitSketchModeClient,
+  setViewOrientationClient,
+  undoClient,
+  redoClient,
+];
+```
+
+---
+
+## 11. React Hook: useAIChat
 
 ```typescript
 // packages/app/src/hooks/useAIChat.ts
-import { useChat } from "@tanstack/ai-react";
-import { useMemo, useCallback, useState, useEffect } from "react";
+import { useChat, type ToolApprovalRequest } from "@tanstack/ai-react";
+import { useMemo, useCallback, useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createDurableStreamAdapter } from "../lib/ai/durable-stream-adapter";
+import { useAuth } from "./useAuth";
+import { createDurableStreamAdapter, createNoopAdapter } from "../lib/ai/durable-stream-adapter";
 import { loadChatHistory } from "../lib/ai/persistence";
 import {
   listChatSessions,
@@ -1638,11 +2121,12 @@ import {
   updateChatSession,
   archiveChatSession,
 } from "../lib/ai/session-functions";
+import { dashboardClientTools, editorClientTools } from "../lib/ai/tools/client-tools";
+import { getApprovalLevel } from "../lib/ai/approval";
+import { useToolApprovalPrefs } from "./useToolApprovalPrefs";
 import type { AIChatSession } from "../db/schema";
-import { v4 as uuid } from "uuid";
 
 interface UseAIChatOptions {
-  userId: string;
   context: "dashboard" | "editor";
   documentId?: string;
   projectId?: string;
@@ -1650,15 +2134,15 @@ interface UseAIChatOptions {
 
 /**
  * Hook for managing chat session list (metadata from PostgreSQL)
+ * userId is derived from auth context on server, not passed as prop
  */
-export function useAIChatSessions(options: { userId: string; context?: "dashboard" | "editor" }) {
+export function useAIChatSessions(options: { context?: "dashboard" | "editor" }) {
   const queryClient = useQueryClient();
 
-  // List sessions for this user and context
+  // List sessions for current user (auth handled server-side)
   const sessionsQuery = useQuery({
-    queryKey: ["ai-chat-sessions", options.userId, options.context],
-    queryFn: () =>
-      listChatSessions({ data: { userId: options.userId, context: options.context } }),
+    queryKey: ["ai-chat-sessions", options.context],
+    queryFn: () => listChatSessions({ data: { context: options.context } }),
   });
 
   // Create new session mutation
@@ -1666,28 +2150,27 @@ export function useAIChatSessions(options: { userId: string; context?: "dashboar
     mutationFn: (data: { title?: string; documentId?: string; projectId?: string }) =>
       createChatSession({
         data: {
-          userId: options.userId,
           context: options.context || "dashboard",
           ...data,
         },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ai-chat-sessions", options.userId] });
+      queryClient.invalidateQueries({ queryKey: ["ai-chat-sessions"] });
     },
   });
 
   // Archive session mutation
   const archiveMutation = useMutation({
-    mutationFn: (sessionId: string) =>
-      archiveChatSession({ data: { sessionId, userId: options.userId } }),
+    mutationFn: (sessionId: string) => archiveChatSession({ data: { sessionId } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ai-chat-sessions", options.userId] });
+      queryClient.invalidateQueries({ queryKey: ["ai-chat-sessions"] });
     },
   });
 
   return {
     sessions: sessionsQuery.data || [],
     isLoading: sessionsQuery.isLoading,
+    isSuccess: sessionsQuery.isSuccess,
     createSession: createMutation.mutateAsync,
     archiveSession: archiveMutation.mutateAsync,
     refetch: sessionsQuery.refetch,
@@ -1696,21 +2179,31 @@ export function useAIChatSessions(options: { userId: string; context?: "dashboar
 
 /**
  * Main chat hook - integrates PostgreSQL sessions with Durable Stream messages
+ * userId is derived from auth context, not passed as prop
  */
 export function useAIChat(options: UseAIChatOptions) {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const approvalPrefs = useToolApprovalPrefs();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [toolApprovalRequests, setToolApprovalRequests] = useState<ToolApprovalRequest[]>([]);
   const queryClient = useQueryClient();
+  const sessionInitialized = useRef(false);
 
   const {
     sessions,
     isLoading: sessionsLoading,
+    isSuccess: sessionsLoaded,
     createSession,
     archiveSession,
     refetch: refetchSessions,
-  } = useAIChatSessions({ userId: options.userId, context: options.context });
+  } = useAIChatSessions({ context: options.context });
 
-  // Get or create active session
+  // Get or create active session - only after sessions have loaded
   const ensureSession = useCallback(async () => {
+    if (!sessionsLoaded) {
+      throw new Error("Sessions not loaded yet");
+    }
+
     // Find existing active session for this context
     const activeSession = sessions.find(
       (s) => s.status === "active" && s.documentId === options.documentId
@@ -1728,22 +2221,84 @@ export function useAIChat(options: UseAIChatOptions) {
     });
     setActiveSessionId(newSession.id);
     return newSession;
-  }, [sessions, options.documentId, options.projectId, createSession]);
+  }, [sessions, sessionsLoaded, options.documentId, options.projectId, createSession]);
 
-  // Durable stream adapter for message content
+  // Auto-initialize session once sessions are loaded
+  useEffect(() => {
+    if (sessionsLoaded && !sessionInitialized.current && !activeSessionId) {
+      sessionInitialized.current = true;
+      ensureSession().catch(console.error);
+    }
+  }, [sessionsLoaded, activeSessionId, ensureSession]);
+
+  // Durable stream adapter - use noop adapter until session exists
   const adapter = useMemo(
-    () => (activeSessionId ? createDurableStreamAdapter(activeSessionId) : null),
+    () => activeSessionId
+      ? createDurableStreamAdapter(activeSessionId)
+      : createNoopAdapter(),
     [activeSessionId]
   );
 
-  // TanStack AI chat hook
+  // Get client tools based on context
+  const clientTools = useMemo(
+    () => options.context === "dashboard" ? dashboardClientTools : editorClientTools,
+    [options.context]
+  );
+
+  // TanStack AI chat hook with tool approval
   const chat = useChat({
-    adapter: adapter!,
-    // Don't start until we have a session
-    enabled: !!activeSessionId,
-    // Client tools for navigation
-    tools: options.context === "dashboard" ? dashboardClientTools : editorClientTools,
+    adapter,
+    enabled: !!activeSessionId && isAuthenticated,
+    tools: clientTools,
+    onToolCall: (toolCall) => {
+      // Get approval level, respecting user preferences (YOLO mode, always-allow list)
+      const level = getApprovalLevel(toolCall.name, options.context, approvalPrefs);
+
+      if (level === "auto") {
+        return true; // Auto-approve (includes YOLO mode and always-allow)
+      }
+
+      if (level === "notify") {
+        // Notify user but continue
+        console.log(`Tool executed: ${toolCall.name}`);
+        return true;
+      }
+
+      // "confirm" - require user approval
+      return new Promise((resolve) => {
+        setToolApprovalRequests((prev) => [
+          ...prev,
+          {
+            id: toolCall.id,
+            name: toolCall.name,
+            arguments: toolCall.arguments,
+            resolve,
+          },
+        ]);
+      });
+    },
   });
+
+  // Tool approval handlers
+  const approveToolCall = useCallback((requestId: string) => {
+    setToolApprovalRequests((prev) => {
+      const request = prev.find((r) => r.id === requestId);
+      if (request) {
+        request.resolve(true);
+      }
+      return prev.filter((r) => r.id !== requestId);
+    });
+  }, []);
+
+  const rejectToolCall = useCallback((requestId: string) => {
+    setToolApprovalRequests((prev) => {
+      const request = prev.find((r) => r.id === requestId);
+      if (request) {
+        request.resolve(false);
+      }
+      return prev.filter((r) => r.id !== requestId);
+    });
+  }, []);
 
   // Load history from Durable Stream when session changes
   useEffect(() => {
@@ -1757,8 +2312,20 @@ export function useAIChat(options: UseAIChatOptions) {
   }, [activeSessionId]);
 
   // Update session metadata after each message
+  // Computed ready state
+  const isReady = isAuthenticated && !!activeSessionId && sessionsLoaded;
+
   const sendMessage = useCallback(
     async (content: string) => {
+      // Guard: don't send if not ready
+      if (!isAuthenticated) {
+        throw new Error("Not authenticated");
+      }
+
+      if (!sessionsLoaded) {
+        throw new Error("Sessions not loaded yet");
+      }
+
       // Ensure we have a session before sending
       const session = activeSessionId ? { id: activeSessionId } : await ensureSession();
 
@@ -1769,12 +2336,11 @@ export function useAIChat(options: UseAIChatOptions) {
         sessionId: session.id,
       });
 
-      // Update message count in PostgreSQL
+      // Update message count in PostgreSQL (userId handled server-side)
       await updateChatSession({
         data: {
           sessionId: session.id,
-          userId: options.userId,
-          messageCount: chat.messages.length + 2, // +2 for user + assistant
+          messageCount: chat.messages.length + 2,
         },
       });
 
@@ -1782,12 +2348,12 @@ export function useAIChat(options: UseAIChatOptions) {
       if (chat.messages.length === 0) {
         const title = content.slice(0, 50) + (content.length > 50 ? "..." : "");
         await updateChatSession({
-          data: { sessionId: session.id, userId: options.userId, title },
+          data: { sessionId: session.id, title },
         });
         refetchSessions();
       }
     },
-    [chat, options, activeSessionId, ensureSession, refetchSessions]
+    [chat, options, activeSessionId, ensureSession, refetchSessions, isAuthenticated, sessionsLoaded]
   );
 
   // Start new chat
@@ -1797,6 +2363,7 @@ export function useAIChat(options: UseAIChatOptions) {
       projectId: options.projectId,
     });
     setActiveSessionId(newSession.id);
+    sessionInitialized.current = true;
     chat.setMessages([]);
     return newSession;
   }, [createSession, options.documentId, options.projectId, chat]);
@@ -1813,10 +2380,17 @@ export function useAIChat(options: UseAIChatOptions) {
 
   return {
     ...chat,
+    // Auth state
+    isAuthenticated,
+    isReady, // Computed above: isAuthenticated && !!activeSessionId && sessionsLoaded
     // Session management
     sessions,
-    sessionsLoading,
+    sessionsLoading: sessionsLoading || authLoading,
     activeSessionId,
+    // Tool approval
+    toolApprovalRequests,
+    approveToolCall,
+    rejectToolCall,
     // Actions
     sendMessage,
     startNewChat,
@@ -1827,9 +2401,30 @@ export function useAIChat(options: UseAIChatOptions) {
 }
 ```
 
+### Noop Adapter for Pre-Session State
+
+```typescript
+// Add to packages/app/src/lib/ai/durable-stream-adapter.ts
+
+/**
+ * No-op adapter used before a session is created.
+ * Prevents null reference errors.
+ */
+export function createNoopAdapter(): ConnectionAdapter {
+  return {
+    async connect() {
+      throw new Error("No active session - cannot send messages");
+    },
+    async resume() {
+      return new Response("", { status: 204 });
+    },
+  };
+}
+```
+
 ---
 
-## 9. Shared AIChat Component
+## 12. Shared AIChat Component
 
 ```typescript
 // packages/app/src/components/ai/ChatSessionList.tsx
@@ -1907,15 +2502,18 @@ import { ToolApprovalPanel } from "./ToolApprovalPanel";
 import "./AIChat.css";
 
 interface AIChatProps {
-  userId: string;
+  // userId is derived from auth context, not passed as prop
   context: "dashboard" | "editor";
   documentId?: string;
   projectId?: string;
   onClose?: () => void;
 }
 
-export function AIChat({ userId, context, documentId, projectId, onClose }: AIChatProps) {
+export function AIChat({ context, documentId, projectId, onClose }: AIChatProps) {
   const {
+    // Auth and ready state
+    isAuthenticated,
+    isReady,
     // Chat state
     messages,
     isLoading,
@@ -1929,21 +2527,18 @@ export function AIChat({ userId, context, documentId, projectId, onClose }: AICh
     startNewChat,
     switchToSession,
     archiveSession,
-    ensureSession,
     // Tool approval
     toolApprovalRequests,
     approveToolCall,
     rejectToolCall,
-  } = useAIChat({ userId, context, documentId, projectId });
+  } = useAIChat({ context, documentId, projectId });
 
   const [input, setInput] = useState("");
   const [showSessions, setShowSessions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Ensure we have a session on mount
-  useEffect(() => {
-    ensureSession();
-  }, []);
+  // Session is auto-initialized by useAIChat hook when sessions load
+  // No need for manual ensureSession() call
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -2019,11 +2614,13 @@ export function AIChat({ userId, context, documentId, projectId, onClose }: AICh
           value={input}
           onChange={setInput}
           onSubmit={handleSubmit}
-          disabled={isLoading}
+          disabled={!isReady || isLoading}
           placeholder={
-            context === "dashboard"
-              ? "Ask about projects, documents, workspaces..."
-              : "Describe what you want to create or modify..."
+            !isReady
+              ? "Loading..."
+              : context === "dashboard"
+                ? "Ask about projects, documents, workspaces..."
+                : "Describe what you want to create or modify..."
         }
       />
     </div>
@@ -2033,56 +2630,302 @@ export function AIChat({ userId, context, documentId, projectId, onClose }: AICh
 
 ---
 
-## 10. Tool Approval Flow
+## 13. Tool Approval Flow
 
-### Approval Categories
+The approval system has three layers:
+1. **Default rules** - Built-in per-tool approval levels
+2. **User preferences** - Per-tool overrides stored in localStorage
+3. **YOLO mode** - Global override to auto-approve everything
+
+### User Preferences Storage
+
+```typescript
+// packages/app/src/lib/ai/approval-preferences.ts
+import { z } from "zod";
+
+/**
+ * User's tool approval preferences
+ */
+export const ToolApprovalPreferencesSchema = z.object({
+  // YOLO mode - auto-approve all tools without confirmation
+  yoloMode: z.boolean().default(false),
+  
+  // Per-tool overrides: tools in this list skip confirmation
+  alwaysAllow: z.array(z.string()).default([]),
+  
+  // Tools that always require confirmation (overrides defaults)
+  alwaysConfirm: z.array(z.string()).default([]),
+});
+
+export type ToolApprovalPreferences = z.infer<typeof ToolApprovalPreferencesSchema>;
+
+const STORAGE_KEY = "solidtype:ai-tool-preferences";
+
+/**
+ * Load preferences from localStorage
+ */
+export function loadApprovalPreferences(): ToolApprovalPreferences {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return { yoloMode: false, alwaysAllow: [], alwaysConfirm: [] };
+    return ToolApprovalPreferencesSchema.parse(JSON.parse(stored));
+  } catch {
+    return { yoloMode: false, alwaysAllow: [], alwaysConfirm: [] };
+  }
+}
+
+/**
+ * Save preferences to localStorage
+ */
+export function saveApprovalPreferences(prefs: ToolApprovalPreferences): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+}
+
+/**
+ * Add a tool to the "always allow" list
+ */
+export function addAlwaysAllow(toolName: string): void {
+  const prefs = loadApprovalPreferences();
+  if (!prefs.alwaysAllow.includes(toolName)) {
+    prefs.alwaysAllow.push(toolName);
+    prefs.alwaysConfirm = prefs.alwaysConfirm.filter((t) => t !== toolName);
+    saveApprovalPreferences(prefs);
+  }
+}
+
+/**
+ * Remove a tool from the "always allow" list
+ */
+export function removeAlwaysAllow(toolName: string): void {
+  const prefs = loadApprovalPreferences();
+  prefs.alwaysAllow = prefs.alwaysAllow.filter((t) => t !== toolName);
+  saveApprovalPreferences(prefs);
+}
+```
+
+### React Hook for Preferences
+
+```typescript
+// packages/app/src/hooks/useToolApprovalPrefs.ts
+import { useState, useCallback, useEffect } from "react";
+import {
+  loadApprovalPreferences,
+  saveApprovalPreferences,
+  type ToolApprovalPreferences,
+} from "../lib/ai/approval-preferences";
+
+/**
+ * React hook for managing tool approval preferences
+ */
+export function useToolApprovalPrefs() {
+  const [prefs, setPrefs] = useState<ToolApprovalPreferences>(() => loadApprovalPreferences());
+
+  // Sync with localStorage changes (e.g., from other tabs)
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "solidtype:ai-tool-preferences") {
+        setPrefs(loadApprovalPreferences());
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  const setYoloMode = useCallback((enabled: boolean) => {
+    setPrefs((prev) => {
+      const next = { ...prev, yoloMode: enabled };
+      saveApprovalPreferences(next);
+      return next;
+    });
+  }, []);
+
+  const toggleAlwaysAllow = useCallback((toolName: string) => {
+    setPrefs((prev) => {
+      const isAllowed = prev.alwaysAllow.includes(toolName);
+      const next = {
+        ...prev,
+        alwaysAllow: isAllowed
+          ? prev.alwaysAllow.filter((t) => t !== toolName)
+          : [...prev.alwaysAllow, toolName],
+      };
+      saveApprovalPreferences(next);
+      return next;
+    });
+  }, []);
+
+  const resetPreferences = useCallback(() => {
+    const defaults = { yoloMode: false, alwaysAllow: [], alwaysConfirm: [] };
+    saveApprovalPreferences(defaults);
+    setPrefs(defaults);
+  }, []);
+
+  return {
+    ...prefs,
+    setYoloMode,
+    toggleAlwaysAllow,
+    resetPreferences,
+  };
+}
+```
+
+### Unified Approval Registry
+
+The approval system uses context-specific rule sets, merged with user preferences:
 
 ```typescript
 // packages/app/src/lib/ai/approval.ts
+import { loadApprovalPreferences, type ToolApprovalPreferences } from "./approval-preferences";
 
 export type ApprovalLevel = "auto" | "notify" | "confirm";
+export type AIChatContext = "dashboard" | "editor";
 
-export const TOOL_APPROVAL_RULES: Record<string, ApprovalLevel> = {
-  // Auto-execute (read-only, safe)
-  listWorkspaces: "auto",
-  listProjects: "auto",
-  listDocuments: "auto",
-  getCurrentSelection: "auto",
-  findFaces: "auto",
-  findEdges: "auto",
-  getGeometry: "auto",
+/**
+ * Dashboard tool approval rules
+ * 
+ * Default: auto for everything except destructive operations
+ * Only deletions require confirmation
+ */
+export const DASHBOARD_TOOL_APPROVAL: Record<string, ApprovalLevel> = {
+  // Destructive operations - require confirmation
+  deleteDocument: "confirm",
+  deleteFolder: "confirm",
+  deleteBranch: "confirm",
+  deleteWorkspace: "confirm",
+  deleteProject: "confirm",
 
-  // Notify (creates things, but non-destructive)
-  createWorkspace: "notify",
-  createProject: "notify",
-  createSketch: "notify",
-  createExtrude: "notify",
-
-  // Confirm (modifies or deletes)
-  modifyFeature: "confirm",
-  deleteFeature: "confirm",
-
-  // Navigation (auto)
-  openProject: "auto",
-  openDocument: "auto",
+  // All other dashboard tools auto-execute by default
+  // (reads, creates, renames, moves, navigation, etc.)
 };
 
-export function getApprovalLevel(toolName: string): ApprovalLevel {
-  return TOOL_APPROVAL_RULES[toolName] || "confirm";
+/**
+ * Dashboard default level for unlisted tools
+ */
+export const DASHBOARD_DEFAULT_LEVEL: ApprovalLevel = "auto";
+
+/**
+ * Sketch tool approval rules
+ * 
+ * Default: auto for all sketch tools
+ * Sketch operations are easily undoable, so no confirmation needed
+ */
+export const SKETCH_TOOL_APPROVAL: Record<string, ApprovalLevel> = {
+  // All sketch tools auto-execute - everything is undoable
+};
+
+/**
+ * Sketch default level for unlisted tools
+ */
+export const SKETCH_DEFAULT_LEVEL: ApprovalLevel = "auto";
+
+/**
+ * 3D Modeling tool approval rules
+ * 
+ * Default: auto for all modeling tools
+ * Modeling operations are undoable via Yjs, so no confirmation needed
+ */
+export const MODELING_TOOL_APPROVAL: Record<string, ApprovalLevel> = {
+  // All modeling tools auto-execute - everything is undoable
+};
+
+/**
+ * Modeling default level for unlisted tools
+ */
+export const MODELING_DEFAULT_LEVEL: ApprovalLevel = "auto";
+
+/**
+ * Get approval level for a tool in a given context.
+ * 
+ * Priority order:
+ * 1. YOLO mode -> always "auto"
+ * 2. User's "alwaysAllow" list -> "auto"
+ * 3. User's "alwaysConfirm" list -> "confirm"
+ * 4. Default context-specific rules
+ * 5. Unknown tool -> "confirm" (safe default)
+ */
+export function getApprovalLevel(
+  toolName: string,
+  context: AIChatContext,
+  userPrefs?: ToolApprovalPreferences
+): ApprovalLevel {
+  // Load preferences if not provided
+  const prefs = userPrefs ?? loadApprovalPreferences();
+
+  // YOLO mode: auto-approve everything
+  if (prefs.yoloMode) {
+    return "auto";
+  }
+
+  // User has explicitly allowed this tool
+  if (prefs.alwaysAllow.includes(toolName)) {
+    return "auto";
+  }
+
+  // User has explicitly required confirmation for this tool
+  if (prefs.alwaysConfirm.includes(toolName)) {
+    return "confirm";
+  }
+
+  // Check context-specific default rules
+  if (context === "dashboard") {
+    // Dashboard: only destructive ops require confirmation
+    if (toolName in DASHBOARD_TOOL_APPROVAL) {
+      return DASHBOARD_TOOL_APPROVAL[toolName];
+    }
+    return DASHBOARD_DEFAULT_LEVEL; // "auto" for non-destructive
+  } else {
+    // Editor context: all sketch/modeling ops are auto (undoable)
+    if (toolName in SKETCH_TOOL_APPROVAL) {
+      return SKETCH_TOOL_APPROVAL[toolName];
+    }
+    if (toolName in MODELING_TOOL_APPROVAL) {
+      return MODELING_TOOL_APPROVAL[toolName];
+    }
+    // Default to auto for editor tools (everything is undoable)
+    return SKETCH_DEFAULT_LEVEL; // "auto"
+  }
 }
+
+/**
+ * Get the default approval level (ignoring user preferences)
+ */
+export function getDefaultApprovalLevel(toolName: string, context: AIChatContext): ApprovalLevel {
+  if (context === "dashboard") {
+    return DASHBOARD_TOOL_APPROVAL[toolName] ?? DASHBOARD_DEFAULT_LEVEL;
+  }
+  return SKETCH_TOOL_APPROVAL[toolName] ?? MODELING_TOOL_APPROVAL[toolName] ?? SKETCH_DEFAULT_LEVEL;
+}
+
+/**
+ * Check if a tool requires any form of user awareness
+ */
+export function requiresUserAwareness(
+  toolName: string,
+  context: AIChatContext,
+  userPrefs?: ToolApprovalPreferences
+): boolean {
+  const level = getApprovalLevel(toolName, context, userPrefs);
+  return level !== "auto";
+}
+
 ```
 
 ### Approval UI Component
 
 ```typescript
 // packages/app/src/components/ai/ToolApprovalPanel.tsx
-import { LuAlertTriangle, LuCheck, LuX } from "react-icons/lu";
+import { LuAlertTriangle, LuCheck, LuX, LuShieldCheck } from "react-icons/lu";
+import { addAlwaysAllow } from "../../lib/ai/approval-preferences";
 import "./ToolApprovalPanel.css";
 
+/**
+ * Tool approval request from useAIChat hook.
+ * Properties match TanStack AI's ToolCall type.
+ */
 interface ToolApprovalRequest {
   id: string;
-  toolName: string;
-  input: Record<string, unknown>;
+  name: string;
+  arguments: Record<string, unknown>;
+  resolve: (approved: boolean) => void;
 }
 
 interface ToolApprovalPanelProps {
@@ -2092,6 +2935,14 @@ interface ToolApprovalPanelProps {
 }
 
 export function ToolApprovalPanel({ requests, onApprove, onReject }: ToolApprovalPanelProps) {
+  if (requests.length === 0) return null;
+
+  const handleAlwaysAllow = (request: ToolApprovalRequest) => {
+    // Add to always-allow list and approve this request
+    addAlwaysAllow(request.name);
+    onApprove(request.id);
+  };
+
   return (
     <div className="tool-approval-panel">
       <div className="tool-approval-header">
@@ -2101,9 +2952,9 @@ export function ToolApprovalPanel({ requests, onApprove, onReject }: ToolApprova
 
       {requests.map((request) => (
         <div key={request.id} className="tool-approval-item">
-          <div className="tool-approval-name">{formatToolName(request.toolName)}</div>
+          <div className="tool-approval-name">{formatToolName(request.name)}</div>
           <div className="tool-approval-params">
-            <pre>{JSON.stringify(request.input, null, 2)}</pre>
+            <pre>{JSON.stringify(request.arguments, null, 2)}</pre>
           </div>
           <div className="tool-approval-actions">
             <button
@@ -2113,6 +2964,15 @@ export function ToolApprovalPanel({ requests, onApprove, onReject }: ToolApprova
             >
               <LuX size={14} />
               Reject
+            </button>
+            <button
+              onClick={() => handleAlwaysAllow(request)}
+              className="tool-approval-always"
+              aria-label="Always Allow"
+              title="Approve and always allow this tool in the future"
+            >
+              <LuShieldCheck size={14} />
+              Always
             </button>
             <button
               onClick={() => onApprove(request.id)}
@@ -2137,9 +2997,180 @@ function formatToolName(name: string): string {
 }
 ```
 
+### YOLO Mode Toggle
+
+Add a settings toggle for YOLO mode in the AI chat header or settings:
+
+```typescript
+// packages/app/src/components/ai/AISettingsMenu.tsx
+import { Menu } from "@base-ui/react/menu";
+import { LuSettings, LuZap, LuShield, LuRotateCcw } from "react-icons/lu";
+import { useToolApprovalPrefs } from "../../hooks/useToolApprovalPrefs";
+import "./AISettingsMenu.css";
+
+export function AISettingsMenu() {
+  const { yoloMode, alwaysAllow, setYoloMode, resetPreferences } = useToolApprovalPrefs();
+
+  return (
+    <Menu.Root>
+      <Menu.Trigger className="ai-settings-trigger" aria-label="AI Settings">
+        <LuSettings size={16} />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner sideOffset={8}>
+          <Menu.Popup className="ai-settings-menu">
+            <Menu.Group>
+              <Menu.GroupLabel className="ai-settings-label">Tool Approval</Menu.GroupLabel>
+              
+              {/* YOLO Mode Toggle */}
+              <Menu.Item
+                className={`ai-settings-item ${yoloMode ? "active" : ""}`}
+                onClick={() => setYoloMode(!yoloMode)}
+              >
+                <LuZap size={14} className={yoloMode ? "yolo-active" : ""} />
+                <span>YOLO Mode</span>
+                {yoloMode && <span className="ai-settings-badge">ON</span>}
+              </Menu.Item>
+
+              {/* Show count of always-allowed tools */}
+              {alwaysAllow.length > 0 && (
+                <div className="ai-settings-info">
+                  <LuShield size={12} />
+                  <span>{alwaysAllow.length} tools always allowed</span>
+                </div>
+              )}
+
+              {/* Reset preferences */}
+              <Menu.Item
+                className="ai-settings-item ai-settings-reset"
+                onClick={resetPreferences}
+              >
+                <LuRotateCcw size={14} />
+                <span>Reset to Defaults</span>
+              </Menu.Item>
+            </Menu.Group>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+```
+
+```css
+/* packages/app/src/components/ai/AISettingsMenu.css */
+
+.ai-settings-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+
+.ai-settings-trigger:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+}
+
+.ai-settings-menu {
+  min-width: 180px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.ai-settings-label {
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+.ai-settings-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.ai-settings-item:hover {
+  background: var(--color-bg-hover);
+}
+
+.ai-settings-item.active {
+  background: var(--color-accent-subtle);
+}
+
+.ai-settings-badge {
+  margin-left: auto;
+  padding: 2px 6px;
+  background: var(--color-accent);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.yolo-active {
+  color: var(--color-warning);
+}
+
+.ai-settings-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.ai-settings-reset {
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+/* ToolApprovalPanel additions */
+.tool-approval-always {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.tool-approval-always:hover {
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+```
+
 ---
 
-## 12. File Structure
+## 14. File Structure
 
 After implementing this phase, the file structure should be:
 
@@ -2150,18 +3181,23 @@ packages/app/src/
 │       ├── ai-chat-sessions.ts  # NEW: Chat sessions table
 │       └── index.ts             # Updated: export new schema
 ├── lib/
+│   ├── auth-client.ts           # better-auth React hooks
 │   └── ai/
 │       ├── adapter.ts           # LLM adapter configuration
 │       ├── session.ts           # Session types and helpers
-│       ├── session-functions.ts # Server functions for CRUD
-│       ├── durable-stream-adapter.ts  # Connection adapter
+│       ├── session-functions.ts # Server functions (auth from context)
+│       ├── durable-stream-adapter.ts  # Connection adapter + noop
 │       ├── persistence.ts       # Durable Stream persistence
-│       ├── approval.ts          # Tool approval rules
+│       ├── persistence-types.ts # Stream chunk schemas
+│       ├── approval.ts          # Unified tool approval registry
+│       ├── approval-preferences.ts  # User preferences (YOLO mode, always-allow)
+│       ├── editor-context.ts    # AsyncLocalStorage for editor state
 │       ├── prompts/
 │       │   └── index.ts         # System prompt builder (stub)
 │       ├── tools/
-│       │   └── index.ts         # Tool registry (stub)
-│       └── runtime/             # NEW: Agent runtime system
+│       │   ├── index.ts         # Tool registry
+│       │   └── client-tools.ts  # Dashboard + Editor client tools
+│       └── runtime/             # Agent runtime system
 │           ├── types.ts         # Runtime interfaces
 │           ├── browser-runtime.ts   # SharedWorker/Worker runtime
 │           ├── agent-worker.ts  # Worker implementation
@@ -2169,19 +3205,22 @@ packages/app/src/
 │           ├── presence.ts      # Awareness integration
 │           └── remote-runtime.ts  # Edge/DO runtime (stub)
 ├── hooks/
+│   ├── useAuth.ts               # Auth context hook
 │   ├── useAIChat.ts             # React hook for chat
-│   └── useAgent.ts              # React hook for agent lifecycle
+│   ├── useAgent.ts              # React hook for agent lifecycle
+│   └── useToolApprovalPrefs.ts  # Tool approval preferences hook
 ├── components/
-│   └── ai/
-│       ├── AIChat.tsx           # Main chat component
-│       ├── AIChat.css
-│       ├── AIChatMessages.tsx   # Message list
-│       ├── AIChatInput.tsx      # Input area
-│       ├── ChatSessionList.tsx  # Session history sidebar
-│       ├── AgentStatus.tsx      # Agent state indicator
-│       ├── AgentStatus.css
-│       ├── ToolApprovalPanel.tsx
-│       └── ToolApprovalPanel.css
+│   ├── ai/                      # AI helper components
+│   │   ├── ToolApprovalPanel.tsx   # Tool confirmation UI
+│   │   ├── ToolApprovalPanel.css
+│   │   ├── AISettingsMenu.tsx      # YOLO mode toggle
+│   │   └── AISettingsMenu.css
+│   └── DashboardAIChat.tsx      # Dashboard FAB + dialog wrapper
+├── editor/
+│   └── components/
+│       ├── AIPanel.tsx          # Main AI chat UI (wired to useAIChat)
+│       ├── AIPanel.css          # Existing styles (unchanged)
+│       └── PropertiesPanel.tsx  # Renders AIPanel when chat toggled
 └── routes/
     └── api/
         └── ai/
@@ -2229,19 +3268,271 @@ describe("Durable Stream Adapter", () => {
 
 ---
 
+## 15. UI Integration
+
+The AI chat uses the **existing `AIPanel` component** (`packages/app/src/editor/components/AIPanel.tsx`) - the same UI in both contexts. The existing design with tab bar, history dropdown, messages, and input area is exactly what we want.
+
+### Existing UI Structure
+
+The current `AIPanel.tsx` already has:
+- **Tab bar** with session tabs (active sessions as tabs)
+- **History dropdown** for closed/archived sessions
+- **Empty state** with AI assistant icon
+- **Message list** for conversation display
+- **Input area** with textarea and send button
+
+This UI will be used identically in both dashboard and editor contexts.
+
+### Wiring to Backend
+
+The existing `AIPanel` component needs to be connected to the real backend:
+
+```typescript
+// packages/app/src/editor/components/AIPanel.tsx
+// Wire up the existing UI to the backend
+
+import React, { useState, useCallback } from "react";
+import { useAIChat } from "../../hooks/useAIChat";
+import { useDocument } from "../contexts/DocumentContext";
+import "./AIPanel.css";
+
+interface AIPanelProps {
+  context?: "dashboard" | "editor";
+}
+
+const AIPanel: React.FC<AIPanelProps> = ({ context = "editor" }) => {
+  const { documentId, projectId } = useDocument();
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Connect to backend via useAIChat hook
+  const {
+    sessions,
+    activeSessionId,
+    messages,
+    isLoading,
+    isReady,
+    sendMessage,
+    startNewChat,
+    switchToSession,
+    archiveSession,
+    toolApprovalRequests,
+    approveToolCall,
+    rejectToolCall,
+  } = useAIChat({
+    context,
+    documentId,
+    projectId,
+  });
+
+  const activeSession = sessions.find((s) => s.id === activeSessionId);
+  const archivedSessions = sessions.filter((s) => s.status === "archived");
+
+  const handleSend = useCallback(() => {
+    const input = document.querySelector(".ai-panel-input") as HTMLTextAreaElement;
+    if (input?.value.trim() && isReady) {
+      sendMessage(input.value.trim());
+      input.value = "";
+    }
+  }, [sendMessage, isReady]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    },
+    [handleSend]
+  );
+
+  return (
+    <div className="ai-panel">
+      {/* Tab bar - same as existing */}
+      <div className="ai-panel-tabs">
+        <div className="ai-panel-tabs-list">
+          {sessions
+            .filter((s) => s.status === "active")
+            .map((session) => (
+              <div
+                key={session.id}
+                className={`ai-panel-tab ${session.id === activeSessionId ? "active" : ""}`}
+                onClick={() => switchToSession(session.id)}
+              >
+                <span className="ai-panel-tab-title">{session.title || "New Chat"}</span>
+                <button
+                  className="ai-panel-tab-close"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    archiveSession(session.id);
+                  }}
+                  aria-label="Close tab"
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+            ))}
+          <button className="ai-panel-new-tab" onClick={startNewChat} aria-label="New chat">
+            <PlusIcon />
+          </button>
+        </div>
+        <div className="ai-panel-tabs-actions">
+          <button
+            className="ai-panel-history-btn"
+            onClick={() => setShowHistory(!showHistory)}
+            aria-label="Session history"
+          >
+            <HistoryIcon />
+          </button>
+          {showHistory && (
+            <div className="ai-panel-history-dropdown">
+              <div className="ai-panel-history-header">Previous Sessions</div>
+              {archivedSessions.length > 0 ? (
+                archivedSessions.map((session) => (
+                  <button
+                    key={session.id}
+                    className="ai-panel-history-item"
+                    onClick={() => {
+                      switchToSession(session.id);
+                      setShowHistory(false);
+                    }}
+                  >
+                    <span>{session.title || "Untitled"}</span>
+                    <span className="ai-panel-history-date">
+                      {new Date(session.createdAt).toLocaleDateString()}
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="ai-panel-history-empty">No previous sessions</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Chat content - same as existing */}
+      <div className="ai-panel-content">
+        {messages.length === 0 ? (
+          <div className="ai-panel-empty">
+            <AgentIcon />
+            <div className="ai-panel-empty-title">AI Assistant</div>
+            <div className="ai-panel-empty-hint">
+              Start a conversation to get help with your design
+            </div>
+          </div>
+        ) : (
+          <div className="ai-panel-messages">
+            {messages.map((msg, idx) => (
+              <div key={idx} className={`ai-panel-message ai-panel-message-${msg.role}`}>
+                {msg.content}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tool approval requests */}
+        {toolApprovalRequests.length > 0 && (
+          <ToolApprovalPanel
+            requests={toolApprovalRequests}
+            onApprove={approveToolCall}
+            onReject={rejectToolCall}
+          />
+        )}
+      </div>
+
+      {/* Input area - same as existing */}
+      <div className="ai-panel-input-area">
+        <div className="ai-panel-input-wrapper">
+          <textarea
+            className="ai-panel-input"
+            placeholder={isReady ? "Ask the AI assistant..." : "Loading..."}
+            rows={2}
+            disabled={!isReady}
+            onKeyDown={handleKeyDown}
+          />
+          <button
+            className="ai-panel-send"
+            aria-label="Send message"
+            onClick={handleSend}
+            disabled={!isReady || isLoading}
+          >
+            <SendIcon />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Icons remain the same as existing...
+```
+
+### Usage in PropertiesPanel
+
+The existing PropertiesPanel already renders `<AIPanel />` when chat is toggled - no changes needed:
+
+```typescript
+// In PropertiesPanel.tsx (already implemented)
+const content = showAIChat ? <AIPanel /> : renderProperties();
+```
+
+### Usage in Dashboard
+
+For the dashboard, the same `AIPanel` component is used inside a dialog:
+
+```typescript
+// packages/app/src/components/DashboardAIChat.tsx
+import { Dialog } from "@base-ui/react/dialog";
+import AIPanel from "../editor/components/AIPanel";
+
+export function DashboardAIChat() {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <>
+      <button className="dashboard-ai-fab" onClick={() => setIsOpen(true)}>
+        <AIIcon />
+      </button>
+
+      <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
+        <Dialog.Portal>
+          <Dialog.Backdrop className="dashboard-ai-backdrop" />
+          <Dialog.Popup className="dashboard-ai-popup">
+            <AIPanel context="dashboard" />
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
+  );
+}
+```
+
+---
+
 ## Deliverables
 
 ### Core Chat Infrastructure
-- [ ] TanStack AI packages installed
-- [ ] AI adapter configuration working
-- [ ] `ai_chat_sessions` PostgreSQL table created (migration)
-- [ ] Session CRUD server functions working
-- [ ] Durable Stream integration for message content
-- [ ] `/api/ai/chat` endpoint returning SSE stream
-- [ ] `useAIChat` hook functional with session management
-- [ ] `AIChat` component rendering
-- [ ] `ChatSessionList` component for session history
-- [ ] Tool approval UI working
+- [ ] TanStack AI packages installed (`@tanstack/ai`, `@tanstack/ai-react`)
+- [ ] AI adapter configuration (`packages/app/src/lib/ai/adapter.ts`)
+- [ ] `ai_chat_sessions` PostgreSQL table + migration
+- [ ] Session CRUD server functions (`packages/app/src/lib/ai/session-functions.ts`)
+- [ ] Durable Stream persistence (`packages/app/src/lib/ai/persistence.ts`)
+- [ ] `/api/ai/chat` endpoint with SSE streaming
+- [ ] `useAuth` hook for authenticated user context
+- [ ] `useAIChat` hook with session management
+- [ ] Tool approval system with unified registry (`packages/app/src/lib/ai/approval.ts`)
+- [ ] User preferences storage (`packages/app/src/lib/ai/approval-preferences.ts`)
+- [ ] `useToolApprovalPrefs` hook for preference management
+- [ ] YOLO mode support (auto-approve all tools)
+- [ ] Per-tool "always allow" functionality
+
+### UI Components
+- [ ] Wire existing `AIPanel.tsx` to `useAIChat` hook (keep existing UI exactly)
+- [ ] Add `context` prop to `AIPanel` ("dashboard" | "editor")
+- [ ] Add `ToolApprovalPanel.tsx` - inline in AIPanel for confirmations
+- [ ] Add `AISettingsMenu.tsx` - YOLO mode toggle (in AIPanel header)
+- [ ] Create `DashboardAIChat.tsx` - FAB + Dialog wrapper around `AIPanel`
+- [ ] Existing `AIPanel.css` styles unchanged
 
 ### Agent Runtime System
 - [ ] `IAgentRuntime` interface defined
@@ -2249,11 +3540,12 @@ describe("Durable Stream Adapter", () => {
 - [ ] `agent-worker.ts` with modeling kernel initialization
 - [ ] `AgentClient` for main thread communication
 - [ ] `useAgent` React hook for agent lifecycle
-- [ ] Presence integration (agents appear in awareness)
-- [ ] `AgentStatus` component showing agent state
-- [ ] `RemoteAgentRuntime` stub for future edge/DO implementations
+- [ ] Presence integration (agents appear in Yjs awareness)
+- [ ] `RemoteAgentRuntime` stub for future implementations
 
 ### Testing
-- [ ] Basic session management tests passing
+- [ ] Session management tests passing
+- [ ] Hook state management tests passing
 - [ ] Agent spawn/terminate tests passing
 - [ ] Worker message protocol tests passing
+- [ ] Tool approval flow tests passing

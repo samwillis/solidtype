@@ -777,49 +777,22 @@ export function DashboardLayout() {
 
 ---
 
-## 7. Tool Approval Rules for Dashboard
+## 7. Tool Approval Rules
 
-```typescript
-// Add to packages/app/src/lib/ai/approval.ts
+**Note:** Dashboard tool approval rules are defined in the unified registry in Phase 23 (`packages/app/src/lib/ai/approval.ts`).
 
-export const DASHBOARD_TOOL_APPROVAL: Record<string, ApprovalLevel> = {
-  // Auto-execute (read-only)
-  listWorkspaces: "auto",
-  listProjects: "auto",
-  listDocuments: "auto",
-  listBranches: "auto",
-  listFolders: "auto",
-  getWorkspace: "auto",
-  getProject: "auto",
-  searchDocuments: "auto",
-  searchProjects: "auto",
+**Default behavior:** All dashboard tools auto-execute except destructive operations.
 
-  // Notify (creates things)
-  createWorkspace: "notify",
-  createProject: "notify",
-  createDocument: "notify",
-  createBranch: "notify",
-  createFolder: "notify",
+| Tool | Approval Level |
+|------|----------------|
+| All read, create, rename, move, navigation tools | `auto` (default) |
+| `deleteDocument`, `deleteFolder`, `deleteBranch`, `deleteWorkspace`, `deleteProject` | `confirm` |
 
-  // Confirm (modifies or deletes)
-  renameDocument: "confirm",
-  moveDocument: "confirm",
-  deleteDocument: "confirm",
-  renameFolder: "confirm",
-  deleteFolder: "confirm",
+Users can override via:
+- **YOLO mode** - auto-approve everything including deletions
+- **Per-tool "always allow"** - bypass confirmation for specific tools
 
-  // Navigation (auto)
-  openProject: "auto",
-  openDocument: "auto",
-  switchBranch: "auto",
-
-  // Branch operations (confirm - can cause data changes)
-  mergeBranch: "confirm",
-  resolveMergeConflict: "confirm",
-  getBranchDiff: "auto",
-  deleteBranch: "confirm",
-};
-```
+See Phase 23 `DASHBOARD_TOOL_APPROVAL` for the authoritative source.
 
 ---
 

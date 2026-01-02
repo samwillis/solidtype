@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import "./AIPanel.css";
+import { AIIcon } from "./Icons";
 
 interface ChatSession {
   id: string;
@@ -129,7 +130,7 @@ const AIPanel: React.FC = () => {
       <div className="ai-panel-content">
         {activeSession && activeSession.messages.length === 0 ? (
           <div className="ai-panel-empty">
-            <AgentIcon />
+            <AIIcon />
             <div className="ai-panel-empty-title">AI Assistant</div>
             <div className="ai-panel-empty-hint">
               Start a conversation to get help with your design
