@@ -250,8 +250,8 @@ These decisions are **locked** to prevent schema migrations:
 | -------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------- |
 | Vector serialization | Comma-separated strings (`"0,0,1"`)                                      | [01-document-model.md](01-document-model.md)               |
 | Complex data         | JSON in attributes (for sketch lists: `points`/`entities`/`constraints`) | [01-document-model.md](01-document-model.md)               |
-| Feature IDs          | Type prefix + counter (`s1`, `e1`)                                       | [01-document-model.md](01-document-model.md)               |
-| Persistent refs      | `type:featureId:selector`                                                | [appendix/naming-strategy.md](appendix/naming-strategy.md) |
+| Feature IDs          | **UUID** (`"f7a8b3c2-1234-..."`) — display names (`Extrude1`) are separate | [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md#03-feature-identity-uuid-vs-display-name) |
+| Persistent refs      | `type:featureId:selector` (featureId = UUID, fingerprints stored separately) | [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md#71-storing-references-in-features) |
 | Build errors         | Transient (not stored in Yjs)                                            | [01-document-model.md](01-document-model.md)               |
 | Rebuild strategy     | Full rebuild initially, incremental later                                | [02-kernel-viewer-wiring.md](02-kernel-viewer-wiring.md)   |
 | OffscreenCanvas      | After Phase 11 or when face count > 500                                  | [02-kernel-viewer-wiring.md](02-kernel-viewer-wiring.md)   |

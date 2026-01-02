@@ -1,34 +1,64 @@
 .status-overlay {
   position: absolute;
-  bottom: 16px;
-  left: 16px;
+  bottom: 8px;
+  left: 8px;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  pointer-events: none;
-}
-
-.status-overlay-item {
-  padding: 4px 8px;
-  background: transparent;
-  border: none;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--color-background);
+  border-radius: 4px;
   font-size: 11px;
   color: var(--color-text);
   white-space: nowrap;
-  opacity: 0.8;
-}
-
-.status-overlay-item.status-error {
-  color: #ff6b6b;
-}
-
-.status-overlay-item.status-solve {
-  font-family: var(--font-family-mono, monospace);
-  font-size: 10px;
-}
-
-.status-overlay-item.status-coordinates {
-  font-family: var(--font-family-mono, monospace);
-  font-size: 10px;
+  pointer-events: none;
   opacity: 0.9;
+}
+
+/* Connection status icons */
+.status-icon {
+  font-size: 8px;
+  line-height: 1;
+}
+
+.status-icon-connected {
+  color: #4ade80;
+}
+
+.status-icon-connecting {
+  color: #facc15;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.status-icon-error {
+  color: #f87171;
+}
+
+.status-icon-offline {
+  color: #6b7280;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+}
+}
+
+/* Text elements */
+.status-text {
+  color: var(--color-text-muted);
+}
+
+.status-text.status-error {
+  color: #f87171;
+}
+
+.status-coords {
+  font-family: var(--font-family-mono, monospace);
+  font-size: 10px;
+  color: var(--color-text-muted);
 }

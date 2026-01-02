@@ -2,7 +2,9 @@
 
 This document describes the persistent naming system that maintains stable references to topological entities across parametric edits.
 
-> **Reference**: See also [OVERVIEW.md § 5. Persistent Naming & Edit Robustness](/OVERVIEW.md) for the architectural vision and research background.
+> **Reference**: See also:
+> - [OVERVIEW.md § 5. Persistent Naming & Edit Robustness](/OVERVIEW.md) for the architectural vision and research background.
+> - **[TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md)** — Comprehensive implementation plan with FreeCAD-style algorithm details, data structures, and phased rollout.
 
 ---
 

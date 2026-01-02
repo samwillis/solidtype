@@ -38,9 +38,6 @@ import "./Viewer.css";
 // Point merge tolerance in sketch units (mm)
 const POINT_MERGE_TOLERANCE_MM = 5;
 
-// Grid size for snapping
-const GRID_SIZE = 1;
-
 /** Get default color for a datum plane based on its ID */
 function getDefaultPlaneColor(planeId: string): number {
   switch (planeId) {
@@ -143,11 +140,12 @@ const Viewer: React.FC = () => {
   const planesGroupRef = useRef<THREE.Group | null>(null);
   const originGroupRef = useRef<THREE.Group | null>(null);
   const faceHighlightGroupRef = useRef<THREE.Group | null>(null);
+  const snapIndicatorRef = useRef<THREE.Mesh | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
 
   const { theme } = useTheme();
-  const { registerRefs, cameraStateRef } = useViewer();
-  const { meshes, bodies, sketchPlaneTransforms } = useKernel();
+  const { registerRefs, cameraStateRef, state: viewerState } = useViewer();
+  const { meshes, bodies, sketchPlaneTransforms, featureStatus } = useKernel();
   const {
     selectFace,
     setHover,
@@ -178,6 +176,8 @@ const Viewer: React.FC = () => {
     clearSelection: clearSketchSelection,
     deleteSelectedItems,
     toggleConstruction,
+    updatePointPosition,
+    getSketchPoints,
   } = useSketch();
   const { doc, features, units, awareness } = useDocument();
 
@@ -200,13 +200,47 @@ const Viewer: React.FC = () => {
   } | null>(null);
   const [sketchPos, setSketchPos] = useState<{ x: number; y: number } | null>(null);
 
+  // Snap target for visual indicator when hovering near a snap-able point
+  const [snapTarget, setSnapTarget] = useState<{
+    x: number;
+    y: number;
+    type: "point" | "endpoint" | "midpoint";
+  } | null>(null);
+
   // Inline dimension editing state
   const [editingDimensionId, setEditingDimensionId] = useState<string | null>(null);
   const [editingDimensionValue, setEditingDimensionValue] = useState<string>("");
+  const [editingDimensionPos, setEditingDimensionPos] = useState<{ x: number; y: number } | null>(null);
+  const [editingDimensionType, setEditingDimensionType] = useState<"distance" | "angle">("distance");
+  const editingDimensionWorldPos = useRef<THREE.Vector3 | null>(null);
+  const dimensionInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Ref to hold dimension double-click handler for use in label creation
+  const handleDimensionDblClickRef = useRef<
+    ((constraintId: string, constraintType: "distance" | "angle", element: HTMLElement) => void) | null
+  >(null);
 
   // Dimension dragging state
   const [draggingDimensionId, setDraggingDimensionId] = useState<string | null>(null);
   const [dragCurrentOffset, setDragCurrentOffset] = useState<{ x: number; y: number } | null>(null);
+
+  // Sketch entity dragging state (for dragging points and lines)
+  const [draggingEntity, setDraggingEntity] = useState<{
+    type: "point" | "line";
+    id: string;
+    /** For lines, store original positions of both endpoints */
+    originalPositions?: { startX: number; startY: number; endX: number; endY: number };
+    /** For lines, store the start and end point IDs */
+    linePointIds?: { startId: string; endId: string };
+    /** Initial click position in sketch coordinates */
+    startPos: { x: number; y: number };
+  } | null>(null);
+
+  // Hovered draggable entity (for showing grab cursor)
+  const [hoveredDraggable, setHoveredDraggable] = useState<{
+    type: "point" | "line";
+    id: string;
+  } | null>(null);
 
   // Track mouse for sketch interactions
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -473,13 +507,20 @@ const Viewer: React.FC = () => {
     [sketchMode.sketchId, sketchPlaneTransforms]
   );
 
-  // Snap to grid helper
-  const snapToGrid = useCallback((x: number, y: number): { x: number; y: number } => {
+  // Snap to grid helper (respects toggleable grid settings from viewer state)
+  const snapToGrid = useCallback(
+    (x: number, y: number): { x: number; y: number } => {
+      if (!viewerState.snapToGrid) {
+        return { x, y };
+      }
+      const gridSize = viewerState.gridSize;
     return {
-      x: Math.round(x / GRID_SIZE) * GRID_SIZE,
-      y: Math.round(y / GRID_SIZE) * GRID_SIZE,
+        x: Math.round(x / gridSize) * gridSize,
+        y: Math.round(y / gridSize) * gridSize,
     };
-  }, []);
+    },
+    [viewerState.snapToGrid, viewerState.gridSize]
+  );
 
   // Get current sketch data (array format for compatibility)
   const getSketch = useCallback((): SketchData | null => {
@@ -514,6 +555,106 @@ const Viewer: React.FC = () => {
       setPreviewLine(null);
     }
   }, [sketchMode.active, sketchMode.activeTool, tempStartPoint, sketchPos, setPreviewLine]);
+
+  // Update snap indicator visual
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || !sceneReady) return;
+
+    // Remove existing snap indicator
+    if (snapIndicatorRef.current) {
+      scene.remove(snapIndicatorRef.current);
+      snapIndicatorRef.current.geometry.dispose();
+      (snapIndicatorRef.current.material as THREE.Material).dispose();
+      snapIndicatorRef.current = null;
+    }
+
+    // Don't show indicator if no snap target or not in sketch mode
+    if (!snapTarget || !sketchMode.active || !sketchMode.planeId) return;
+
+    // Get plane transform for positioning
+    const sketchId = sketchMode.sketchId;
+    const kernelTransform = sketchId ? sketchPlaneTransforms[sketchId] : null;
+
+    let origin: THREE.Vector3;
+    let xDir: THREE.Vector3;
+    let yDir: THREE.Vector3;
+
+    if (kernelTransform) {
+      origin = new THREE.Vector3(...kernelTransform.origin);
+      xDir = new THREE.Vector3(...kernelTransform.xDir);
+      yDir = new THREE.Vector3(...kernelTransform.yDir);
+    } else {
+      // Fallback for built-in planes
+      switch (sketchMode.planeId) {
+        case "xy":
+          origin = new THREE.Vector3(0, 0, 0);
+          xDir = new THREE.Vector3(1, 0, 0);
+          yDir = new THREE.Vector3(0, 1, 0);
+          break;
+        case "xz":
+          origin = new THREE.Vector3(0, 0, 0);
+          xDir = new THREE.Vector3(1, 0, 0);
+          yDir = new THREE.Vector3(0, 0, 1);
+          break;
+        case "yz":
+          origin = new THREE.Vector3(0, 0, 0);
+          xDir = new THREE.Vector3(0, 1, 0);
+          yDir = new THREE.Vector3(0, 0, 1);
+          break;
+        default:
+          origin = new THREE.Vector3(0, 0, 0);
+          xDir = new THREE.Vector3(1, 0, 0);
+          yDir = new THREE.Vector3(0, 1, 0);
+      }
+    }
+
+    // Calculate world position
+    const worldPos = new THREE.Vector3(
+      origin.x + snapTarget.x * xDir.x + snapTarget.y * yDir.x,
+      origin.y + snapTarget.x * xDir.y + snapTarget.y * yDir.y,
+      origin.z + snapTarget.x * xDir.z + snapTarget.y * yDir.z
+    );
+
+    // Create snap indicator (diamond shape)
+    const geometry = new THREE.RingGeometry(1.5, 2.5, 4);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x00ff00, // Bright green
+      side: THREE.DoubleSide,
+      depthTest: false,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const indicator = new THREE.Mesh(geometry, material);
+    indicator.position.copy(worldPos);
+    indicator.renderOrder = 999; // Always on top
+
+    // Rotate to face camera (billboard effect)
+    const normal = xDir.clone().cross(yDir).normalize();
+    indicator.lookAt(worldPos.clone().add(normal));
+    // Rotate 45 degrees to make a diamond
+    indicator.rotation.z = Math.PI / 4;
+
+    scene.add(indicator);
+    snapIndicatorRef.current = indicator;
+    needsRenderRef.current = true;
+
+    return () => {
+      if (snapIndicatorRef.current && scene) {
+        scene.remove(snapIndicatorRef.current);
+        snapIndicatorRef.current.geometry.dispose();
+        (snapIndicatorRef.current.material as THREE.Material).dispose();
+        snapIndicatorRef.current = null;
+      }
+    };
+  }, [
+    snapTarget,
+    sketchMode.active,
+    sketchMode.planeId,
+    sketchMode.sketchId,
+    sketchPlaneTransforms,
+    sceneReady,
+  ]);
 
   // Handle escape to cancel current draft operation and clear selection
   // Handle backspace/delete to delete selected items
@@ -686,6 +827,13 @@ const Viewer: React.FC = () => {
 
     // Add new meshes
     meshes.forEach((meshData, bodyId) => {
+      // Check if the feature is hidden
+      const feature = features.find((f) => f.id === bodyId);
+      if (feature && feature.visible === false) {
+        console.log("[Viewer] Skipping hidden feature:", bodyId);
+        return;
+      }
+
       console.log(
         "[Viewer] Adding mesh for body:",
         bodyId,
@@ -718,7 +866,7 @@ const Viewer: React.FC = () => {
     });
 
     needsRenderRef.current = true;
-  }, [meshes, bodies, sceneReady]);
+  }, [meshes, bodies, sceneReady, features]);
 
   // Render 3D face/edge selection highlights
   useEffect(() => {
@@ -920,6 +1068,10 @@ const Viewer: React.FC = () => {
 
       const planeFeature = feature as PlaneFeature;
 
+      // Skip planes that are gated (after rebuild gate)
+      const status = featureStatus[planeFeature.id];
+      if (status === "gated") continue;
+
       // Check visibility - show if visible OR if selected/hovered in feature tree
       const isSelected = selectedFeatureId === planeFeature.id;
       const isHovered = hoveredFeatureId === planeFeature.id;
@@ -1068,7 +1220,7 @@ const Viewer: React.FC = () => {
     }
 
     needsRenderRef.current = true;
-  }, [doc.featuresById, features, sceneReady, selectedFeatureId, hoveredFeatureId]);
+  }, [doc.featuresById, features, sceneReady, selectedFeatureId, hoveredFeatureId, featureStatus]);
 
   // Render origin
   useEffect(() => {
@@ -1096,6 +1248,10 @@ const Viewer: React.FC = () => {
       if (!feature || feature.type !== "origin") continue;
 
       const originFeature = feature as OriginFeature;
+
+      // Skip features that are gated (after rebuild gate)
+      const status = featureStatus[originFeature.id];
+      if (status === "gated") continue;
 
       // Show if visible OR if selected/hovered in feature tree
       const isSelected = selectedFeatureId === originFeature.id;
@@ -1161,7 +1317,7 @@ const Viewer: React.FC = () => {
     }
 
     needsRenderRef.current = true;
-  }, [doc.featuresById, features, sceneReady, selectedFeatureId, hoveredFeatureId]);
+  }, [doc.featuresById, features, sceneReady, selectedFeatureId, hoveredFeatureId, featureStatus]);
 
   // Update 3D sketch visualization
   useEffect(() => {
@@ -1715,23 +1871,31 @@ const Viewer: React.FC = () => {
           font-weight: 600;
           cursor: move;
           user-select: none;
+          pointer-events: auto;
         `;
         labelDiv.dataset.constraintId = c.id;
         labelDiv.dataset.constraintType = "distance";
         labelDiv.dataset.storedOffsetX = String(storedOffsetX);
         labelDiv.dataset.storedOffsetY = String(storedOffsetY);
+        // Store world position for camera tracking during inline edit
+        labelDiv.dataset.worldX = String(labelPos.x);
+        labelDiv.dataset.worldY = String(labelPos.y);
+        labelDiv.dataset.worldZ = String(labelPos.z);
+        // Stop mousedown from bubbling to prevent entity drag interference
+        labelDiv.addEventListener("mousedown", (e) => {
+          e.stopPropagation();
+        });
         // Add click handler for selection
         labelDiv.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
           toggleConstraintSelection(c.id);
         });
-        // Add double-click handler directly to the label
+        // Add double-click handler for editing
         labelDiv.addEventListener("dblclick", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          setEditingDimensionId(c.id);
-          setEditingDimensionValue(String(c.value));
+          handleDimensionDblClickRef.current?.(c.id, "distance", labelDiv);
         });
         // Highlight if selected
         if (selectedConstraints.has(c.id)) {
@@ -1805,23 +1969,31 @@ const Viewer: React.FC = () => {
           font-weight: 600;
           cursor: move;
           user-select: none;
+          pointer-events: auto;
         `;
         labelDiv.dataset.constraintId = c.id;
         labelDiv.dataset.constraintType = "angle";
         labelDiv.dataset.storedOffsetX = String(storedOffsetX);
         labelDiv.dataset.storedOffsetY = String(storedOffsetY);
+        // Store world position for camera tracking during inline edit
+        labelDiv.dataset.worldX = String(labelPos.x);
+        labelDiv.dataset.worldY = String(labelPos.y);
+        labelDiv.dataset.worldZ = String(labelPos.z);
+        // Stop mousedown from bubbling to prevent entity drag interference
+        labelDiv.addEventListener("mousedown", (e) => {
+          e.stopPropagation();
+        });
         // Add click handler for selection
         labelDiv.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
           toggleConstraintSelection(c.id);
         });
-        // Add double-click handler directly to the label
+        // Add double-click handler for editing
         labelDiv.addEventListener("dblclick", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          setEditingDimensionId(c.id);
-          setEditingDimensionValue(String(c.value));
+          handleDimensionDblClickRef.current?.(c.id, "angle", labelDiv);
         });
         // Highlight if selected
         if (selectedConstraints.has(c.id)) {
@@ -1885,6 +2057,7 @@ const Viewer: React.FC = () => {
           font-size: 11px;
           font-weight: 600;
           cursor: pointer;
+          pointer-events: auto;
           ${isSelected ? "outline: 2px solid #ff6600; outline-offset: 2px;" : ""}
         `;
         // Add click handler for selection
@@ -1915,65 +2088,120 @@ const Viewer: React.FC = () => {
     sketchPlaneTransforms,
   ]);
 
+  // Keep dimension double-click handler ref updated
+  useEffect(() => {
+    handleDimensionDblClickRef.current = (
+      constraintId: string,
+      constraintType: "distance" | "angle",
+      element: HTMLElement
+    ) => {
+      const sketch = getSketch();
+      if (!sketch) return;
+
+      const constraint = sketch.constraints.find((c) => c.id === constraintId);
+      if (!constraint || (constraint.type !== "distance" && constraint.type !== "angle")) return;
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      // Store the 3D world position for camera tracking
+      const worldX = parseFloat(element.dataset.worldX ?? "0");
+      const worldY = parseFloat(element.dataset.worldY ?? "0");
+      const worldZ = parseFloat(element.dataset.worldZ ?? "0");
+      editingDimensionWorldPos.current = new THREE.Vector3(worldX, worldY, worldZ);
+
+      // Get the label's screen position for inline editing
+      const rect = element.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      setEditingDimensionPos({
+        x: rect.left - containerRect.left + rect.width / 2,
+        y: rect.top - containerRect.top + rect.height / 2,
+      });
+      setEditingDimensionId(constraintId);
+      setEditingDimensionValue(String(constraint.value));
+      setEditingDimensionType(constraintType);
+    };
+  }, [getSketch]);
+
   // Handle dimension label dragging for repositioning
+  // Uses a drag threshold to allow double-clicks to work
   useEffect(() => {
     if (!sketchMode.active) return;
 
+    let isPotentialDrag = false;
     let isDragging = false;
     let currentDragId: string | null = null;
+    let currentTarget: HTMLElement | null = null;
     let startX = 0;
     let startY = 0;
     let initialOffsetX = 0;
     let initialOffsetY = 0;
+    const DRAG_THRESHOLD = 5; // Pixels of movement before drag starts
 
     const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (target.classList.contains("draggable-dimension") && e.button === 0) {
-        // Start drag on left mouse button
+        // Prepare for potential drag, but don't start yet (allows double-click)
         const constraintId = target.dataset.constraintId;
         if (constraintId) {
-          isDragging = true;
+          isPotentialDrag = true;
           currentDragId = constraintId;
+          currentTarget = target;
           startX = e.clientX;
           startY = e.clientY;
           initialOffsetX = parseFloat(target.dataset.storedOffsetX ?? "0");
           initialOffsetY = parseFloat(target.dataset.storedOffsetY ?? "15");
-          setDraggingDimensionId(constraintId);
-          setDragCurrentOffset({ x: initialOffsetX, y: initialOffsetY });
-          e.preventDefault();
-          e.stopPropagation();
+          // Don't prevent default or stop propagation here - allows double-click to fire
         }
       }
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging || !currentDragId) return;
+      if (!isPotentialDrag || !currentDragId) return;
 
+      // Check if we've moved past the drag threshold
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (!isDragging && distance >= DRAG_THRESHOLD) {
+        // Start actual drag
+        isDragging = true;
+        setDraggingDimensionId(currentDragId);
+        setDragCurrentOffset({ x: initialOffsetX, y: initialOffsetY });
+      }
+
+      if (isDragging) {
       // Calculate offset delta (scaled to sketch units - approximate)
-      const deltaX = (e.clientX - startX) * 0.5; // Rough scaling factor
-      const deltaY = -(e.clientY - startY) * 0.5; // Invert Y for sketch coords
+        const deltaX = dx * 0.5; // Rough scaling factor
+        const deltaY = -dy * 0.5; // Invert Y for sketch coords
 
       setDragCurrentOffset({
         x: initialOffsetX + deltaX,
         y: initialOffsetY + deltaY,
       });
+      }
     };
 
-    const handleMouseUp = (e: MouseEvent) => {
-      if (!isDragging || !currentDragId) return;
-
-      // Calculate final offset
-      const deltaX = (e.clientX - startX) * 0.5;
-      const deltaY = -(e.clientY - startY) * 0.5;
+    const handleMouseUp = (_e: MouseEvent) => {
+      if (isDragging && currentDragId) {
+        // Complete the drag - save to document
+        // Get current offset from the state (we need to recalculate)
+        const dx = _e.clientX - startX;
+        const dy = _e.clientY - startY;
+        const deltaX = dx * 0.5;
+        const deltaY = -dy * 0.5;
       const finalOffsetX = initialOffsetX + deltaX;
       const finalOffsetY = initialOffsetY + deltaY;
 
-      // Save to document
       updateConstraintOffset(currentDragId, finalOffsetX, finalOffsetY);
+      }
 
-      // Reset drag state
+      // Reset all state
+      isPotentialDrag = false;
       isDragging = false;
       currentDragId = null;
+      currentTarget = null;
       setDraggingDimensionId(null);
       setDragCurrentOffset(null);
     };
@@ -1989,35 +2217,6 @@ const Viewer: React.FC = () => {
     };
   }, [sketchMode.active, updateConstraintOffset]);
 
-  // Handle double-click on dimension labels for inline editing
-  useEffect(() => {
-    if (!sketchMode.active) return;
-
-    const handleDimensionDoubleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.classList.contains("dimension-label")) {
-        e.preventDefault();
-        e.stopPropagation();
-        const constraintId = target.dataset.constraintId;
-        if (constraintId) {
-          const sketch = getSketch();
-          if (sketch) {
-            const constraint = sketch.constraints.find((c) => c.id === constraintId);
-            if (constraint && (constraint.type === "distance" || constraint.type === "angle")) {
-              setEditingDimensionId(constraintId);
-              setEditingDimensionValue(String(constraint.value));
-            }
-          }
-        }
-      }
-    };
-
-    document.addEventListener("dblclick", handleDimensionDoubleClick, true);
-    return () => {
-      document.removeEventListener("dblclick", handleDimensionDoubleClick, true);
-    };
-  }, [sketchMode.active, getSketch]);
-
   // Handle inline dimension edit submission
   const handleDimensionEditSubmit = useCallback(() => {
     if (!editingDimensionId) return;
@@ -2027,7 +2226,60 @@ const Viewer: React.FC = () => {
     }
     setEditingDimensionId(null);
     setEditingDimensionValue("");
+    setEditingDimensionPos(null);
   }, [editingDimensionId, editingDimensionValue, updateConstraintValue]);
+
+  // Focus the dimension input when it appears
+  useEffect(() => {
+    if (editingDimensionId && dimensionInputRef.current) {
+      dimensionInputRef.current.focus();
+      dimensionInputRef.current.select();
+    }
+  }, [editingDimensionId]);
+
+  // Update dimension input position as camera moves
+  useEffect(() => {
+    if (!editingDimensionId || !editingDimensionWorldPos.current) return;
+    const container = containerRef.current;
+    const camera = cameraRef.current;
+    if (!container || !camera) return;
+
+    let animationId: number | null = null;
+
+    const updatePosition = () => {
+      if (!editingDimensionWorldPos.current || !camera || !container) {
+        animationId = requestAnimationFrame(updatePosition);
+        return;
+      }
+
+      // Project 3D world position to screen coordinates
+      const worldPos = editingDimensionWorldPos.current.clone();
+      worldPos.project(camera);
+
+      // Convert normalized device coordinates to screen coordinates
+      const containerRect = container.getBoundingClientRect();
+      const screenX = ((worldPos.x + 1) / 2) * containerRect.width;
+      const screenY = ((-worldPos.y + 1) / 2) * containerRect.height;
+
+      setEditingDimensionPos({ x: screenX, y: screenY });
+      animationId = requestAnimationFrame(updatePosition);
+    };
+
+    animationId = requestAnimationFrame(updatePosition);
+
+    return () => {
+      if (animationId !== null) {
+        cancelAnimationFrame(animationId);
+      }
+    };
+  }, [editingDimensionId]);
+
+  // Clear world position ref when editing ends
+  useEffect(() => {
+    if (!editingDimensionId) {
+      editingDimensionWorldPos.current = null;
+    }
+  }, [editingDimensionId]);
 
   // Reset camera to face the sketch plane normal
   const resetToSketchNormal = useCallback(() => {
@@ -2092,6 +2344,7 @@ const Viewer: React.FC = () => {
         e.preventDefault();
         setEditingDimensionId(null);
         setEditingDimensionValue("");
+        setEditingDimensionPos(null);
       }
     };
 
@@ -2583,9 +2836,80 @@ const Viewer: React.FC = () => {
         const snapped = snapToGrid(sketchCoords.x, sketchCoords.y);
         setSketchPos(snapped);
         setSketchMousePos({ x: snapped.x, y: snapped.y });
+
+        // Handle entity dragging
+        if (draggingEntity) {
+          if (draggingEntity.type === "point") {
+            // For points, just set the position directly to the snapped mouse position
+            const newX = snapped.x;
+            const newY = snapped.y;
+            updatePointPosition(draggingEntity.id, newX, newY);
+          } else if (draggingEntity.type === "line" && draggingEntity.originalPositions && draggingEntity.linePointIds) {
+            // For lines, calculate delta from original drag start position
+            // and apply to original endpoint positions (not updated positions)
+            const dx = sketchCoords.x - draggingEntity.startPos.x;
+            const dy = sketchCoords.y - draggingEntity.startPos.y;
+            const orig = draggingEntity.originalPositions;
+            const ids = draggingEntity.linePointIds;
+            
+            // Apply delta to original positions, then snap
+            const newStartX = snapToGrid(orig.startX + dx, 0).x;
+            const newStartY = snapToGrid(0, orig.startY + dy).y;
+            const newEndX = snapToGrid(orig.endX + dx, 0).x;
+            const newEndY = snapToGrid(0, orig.endY + dy).y;
+            
+            updatePointPosition(ids.startId, newStartX, newStartY);
+            updatePointPosition(ids.endId, newEndX, newEndY);
+            // Note: Do NOT update originalPositions or startPos here!
+            // The delta should always be relative to the drag start.
+          }
+          isDraggingViewRef.current = true; // Prevent selection toggle
+          return;
+        }
+
+        // Detect snap targets when using drawing tools
+        if (
+          sketchMode.activeTool === "line" ||
+          sketchMode.activeTool === "arc" ||
+          sketchMode.activeTool === "circle" ||
+          sketchMode.activeTool === "rectangle"
+        ) {
+          const nearbyPoint = findNearbyPoint(snapped.x, snapped.y, POINT_MERGE_TOLERANCE_MM);
+          if (nearbyPoint) {
+            setSnapTarget({ x: nearbyPoint.x, y: nearbyPoint.y, type: "point" });
+          } else {
+            setSnapTarget(null);
+          }
+          setHoveredDraggable(null);
+        } else if (sketchMode.activeTool === "select") {
+          // Detect hovering over draggable entities for cursor feedback
+          setSnapTarget(null);
+          const sketch = getSketch();
+          if (sketch) {
+            const tol = POINT_MERGE_TOLERANCE_MM;
+            const nearbyPoint = findNearbyPoint(snapped.x, snapped.y, tol);
+            if (nearbyPoint) {
+              setHoveredDraggable({ type: "point", id: nearbyPoint.id });
+            } else {
+              const nearbyLine = findNearbyLineInSketch(sketch, snapped.x, snapped.y, tol);
+              if (nearbyLine) {
+                setHoveredDraggable({ type: "line", id: nearbyLine.id });
+              } else {
+                setHoveredDraggable(null);
+              }
+            }
+          } else {
+            setHoveredDraggable(null);
+          }
+        } else {
+          setSnapTarget(null);
+          setHoveredDraggable(null);
+        }
       } else {
         setSketchMousePos(null);
         setSketchPos(null);
+        setSnapTarget(null);
+        setHoveredDraggable(null);
       }
     };
 
@@ -2593,6 +2917,53 @@ const Viewer: React.FC = () => {
       const rect = container.getBoundingClientRect();
       mouseDownPosRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       isDraggingViewRef.current = false;
+
+      // For select tool, check if we're clicking on a draggable entity
+      if (sketchMode.activeTool === "select" && e.button === 0 && !e.shiftKey) {
+        const sketchCoords = screenToSketch(e.clientX, e.clientY, sketchMode.planeId!);
+        if (sketchCoords) {
+          const tol = POINT_MERGE_TOLERANCE_MM;
+          const sketch = getSketch();
+          if (sketch) {
+            // Check for point first (higher priority)
+            const nearbyPoint = findNearbyPoint(sketchCoords.x, sketchCoords.y, tol);
+            if (nearbyPoint) {
+              setDraggingEntity({
+                type: "point",
+                id: nearbyPoint.id,
+                startPos: { x: sketchCoords.x, y: sketchCoords.y },
+              });
+              return;
+            }
+
+            // Check for line
+            const nearbyLine = findNearbyLineInSketch(sketch, sketchCoords.x, sketchCoords.y, tol);
+            if (nearbyLine) {
+              // Get the line's endpoints
+              const startPt = sketch.points.find((p) => p.id === nearbyLine.start);
+              const endPt = sketch.points.find((p) => p.id === nearbyLine.end);
+              if (startPt && endPt) {
+                setDraggingEntity({
+                  type: "line",
+                  id: nearbyLine.id,
+                  originalPositions: {
+                    startX: startPt.x,
+                    startY: startPt.y,
+                    endX: endPt.x,
+                    endY: endPt.y,
+                  },
+                  linePointIds: {
+                    startId: nearbyLine.start,
+                    endId: nearbyLine.end,
+                  },
+                  startPos: { x: sketchCoords.x, y: sketchCoords.y },
+                });
+              }
+              return;
+            }
+          }
+        }
+      }
     };
 
     const handleMouseUp = (e: MouseEvent) => {
@@ -2600,10 +2971,16 @@ const Viewer: React.FC = () => {
       if (!mouseDownPosRef.current) return;
 
       const wasDragging = isDraggingViewRef.current;
+      const wasDraggingEntity = draggingEntity !== null;
       mouseDownPosRef.current = null;
       isDraggingViewRef.current = false;
 
-      // If we were dragging (rotating view), don't trigger tool action
+      // Clear entity dragging state
+      if (wasDraggingEntity) {
+        setDraggingEntity(null);
+      }
+
+      // If we were dragging (rotating view or entity), don't trigger tool action
       if (wasDragging) return;
 
       // If no tool is active (tool is 'none'), don't handle sketch clicks
@@ -2796,19 +3173,26 @@ const Viewer: React.FC = () => {
     arcStartPoint,
     arcEndPoint,
     circleCenterPoint,
+    draggingEntity,
+    updatePointPosition,
+    getSketchPoints,
   ]);
 
-  // Get current sketch for dimensions panel
-  const currentSketch = useMemo(() => getSketch(), [getSketch]);
-  const dimensionConstraints = useMemo(() => {
-    if (!currentSketch) return [];
-    return currentSketch.constraints.filter(
-      (c) => c.type === "distance" || c.type === "angle"
-    ) as Array<Extract<SketchConstraint, { type: "distance" | "angle" }>>;
-  }, [currentSketch]);
+
+  // Determine cursor style based on current state
+  const viewerCursor = useMemo(() => {
+    if (draggingEntity) return "grabbing";
+    if (hoveredDraggable) return "grab";
+    if (sketchMode.active && sketchMode.activeTool === "select") return "default";
+    return "default";
+  }, [draggingEntity, hoveredDraggable, sketchMode.active, sketchMode.activeTool]);
 
   return (
-    <div ref={containerRef} className="viewer-container">
+    <div
+      ref={containerRef}
+      className="viewer-container"
+      style={{ cursor: viewerCursor }}
+    >
       {/* Collaborative 3D cursors */}
       <UserCursors3D
         scene={sceneRef.current}
@@ -2818,78 +3202,48 @@ const Viewer: React.FC = () => {
       {/* 2D cursor overlay for followed user when not over model */}
       <UserCursor2D followedUser={followedUser} containerRef={containerRef} />
 
-      {/* Sketch mode overlays */}
-      {sketchMode.active && (
-        <>
-          {/* Dimensions panel */}
-          {dimensionConstraints.length > 0 && (
-            <div className="sketch-dimensions-panel">
-              <div className="sketch-dimensions-title">Dimensions</div>
-              {dimensionConstraints.map((c) => (
-                <div key={c.id} className="sketch-dimension-row">
-                  <span className="sketch-dimension-label">
-                    {c.type === "distance" ? "D" : "∠"} {c.id}
-                  </span>
-                  <input
-                    className="sketch-dimension-input"
-                    type="number"
-                    value={c.value}
-                    onChange={(e) => updateConstraintValue(c.id, parseFloat(e.target.value) || 0)}
-                    step={c.type === "distance" ? 1 : 1}
-                  />
-                  <span className="sketch-dimension-unit">
-                    {c.type === "distance" ? units : "°"}
-                  </span>
-                  <button
-                    className="sketch-dimension-delete"
-                    type="button"
-                    title="Delete constraint"
-                    onClick={() => deleteConstraint(c.id)}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
 
-      {/* Inline dimension edit overlay */}
-      {editingDimensionId && (
-        <div
-          className="dimension-edit-overlay"
-          onClick={() => {
-            setEditingDimensionId(null);
-            setEditingDimensionValue("");
-          }}
-        >
-          <div className="dimension-edit-popup" onClick={(e) => e.stopPropagation()}>
+      {/* Inline dimension edit - positioned at the label */}
+      {editingDimensionId && editingDimensionPos && (
             <input
+          ref={dimensionInputRef}
               type="number"
-              className="dimension-edit-input"
+          className="dimension-inline-input"
               value={editingDimensionValue}
               onChange={(e) => setEditingDimensionValue(e.target.value)}
-              autoFocus
-              step="0.1"
-              min="0"
-            />
-            <div className="dimension-edit-buttons">
-              <button className="dimension-edit-ok" onClick={handleDimensionEditSubmit}>
-                ✓
-              </button>
-              <button
-                className="dimension-edit-cancel"
-                onClick={() => {
+          onBlur={handleDimensionEditSubmit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleDimensionEditSubmit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
                   setEditingDimensionId(null);
                   setEditingDimensionValue("");
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        </div>
+              setEditingDimensionPos(null);
+            }
+          }}
+          step="0.1"
+          min="0"
+          style={{
+            position: "absolute",
+            left: `${editingDimensionPos.x}px`,
+            top: `${editingDimensionPos.y}px`,
+            transform: "translate(-50%, -50%)",
+            background: editingDimensionType === "distance" ? "rgba(0, 170, 0, 0.95)" : "rgba(170, 85, 0, 0.95)",
+            color: "white",
+            border: "2px solid white",
+            borderRadius: "4px",
+            padding: "4px 8px",
+            fontSize: "13px",
+            fontWeight: 600,
+            width: "70px",
+            textAlign: "center",
+            outline: "none",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+            zIndex: 1000,
+          }}
+        />
       )}
     </div>
   );

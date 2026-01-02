@@ -318,7 +318,7 @@ function getDatumPlaneFromFeature(featureMap: Y.Map<unknown>): DatumPlane | null
 
 /**
  * Get sketch plane from a SketchPlaneRef
- * Note: Face references are not supported in the new OCCT API yet
+ * Supports datum plane references and face references.
  */
 function getSketchPlane(
   planeRef: SketchPlaneRef,
@@ -331,10 +331,43 @@ function getSketchPlane(
   }
 
   if (planeRef.kind === "faceRef") {
-    // TODO: Implement face selection in OCCT API
-    // For now, face references are not supported
-    console.warn("[Worker] Face references are not yet supported in the OCCT API");
+    // Parse face reference: "face:featureId:faceIndex"
+    const parts = planeRef.ref.split(":");
+    if (parts.length !== 3 || parts[0] !== "face") {
+      console.warn(`[Worker] Invalid face reference format: ${planeRef.ref}`);
     return null;
+    }
+
+    const featureId = parts[1];
+    const faceIndex = parseInt(parts[2], 10);
+
+    if (isNaN(faceIndex)) {
+      console.warn(`[Worker] Invalid face index in reference: ${planeRef.ref}`);
+      return null;
+    }
+
+    // Find the body entry for this feature
+    const bodyEntry = bodyMap.get(featureId);
+    if (!bodyEntry || !session) {
+      console.warn(`[Worker] Body not found for feature: ${featureId}`);
+      return null;
+    }
+
+    // Get face plane data from the session
+    const facePlane = session.getFacePlane(bodyEntry.bodyId, faceIndex);
+    if (!facePlane) {
+      console.warn(`[Worker] Could not extract plane from face ${faceIndex} of body ${featureId}`);
+      return null;
+    }
+
+    // Create a datum plane from the face plane data
+    return createDatumPlane(`face-${featureId}-${faceIndex}`, {
+      kind: "plane",
+      origin: facePlane.origin,
+      normal: facePlane.normal,
+      xDir: facePlane.xDir,
+      yDir: facePlane.yDir,
+    });
   }
 
   return null;
@@ -1325,16 +1358,23 @@ function sendMesh(
     const positions = new Float32Array(mesh.positions);
     const normals = new Float32Array(mesh.normals);
     const indices = new Uint32Array(mesh.indices);
+    const faceMap = mesh.faceMap ? new Uint32Array(mesh.faceMap) : undefined;
 
     console.log(
-      `[Worker] Mesh stats: ${positions.length / 3} vertices, ${indices.length / 3} triangles`
+      `[Worker] Mesh stats: ${positions.length / 3} vertices, ${indices.length / 3} triangles, ${faceMap?.length ?? 0} faces`
     );
 
     const transferableMesh: TransferableMesh = {
       positions,
       normals,
       indices,
+      faceMap,
     };
+
+    const transferBuffers: ArrayBuffer[] = [positions.buffer, normals.buffer, indices.buffer];
+    if (faceMap) {
+      transferBuffers.push(faceMap.buffer);
+    }
 
     self.postMessage(
       {
@@ -1343,7 +1383,7 @@ function sendMesh(
         mesh: transferableMesh,
         color,
       } as WorkerToMainMessage,
-      { transfer: [positions.buffer, normals.buffer, indices.buffer] }
+      { transfer: transferBuffers }
     );
   } catch (err) {
     console.error("Failed to tessellate body:", err);
@@ -1671,6 +1711,38 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         const json = mapToObject(root);
         const content = JSON.stringify(json, null, 2);
         self.postMessage({ type: "json-exported", content } as WorkerToMainMessage);
+      } catch (err) {
+        self.postMessage({
+          type: "error",
+          message: err instanceof Error ? err.message : String(err),
+        } as WorkerToMainMessage);
+      }
+      break;
+    }
+
+    case "export-step": {
+      try {
+        if (!session) {
+          throw new Error("No session available");
+        }
+
+        // Get all body IDs
+        const bodyIds = Array.from(bodyMap.values()).map((entry) => entry.bodyId);
+
+        if (bodyIds.length === 0) {
+          throw new Error("No bodies to export");
+        }
+
+        // Export first body for now (TODO: support compound/assembly)
+        const stepData = session.exportSTEP(bodyIds[0]);
+
+        // Convert Uint8Array to ArrayBuffer for transfer
+        const buffer = stepData.buffer.slice(
+          stepData.byteOffset,
+          stepData.byteOffset + stepData.byteLength
+        );
+
+        self.postMessage({ type: "step-exported", buffer } as WorkerToMainMessage, [buffer]);
       } catch (err) {
         self.postMessage({
           type: "error",

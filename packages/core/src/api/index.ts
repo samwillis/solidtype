@@ -35,5 +35,5 @@ export type {
   FilletOptions,
 } from "./types.js";
 
-// Re-export tessellation quality for convenience
-export type { TessellationQuality } from "../kernel/tessellate.js";
+// Re-export tessellation quality and face plane data for convenience
+export type { TessellationQuality, FacePlaneData } from "../kernel/tessellate.js";

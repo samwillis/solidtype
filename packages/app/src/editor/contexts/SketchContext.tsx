@@ -131,7 +131,7 @@ interface SketchProviderProps {
 }
 
 export function SketchProvider({ children }: SketchProviderProps) {
-  const { doc, addSketch, deleteFeature, undoManager } = useDocument();
+  const { doc, addSketch, deleteFeature, undoManager, rebuildGate, setRebuildGate } = useDocument();
   const { actions, state } = useViewer();
 
   const [mode, setMode] = useState<SketchModeState>({
@@ -145,6 +145,9 @@ export function SketchProvider({ children }: SketchProviderProps) {
 
   // Store the undo stack position when we start editing, so we can revert on cancel
   const undoStackPositionRef = useRef<number>(0);
+
+  // Store the previous rebuild gate position to restore when exiting sketch mode
+  const previousRebuildGateRef = useRef<string | null>(null);
 
   // Mouse position in sketch coordinates (shared with StatusBar)
   const [sketchMousePos, setSketchMousePos] = useState<SketchMousePos | null>(null);
@@ -206,6 +209,12 @@ export function SketchProvider({ children }: SketchProviderProps) {
       // Create new sketch in Yjs (using the role string so it creates proper ref)
       const sketchId = addSketch(planeIdOrRole);
 
+      // Store the current rebuild gate position so we can restore it when finishing
+      previousRebuildGateRef.current = rebuildGate;
+
+      // Move the rebuild gate to immediately after the new sketch
+      setRebuildGate(sketchId);
+
       // Rotate camera to face the sketch plane normal
       const targetView = getViewForPlane(planeIdOrRole);
       if (state.currentView !== targetView) {
@@ -221,13 +230,19 @@ export function SketchProvider({ children }: SketchProviderProps) {
         isNewSketch: true,
       });
     },
-    [addSketch, resolvePlaneId, getViewForPlane, actions, state.currentView]
+    [addSketch, resolvePlaneId, getViewForPlane, actions, state.currentView, rebuildGate, setRebuildGate]
   );
 
   const editSketch = useCallback(
     (sketchId: string, planeId: string) => {
       // Store current undo stack position so we can revert on cancel
       undoStackPositionRef.current = undoManager.undoStack.length;
+
+      // Store the current rebuild gate position so we can restore it when finishing
+      previousRebuildGateRef.current = rebuildGate;
+
+      // Move the rebuild gate to immediately after the sketch being edited
+      setRebuildGate(sketchId);
 
       // Rotate camera to face the sketch plane
       const targetView = getViewForPlane(planeId);
@@ -244,10 +259,14 @@ export function SketchProvider({ children }: SketchProviderProps) {
         isNewSketch: false,
       });
     },
-    [getViewForPlane, actions, state.currentView, undoManager]
+    [getViewForPlane, actions, state.currentView, undoManager, rebuildGate, setRebuildGate]
   );
 
   const finishSketch = useCallback(() => {
+    // Restore the rebuild gate to its previous position
+    setRebuildGate(previousRebuildGateRef.current);
+    previousRebuildGateRef.current = null;
+
     setMode({
       active: false,
       sketchId: null,
@@ -256,7 +275,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
       tempPoints: [],
       isNewSketch: false,
     });
-  }, []);
+  }, [setRebuildGate]);
 
   const cancelSketch = useCallback(() => {
     const { sketchId, isNewSketch } = mode;
@@ -275,6 +294,10 @@ export function SketchProvider({ children }: SketchProviderProps) {
       }
     }
 
+    // Restore the rebuild gate to its previous position
+    setRebuildGate(previousRebuildGateRef.current);
+    previousRebuildGateRef.current = null;
+
     setMode({
       active: false,
       sketchId: null,
@@ -283,7 +306,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
       tempPoints: [],
       isNewSketch: false,
     });
-  }, [mode, deleteFeature, undoManager]);
+  }, [mode, deleteFeature, undoManager, setRebuildGate]);
 
   const setTool = useCallback((tool: SketchTool) => {
     setMode((prev) => ({

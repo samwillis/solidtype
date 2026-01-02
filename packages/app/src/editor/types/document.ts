@@ -17,10 +17,17 @@ export type {
   SketchConstraint,
   SketchData,
   OriginFeature,
+  // Plane definition types
+  PlaneDefinition,
   DatumPlaneRole,
   DatumPlaneFeature,
   UserPlaneFeature,
   PlaneFeature,
+  // Axis definition types
+  AxisDefinition,
+  DatumAxisRole,
+  AxisFeature,
+  // Sketch
   SketchFeature,
   ExtrudeExtent,
   ExtrudeDirection,
@@ -44,7 +51,7 @@ export type { NewSketchConstraint } from "../document/featureHelpers";
 export type DocumentUnits = "mm" | "cm" | "m" | "in" | "ft";
 
 /** Feature type discriminator */
-export type FeatureType = "origin" | "plane" | "sketch" | "extrude" | "revolve" | "boolean";
+export type FeatureType = "origin" | "plane" | "axis" | "sketch" | "extrude" | "revolve" | "boolean";
 
 // ============================================================================
 // Build State Types (transient, not stored in Yjs)

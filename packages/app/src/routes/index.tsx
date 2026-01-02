@@ -88,7 +88,7 @@ function Home() {
             <div className="home-hero-alpha-badge">Very Alpha!</div>
             <h1 className="home-hero-title">Modern CAD, Built for the Web</h1>
             <h2 className="home-hero-subtitle">
-              Demonstrating how to build a production-ready collaborative application using{" "}
+              Demonstrating how to build a collaborative application, with agentic AI, using{" "}
               <a href="https://electric-sql.com/" target="_blank" rel="noopener noreferrer">
                 ElectricSQL
               </a>

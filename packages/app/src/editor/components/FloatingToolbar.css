@@ -171,16 +171,134 @@
   margin: 4px 0;
 }
 
+.floating-toolbar-dropdown-label {
+  padding: 4px 10px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-muted, #888);
+  pointer-events: none;
+}
+
 .floating-toolbar-dropdown-key {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 18px;
   height: 18px;
-  background: var(--color-surface-alt, #383838);
-  border-radius: 3px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
+  opacity: 0.7;
 }
 
 /* Always dark mode - removed light theme overrides */
+
+/* Dialog styles */
+.floating-toolbar-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+.floating-toolbar-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #252526;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 20px;
+  min-width: 280px;
+  z-index: 1001;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.floating-toolbar-dialog-title {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.floating-toolbar-dialog-description {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.floating-toolbar-dialog-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.floating-toolbar-dialog-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.floating-toolbar-dialog-input:focus {
+  border-color: var(--color-accent);
+}
+
+.floating-toolbar-dialog-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.floating-toolbar-dialog-input-suffix {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.floating-toolbar-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.floating-toolbar-dialog-button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.floating-toolbar-dialog-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.floating-toolbar-dialog-button-secondary {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--color-text);
+}
+
+.floating-toolbar-dialog-button-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.floating-toolbar-dialog-button-primary {
+  background: var(--color-accent);
+  border: none;
+  color: white;
+}
+
+.floating-toolbar-dialog-button-primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}

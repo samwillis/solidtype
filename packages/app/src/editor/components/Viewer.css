@@ -11,174 +11,18 @@
   height: 100%;
 }
 
-/* Dimensions panel */
-.sketch-dimensions-panel {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: var(--color-overlay-bg, rgba(37, 37, 38, 0.9));
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 12px;
-  min-width: 180px;
-  pointer-events: auto;
+/* Inline dimension edit input - appears directly on the label */
+.dimension-inline-input {
+  /* Base styling is done inline for dynamic background color */
+  /* This class is for any additional styling needed */
 }
 
-/* Light theme - dimensions panel */
-[data-theme="light"] .sketch-dimensions-panel {
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+.dimension-inline-input::-webkit-inner-spin-button,
+.dimension-inline-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
-.sketch-dimensions-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
-}
-
-.sketch-dimension-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.sketch-dimension-row:last-child {
-  margin-bottom: 0;
-}
-
-.sketch-dimension-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-muted);
-  min-width: 40px;
-}
-
-.sketch-dimension-input {
-  flex: 1;
-  min-width: 60px;
-  padding: 4px 6px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  color: var(--color-text);
-  font-size: 12px;
-  text-align: right;
-}
-
-.sketch-dimension-input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
-
-.sketch-dimension-unit {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  min-width: 20px;
-}
-
-.sketch-dimension-delete {
-  background: transparent;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 2px 4px;
-  font-size: 14px;
-  line-height: 1;
-  border-radius: 3px;
-}
-
-.sketch-dimension-delete:hover {
-  background: rgba(231, 76, 60, 0.2);
-  color: #e74c3c;
-}
-
-/* Inline dimension edit overlay */
-.dimension-edit-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.dimension-edit-popup {
-  background: var(--color-bg-secondary, #2d2d2d);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  min-width: 160px;
-}
-
-.dimension-edit-input {
-  width: 100%;
-  padding: 8px 12px;
-  background: var(--color-bg, #1e1e1e);
-  border: 2px solid var(--color-primary, #0078d4);
-  border-radius: 6px;
-  color: var(--color-text, white);
-  font-size: 16px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.dimension-edit-input:focus {
-  outline: none;
-  border-color: #2ecc71;
-}
-
-.dimension-edit-buttons {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-}
-
-.dimension-edit-ok,
-.dimension-edit-cancel {
-  flex: 1;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-
-.dimension-edit-ok {
-  background: #2ecc71;
-  color: white;
-}
-
-.dimension-edit-ok:hover {
-  background: #27ae60;
-}
-
-.dimension-edit-cancel {
-  background: #95a5a6;
-  color: white;
-}
-
-.dimension-edit-cancel:hover {
-  background: #7f8c8d;
-}
-
-/* Light theme overrides */
-[data-theme="light"] .dimension-edit-popup {
-  background: white;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-}
-
-[data-theme="light"] .dimension-edit-input {
-  background: #f5f5f5;
-  color: #333;
+.dimension-inline-input[type=number] {
+  -moz-appearance: textfield;
 }

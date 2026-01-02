@@ -133,15 +133,15 @@ function initializeDefaultFeatures(
     id: xyPlaneId,
     type: "plane",
     name: "XY Plane",
-    role: "xy" as DatumPlaneRole,
+    definition: { kind: "datum", role: "xy" },
     normal: [0, 0, 1],
     origin: [0, 0, 0],
     xDir: [1, 0, 0],
     visible: true,
     width: DEFAULT_PLANE_WIDTH,
     height: DEFAULT_PLANE_HEIGHT,
-    offsetX: 0,
-    offsetY: 0,
+    displayOffsetX: 0,
+    displayOffsetY: 0,
   });
 
   // Add XZ plane
@@ -151,15 +151,15 @@ function initializeDefaultFeatures(
     id: xzPlaneId,
     type: "plane",
     name: "XZ Plane",
-    role: "xz" as DatumPlaneRole,
+    definition: { kind: "datum", role: "xz" },
     normal: [0, 1, 0],
     origin: [0, 0, 0],
     xDir: [1, 0, 0],
     visible: true,
     width: DEFAULT_PLANE_WIDTH,
     height: DEFAULT_PLANE_HEIGHT,
-    offsetX: 0,
-    offsetY: 0,
+    displayOffsetX: 0,
+    displayOffsetY: 0,
   });
 
   // Add YZ plane
@@ -169,15 +169,15 @@ function initializeDefaultFeatures(
     id: yzPlaneId,
     type: "plane",
     name: "YZ Plane",
-    role: "yz" as DatumPlaneRole,
+    definition: { kind: "datum", role: "yz" },
     normal: [1, 0, 0],
     origin: [0, 0, 0],
     xDir: [0, 1, 0],
     visible: true,
     width: DEFAULT_PLANE_WIDTH,
     height: DEFAULT_PLANE_HEIGHT,
-    offsetX: 0,
-    offsetY: 0,
+    displayOffsetX: 0,
+    displayOffsetY: 0,
   });
 
   // Pinned order: [origin, xy, xz, yz]

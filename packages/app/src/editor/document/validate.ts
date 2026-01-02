@@ -155,8 +155,10 @@ function validateDatumPlanes(snapshot: DocSnapshot, errors: string[]): void {
     if (feature.type === "origin") {
       originCount++;
       originId = id;
-    } else if (feature.type === "plane" && "role" in feature) {
-      const role = feature.role;
+    } else if (feature.type === "plane" && "definition" in feature) {
+      const definition = feature.definition as { kind: string; role?: string };
+      if (definition.kind === "datum" && definition.role) {
+        const role = definition.role;
       if (role === "xy") {
         xyCount++;
         xyId = id;
@@ -166,6 +168,7 @@ function validateDatumPlanes(snapshot: DocSnapshot, errors: string[]): void {
       } else if (role === "yz") {
         yzCount++;
         yzId = id;
+        }
       }
     }
   }

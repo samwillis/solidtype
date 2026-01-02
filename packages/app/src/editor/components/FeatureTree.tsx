@@ -1,7 +1,14 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { Collapsible } from "@base-ui/react/collapsible";
-import { LuFolder, LuLayoutGrid, LuCrosshair, LuChevronRight } from "react-icons/lu";
+import {
+  LuFolder,
+  LuLayoutGrid,
+  LuCrosshair,
+  LuChevronRight,
+  LuEye,
+  LuEyeOff,
+} from "react-icons/lu";
 import { SketchIcon, ExtrudeIcon, RevolveIcon, PlaneIcon, BooleanIcon } from "./Icons";
 import { useDocument } from "../contexts/DocumentContext";
 import { useKernel } from "../contexts/KernelContext";
@@ -35,6 +42,7 @@ interface TreeNode {
   expanded?: boolean;
   suppressed?: boolean;
   gated?: boolean;
+  visible?: boolean;
   status?: FeatureStatus;
   errorMessage?: string;
 }
@@ -78,12 +86,15 @@ function featuresToTreeNodes(
     const errorMessage = errorsByFeature[feature.id];
     const gated = status === "gated" ? true : isGatedByGate;
     const suppressed = status === "suppressed" ? true : Boolean(feature.suppressed);
+    // Visibility defaults to true if not set
+    const visible = feature.visible !== false;
     return {
       id: feature.id,
       name: feature.name || feature.id,
       type: featureTypeToNodeType(feature.type),
       suppressed,
       gated,
+      visible,
       status,
       errorMessage,
     };
@@ -325,6 +336,7 @@ interface TreeNodeItemProps {
   onDoubleClick: (id: string) => void;
   onRename: (id: string, name: string) => void;
   onCancelRename: () => void;
+  onToggleVisibility: (id: string) => void;
   getContextMenuItems: (nodeId: string, nodeType: string) => ContextMenuItem[];
 }
 
@@ -347,6 +359,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   onDoubleClick,
   onRename,
   onCancelRename,
+  onToggleVisibility,
   getContextMenuItems,
 }) => {
   const hasChildren = node.children && node.children.length > 0;
@@ -442,6 +455,23 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
           ⏸
         </span>
       )}
+      {/* Visibility toggle for sketch/extrude/revolve/boolean features */}
+      {(node.type === "sketch" ||
+        node.type === "extrude" ||
+        node.type === "revolve" ||
+        node.type === "boolean") &&
+        !isEditing && (
+          <button
+            className={`tree-item-visibility ${node.visible === false ? "hidden" : ""}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleVisibility(node.id);
+            }}
+            title={node.visible === false ? "Show" : "Hide"}
+          >
+            {node.visible === false ? <LuEyeOff size={12} /> : <LuEye size={12} />}
+          </button>
+      )}
     </li>
   );
 
@@ -527,6 +557,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
               onDoubleClick={onDoubleClick}
               onRename={onRename}
               onCancelRename={onCancelRename}
+              onToggleVisibility={onToggleVisibility}
               getContextMenuItems={getContextMenuItems}
             />
           ))}
@@ -552,7 +583,8 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
 };
 
 const FeatureTree: React.FC = () => {
-  const { features, rebuildGate, setRebuildGate, deleteFeature, renameFeature } = useDocument();
+  const { features, rebuildGate, setRebuildGate, deleteFeature, renameFeature, toggleVisibility } =
+    useDocument();
   const { featureStatus, errors, bodies } = useKernel();
   const { selectedFeatureId, selectFeature, setHoveredFeature } = useSelection();
   const { mode: sketchMode, editSketch } = useSketch();
@@ -689,6 +721,13 @@ const FeatureTree: React.FC = () => {
     setEditingId(null);
   }, []);
 
+  const handleToggleVisibility = useCallback(
+    (id: string) => {
+      toggleVisibility(id);
+    },
+    [toggleVisibility]
+  );
+
   const handleDeleteConfirm = useCallback(() => {
     if (deleteConfirm.id) {
       deleteFeature(deleteConfirm.id);
@@ -737,7 +776,14 @@ const FeatureTree: React.FC = () => {
       });
 
       // Only allow delete for non-system features
-      if (nodeType !== "origin" && nodeType !== "plane") {
+      // Datum planes (definition.kind === "datum") cannot be deleted
+      // User planes (other definition kinds) can be deleted
+      const isSystemPlane =
+        nodeType === "plane" &&
+        feature &&
+        "definition" in feature &&
+        (feature.definition as { kind?: string })?.kind === "datum";
+      if (nodeType !== "origin" && !isSystemPlane) {
         items.push({ id: "sep2", label: "", separator: true });
         items.push({
           id: "delete",
@@ -770,7 +816,12 @@ const FeatureTree: React.FC = () => {
       // Delete key
       if ((e.key === "Delete" || e.key === "Backspace") && selectedFeatureId) {
         const feature = features.find((f) => f.id === selectedFeatureId);
-        if (feature && feature.type !== "origin" && feature.type !== "plane") {
+        // Allow delete for non-origin features, but not for datum planes
+        const isSystemPlane =
+          feature?.type === "plane" &&
+          "definition" in feature &&
+          (feature.definition as { kind?: string })?.kind === "datum";
+        if (feature && feature.type !== "origin" && !isSystemPlane) {
           e.preventDefault();
           setDeleteConfirm({
             open: true,
@@ -827,6 +878,7 @@ const FeatureTree: React.FC = () => {
                           onDoubleClick={handleDoubleClick}
                           onRename={handleRename}
                           onCancelRename={handleCancelRename}
+                          onToggleVisibility={handleToggleVisibility}
                           getContextMenuItems={getContextMenuItems}
                         />
                       ))}

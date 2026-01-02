@@ -32,11 +32,13 @@ import {
   chamferAllEdges,
   tessellate,
   getBoundingBox,
+  getFacePlane as kernelGetFacePlane,
   sketchProfileToFace,
   getPlaneNormal,
   exportSTEP,
   importSTEP,
   type TessellationQuality,
+  type FacePlaneData,
 } from "../kernel/index.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,6 +62,8 @@ export interface Mesh {
   readonly normals: Float32Array;
   /** Triangle indices (3 per triangle) */
   readonly indices: Uint32Array;
+  /** Maps each triangle to its face index (for 3D selection) */
+  readonly faceMap: Uint32Array;
 }
 
 /** Bounding box */
@@ -605,6 +609,7 @@ export class SolidSession {
       positions: result.vertices,
       normals: result.normals,
       indices: result.indices,
+      faceMap: result.faceMap,
     };
   }
 
@@ -620,6 +625,24 @@ export class SolidSession {
     }
 
     return getBoundingBox(body);
+  }
+
+  /**
+   * Get plane data from a specific face of a body.
+   * Returns null if the face index is out of range or the face has no valid plane.
+   *
+   * @param bodyId - The body containing the face
+   * @param faceIndex - The 0-based face index
+   */
+  getFacePlane(bodyId: BodyId, faceIndex: number): FacePlaneData | null {
+    this.ensureInitialized();
+
+    const body = this.bodies.get(bodyId);
+    if (!body) {
+      throw new Error(`Body ${bodyId} not found`);
+    }
+
+    return kernelGetFacePlane(body, faceIndex);
   }
 
   /**

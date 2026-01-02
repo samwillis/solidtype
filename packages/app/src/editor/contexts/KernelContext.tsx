@@ -68,6 +68,8 @@ interface KernelContextValue {
   sketchPlaneTransforms: Record<string, PlaneTransform>;
   /** Export model to STL format (Phase 18) */
   exportStl: (options?: { binary?: boolean; name?: string }) => Promise<ArrayBuffer | string>;
+  /** Export model to STEP format */
+  exportStep: (options?: { name?: string }) => Promise<ArrayBuffer>;
   /** Export full document JSON for debugging/support */
   exportJson: () => Promise<string>;
 }
@@ -94,6 +96,11 @@ export function KernelProvider({ children }: KernelProviderProps) {
   // For STL export promise resolution (Phase 18)
   const stlResolveRef = useRef<{
     resolve: (value: ArrayBuffer | string) => void;
+    reject: (reason: Error) => void;
+  } | null>(null);
+  // For STEP export promise resolution
+  const stepResolveRef = useRef<{
+    resolve: (value: ArrayBuffer) => void;
     reject: (reason: Error) => void;
   } | null>(null);
   // For JSON export promise resolution
@@ -249,12 +256,23 @@ export function KernelProvider({ children }: KernelProviderProps) {
           }
           break;
 
+        case "step-exported":
+          if (stepResolveRef.current) {
+            stepResolveRef.current.resolve(msg.buffer);
+            stepResolveRef.current = null;
+          }
+          break;
+
         case "error":
           console.error("Kernel worker error:", msg.message);
-          // Also reject pending STL export if any
+          // Also reject pending export promises if any
           if (stlResolveRef.current) {
             stlResolveRef.current.reject(new Error(msg.message));
             stlResolveRef.current = null;
+          }
+          if (stepResolveRef.current) {
+            stepResolveRef.current.reject(new Error(msg.message));
+            stepResolveRef.current = null;
           }
           if (jsonResolveRef.current) {
             jsonResolveRef.current.reject(new Error(msg.message));
@@ -350,6 +368,21 @@ export function KernelProvider({ children }: KernelProviderProps) {
     });
   };
 
+  // Export STEP
+  const exportStep = (options?: { name?: string }): Promise<ArrayBuffer> => {
+    return new Promise((resolve, reject) => {
+      if (!workerRef.current) {
+        reject(new Error("Worker not ready"));
+        return;
+      }
+      stepResolveRef.current = { resolve, reject };
+      workerRef.current.postMessage({
+        type: "export-step",
+        name: options?.name ?? "model",
+      });
+    });
+  };
+
   const value: KernelContextValue = {
     meshes,
     errors,
@@ -364,6 +397,7 @@ export function KernelProvider({ children }: KernelProviderProps) {
     sketchSolveInfo,
     sketchPlaneTransforms,
     exportStl,
+    exportStep,
     exportJson,
   };
 

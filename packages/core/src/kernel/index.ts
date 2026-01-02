@@ -48,8 +48,10 @@ export {
   tessellate,
   tessellateWithParams,
   getBoundingBox,
+  getFacePlane,
   type TessellatedMesh,
   type TessellationQuality,
+  type FacePlaneData,
 } from "./tessellate.js";
 
 // Import/Export

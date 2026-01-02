@@ -51,6 +51,11 @@ export interface ExportJsonMessage {
   type: "export-json";
 }
 
+export interface ExportStepMessage {
+  type: "export-step";
+  name?: string;
+}
+
 export type MainToWorkerMessage =
   | InitSyncMessage
   | YjsInitMessage
@@ -59,7 +64,8 @@ export type MainToWorkerMessage =
   | PreviewRevolveMessage
   | ClearPreviewMessage
   | ExportStlMessage
-  | ExportJsonMessage;
+  | ExportJsonMessage
+  | ExportStepMessage;
 
 // ============================================================================
 // Message Types: Worker → Main Thread
@@ -139,6 +145,12 @@ export interface JsonExportedMessage {
   content: string;
 }
 
+export interface StepExportedMessage {
+  type: "step-exported";
+  /** Binary STEP data */
+  buffer: ArrayBuffer;
+}
+
 export type WorkerToMainMessage =
   | ReadyMessage
   | RebuildStartMessage
@@ -148,7 +160,8 @@ export type WorkerToMainMessage =
   | PreviewErrorMessage
   | ErrorMessage
   | StlExportedMessage
-  | JsonExportedMessage;
+  | JsonExportedMessage
+  | StepExportedMessage;
 
 // ============================================================================
 // Shared Types

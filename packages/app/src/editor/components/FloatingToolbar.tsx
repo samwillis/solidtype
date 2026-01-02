@@ -12,6 +12,7 @@ import {
   ExtrudeIcon,
   RevolveIcon,
   PlaneIcon,
+  AxisIcon,
   SelectIcon,
   LineIcon,
   RectangleIcon,
@@ -30,6 +31,7 @@ import {
   NormalViewIcon,
   CheckIcon,
   CloseIcon,
+  OptionsIcon,
 } from "./Icons";
 import "./FloatingToolbar.css";
 
@@ -49,12 +51,13 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
     toggleConstruction,
     hasSelectedEntities,
   } = useSketch();
-  const { undo, redo, canUndo, canRedo, features, addBoolean, addOffsetPlane } = useDocument();
+  const { undo, redo, canUndo, canRedo, features, addBoolean, addOffsetPlane, addAxis } = useDocument();
   const { selectedFeatureId, selectFeature, clearSelection } = useSelection();
-  const { exportStl, exportJson, bodies, sketchPlaneTransforms } = useKernel();
+  const { exportStl, exportStep, exportJson, bodies, sketchPlaneTransforms } = useKernel();
   const { startExtrudeEdit, startRevolveEdit, isEditing } = useFeatureEdit();
-  const { actions: viewerActions } = useViewer();
+  const { actions: viewerActions, state: viewerState } = useViewer();
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingStep, setIsExportingStep] = useState(false);
   const [isExportingJson, setIsExportingJson] = useState(false);
 
   // Toggle tool - clicking an active tool toggles it off
@@ -102,6 +105,28 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
       setIsExporting(false);
     }
   }, [canExport, exportStl]);
+
+  const handleExportStep = useCallback(async () => {
+    if (!canExport || isExportingStep) return;
+
+    setIsExportingStep(true);
+    try {
+      const result = await exportStep({ name: "model" });
+
+      const blob = new Blob([result], { type: "application/step" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "model.step";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("STEP export failed:", err);
+      alert(`STEP export failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsExportingStep(false);
+    }
+  }, [canExport, exportStep, isExportingStep]);
 
   const handleExportJson = useCallback(async () => {
     if (!canExport || isExportingJson) return;
@@ -164,7 +189,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
     return null;
   }, [selectedFeatureId, features]);
 
-  // Handle creating an offset plane
+  // Handle creating an offset plane (default 10mm, user can edit in Properties panel)
   const handleCreateOffsetPlane = useCallback(
     (offset: number) => {
       if (!selectedDatumPlane) return;
@@ -195,6 +220,15 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
         }
         return;
       }
+
+      // Toggle snap-to-grid with 'G' key (only in sketch mode)
+      if (e.key === "g" || e.key === "G") {
+        if (mode.active) {
+          e.preventDefault();
+          viewerActions.toggleSnapToGrid();
+        }
+        return;
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -206,6 +240,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
     selectFeature,
     clearSelection,
     clearSketchSelection,
+    viewerActions,
   ]);
 
   const handleNewSketch = () => {
@@ -485,6 +520,63 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
               </Tooltip.Portal>
             </Tooltip.Root>
 
+            {/* Sketch Options Menu */}
+            <Menu.Root>
+              <Menu.Trigger
+                className="floating-toolbar-button floating-toolbar-dropdown-button"
+                aria-label="Sketch Options"
+              >
+                <OptionsIcon />
+                <ChevronDownIcon />
+              </Menu.Trigger>
+              <Menu.Portal>
+                <Menu.Positioner side="bottom" sideOffset={6} align="start">
+                  <Menu.Popup className="floating-toolbar-dropdown-menu">
+                    {/* Snap to Grid toggle */}
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => viewerActions.toggleSnapToGrid()}
+                    >
+                      {viewerState.snapToGrid && <CheckIcon />} Snap to Grid (G)
+                    </Menu.Item>
+                    <Menu.Separator className="floating-toolbar-dropdown-separator" />
+                    {/* Grid Size options */}
+                    <div className="floating-toolbar-dropdown-label">Grid Size</div>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => viewerActions.setGridSize(0.5)}
+                    >
+                      {viewerState.gridSize === 0.5 && <CheckIcon />} 0.5mm
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => viewerActions.setGridSize(1)}
+                    >
+                      {viewerState.gridSize === 1 && <CheckIcon />} 1mm
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => viewerActions.setGridSize(2)}
+                    >
+                      {viewerState.gridSize === 2 && <CheckIcon />} 2mm
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => viewerActions.setGridSize(5)}
+                    >
+                      {viewerState.gridSize === 5 && <CheckIcon />} 5mm
+                    </Menu.Item>
+                    <Menu.Item
+                      className="floating-toolbar-dropdown-item"
+                      onClick={() => viewerActions.setGridSize(10)}
+                    >
+                      {viewerState.gridSize === 10 && <CheckIcon />} 10mm
+                    </Menu.Item>
+                  </Menu.Popup>
+                </Menu.Positioner>
+              </Menu.Portal>
+            </Menu.Root>
+
             {/* Sketch mode actions: Normal to Sketch, Accept, Cancel */}
             <div className="floating-toolbar-separator" />
             <div className="floating-toolbar-group">
@@ -493,19 +585,24 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                   delay={300}
                   className="floating-toolbar-button"
                   onClick={() => {
-                    // Reset camera to sketch normal - get view for the sketch plane
-                    if (mode.sketchId && mode.planeId) {
-                      // Map plane IDs to view presets
+                    // Reset camera to sketch normal using actual plane transform
+                    if (mode.sketchId) {
+                      const transform = sketchPlaneTransforms[mode.sketchId];
+                      if (transform) {
+                        // Use the kernel's plane transform
+                        viewerActions.setViewToPlane(transform);
+                      } else if (mode.planeId) {
+                        // Fallback for built-in planes when transform not yet available
                       const planeViewMap: Record<string, string> = {
                         xy: "top",
                         xz: "front",
                         yz: "right",
-                        top: "top",
-                        front: "front",
-                        right: "right",
                       };
-                      const view = planeViewMap[mode.planeId] || "top";
-                      viewerActions.setView(view as any);
+                        const view = planeViewMap[mode.planeId];
+                        if (view) {
+                          viewerActions.setView(view as "top" | "front" | "right");
+                        }
+                      }
                     }
                   }}
                   render={<button aria-label="Normal to Sketch" />}
@@ -581,53 +678,78 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                   </Tooltip.Positioner>
                 </Tooltip.Portal>
               </Tooltip.Root>
-              {/* Plane Creation Dropdown */}
+              {/* Plane Creation Button */}
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  delay={300}
+                  className={`floating-toolbar-button ${!selectedDatumPlane ? "disabled" : ""}`}
+                  onClick={() => handleCreateOffsetPlane(10)}
+                  render={<button aria-label="Add Offset Plane" disabled={!selectedDatumPlane} />}
+                >
+                  <PlaneIcon />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Positioner side="top" sideOffset={6}>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">
+                      {selectedDatumPlane
+                        ? "Add Offset Plane (edit distance in Properties)"
+                        : "Add Offset Plane (select a plane first)"}
+                    </Tooltip.Popup>
+                  </Tooltip.Positioner>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+
+              {/* Axis Creation Dropdown */}
               <Menu.Root>
-                <Tooltip.Root>
-                  <Tooltip.Trigger
-                    delay={300}
-                    render={
-                      <Menu.Trigger
-                        className={`floating-toolbar-button ${!selectedDatumPlane ? "disabled" : ""}`}
-                        aria-label="Plane"
-                        disabled={!selectedDatumPlane}
-                      >
-                        <PlaneIcon />
-                        <ChevronDownIcon />
-                      </Menu.Trigger>
-                    }
-                  />
-                  <Tooltip.Portal>
-                    <Tooltip.Positioner side="top" sideOffset={6}>
-                      <Tooltip.Popup className="floating-toolbar-tooltip">
-                        Create Plane {selectedDatumPlane ? "" : "(select a plane first)"}
-                      </Tooltip.Popup>
-                    </Tooltip.Positioner>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
+                <Menu.Trigger
+                  className="floating-toolbar-button floating-toolbar-dropdown-button"
+                  aria-label="Add Axis"
+                >
+                  <AxisIcon />
+                  <ChevronDownIcon />
+                </Menu.Trigger>
                 <Menu.Portal>
                   <Menu.Positioner sideOffset={4}>
-                    <Menu.Popup className="floating-toolbar-dropdown">
+                    <Menu.Popup className="floating-toolbar-dropdown-menu">
                       <Menu.Item
                         className="floating-toolbar-dropdown-item"
-                        onClick={() => handleCreateOffsetPlane(10)}
+                        onClick={() => addAxis({ definition: { kind: "datum", role: "x" } })}
                       >
-                        <PlaneIcon />
-                        <span>Offset Plane (+10mm)</span>
+                        X Axis (datum)
                       </Menu.Item>
                       <Menu.Item
                         className="floating-toolbar-dropdown-item"
-                        onClick={() => handleCreateOffsetPlane(-10)}
+                        onClick={() => addAxis({ definition: { kind: "datum", role: "y" } })}
                       >
-                        <PlaneIcon />
-                        <span>Offset Plane (-10mm)</span>
+                        Y Axis (datum)
                       </Menu.Item>
                       <Menu.Item
                         className="floating-toolbar-dropdown-item"
-                        onClick={() => handleCreateOffsetPlane(50)}
+                        onClick={() => addAxis({ definition: { kind: "datum", role: "z" } })}
                       >
-                        <PlaneIcon />
-                        <span>Offset Plane (+50mm)</span>
+                        Z Axis (datum)
+                      </Menu.Item>
+                      <Menu.Separator className="floating-toolbar-dropdown-separator" />
+                      <Menu.Item
+                        className="floating-toolbar-dropdown-item"
+                        disabled
+                        onClick={() => {/* TODO: implement edge selection */}}
+                      >
+                        Along Edge (select edge)
+                      </Menu.Item>
+                      <Menu.Item
+                        className="floating-toolbar-dropdown-item"
+                        disabled
+                        onClick={() => {/* TODO: implement two-point selection */}}
+                      >
+                        Between Two Points
+                      </Menu.Item>
+                      <Menu.Item
+                        className="floating-toolbar-dropdown-item"
+                        disabled
+                        onClick={() => {/* TODO: implement sketch line selection */}}
+                      >
+                        Along Sketch Line
                       </Menu.Item>
                     </Menu.Popup>
                   </Menu.Positioner>
@@ -738,29 +860,59 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
 
         {/* Export */}
         <div className="floating-toolbar-group">
+          <Menu.Root>
           <Tooltip.Root>
             <Tooltip.Trigger
               delay={300}
-              className={`floating-toolbar-button ${!canExport ? "disabled" : ""} ${isExporting ? "loading" : ""}`}
-              onClick={handleExportStl}
-              render={<button aria-label="Export STL" disabled={!canExport} />}
+                render={
+                  <Menu.Trigger
+                    className={`floating-toolbar-button has-dropdown ${!canExport ? "disabled" : ""} ${isExporting || isExportingStep ? "loading" : ""}`}
+                    disabled={!canExport}
+                    aria-label="Export"
+                  />
+                }
             >
               <ExportIcon />
+                <ChevronDownIcon className="dropdown-indicator" />
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Positioner side="top" sideOffset={6}>
                 <Tooltip.Popup className="floating-toolbar-tooltip">
-                  {isExporting
+                    {isExporting || isExportingStep
                     ? "Exporting..."
                     : canExport
-                      ? "Export STL"
-                      : "Export STL (no bodies)"}
+                        ? "Export Model"
+                        : "Export (no bodies)"}
                 </Tooltip.Popup>
               </Tooltip.Positioner>
             </Tooltip.Portal>
           </Tooltip.Root>
+            <Menu.Portal>
+              <Menu.Positioner side="top" sideOffset={8}>
+                <Menu.Popup className="floating-toolbar-dropdown">
+                  <Menu.Item
+                    className="floating-toolbar-dropdown-item"
+                    onClick={handleExportStl}
+                    disabled={!canExport || isExporting}
+                  >
+                    <span>STL (Mesh)</span>
+                    <span className="floating-toolbar-dropdown-hint">.stl</span>
+                  </Menu.Item>
+                  <Menu.Item
+                    className="floating-toolbar-dropdown-item"
+                    onClick={handleExportStep}
+                    disabled={!canExport || isExportingStep}
+                  >
+                    <span>STEP (CAD)</span>
+                    <span className="floating-toolbar-dropdown-hint">.step</span>
+                  </Menu.Item>
+                </Menu.Popup>
+              </Menu.Positioner>
+            </Menu.Portal>
+          </Menu.Root>
         </div>
       </div>
+
     </Tooltip.Provider>
   );
 };

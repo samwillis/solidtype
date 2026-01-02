@@ -26,6 +26,7 @@ import type {
   OriginFeature,
   PlaneFeature,
   DatumPlaneFeature,
+  AxisFeature,
   SketchData,
   SketchPoint,
   SketchEntity,
@@ -40,6 +41,35 @@ import type {
 
 type WithoutId<T> = T extends { id: string } ? Omit<T, "id"> : never;
 export type NewSketchConstraint = WithoutId<SketchConstraint>;
+
+// ============================================================================
+// Feature Insertion Helper
+// ============================================================================
+
+/**
+ * Insert a feature ID into the feature order at the appropriate position.
+ * If rebuildGate is set, inserts after the gate position; otherwise appends to end.
+ * Also updates the rebuild gate to point to the newly inserted feature.
+ */
+export function insertFeatureAtGate(doc: SolidTypeDoc, featureId: string): void {
+  const state = doc.ydoc.getMap("root").get("state") as Y.Map<unknown>;
+  const rebuildGate = state.get("rebuildGate") as string | null;
+
+  if (rebuildGate) {
+    // Find the position of the rebuild gate
+    const gateIndex = doc.featureOrder.toArray().indexOf(rebuildGate);
+    if (gateIndex !== -1) {
+      // Insert after the gate position
+      doc.featureOrder.insert(gateIndex + 1, [featureId]);
+      // Move the rebuild gate to the newly inserted feature
+      state.set("rebuildGate", featureId);
+      return;
+    }
+  }
+
+  // No gate or gate not found - append to end
+  doc.featureOrder.push([featureId]);
+}
 
 // ============================================================================
 // Feature Finding
@@ -107,8 +137,8 @@ export function addSketchFeature(doc: SolidTypeDoc, planeIdOrRole: string, name?
       data,
     });
 
-    // Add to feature order
-    doc.featureOrder.push([id]);
+    // Insert at rebuild gate position (or end if no gate)
+    insertFeatureAtGate(doc, id);
   });
 
   return id;
@@ -191,7 +221,8 @@ export function addExtrudeFeature(
     }
 
     setMapProperties(extrude, props);
-    doc.featureOrder.push([id]);
+    // Insert at rebuild gate position (or end if no gate)
+    insertFeatureAtGate(doc, id);
   });
 
   return id;
@@ -261,7 +292,8 @@ export function addRevolveFeature(
     }
 
     setMapProperties(revolve, props);
-    doc.featureOrder.push([id]);
+    // Insert at rebuild gate position (or end if no gate)
+    insertFeatureAtGate(doc, id);
   });
 
   return id;
@@ -297,7 +329,8 @@ export function addBooleanFeature(doc: SolidTypeDoc, options: BooleanFeatureOpti
       tool: options.tool,
     });
 
-    doc.featureOrder.push([id]);
+    // Insert at rebuild gate position (or end if no gate)
+    insertFeatureAtGate(doc, id);
   });
 
   return id;
@@ -331,6 +364,9 @@ export function addOffsetPlane(doc: SolidTypeDoc, options: OffsetPlaneOptions): 
   let origin: [number, number, number] = [0, 0, 0];
   let xDir: [number, number, number] = [1, 0, 0];
 
+  // Determine the definition type based on baseRef
+  let definition: Record<string, unknown>;
+
   if (options.baseRef.kind === "planeFeatureId") {
     // Get from existing plane feature
     const basePlane = doc.featuresById.get(options.baseRef.ref);
@@ -342,9 +378,26 @@ export function addOffsetPlane(doc: SolidTypeDoc, options: OffsetPlaneOptions): 
       if (baseOrigin) origin = baseOrigin;
       if (baseXDir) xDir = baseXDir;
     }
+    definition = {
+      kind: "offsetPlane",
+      basePlaneId: options.baseRef.ref,
+      distance: options.offset,
+    };
+  } else if (options.baseRef.kind === "faceRef") {
+    // Face offset - will be resolved at runtime by the kernel
+    definition = {
+      kind: "offsetFace",
+      faceRef: options.baseRef.ref,
+      distance: options.offset,
+    };
+  } else {
+    // Custom or unknown - default to offset plane with no base
+    definition = {
+      kind: "offsetPlane",
+      basePlaneId: "",
+      distance: options.offset,
+    };
   }
-  // For face refs, we'll need to resolve the face normal at runtime in the kernel
-  // For now, just use default normal
 
   // Calculate offset origin
   const offsetOrigin: [number, number, number] = [
@@ -361,15 +414,108 @@ export function addOffsetPlane(doc: SolidTypeDoc, options: OffsetPlaneOptions): 
       id,
       type: "plane",
       name: options.name ?? `Offset Plane ${doc.featureOrder.length}`,
+      // Definition (source of truth for how plane is defined)
+      definition,
+      // Computed geometry (cached, updated when definition changes)
       normal,
       origin: offsetOrigin,
       xDir,
+      // Display properties
       visible: true,
       width: options.width ?? DEFAULT_WIDTH,
       height: options.height ?? DEFAULT_HEIGHT,
     });
 
-    doc.featureOrder.push([id]);
+    // Insert at rebuild gate position (or end if no gate)
+    insertFeatureAtGate(doc, id);
+  });
+
+  return id;
+}
+
+// ============================================================================
+// Axis Feature Creation
+// ============================================================================
+
+/**
+ * Options for creating an axis feature
+ */
+export interface AxisFeatureOptions {
+  /** How the axis is defined */
+  definition: {
+    kind: "datum";
+    role: "x" | "y" | "z";
+  } | {
+    kind: "twoPoints";
+    point1Ref: string;
+    point2Ref: string;
+  } | {
+    kind: "sketchLine";
+    sketchId: string;
+    lineId: string;
+  } | {
+    kind: "edge";
+    edgeRef: string;
+  } | {
+    kind: "surfaceNormal";
+    faceRef: string;
+    pointRef?: string;
+  };
+  /** Optional name */
+  name?: string;
+  /** Display length */
+  length?: number;
+  /** Display offset (position along axis direction) */
+  displayOffset?: number;
+}
+
+const DEFAULT_AXIS_LENGTH = 100;
+
+/**
+ * Create a new axis feature
+ */
+export function addAxisFeature(doc: SolidTypeDoc, options: AxisFeatureOptions): string {
+  const id = uuid();
+
+  // Calculate origin and direction based on definition
+  let origin: [number, number, number] = [0, 0, 0];
+  let direction: [number, number, number] = [1, 0, 0];
+
+  if (options.definition.kind === "datum") {
+    // Datum axes go through origin
+    origin = [0, 0, 0];
+    switch (options.definition.role) {
+      case "x":
+        direction = [1, 0, 0];
+        break;
+      case "y":
+        direction = [0, 1, 0];
+        break;
+      case "z":
+        direction = [0, 0, 1];
+        break;
+    }
+  }
+  // For other definition types, the kernel will compute origin/direction
+
+  doc.ydoc.transact(() => {
+    const axis = createFeatureMap();
+    doc.featuresById.set(id, axis);
+
+    setMapProperties(axis, {
+      id,
+      type: "axis",
+      name: options.name ?? `Axis ${doc.featureOrder.length}`,
+      definition: options.definition,
+      origin,
+      direction,
+      length: options.length ?? DEFAULT_AXIS_LENGTH,
+      displayOffset: options.displayOffset ?? 0,
+      visible: true,
+    });
+
+    // Insert at rebuild gate position (or end if no gate)
+    insertFeatureAtGate(doc, id);
   });
 
   return id;
@@ -745,6 +891,15 @@ export function parseFeature(featureMap: Y.Map<unknown>): Feature | null {
 
     case "plane": {
       const role = featureMap.get("role") as DatumPlaneRole | undefined;
+      let definition = featureMap.get("definition") as
+        | { kind: string; [key: string]: unknown }
+        | undefined;
+
+      // Backward compatibility: synthesize definition from legacy role field
+      if (!definition && role) {
+        definition = { kind: "datum", role };
+      }
+
       const base = {
         type: "plane" as const,
         id,
@@ -758,13 +913,36 @@ export function parseFeature(featureMap: Y.Map<unknown>): Feature | null {
         height: featureMap.get("height") as number | undefined,
         offsetX: featureMap.get("offsetX") as number | undefined,
         offsetY: featureMap.get("offsetY") as number | undefined,
+        displayOffsetX: featureMap.get("displayOffsetX") as number | undefined,
+        displayOffsetY: featureMap.get("displayOffsetY") as number | undefined,
         color: featureMap.get("color") as string | undefined,
+        definition,
       };
 
       if (role) {
         return { ...base, role } as DatumPlaneFeature;
       }
       return base as PlaneFeature;
+    }
+
+    case "axis": {
+      const definition = featureMap.get("definition") as
+        | { kind: string; [key: string]: unknown }
+        | undefined;
+
+      return {
+        type: "axis",
+        id,
+        name,
+        suppressed,
+        definition,
+        origin: featureMap.get("origin") as [number, number, number],
+        direction: featureMap.get("direction") as [number, number, number],
+        length: featureMap.get("length") as number | undefined,
+        displayOffset: featureMap.get("displayOffset") as number | undefined,
+        color: featureMap.get("color") as string | undefined,
+        visible: featureMap.get("visible") as boolean | undefined,
+      } as AxisFeature;
     }
 
     case "sketch": {
@@ -907,5 +1085,29 @@ export function renameFeature(doc: SolidTypeDoc, id: string, name: string): bool
   if (!feature) return false;
 
   feature.set("name", name);
+  return true;
+}
+
+/**
+ * Toggle the visibility of a feature (for hiding/showing bodies, sketches, etc.)
+ */
+export function toggleFeatureVisibility(doc: SolidTypeDoc, id: string): boolean {
+  const feature = doc.featuresById.get(id);
+  if (!feature) return false;
+
+  const currentVisible = feature.get("visible") as boolean | undefined;
+  // Default to visible if not set, then toggle
+  feature.set("visible", currentVisible === false ? true : false);
+  return true;
+}
+
+/**
+ * Set the visibility of a feature explicitly
+ */
+export function setFeatureVisibility(doc: SolidTypeDoc, id: string, visible: boolean): boolean {
+  const feature = doc.featuresById.get(id);
+  if (!feature) return false;
+
+  feature.set("visible", visible);
   return true;
 }

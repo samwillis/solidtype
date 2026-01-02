@@ -18,28 +18,40 @@ export interface ImportResult {
 
 /**
  * Export a shape to STEP format.
+ * Uses Emscripten's virtual filesystem to write and read the file.
  */
 export function exportSTEP(shape: Shape): Uint8Array {
   const oc = getOC();
 
   const writer = new oc.STEPControl_Writer_1();
 
-  // Transfer shape to STEP (no progress parameter needed in this OpenCascade.js version)
+  // Transfer shape to STEP
   writer.Transfer(shape.raw, oc.STEPControl_StepModelType.STEPControl_AsIs, true);
 
-  // Write to a virtual file
-  const filename = `/tmp/export.step`;
-  const status = writer.Write(filename);
+  // Create the filename as a TCollection_AsciiString for proper C++ string handling
+  const filename = "export.step";
+  const filenameStr = new oc.TCollection_AsciiString_2(filename);
+  
+  // Write using the TCollection_AsciiString overload
+  const status = writer.Write(filenameStr.ToCString());
+
+  // Clean up the string
+  filenameStr.delete();
 
   if (status !== oc.IFSelect_ReturnStatus.IFSelect_RetDone) {
+    writer.delete();
     throw new Error(`Failed to export STEP file`);
   }
 
   // Read the file from Emscripten filesystem
   const fileData = oc.FS.readFile(filename);
 
-  // Clean up
-  oc.FS.unlink(filename);
+  // Clean up the virtual file
+  try {
+    oc.FS.unlink(filename);
+  } catch {
+    // Ignore cleanup errors
+  }
   writer.delete();
 
   return new Uint8Array(fileData);
@@ -51,16 +63,21 @@ export function exportSTEP(shape: Shape): Uint8Array {
 export function importSTEP(data: Uint8Array): ImportResult {
   const oc = getOC();
 
+  const filename = "import.step";
+
   try {
     // Write to Emscripten filesystem
-    const filename = `/tmp/import.step`;
     oc.FS.writeFile(filename, data);
 
     const reader = new oc.STEPControl_Reader_1();
     const status = reader.ReadFile(filename);
 
     if (status !== oc.IFSelect_ReturnStatus.IFSelect_RetDone) {
-      oc.FS.unlink(filename);
+      try {
+        oc.FS.unlink(filename);
+      } catch {
+        // Ignore cleanup errors
+      }
       reader.delete();
       return { success: false, error: `Failed to read STEP file` };
     }
@@ -71,7 +88,11 @@ export function importSTEP(data: Uint8Array): ImportResult {
     const shape = reader.OneShape();
 
     // Clean up
-    oc.FS.unlink(filename);
+    try {
+      oc.FS.unlink(filename);
+    } catch {
+      // Ignore cleanup errors
+    }
     reader.delete();
 
     if (shape.IsNull()) {
@@ -80,6 +101,11 @@ export function importSTEP(data: Uint8Array): ImportResult {
 
     return { success: true, shape: new Shape(shape) };
   } catch (e) {
+    try {
+      oc.FS.unlink(filename);
+    } catch {
+      // Ignore cleanup errors
+    }
     return {
       success: false,
       error: e instanceof Error ? e.message : `Unknown import error`,
@@ -93,7 +119,7 @@ export function importSTEP(data: Uint8Array): ImportResult {
 export function exportBREP(shape: Shape): Uint8Array {
   const oc = getOC();
 
-  const filename = `/tmp/export.brep`;
+  const filename = "export.brep";
   // Use BRepTools.Write_1 which takes (shape, filename) without progress
   const result = oc.BRepTools.Write_1(shape.raw, filename);
 
@@ -102,7 +128,11 @@ export function exportBREP(shape: Shape): Uint8Array {
   }
 
   const fileData = oc.FS.readFile(filename);
-  oc.FS.unlink(filename);
+  try {
+    oc.FS.unlink(filename);
+  } catch {
+    // Ignore cleanup errors
+  }
 
   return new Uint8Array(fileData);
 }
@@ -113,8 +143,9 @@ export function exportBREP(shape: Shape): Uint8Array {
 export function importBREP(data: Uint8Array): ImportResult {
   const oc = getOC();
 
+  const filename = "import.brep";
+
   try {
-    const filename = `/tmp/import.brep`;
     oc.FS.writeFile(filename, data);
 
     const shape = new oc.TopoDS_Shape();
@@ -123,7 +154,11 @@ export function importBREP(data: Uint8Array): ImportResult {
     // Use BRepTools.Read_1 which takes (shape, filename, builder) without progress
     const result = oc.BRepTools.Read_1(shape, filename, builder);
 
-    oc.FS.unlink(filename);
+    try {
+      oc.FS.unlink(filename);
+    } catch {
+      // Ignore cleanup errors
+    }
     builder.delete();
 
     if (!result || shape.IsNull()) {
@@ -133,6 +168,11 @@ export function importBREP(data: Uint8Array): ImportResult {
 
     return { success: true, shape: new Shape(shape) };
   } catch (e) {
+    try {
+      oc.FS.unlink(filename);
+    } catch {
+      // Ignore cleanup errors
+    }
     return {
       success: false,
       error: e instanceof Error ? e.message : `Unknown import error`,

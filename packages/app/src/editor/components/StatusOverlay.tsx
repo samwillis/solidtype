@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { useSketch } from "../contexts/SketchContext";
 import { useDocument } from "../contexts/DocumentContext";
 import { useKernel } from "../contexts/KernelContext";
@@ -9,100 +9,76 @@ interface StatusOverlayProps {
 }
 
 const StatusOverlay: React.FC<StatusOverlayProps> = ({ status }) => {
-  const { units, syncStatus, isCloudDocument, syncError } = useDocument();
+  const { units, syncStatus, isCloudDocument } = useDocument();
   const { mode: sketchMode, sketchMousePos } = useSketch();
-  const { sketchSolveInfo, isRebuilding, errors } = useKernel();
-
-  // Get sync status label
-  const getSyncStatus = () => {
-    if (!isCloudDocument) return null;
-
-    switch (syncStatus) {
-      case "connecting":
-        return "Connecting...";
-      case "connected":
-        return "Connected";
-      case "synced":
-        return "Synced";
-      case "error":
-        return syncError?.message || "Sync error";
-      case "disconnected":
-        return "Offline";
-      default:
-        return null;
-    }
-  };
-
-  // Get actual status
-  const getStatus = () => {
-    if (status) return status;
-    if (isRebuilding) return "Rebuilding...";
-    if (errors.length > 0) return `${errors.length} error${errors.length > 1 ? "s" : ""}`;
-    if (sketchMode.active) return "Editing Sketch";
-    return null; // Don't show "Ready" - only show when there's something to show
-  };
-
-  // Get solve status for active sketch
-  const getSolveStatus = () => {
-    if (!sketchMode.active || !sketchMode.sketchId) return null;
-    const info = sketchSolveInfo[sketchMode.sketchId];
-    if (!info) return null;
-
-    const dof = info.dof;
-    if (!dof) return `Solve: ${info.status}`;
-
-    const tag = dof.isOverConstrained
-      ? "Over"
-      : dof.isFullyConstrained
-        ? "Fully"
-        : `DOF ${dof.remainingDOF}`;
-    return `Solve: ${info.status} • ${tag}`;
-  };
+  const { isRebuilding, errors } = useKernel();
 
   // Format coordinates
   const getCoordinates = () => {
     if (sketchMode.active && sketchMousePos) {
-      return `X: ${sketchMousePos.x.toFixed(2)} Y: ${sketchMousePos.y.toFixed(2)} ${units}`;
+      return `${sketchMousePos.x.toFixed(2)}, ${sketchMousePos.y.toFixed(2)} ${units}`;
     }
     return null;
   };
 
-  const currentStatus = getStatus();
-  const solveStatus = getSolveStatus();
   const coordinates = getCoordinates();
-  const cloudSyncStatus = getSyncStatus();
 
-  // Only render if there's something to show
-  if (!currentStatus && !solveStatus && !coordinates && !cloudSyncStatus) {
+  // Determine what to show
+  const showConnectionIcon = isCloudDocument;
+  const showErrors = errors.length > 0;
+  const showRebuilding = isRebuilding;
+  const showCoordinates = !!coordinates;
+  const showCustomStatus = !!status;
+
+  // Don't render if nothing to show
+  if (!showConnectionIcon && !showErrors && !showRebuilding && !showCoordinates && !showCustomStatus) {
     return null;
   }
 
+  // Get connection icon class
+  const getConnectionClass = () => {
+    switch (syncStatus) {
+      case "synced":
+        return "connected";
+      case "connected":
+        return "connected";
+      case "connecting":
+        return "connecting";
+      case "error":
+        return "error";
+      case "disconnected":
+        return "offline";
+      default:
+        return "offline";
+    }
+  };
+
   return (
     <div className="status-overlay">
-      {cloudSyncStatus && (
-        <div
-          className={`status-overlay-item ${
-            syncStatus === "error"
-              ? "status-error"
-              : syncStatus === "synced"
-                ? "status-synced"
-                : syncStatus === "connecting" || syncStatus === "connected"
-                  ? "status-connecting"
-                  : "status-offline"
-          }`}
-        >
-          {syncStatus === "synced" && <span className="status-sync-indicator">●</span>}
-          {syncStatus === "connecting" && <span className="status-sync-indicator spinning">◐</span>}
-          {cloudSyncStatus}
-        </div>
+      {/* Connection status icon */}
+      {showConnectionIcon && (
+        <span className={`status-icon status-icon-${getConnectionClass()}`} title={syncStatus}>
+          ●
+        </span>
       )}
-      {currentStatus && (
-        <div className={`status-overlay-item ${errors.length > 0 ? "status-error" : ""}`}>
-          {currentStatus}
-        </div>
+
+      {/* Errors */}
+      {showErrors && (
+        <span className="status-text status-error">
+          {errors.length} error{errors.length > 1 ? "s" : ""}
+        </span>
       )}
-      {solveStatus && <div className="status-overlay-item status-solve">{solveStatus}</div>}
-      {coordinates && <div className="status-overlay-item status-coordinates">{coordinates}</div>}
+
+      {/* Rebuilding */}
+      {showRebuilding && !showErrors && <span className="status-text">Rebuilding...</span>}
+
+      {/* Custom status */}
+      {showCustomStatus && !showRebuilding && !showErrors && (
+        <span className="status-text">{status}</span>
+      )}
+
+      {/* Coordinates when sketching */}
+      {showCoordinates && <span className="status-coords">{coordinates}</span>}
     </div>
   );
 };

@@ -25,9 +25,12 @@ import {
   addRevolveFeature,
   addBooleanFeature,
   addOffsetPlane as addOffsetPlaneFeature,
+  addAxisFeature,
   deleteFeature,
   renameFeature,
+  toggleFeatureVisibility,
 } from "../document/featureHelpers";
+import type { AxisFeatureOptions } from "../document/featureHelpers";
 import type { Feature } from "../document/schema";
 import { createDocumentSync, type DocumentSync } from "../../lib/yjs-sync";
 import { SolidTypeAwareness } from "../../lib/awareness-provider";
@@ -73,9 +76,12 @@ interface DocumentContextValue {
   ) => string;
   /** Add an offset plane from a datum plane or face */
   addOffsetPlane: (basePlaneId: string, offset: number, name?: string) => string;
+  /** Add an axis feature */
+  addAxis: (options: AxisFeatureOptions) => string;
   getFeatureById: (id: string) => Feature | null;
   deleteFeature: (id: string) => boolean;
   renameFeature: (id: string, name: string) => boolean;
+  toggleVisibility: (id: string) => boolean;
   // Cloud sync status (only when documentId is provided)
   syncStatus: SyncStatus;
   isCloudDocument: boolean;
@@ -431,6 +437,14 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
     [doc]
   );
 
+  const addAxis = useCallback(
+    (options: AxisFeatureOptions) => {
+      if (!doc) return "";
+      return addAxisFeature(doc, options);
+    },
+    [doc]
+  );
+
   const getFeatureById = useCallback(
     (id: string): Feature | null => {
       if (!doc) return null;
@@ -456,6 +470,14 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
     (id: string, name: string): boolean => {
       if (!doc) return false;
       return renameFeature(doc, id, name);
+    },
+    [doc]
+  );
+
+  const handleToggleVisibility = useCallback(
+    (id: string): boolean => {
+      if (!doc) return false;
+      return toggleFeatureVisibility(doc, id);
     },
     [doc]
   );
@@ -511,9 +533,11 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
     addRevolve,
     addBoolean,
     addOffsetPlane,
+    addAxis,
     getFeatureById,
     deleteFeature: handleDeleteFeature,
     renameFeature: handleRenameFeature,
+    toggleVisibility: handleToggleVisibility,
     // Cloud sync info
     syncStatus,
     isCloudDocument,

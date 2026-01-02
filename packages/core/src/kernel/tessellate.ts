@@ -17,6 +17,8 @@ export interface TessellatedMesh {
   normals: Float32Array;
   /** Triangle indices into the vertex array */
   indices: Uint32Array;
+  /** Maps each triangle index to its face ID (for 3D selection) */
+  faceMap: Uint32Array;
 }
 
 /**
@@ -91,6 +93,7 @@ export function tessellateWithParams(
 
   const vertices: number[] = [];
   const indices: number[] = [];
+  const faceMap: number[] = [];
 
   // Iterate over all faces
   const faceExplorer = new oc.TopExp_Explorer_2(
@@ -99,6 +102,7 @@ export function tessellateWithParams(
     oc.TopAbs_ShapeEnum.TopAbs_SHAPE
   );
 
+  let faceIndex = 0;
   while (faceExplorer.More()) {
     const face = oc.TopoDS.Face_1(faceExplorer.Current());
     const location = new oc.TopLoc_Location_1();
@@ -136,11 +140,14 @@ export function tessellateWithParams(
         }
 
         indices.push(n1, n2, n3);
+        // Track which face this triangle belongs to (for 3D selection)
+        faceMap.push(faceIndex);
       }
     }
 
     location.delete();
     faceExplorer.Next();
+    faceIndex++;
   }
 
   faceExplorer.delete();
@@ -153,6 +160,7 @@ export function tessellateWithParams(
     vertices: new Float32Array(vertices),
     normals: new Float32Array(computedNormals),
     indices: new Uint32Array(indices),
+    faceMap: new Uint32Array(faceMap),
   };
 }
 
@@ -202,6 +210,124 @@ function computeNormals(vertices: number[], indices: number[]): number[] {
   }
 
   return normals;
+}
+
+/**
+ * Plane data extracted from a face.
+ */
+export interface FacePlaneData {
+  /** Point on the face (used as origin for sketch plane) */
+  origin: [number, number, number];
+  /** Face normal direction */
+  normal: [number, number, number];
+  /** X direction for the sketch plane (tangent to face) */
+  xDir: [number, number, number];
+  /** Y direction for the sketch plane (tangent to face, perpendicular to xDir) */
+  yDir: [number, number, number];
+}
+
+/**
+ * Extract plane data from a specific face of a shape.
+ * Returns null if the face index is out of range.
+ *
+ * @param shape - The shape containing the face
+ * @param faceIndex - The 0-based face index
+ */
+export function getFacePlane(shape: Shape, faceIndex: number): FacePlaneData | null {
+  const oc = getOC();
+
+  // Iterate over faces to find the target one
+  const faceExplorer = new oc.TopExp_Explorer_2(
+    shape.raw,
+    oc.TopAbs_ShapeEnum.TopAbs_FACE,
+    oc.TopAbs_ShapeEnum.TopAbs_SHAPE
+  );
+
+  let currentIndex = 0;
+  let result: FacePlaneData | null = null;
+
+  while (faceExplorer.More()) {
+    if (currentIndex === faceIndex) {
+      const face = oc.TopoDS.Face_1(faceExplorer.Current());
+
+      // Get the surface from the face
+      const surface = oc.BRep_Tool.Surface_2(face);
+
+      if (!surface.IsNull()) {
+        const surfaceHandle = surface.get();
+
+        // Get surface type
+        const geomPlane = surfaceHandle as { Location?: () => unknown };
+
+        // Try to get plane parameters using the Geom_Surface interface
+        // Get a point and normal at UV = (0, 0) - this works for any surface type
+        const uMin = { current: 0 };
+        const uMax = { current: 0 };
+        const vMin = { current: 0 };
+        const vMax = { current: 0 };
+        surfaceHandle.Bounds(uMin, uMax, vMin, vMax);
+
+        // Sample at the center of the parameter space
+        const uMid = (uMin.current + uMax.current) / 2;
+        const vMid = (vMin.current + vMax.current) / 2;
+
+        // Get point on surface
+        const point = surfaceHandle.Value(uMid, vMid);
+
+        // Get derivatives to compute normal and tangent directions
+        const d1u = new oc.gp_Vec_1();
+        const d1v = new oc.gp_Vec_1();
+        const pnt = new oc.gp_Pnt_1();
+        surfaceHandle.D1(uMid, vMid, pnt, d1u, d1v);
+
+        // Compute normal from cross product of derivatives
+        const normal = d1u.Crossed(d1v);
+        const normalLen = normal.Magnitude();
+
+        if (normalLen > 1e-10) {
+          // Normalize
+          normal.Scale(1 / normalLen);
+
+          // Use d1u as xDir (normalized)
+          const d1uLen = d1u.Magnitude();
+          if (d1uLen > 1e-10) {
+            d1u.Scale(1 / d1uLen);
+          }
+
+          // Compute yDir as normal × xDir
+          const yDir = normal.Crossed(d1u);
+
+          // Handle face orientation
+          const isReversed = face.Orientation_1() === oc.TopAbs_Orientation.TopAbs_REVERSED;
+          const sign = isReversed ? -1 : 1;
+
+          result = {
+            origin: [point.X(), point.Y(), point.Z()],
+            normal: [normal.X() * sign, normal.Y() * sign, normal.Z() * sign],
+            xDir: [d1u.X(), d1u.Y(), d1u.Z()],
+            yDir: [yDir.X() * sign, yDir.Y() * sign, yDir.Z() * sign],
+          };
+
+          // Clean up
+          d1u.delete();
+          d1v.delete();
+          pnt.delete();
+          normal.delete();
+          yDir.delete();
+        }
+
+        point.delete();
+      }
+
+      break;
+    }
+
+    faceExplorer.Next();
+    currentIndex++;
+  }
+
+  faceExplorer.delete();
+  return result;
 }
 
 /**

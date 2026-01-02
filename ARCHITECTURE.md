@@ -339,6 +339,8 @@ This replaces our custom boolean implementation which had numerical stability is
 
 ### 3.6 `naming` – Persistent Naming
 
+> **📘 Comprehensive Implementation Plan**: See [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md) for detailed algorithm specification, data structures, and phased implementation plan based on FreeCAD's approach.
+
 **Responsibility**
 
 - Provide **persistently stable references** to faces/edges/vertices through parametric edits and modeling operations.

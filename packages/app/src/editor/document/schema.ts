@@ -239,6 +239,7 @@ export const FeatureBaseSchema = z
     type: z.string(),
     name: z.string().optional(),
     suppressed: z.boolean().optional(),
+    visible: z.boolean().optional(),
   })
   .strict();
 
@@ -248,50 +249,224 @@ export const FeatureBaseSchema = z
 
 export const OriginFeatureSchema = FeatureBaseSchema.extend({
   type: z.literal("origin"),
-  visible: z.boolean().optional(),
 }).strict();
 
 export type OriginFeature = z.infer<typeof OriginFeatureSchema>;
 
 // ============================================================================
+// Plane Definition Types (how a plane is defined/constrained)
+// ============================================================================
+
+/** Datum plane - one of the standard XY, XZ, YZ planes */
+export const DatumPlaneDefinitionSchema = z.object({
+  kind: z.literal("datum"),
+  role: z.enum(["xy", "xz", "yz"]),
+}).strict();
+
+/** Offset from another plane */
+export const OffsetPlaneDefinitionSchema = z.object({
+  kind: z.literal("offsetPlane"),
+  /** Reference to the base plane feature ID */
+  basePlaneId: z.string(),
+  /** Offset distance in mm (positive = along normal, negative = opposite) */
+  distance: z.number(),
+}).strict();
+
+/** Offset from a face */
+export const OffsetFaceDefinitionSchema = z.object({
+  kind: z.literal("offsetFace"),
+  /** Reference to the face (format: "face:featureId:faceIndex") */
+  faceRef: z.string(),
+  /** Offset distance in mm */
+  distance: z.number(),
+}).strict();
+
+/** On a face (tangent plane at a point on the face) */
+export const OnFaceDefinitionSchema = z.object({
+  kind: z.literal("onFace"),
+  /** Reference to the face */
+  faceRef: z.string(),
+}).strict();
+
+/** Through three points */
+export const ThreePointsDefinitionSchema = z.object({
+  kind: z.literal("threePoints"),
+  /** References to three points (vertex refs, sketch point refs, etc.) */
+  point1Ref: z.string(),
+  point2Ref: z.string(),
+  point3Ref: z.string(),
+}).strict();
+
+/** Through an axis and a point */
+export const AxisPointDefinitionSchema = z.object({
+  kind: z.literal("axisPoint"),
+  /** Reference to the axis */
+  axisRef: z.string(),
+  /** Reference to a point */
+  pointRef: z.string(),
+}).strict();
+
+/** Rotated around an axis from a base plane */
+export const AxisAngleDefinitionSchema = z.object({
+  kind: z.literal("axisAngle"),
+  /** Reference to the rotation axis */
+  axisRef: z.string(),
+  /** Angle in degrees */
+  angle: z.number(),
+  /** Reference to the base plane to rotate from */
+  basePlaneRef: z.string(),
+}).strict();
+
+/** Through points in a sketch (minimum 3 points) */
+export const SketchPointsDefinitionSchema = z.object({
+  kind: z.literal("sketchPoints"),
+  /** Reference to the sketch feature */
+  sketchId: z.string(),
+  /** References to point IDs within the sketch (minimum 3) */
+  pointIds: z.array(z.string()).min(3),
+}).strict();
+
+/** Through a line in a sketch and a point */
+export const SketchLinePointDefinitionSchema = z.object({
+  kind: z.literal("sketchLinePoint"),
+  /** Reference to the sketch feature */
+  sketchId: z.string(),
+  /** Reference to a line ID within the sketch */
+  lineId: z.string(),
+  /** Reference to a point ID within the sketch */
+  pointId: z.string(),
+}).strict();
+
+/** Union of all plane definition types */
+export const PlaneDefinitionSchema = z.discriminatedUnion("kind", [
+  DatumPlaneDefinitionSchema,
+  OffsetPlaneDefinitionSchema,
+  OffsetFaceDefinitionSchema,
+  OnFaceDefinitionSchema,
+  ThreePointsDefinitionSchema,
+  AxisPointDefinitionSchema,
+  AxisAngleDefinitionSchema,
+  SketchPointsDefinitionSchema,
+  SketchLinePointDefinitionSchema,
+]);
+
+export type PlaneDefinition = z.infer<typeof PlaneDefinitionSchema>;
+export type DatumPlaneRole = "xy" | "xz" | "yz";
+
+// ============================================================================
+// Axis Definition Types (how an axis is defined)
+// ============================================================================
+
+/** Datum axis - one of the standard X, Y, Z axes */
+export const DatumAxisDefinitionSchema = z.object({
+  kind: z.literal("datum"),
+  role: z.enum(["x", "y", "z"]),
+}).strict();
+
+/** Normal to a face at a point */
+export const SurfaceNormalDefinitionSchema = z.object({
+  kind: z.literal("surfaceNormal"),
+  /** Reference to the face */
+  faceRef: z.string(),
+  /** Optional point on the face (if not specified, uses center) */
+  pointRef: z.string().optional(),
+}).strict();
+
+/** Between two points */
+export const TwoPointsAxisDefinitionSchema = z.object({
+  kind: z.literal("twoPoints"),
+  /** Reference to the first point */
+  point1Ref: z.string(),
+  /** Reference to the second point */
+  point2Ref: z.string(),
+}).strict();
+
+/** Along a sketch line */
+export const SketchLineAxisDefinitionSchema = z.object({
+  kind: z.literal("sketchLine"),
+  /** Reference to the sketch feature */
+  sketchId: z.string(),
+  /** Reference to a line ID within the sketch */
+  lineId: z.string(),
+}).strict();
+
+/** Along an edge */
+export const EdgeAxisDefinitionSchema = z.object({
+  kind: z.literal("edge"),
+  /** Reference to the edge (format: "edge:featureId:edgeIndex") */
+  edgeRef: z.string(),
+}).strict();
+
+/** Union of all axis definition types */
+export const AxisDefinitionSchema = z.discriminatedUnion("kind", [
+  DatumAxisDefinitionSchema,
+  SurfaceNormalDefinitionSchema,
+  TwoPointsAxisDefinitionSchema,
+  SketchLineAxisDefinitionSchema,
+  EdgeAxisDefinitionSchema,
+]);
+
+export type AxisDefinition = z.infer<typeof AxisDefinitionSchema>;
+export type DatumAxisRole = "x" | "y" | "z";
+
+// ============================================================================
 // Plane Features
 // ============================================================================
 
-const PlaneFields = {
-  type: z.literal("plane"),
-  normal: Vec3,
-  origin: Vec3,
-  xDir: Vec3,
-  visible: z.boolean().optional(),
+/** Display properties for planes (how they appear in the viewer) */
+const PlaneDisplayFields = {
   width: z.number().optional(),
   height: z.number().optional(),
-  offsetX: z.number().optional(),
-  offsetY: z.number().optional(),
+  /** Display offset X (for centering the plane visualization) */
+  displayOffsetX: z.number().optional(),
+  /** Display offset Y (for centering the plane visualization) */
+  displayOffsetY: z.number().optional(),
   color: z.string().optional(),
 } as const;
 
-export const DatumPlaneRoleSchema = z.enum(["xy", "xz", "yz"]);
+/** Computed/cached geometry (updated when definition changes) */
+const PlaneGeometryFields = {
+  /** Computed normal vector */
+  normal: Vec3,
+  /** Computed origin point */
+  origin: Vec3,
+  /** Computed X direction for the plane */
+  xDir: Vec3,
+} as const;
 
-export type DatumPlaneRole = z.infer<typeof DatumPlaneRoleSchema>;
-
-export const DatumPlaneFeatureSchema = FeatureBaseSchema.extend({
-  ...PlaneFields,
-  role: DatumPlaneRoleSchema,
+export const PlaneFeatureSchema = FeatureBaseSchema.extend({
+  type: z.literal("plane"),
+  /** How this plane is defined (the source of truth) */
+  definition: PlaneDefinitionSchema,
+  /** Computed geometry (cached, updated when definition changes) */
+  ...PlaneGeometryFields,
+  /** Display properties */
+  ...PlaneDisplayFields,
 }).strict();
-
-export type DatumPlaneFeature = z.infer<typeof DatumPlaneFeatureSchema>;
-
-export const UserPlaneFeatureSchema = FeatureBaseSchema.extend({
-  ...PlaneFields,
-  // no role field
-}).strict();
-
-export type UserPlaneFeature = z.infer<typeof UserPlaneFeatureSchema>;
-
-// Combined plane schema (for parsing)
-export const PlaneFeatureSchema = z.union([DatumPlaneFeatureSchema, UserPlaneFeatureSchema]);
 
 export type PlaneFeature = z.infer<typeof PlaneFeatureSchema>;
+
+// Convenience type aliases for backward compatibility
+export type DatumPlaneFeature = PlaneFeature & { definition: { kind: "datum" } };
+export type UserPlaneFeature = PlaneFeature & { definition: { kind: Exclude<PlaneDefinition["kind"], "datum"> } };
+
+// ============================================================================
+// Axis Features (for future use)
+// ============================================================================
+
+export const AxisFeatureSchema = FeatureBaseSchema.extend({
+  type: z.literal("axis"),
+  /** How this axis is defined */
+  definition: AxisDefinitionSchema,
+  /** Computed geometry */
+  origin: Vec3,
+  direction: Vec3,
+  /** Display properties */
+  length: z.number().optional(),
+  color: z.string().optional(),
+}).strict();
+
+export type AxisFeature = z.infer<typeof AxisFeatureSchema>;
 
 // ============================================================================
 // Sketch Feature
@@ -300,7 +475,6 @@ export type PlaneFeature = z.infer<typeof PlaneFeatureSchema>;
 export const SketchFeatureSchema = FeatureBaseSchema.extend({
   type: z.literal("sketch"),
   plane: SketchPlaneRefSchema,
-  visible: z.boolean().optional(),
   data: SketchDataSchema,
 }).strict();
 
@@ -379,13 +553,10 @@ export type BooleanFeature = z.infer<typeof BooleanFeatureSchema>;
 // Feature Union
 // ============================================================================
 
-// Note: We can't use discriminatedUnion for plane types because both DatumPlane
-// and UserPlane have type: 'plane'. We use a regular union for planes and
-// build the full feature schema manually.
 export const FeatureSchema = z.union([
   OriginFeatureSchema,
-  DatumPlaneFeatureSchema,
-  UserPlaneFeatureSchema,
+  PlaneFeatureSchema,
+  AxisFeatureSchema,
   SketchFeatureSchema,
   ExtrudeFeatureSchema,
   RevolveFeatureSchema,

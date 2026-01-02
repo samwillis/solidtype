@@ -321,3 +321,41 @@
   background: var(--color-primary, #0078d4);
   border-radius: 1px;
 }
+
+/* Visibility toggle button */
+.tree-item-visibility {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease;
+}
+
+.tree-item:hover .tree-item-visibility {
+  opacity: 1;
+}
+
+.tree-item-visibility:hover {
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+}
+
+.tree-item-visibility.hidden {
+  opacity: 1;
+  color: var(--color-text-muted);
+}
+
+.tree-item-visibility.hidden:hover {
+  color: var(--color-accent);
+}

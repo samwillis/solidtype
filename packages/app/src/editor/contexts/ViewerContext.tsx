@@ -37,13 +37,29 @@ interface ViewerState {
   displayMode: DisplayMode;
   projectionMode: ProjectionMode;
   currentView: ViewPreset | null;
+  /** Whether snap-to-grid is enabled in sketch mode */
+  snapToGrid: boolean;
+  /** Grid size for snapping in mm */
+  gridSize: number;
+}
+
+interface PlaneTransform {
+  origin: [number, number, number];
+  normal: [number, number, number];
+  yDir: [number, number, number];
 }
 
 interface ViewerActions {
   setView: (preset: ViewPreset) => void;
+  /** Align camera to look at a plane from its normal direction */
+  setViewToPlane: (transform: PlaneTransform) => void;
   setDisplayMode: (mode: DisplayMode) => void;
   toggleProjection: () => void;
   zoomToFit: () => void;
+  /** Toggle snap-to-grid on/off */
+  toggleSnapToGrid: () => void;
+  /** Set the grid size in mm */
+  setGridSize: (size: number) => void;
 }
 
 // Shared camera state ref for real-time sync between Viewer and ViewCube
@@ -146,6 +162,8 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     displayMode: "shaded",
     projectionMode: "perspective",
     currentView: null,
+    snapToGrid: true,
+    gridSize: 1, // 1mm default
   });
 
   // Shared ref for camera state (avoids React state updates during drag)
@@ -181,6 +199,32 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     cameraStateRef.current.version++;
 
     setState((prev) => ({ ...prev, currentView: preset }));
+    refs.requestRender();
+  }, []);
+
+  const setViewToPlane = useCallback((transform: PlaneTransform) => {
+    const refs = viewerRefsRef.current;
+    if (!refs || !refs.camera.current) return;
+
+    const camera = refs.camera.current;
+    const normal = new THREE.Vector3(...transform.normal);
+    const yDir = new THREE.Vector3(...transform.yDir);
+    const origin = new THREE.Vector3(...transform.origin);
+
+    // Position camera along the plane normal, looking at the plane origin
+    const distance = camera.position.distanceTo(refs.target.current);
+    const newTarget = origin.clone();
+    camera.position.copy(newTarget).add(normal.clone().multiplyScalar(distance));
+    refs.target.current.copy(newTarget);
+    camera.up.copy(yDir);
+    camera.lookAt(refs.target.current);
+
+    // Update camera state ref
+    cameraStateRef.current.position.copy(normal);
+    cameraStateRef.current.up.copy(yDir);
+    cameraStateRef.current.version++;
+
+    setState((prev) => ({ ...prev, currentView: null })); // Custom view, not a preset
     refs.requestRender();
   }, []);
 
@@ -243,6 +287,14 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     refs.requestRender();
   }, []);
 
+  const toggleSnapToGrid = useCallback(() => {
+    setState((prev) => ({ ...prev, snapToGrid: !prev.snapToGrid }));
+  }, []);
+
+  const setGridSize = useCallback((size: number) => {
+    setState((prev) => ({ ...prev, gridSize: Math.max(0.1, size) }));
+  }, []);
+
   // Convert screen coordinates to sketch coordinates via ray-plane intersection
   const screenToSketch = useCallback(
     (screenX: number, screenY: number, planeId: string): { x: number; y: number } | null => {
@@ -259,7 +311,15 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     <ViewerContext.Provider
       value={{
         state,
-        actions: { setView, setDisplayMode, toggleProjection, zoomToFit },
+        actions: {
+          setView,
+          setViewToPlane,
+          setDisplayMode,
+          toggleProjection,
+          zoomToFit,
+          toggleSnapToGrid,
+          setGridSize,
+        },
         registerRefs,
         cameraStateRef,
         screenToSketch,

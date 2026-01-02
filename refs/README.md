@@ -89,13 +89,17 @@ This directory contains source code from open-source CAD kernels for reference w
 
 **License**: LGPL-2.0+
 
+> **📘 SolidType Implementation Plan**: See [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md) for our comprehensive plan based on FreeCAD's approach.
+
 **Key directories to study**:
 
-| Path                               | Purpose                               |
-| ---------------------------------- | ------------------------------------- |
-| `src/Mod/Part/App/TopoShape*.cpp`  | Toponaming implementation             |
-| `src/Mod/Part/App/TopoShapeEx.cpp` | Extended shape operations with naming |
-| `src/App/PropertyLinks.cpp`        | Persistent reference storage          |
+| Path                               | Purpose                                        |
+| ---------------------------------- | ---------------------------------------------- |
+| `src/Mod/Part/App/TopoShapeEx.cpp` | **Core naming algorithm** (`makESHAPE()`)      |
+| `src/Mod/Part/App/TopoShape.h`     | Shape wrapper with `Mapper` abstraction        |
+| `src/Mod/Part/App/TopoShapeOpCode.h` | Operation codes (XTR, RVL, FUS, CUT, etc.)   |
+| `src/App/ComplexGeoData.h`         | Base class with `ElementMap`, postfix markers  |
+| `src/App/StringHasher.h`           | Name compression for large element maps        |
 
 **When to reference**:
 
@@ -106,9 +110,15 @@ This directory contains source code from open-source CAD kernels for reference w
 
 **Key concepts**:
 
-- "Mapped element" system for tracking face/edge identity
-- Hash-based geometry fingerprinting
-- Parent-child shape relationships
+- **`ElementMap`** — Bidirectional mapping between indexed names (Face7) and mapped names (stable)
+- **`Mapper`** interface — Abstracts OCCT maker history (Generated/Modified)
+- **Four-stage naming algorithm**:
+  1. Copy unchanged elements
+  2. History-based naming (from Generated/Modified)
+  3. Upper fallback (faces → edges → vertices)
+  4. Lower fallback (edges → faces)
+- **Postfix markers** — `;:M` (modified), `;:G` (generated), `;:U` (upper), `;:L` (lower), `;:T` (tag)
+- **Feature tags** — Each feature stamps a unique integer on its shapes
 
 ---
 

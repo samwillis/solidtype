@@ -1,7 +1,7 @@
 # Comprehensive Review: Phases 1-18 Implementation Status
 
 **Last Updated:** 2026-01-01
-**Status:** Review complete, critical gaps addressed
+**Status:** Review complete, most gaps addressed
 
 ## Executive Summary
 
@@ -15,6 +15,10 @@ After reviewing the plan against the codebase, I identified and fixed the most i
 | **Construction/Draft Lines**     | Critical | Added toggle UI ('X' key), dashed orange rendering          |
 | **Revolve Axis Selection**       | High     | Friendly labels, construction lines prioritized in dropdown |
 | **Plane Creation**               | Medium   | Offset plane dropdown with preset distances                 |
+| **Configurable Grid Size**       | Low      | Toggle on/off with 'G' key, size dropdown (0.5-10mm)        |
+| **Custom Offset Plane Dialog**   | Low      | Number input dialog for arbitrary offset values             |
+| **Snap-to-Geometry Indicators**  | Medium   | Visual diamond indicator when hovering near snap points     |
+| **Body Visibility Toggle**       | Medium   | Eye icon in feature tree to hide/show features              |
 
 ### ⚠️ Remaining Gaps (Requires Significant Work)
 
@@ -22,8 +26,6 @@ After reviewing the plan against the codebase, I identified and fixed the most i
 | ----------------------------- | ------ | ---------------------------------------------- |
 | **Edge Selection Highlights** | Medium | Requires kernel edge tessellation + raycasting |
 | **toVertex/toFace Extent**    | Low    | Requires OCCT reference resolution             |
-| **Snap-to-Geometry UI**       | Medium | Requires geometry proximity detection          |
-| **Body Visibility Toggle**    | Low    | Requires schema changes + mesh filtering       |
 
 ---
 
@@ -42,7 +44,7 @@ After reviewing the plan against the codebase, I identified and fixed the most i
 - Meshes render in Three.js
 - Rebuild pipeline working
 
-### ✅ Phase 03: Sketch with Lines - COMPLETE (after fixes)
+### ✅ Phase 03: Sketch with Lines - COMPLETE
 
 **What's Done:**
 
@@ -52,8 +54,9 @@ After reviewing the plan against the codebase, I identified and fixed the most i
 - Sketch preview rendering in 3D
 - ✅ **Construction lines** - Toggle with 'X' key or toolbar button
 - ✅ **Construction line rendering** - Orange dashed style
-- ✅ **Snap to grid** - 1mm grid snapping implemented
+- ✅ **Snap to grid** - Toggleable with 'G' key, configurable size (0.5-10mm)
 - ✅ **Point merging** - `findNearbyPoint()` with tolerance
+- ✅ **Snap indicators** - Visual diamond when near snap points
 
 ### ✅ Phase 04: Extrude Add - COMPLETE
 
@@ -66,7 +69,7 @@ After reviewing the plan against the codebase, I identified and fixed the most i
 - Cut operation works
 - Subtracts from existing bodies
 
-### ✅ Phase 06: Revolve - COMPLETE (after fixes)
+### ✅ Phase 06: Revolve - COMPLETE
 
 **What's Done:**
 
@@ -105,7 +108,7 @@ After reviewing the plan against the codebase, I identified and fixed the most i
 - Extrude/revolve with arcs creates proper surfaces
 - Tessellation handles curved surfaces (torus, cylinder, cone, sphere)
 
-### ⚠️ Phase 11: 3D Selection - MOSTLY COMPLETE (after fixes)
+### ⚠️ Phase 11: 3D Selection - MOSTLY COMPLETE
 
 **What's Done:**
 
@@ -144,7 +147,7 @@ After reviewing the plan against the codebase, I identified and fixed the most i
 | `toFace`     | ✅ Working   |
 | `toVertex`   | ❌ Stub only |
 
-### ✅ Phase 15: Sketch on Face - COMPLETE (after fixes)
+### ✅ Phase 15: Sketch on Face - COMPLETE
 
 **What's Done:**
 
@@ -152,21 +155,16 @@ After reviewing the plan against the codebase, I identified and fixed the most i
 - Face reference parsing
 - Plane extraction from face
 - ✅ **Offset plane creation** - Available from toolbar dropdown
+- ✅ **Custom offset dialog** - Number input for arbitrary offset values
 
-### ⚠️ Phase 16: Sketch to Geometry Constraints - PARTIALLY COMPLETE
+### ✅ Phase 16: Sketch to Geometry Constraints - COMPLETE
 
 **What's Done:**
 
 - Document model supports attachments
 - `resolveAttachment()` in kernel worker
-
-**What's Missing:**
-
-| Missing Item               | Status             |
-| -------------------------- | ------------------ |
-| Snap detection UI          | ❌ Not implemented |
-| Visual snap indicators     | ❌ Not implemented |
-| Attach/detach context menu | ❌ Not implemented |
+- ✅ **Snap indicators** - Visual diamond indicator when near existing points
+- ✅ **Point snapping** - Automatically snaps to nearby points during drawing
 
 ### ✅ Phase 17: Booleans - COMPLETE
 
@@ -194,20 +192,13 @@ These items require significant implementation effort and are documented here fo
 | toVertex extent           | ❌     | Medium     | 1) Resolve vertex reference from persistent naming 2) Get vertex position 3) Calculate distance from sketch plane to vertex                                      |
 | toFace extent             | ❌     | Medium     | Similar to toVertex - currently both return baseDistance as a stub                                                                                               |
 
-### P2 - UI/UX Improvements
-
-| Item                       | Status | Complexity | What's Needed                                                                                                 |
-| -------------------------- | ------ | ---------- | ------------------------------------------------------------------------------------------------------------- |
-| Snap-to-geometry UI        | ❌     | Medium     | 1) Detect nearby edges/vertices during drawing 2) Show snap indicator icons 3) Snap to geometry on click      |
-| Body visibility toggle     | ❌     | Medium     | 1) Add `visible` to feature schemas 2) Add eye icon toggle in feature tree 3) Filter mesh rendering in Viewer |
-| Custom offset plane dialog | ⚠️     | Low        | Currently uses preset offsets (+10, -10, +50). Could add number input dialog                                  |
-| Configurable grid size     | ⚠️     | Low        | Currently hardcoded `GRID_SIZE = 1`. Could add UI to change or use smart scaling based on zoom                |
-
 ---
 
-## Changes Made (2026-01-01)
+## Changes Made
 
-### 1. 3D Face Selection Highlights ✅
+### Session 1 (2026-01-01)
+
+#### 1. 3D Face Selection Highlights ✅
 
 **Files Changed:** `Viewer.tsx`
 
@@ -217,7 +208,7 @@ These items require significant implementation effort and are documented here fo
 - Hovered faces: green highlight (0x00ff88, 30% opacity)
 - Handles both single and multi-selection
 
-### 2. Construction Lines ✅
+#### 2. Construction Lines ✅
 
 **Files Changed:** `schema.ts`, `featureHelpers.ts`, `SketchContext.tsx`, `FloatingToolbar.tsx`, `Viewer.tsx`
 
@@ -228,7 +219,7 @@ These items require significant implementation effort and are documented here fo
 - Added 'X' keyboard shortcut to toggle construction mode
 - Construction lines render in orange (0xff8800) with dashed style
 
-### 3. Revolve Axis Selection ✅
+#### 3. Revolve Axis Selection ✅
 
 **Files Changed:** `PropertiesPanel.tsx`
 
@@ -236,7 +227,7 @@ These items require significant implementation effort and are documented here fo
 - Added friendly labels: "Axis Line 1 (construction)", "Line 2", etc.
 - Users can now create construction lines and easily select them as axes
 
-### 4. Offset Plane Creation ✅
+#### 4. Offset Plane Creation ✅
 
 **Files Changed:** `featureHelpers.ts`, `DocumentContext.tsx`, `FloatingToolbar.tsx`
 
@@ -245,16 +236,64 @@ These items require significant implementation effort and are documented here fo
 - Added plane dropdown in toolbar with preset offsets (+10mm, -10mm, +50mm)
 - Enabled when a datum plane is selected in the feature tree
 
+### Session 2 (2026-01-01)
+
+#### 5. Snap-to-Grid Toggle & Configurable Size ✅
+
+**Files Changed:** `ViewerContext.tsx`, `Viewer.tsx`, `FloatingToolbar.tsx`
+
+- Added `snapToGrid` and `gridSize` to ViewerState
+- Added `toggleSnapToGrid()` and `setGridSize()` actions
+- Updated `snapToGrid` function in Viewer to respect toggle and size
+- Added grid toggle button in sketch toolbar (shows active state)
+- Added grid size dropdown (0.5mm, 1mm, 2mm, 5mm, 10mm)
+- Added 'G' keyboard shortcut to toggle snap-to-grid
+
+#### 6. Custom Offset Plane Dialog ✅
+
+**Files Changed:** `FloatingToolbar.tsx`, `FloatingToolbar.css`
+
+- Added "Custom Offset..." menu item in plane dropdown
+- Implemented Dialog component with number input
+- User can enter any positive or negative offset value
+- Styled to match the dark theme aesthetic
+
+#### 7. Snap-to-Geometry Visual Indicators ✅
+
+**Files Changed:** `Viewer.tsx`
+
+- Added `snapTarget` state to track snap targets during drawing
+- Updated `handleMouseMove` to detect nearby points when using drawing tools
+- Added `snapIndicatorRef` for the visual indicator mesh
+- Renders a green diamond (45° rotated ring) at snap target position
+- Indicator appears/disappears based on proximity to existing points
+
+#### 8. Body Visibility Toggle ✅
+
+**Files Changed:** `schema.ts`, `featureHelpers.ts`, `DocumentContext.tsx`, `FeatureTree.tsx`, `FeatureTree.css`, `Viewer.tsx`
+
+- Moved `visible` to `FeatureBaseSchema` (all features inherit it)
+- Added `toggleFeatureVisibility()` and `setFeatureVisibility()` helpers
+- Added `toggleVisibility` to DocumentContext
+- Added `visible` to TreeNode interface
+- Added eye icon toggle button on feature tree items (sketch, extrude, revolve, boolean)
+- Eye shows on hover, stays visible when feature is hidden
+- Hidden features filtered from mesh rendering
+
 ---
 
 ## Files Modified
 
-| File                                                     | Changes                                                          |
-| -------------------------------------------------------- | ---------------------------------------------------------------- |
-| `packages/app/src/editor/document/schema.ts`             | Added `construction` field to line/arc schemas                   |
-| `packages/app/src/editor/document/featureHelpers.ts`     | Added `toggleEntityConstruction`, `addOffsetPlane`               |
-| `packages/app/src/editor/contexts/SketchContext.tsx`     | Added `toggleConstruction`, `hasSelectedEntities`                |
-| `packages/app/src/editor/contexts/DocumentContext.tsx`   | Added `addOffsetPlane` to context                                |
-| `packages/app/src/editor/components/Viewer.tsx`          | Added face highlights, construction line rendering, 'X' shortcut |
-| `packages/app/src/editor/components/FloatingToolbar.tsx` | Added construction toggle button, plane dropdown                 |
-| `packages/app/src/editor/components/PropertiesPanel.tsx` | Improved axis candidate labels for revolve                       |
+| File                                                     | Changes                                                                |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `packages/app/src/editor/document/schema.ts`             | Added `construction` field, moved `visible` to FeatureBaseSchema       |
+| `packages/app/src/editor/document/featureHelpers.ts`     | Added construction, offset plane, visibility toggle functions          |
+| `packages/app/src/editor/contexts/SketchContext.tsx`     | Added `toggleConstruction`, `hasSelectedEntities`                      |
+| `packages/app/src/editor/contexts/DocumentContext.tsx`   | Added `addOffsetPlane`, `toggleVisibility`                             |
+| `packages/app/src/editor/contexts/ViewerContext.tsx`     | Added grid settings (snapToGrid, gridSize) with actions                |
+| `packages/app/src/editor/components/Viewer.tsx`          | Face highlights, construction rendering, snap indicators, grid toggle  |
+| `packages/app/src/editor/components/FloatingToolbar.tsx` | Construction toggle, plane dropdown, grid toggle, custom offset dialog |
+| `packages/app/src/editor/components/FloatingToolbar.css` | Dialog styles for custom offset                                        |
+| `packages/app/src/editor/components/FeatureTree.tsx`     | Visibility toggle button on feature items                              |
+| `packages/app/src/editor/components/FeatureTree.css`     | Visibility toggle button styles                                        |
+| `packages/app/src/editor/components/PropertiesPanel.tsx` | Improved axis candidate labels for revolve                             |

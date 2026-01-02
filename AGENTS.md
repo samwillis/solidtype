@@ -8,6 +8,8 @@ Before you write _any_ code, read:
 - [`OVERVIEW.md`](OVERVIEW.md) – **What** SolidType is and why it exists.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) – **How** it is structured (packages, layers, data flow).
 - [`/plan/*`](plan/*) – The **phase-by-phase implementation plan** you must follow.
+- [`TOPOLOGICAL-NAMING.md`](TOPOLOGICAL-NAMING.md) – **Comprehensive plan** for persistent naming (FreeCAD-style algorithm, data structures, phased implementation).
+- [`IMPLEMENTATION-SEQUENCE.md`](IMPLEMENTATION-SEQUENCE.md) – **Ordering guide** for interleaving sketch tools and topological naming work.
 
 Treat those documents as the source of truth. If they conflict with existing code, the docs win and the code should be brought back into line.
 

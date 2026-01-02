@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import "./ConfirmDialog.css";
 
 interface ConfirmDialogProps {
@@ -39,7 +40,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   if (!open) return null;
 
-  return (
+  // Use portal to render at document body level, escaping any overflow:hidden containers
+  return createPortal(
     <div className="confirm-dialog-overlay" onClick={onCancel}>
       <div ref={dialogRef} className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
         <h3 className="confirm-dialog-title">{title}</h3>
@@ -56,7 +58,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
