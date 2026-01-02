@@ -10,6 +10,7 @@ import {
   addPointToSketch,
   addLineToSketch,
   addArcToSketch,
+  addCircleToSketch,
   addConstraintToSketch,
   getSketchData,
   getSketchDataAsArrays,
@@ -40,7 +41,18 @@ export type ConstraintType =
 // Types
 // ============================================================================
 
-export type SketchTool = "none" | "select" | "line" | "arc" | "circle" | "rectangle";
+export type SketchTool =
+  | "none"
+  | "select"
+  | "point" // Standalone point
+  | "line"
+  | "arc" // 3-point arc (start → end → bulge)
+  | "arcCenterpoint" // Centerpoint arc (center → start → end)
+  | "arcTangent" // Tangent arc from endpoint
+  | "circle" // Centerpoint circle
+  | "circle3Point" // 3-point circle
+  | "rectangle" // Corner-corner rectangle
+  | "rectangleCenter"; // Center-corner rectangle
 
 export interface SketchModeState {
   active: boolean;
@@ -82,13 +94,15 @@ interface SketchContextValue {
   addPoint: (x: number, y: number) => string | null;
   addLine: (startId: string, endId: string) => string | null;
   addArc: (startId: string, endId: string, centerId: string, ccw?: boolean) => string | null;
+  /** Add a circle with center point and radius (no edge point needed) */
+  addCircle: (centerId: string, radius: number) => string | null;
   addTempPoint: (x: number, y: number) => void;
   clearTempPoints: () => void;
   getSketchPoints: () => SketchPoint[];
   updatePointPosition: (pointId: string, x: number, y: number) => void;
   findNearbyPoint: (x: number, y: number, tolerance: number) => SketchPoint | null;
-  /** Draw a rectangle at the given center with width and height */
-  addRectangle: (centerX: number, centerY: number, width: number, height: number) => void;
+  /** Draw a rectangle from corner (x1, y1) to corner (x2, y2) */
+  addRectangle: (x1: number, y1: number, x2: number, y2: number) => void;
   addConstraint: (constraint: NewSketchConstraint) => string | null;
 
   // Selection state for constraints
@@ -98,9 +112,9 @@ interface SketchContextValue {
   setSelectedPoints: React.Dispatch<React.SetStateAction<Set<string>>>;
   setSelectedLines: React.Dispatch<React.SetStateAction<Set<string>>>;
   setSelectedConstraints: React.Dispatch<React.SetStateAction<Set<string>>>;
-  togglePointSelection: (pointId: string) => void;
-  toggleLineSelection: (lineId: string) => void;
-  toggleConstraintSelection: (constraintId: string) => void;
+  togglePointSelection: (pointId: string, clearOthers?: boolean) => void;
+  toggleLineSelection: (lineId: string, clearOthers?: boolean) => void;
+  toggleConstraintSelection: (constraintId: string, clearOthers?: boolean) => void;
   clearSelection: () => void;
 
   // Deletion helpers
@@ -230,7 +244,15 @@ export function SketchProvider({ children }: SketchProviderProps) {
         isNewSketch: true,
       });
     },
-    [addSketch, resolvePlaneId, getViewForPlane, actions, state.currentView, rebuildGate, setRebuildGate]
+    [
+      addSketch,
+      resolvePlaneId,
+      getViewForPlane,
+      actions,
+      state.currentView,
+      rebuildGate,
+      setRebuildGate,
+    ]
   );
 
   const editSketch = useCallback(
@@ -348,6 +370,15 @@ export function SketchProvider({ children }: SketchProviderProps) {
     [getSketchElement]
   );
 
+  const addCircle = useCallback(
+    (centerId: string, radius: number): string | null => {
+      const sketch = getSketchElement();
+      if (!sketch) return null;
+      return addCircleToSketch(sketch, centerId, radius);
+    },
+    [getSketchElement]
+  );
+
   const addTempPoint = useCallback((x: number, y: number) => {
     setMode((prev) => ({
       ...prev,
@@ -393,24 +424,33 @@ export function SketchProvider({ children }: SketchProviderProps) {
   );
 
   const addRectangle = useCallback(
-    (centerX: number, centerY: number, width: number, height: number) => {
+    (x1: number, y1: number, x2: number, y2: number) => {
       const sketch = getSketchElement();
       if (!sketch) return;
 
-      const halfW = width / 2;
-      const halfH = height / 2;
+      // Ensure proper min/max ordering for corners
+      const minX = Math.min(x1, x2);
+      const minY = Math.min(y1, y2);
+      const maxX = Math.max(x1, x2);
+      const maxY = Math.max(y1, y2);
 
-      // Add 4 corner points
-      const p1 = addPointToSketch(sketch, centerX - halfW, centerY - halfH);
-      const p2 = addPointToSketch(sketch, centerX + halfW, centerY - halfH);
-      const p3 = addPointToSketch(sketch, centerX + halfW, centerY + halfH);
-      const p4 = addPointToSketch(sketch, centerX - halfW, centerY + halfH);
+      // Add 4 corner points (bottom-left, bottom-right, top-right, top-left)
+      const p1 = addPointToSketch(sketch, minX, minY); // bottom-left
+      const p2 = addPointToSketch(sketch, maxX, minY); // bottom-right
+      const p3 = addPointToSketch(sketch, maxX, maxY); // top-right
+      const p4 = addPointToSketch(sketch, minX, maxY); // top-left
 
       // Add 4 lines
-      addLineToSketch(sketch, p1, p2);
-      addLineToSketch(sketch, p2, p3);
-      addLineToSketch(sketch, p3, p4);
-      addLineToSketch(sketch, p4, p1);
+      addLineToSketch(sketch, p1, p2); // bottom (horizontal)
+      addLineToSketch(sketch, p2, p3); // right (vertical)
+      addLineToSketch(sketch, p3, p4); // top (horizontal)
+      addLineToSketch(sketch, p4, p1); // left (vertical)
+
+      // Add auto-constraints for rectangle edges
+      addConstraintToSketch(sketch, { type: "horizontal", points: [p1, p2] }); // bottom
+      addConstraintToSketch(sketch, { type: "horizontal", points: [p3, p4] }); // top
+      addConstraintToSketch(sketch, { type: "vertical", points: [p2, p3] }); // right
+      addConstraintToSketch(sketch, { type: "vertical", points: [p4, p1] }); // left
     },
     [getSketchElement]
   );
@@ -429,7 +469,8 @@ export function SketchProvider({ children }: SketchProviderProps) {
   const [selectedLines, setSelectedLines] = useState<Set<string>>(() => new Set());
   const [selectedConstraints, setSelectedConstraints] = useState<Set<string>>(() => new Set());
 
-  const togglePointSelection = useCallback((pointId: string) => {
+  // Toggle functions that preserve other selection types (for Ctrl+click multi-select)
+  const togglePointSelection = useCallback((pointId: string, clearOthers: boolean = true) => {
     setSelectedPoints((prev) => {
       const next = new Set(prev);
       if (next.has(pointId)) {
@@ -439,11 +480,14 @@ export function SketchProvider({ children }: SketchProviderProps) {
       }
       return next;
     });
-    setSelectedLines(new Set());
-    setSelectedConstraints(new Set());
+    // Only clear other types if not in multi-select mode
+    if (clearOthers) {
+      setSelectedLines(new Set());
+      setSelectedConstraints(new Set());
+    }
   }, []);
 
-  const toggleLineSelection = useCallback((lineId: string) => {
+  const toggleLineSelection = useCallback((lineId: string, clearOthers: boolean = true) => {
     setSelectedLines((prev) => {
       const next = new Set(prev);
       if (next.has(lineId)) {
@@ -453,23 +497,32 @@ export function SketchProvider({ children }: SketchProviderProps) {
       }
       return next;
     });
-    setSelectedPoints(new Set());
-    setSelectedConstraints(new Set());
+    // Only clear other types if not in multi-select mode
+    if (clearOthers) {
+      setSelectedPoints(new Set());
+      setSelectedConstraints(new Set());
+    }
   }, []);
 
-  const toggleConstraintSelection = useCallback((constraintId: string) => {
-    setSelectedConstraints((prev) => {
-      const next = new Set(prev);
-      if (next.has(constraintId)) {
-        next.delete(constraintId);
-      } else {
-        next.add(constraintId);
+  const toggleConstraintSelection = useCallback(
+    (constraintId: string, clearOthers: boolean = true) => {
+      setSelectedConstraints((prev) => {
+        const next = new Set(prev);
+        if (next.has(constraintId)) {
+          next.delete(constraintId);
+        } else {
+          next.add(constraintId);
+        }
+        return next;
+      });
+      // Only clear other types if not in multi-select mode
+      if (clearOthers) {
+        setSelectedPoints(new Set());
+        setSelectedLines(new Set());
       }
-      return next;
-    });
-    setSelectedPoints(new Set());
-    setSelectedLines(new Set());
-  }, []);
+    },
+    []
+  );
 
   const clearSelection = useCallback(() => {
     setSelectedPoints(new Set());
@@ -730,6 +783,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     addPoint,
     addLine,
     addArc,
+    addCircle,
     addTempPoint,
     clearTempPoints,
     getSketchPoints,

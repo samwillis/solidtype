@@ -41,6 +41,8 @@ interface ViewerState {
   snapToGrid: boolean;
   /** Grid size for snapping in mm */
   gridSize: number;
+  /** Whether auto-constraints (H/V, coincident) are applied during sketching */
+  autoConstraints: boolean;
 }
 
 interface PlaneTransform {
@@ -60,6 +62,10 @@ interface ViewerActions {
   toggleSnapToGrid: () => void;
   /** Set the grid size in mm */
   setGridSize: (size: number) => void;
+  /** Toggle auto-constraints on/off */
+  toggleAutoConstraints: () => void;
+  /** Set auto-constraints enabled/disabled */
+  setAutoConstraints: (enabled: boolean) => void;
 }
 
 // Shared camera state ref for real-time sync between Viewer and ViewCube
@@ -164,6 +170,7 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     currentView: null,
     snapToGrid: true,
     gridSize: 1, // 1mm default
+    autoConstraints: true, // Auto-apply H/V constraints
   });
 
   // Shared ref for camera state (avoids React state updates during drag)
@@ -295,6 +302,14 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     setState((prev) => ({ ...prev, gridSize: Math.max(0.1, size) }));
   }, []);
 
+  const toggleAutoConstraints = useCallback(() => {
+    setState((prev) => ({ ...prev, autoConstraints: !prev.autoConstraints }));
+  }, []);
+
+  const setAutoConstraints = useCallback((enabled: boolean) => {
+    setState((prev) => ({ ...prev, autoConstraints: enabled }));
+  }, []);
+
   // Convert screen coordinates to sketch coordinates via ray-plane intersection
   const screenToSketch = useCallback(
     (screenX: number, screenY: number, planeId: string): { x: number; y: number } | null => {
@@ -319,6 +334,8 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
           zoomToFit,
           toggleSnapToGrid,
           setGridSize,
+          toggleAutoConstraints,
+          setAutoConstraints,
         },
         registerRefs,
         cameraStateRef,

@@ -246,15 +246,15 @@ A phase is complete when:
 
 These decisions are **locked** to prevent schema migrations:
 
-| Decision             | Value                                                                    | See                                                        |
-| -------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| Vector serialization | Comma-separated strings (`"0,0,1"`)                                      | [01-document-model.md](01-document-model.md)               |
-| Complex data         | JSON in attributes (for sketch lists: `points`/`entities`/`constraints`) | [01-document-model.md](01-document-model.md)               |
-| Feature IDs          | **UUID** (`"f7a8b3c2-1234-..."`) — display names (`Extrude1`) are separate | [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md#03-feature-identity-uuid-vs-display-name) |
-| Persistent refs      | `type:featureId:selector` (featureId = UUID, fingerprints stored separately) | [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md#71-storing-references-in-features) |
-| Build errors         | Transient (not stored in Yjs)                                            | [01-document-model.md](01-document-model.md)               |
-| Rebuild strategy     | Full rebuild initially, incremental later                                | [02-kernel-viewer-wiring.md](02-kernel-viewer-wiring.md)   |
-| OffscreenCanvas      | After Phase 11 or when face count > 500                                  | [02-kernel-viewer-wiring.md](02-kernel-viewer-wiring.md)   |
+| Decision             | Value                                                                        | See                                                                                      |
+| -------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Vector serialization | Comma-separated strings (`"0,0,1"`)                                          | [01-document-model.md](01-document-model.md)                                             |
+| Complex data         | JSON in attributes (for sketch lists: `points`/`entities`/`constraints`)     | [01-document-model.md](01-document-model.md)                                             |
+| Feature IDs          | **UUID** (`"f7a8b3c2-1234-..."`) — display names (`Extrude1`) are separate   | [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md#03-feature-identity-uuid-vs-display-name) |
+| Persistent refs      | `type:featureId:selector` (featureId = UUID, fingerprints stored separately) | [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md#71-storing-references-in-features)        |
+| Build errors         | Transient (not stored in Yjs)                                                | [01-document-model.md](01-document-model.md)                                             |
+| Rebuild strategy     | Full rebuild initially, incremental later                                    | [02-kernel-viewer-wiring.md](02-kernel-viewer-wiring.md)                                 |
+| OffscreenCanvas      | After Phase 11 or when face count > 500                                      | [02-kernel-viewer-wiring.md](02-kernel-viewer-wiring.md)                                 |
 
 **AI integration (Phases 23-26) requires all of these to be stable before starting.**
 

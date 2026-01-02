@@ -442,25 +442,30 @@ export function addOffsetPlane(doc: SolidTypeDoc, options: OffsetPlaneOptions): 
  */
 export interface AxisFeatureOptions {
   /** How the axis is defined */
-  definition: {
-    kind: "datum";
-    role: "x" | "y" | "z";
-  } | {
-    kind: "twoPoints";
-    point1Ref: string;
-    point2Ref: string;
-  } | {
-    kind: "sketchLine";
-    sketchId: string;
-    lineId: string;
-  } | {
-    kind: "edge";
-    edgeRef: string;
-  } | {
-    kind: "surfaceNormal";
-    faceRef: string;
-    pointRef?: string;
-  };
+  definition:
+    | {
+        kind: "datum";
+        role: "x" | "y" | "z";
+      }
+    | {
+        kind: "twoPoints";
+        point1Ref: string;
+        point2Ref: string;
+      }
+    | {
+        kind: "sketchLine";
+        sketchId: string;
+        lineId: string;
+      }
+    | {
+        kind: "edge";
+        edgeRef: string;
+      }
+    | {
+        kind: "surfaceNormal";
+        faceRef: string;
+        pointRef?: string;
+      };
   /** Optional name */
   name?: string;
   /** Display length */
@@ -693,6 +698,30 @@ export function addArcToSketch(
   arc.set("end", endId);
   arc.set("center", centerId);
   arc.set("ccw", ccw);
+
+  return id;
+}
+
+/**
+ * Add a circle to a sketch (center point + radius, no edge point needed)
+ */
+export function addCircleToSketch(
+  sketchMap: Y.Map<unknown>,
+  centerId: string,
+  radius: number
+): string {
+  const id = uuid();
+
+  const dataMap = sketchMap.get("data") as Y.Map<unknown>;
+  const entitiesById = getEntitiesById(dataMap);
+
+  const circle = new Y.Map();
+  entitiesById.set(id, circle);
+
+  circle.set("id", id);
+  circle.set("type", "circle");
+  circle.set("center", centerId);
+  circle.set("radius", radius);
 
   return id;
 }

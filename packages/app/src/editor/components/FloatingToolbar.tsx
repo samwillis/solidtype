@@ -14,6 +14,7 @@ import {
   PlaneIcon,
   AxisIcon,
   SelectIcon,
+  PointIcon,
   LineIcon,
   RectangleIcon,
   ArcIcon,
@@ -43,7 +44,6 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
     startSketch,
     finishSketch,
     cancelSketch,
-    addRectangle,
     setTool,
     canApplyConstraint,
     applyConstraint,
@@ -51,7 +51,8 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
     toggleConstruction,
     hasSelectedEntities,
   } = useSketch();
-  const { undo, redo, canUndo, canRedo, features, addBoolean, addOffsetPlane, addAxis } = useDocument();
+  const { undo, redo, canUndo, canRedo, features, addBoolean, addOffsetPlane, addAxis } =
+    useDocument();
   const { selectedFeatureId, selectFeature, clearSelection } = useSelection();
   const { exportStl, exportStep, exportJson, bodies, sketchPlaneTransforms } = useKernel();
   const { startExtrudeEdit, startRevolveEdit, isEditing } = useFeatureEdit();
@@ -62,7 +63,18 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
 
   // Toggle tool - clicking an active tool toggles it off
   const toggleTool = useCallback(
-    (tool: "select" | "line" | "arc" | "circle" | "rectangle") => {
+    (
+      tool:
+        | "select"
+        | "point"
+        | "line"
+        | "arc"
+        | "arcCenterpoint"
+        | "circle"
+        | "circle3Point"
+        | "rectangle"
+        | "rectangleCenter"
+    ) => {
       if (mode.activeTool === tool) {
         setTool("none");
       } else {
@@ -248,9 +260,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
     startSketch(sketchPlaneRef);
   };
 
-  const handleAddRectangle = () => {
-    addRectangle(0, 0, 4, 3);
-  };
+  // Rectangle tool removed - use toggleTool("rectangle") instead
 
   const canStartSketch = sketchPlaneRef !== null;
   const canExtrude = !isEditing && (selectedSketch !== null || sketches.length === 1);
@@ -345,6 +355,21 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
             <Tooltip.Root>
               <Tooltip.Trigger
                 delay={300}
+                className={`floating-toolbar-button ${mode.activeTool === "point" ? "active" : ""}`}
+                onClick={() => toggleTool("point")}
+                render={<button aria-label="Point" />}
+              >
+                <PointIcon />
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Positioner side="top" sideOffset={6}>
+                  <Tooltip.Popup className="floating-toolbar-tooltip">Point</Tooltip.Popup>
+                </Tooltip.Positioner>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+            <Tooltip.Root>
+              <Tooltip.Trigger
+                delay={300}
                 className={`floating-toolbar-button ${mode.activeTool === "line" ? "active" : ""}`}
                 onClick={() => toggleTool("line")}
                 render={<button aria-label="Line" />}
@@ -357,51 +382,154 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                 </Tooltip.Positioner>
               </Tooltip.Portal>
             </Tooltip.Root>
-            <Tooltip.Root>
-              <Tooltip.Trigger
-                delay={300}
-                className={`floating-toolbar-button ${mode.activeTool === "arc" ? "active" : ""}`}
-                onClick={() => toggleTool("arc")}
-                render={<button aria-label="Arc" />}
-              >
-                <ArcIcon />
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Positioner side="top" sideOffset={6}>
-                  <Tooltip.Popup className="floating-toolbar-tooltip">Arc</Tooltip.Popup>
-                </Tooltip.Positioner>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-            <Tooltip.Root>
-              <Tooltip.Trigger
-                delay={300}
-                className={`floating-toolbar-button ${mode.activeTool === "circle" ? "active" : ""}`}
-                onClick={() => toggleTool("circle")}
-                render={<button aria-label="Circle" />}
-              >
-                <CircleIcon />
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Positioner side="top" sideOffset={6}>
-                  <Tooltip.Popup className="floating-toolbar-tooltip">Circle</Tooltip.Popup>
-                </Tooltip.Positioner>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-            <Tooltip.Root>
-              <Tooltip.Trigger
-                delay={300}
-                className="floating-toolbar-button"
-                onClick={handleAddRectangle}
-                render={<button aria-label="Rectangle" />}
-              >
-                <RectangleIcon />
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Positioner side="top" sideOffset={6}>
-                  <Tooltip.Popup className="floating-toolbar-tooltip">Rectangle</Tooltip.Popup>
-                </Tooltip.Positioner>
-              </Tooltip.Portal>
-            </Tooltip.Root>
+            {/* Arc Tool with Flyout Menu */}
+            <div className="floating-toolbar-button-group">
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  delay={300}
+                  className={`floating-toolbar-button ${mode.activeTool === "arc" || mode.activeTool === "arcCenterpoint" ? "active" : ""}`}
+                  onClick={() =>
+                    toggleTool(mode.activeTool === "arcCenterpoint" ? "arcCenterpoint" : "arc")
+                  }
+                  render={<button aria-label="Arc" />}
+                >
+                  <ArcIcon />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Positioner side="top" sideOffset={6}>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">
+                      {mode.activeTool === "arcCenterpoint" ? "Arc (Centerpoint)" : "Arc (3-Point)"}
+                    </Tooltip.Popup>
+                  </Tooltip.Positioner>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+              <Menu.Root>
+                <Menu.Trigger
+                  className="floating-toolbar-flyout-trigger"
+                  render={<button aria-label="Arc options" />}
+                >
+                  <ChevronDownIcon />
+                </Menu.Trigger>
+                <Menu.Portal>
+                  <Menu.Positioner sideOffset={4}>
+                    <Menu.Popup className="floating-toolbar-menu">
+                      <Menu.Item
+                        className="floating-toolbar-menu-item"
+                        onClick={() => setTool("arc")}
+                      >
+                        3-Point Arc (Start → End → Bulge)
+                      </Menu.Item>
+                      <Menu.Item
+                        className="floating-toolbar-menu-item"
+                        onClick={() => setTool("arcCenterpoint")}
+                      >
+                        Centerpoint Arc (Center → Start → End)
+                      </Menu.Item>
+                    </Menu.Popup>
+                  </Menu.Positioner>
+                </Menu.Portal>
+              </Menu.Root>
+            </div>
+            {/* Circle Tool with Flyout Menu */}
+            <div className="floating-toolbar-button-group">
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  delay={300}
+                  className={`floating-toolbar-button ${mode.activeTool === "circle" || mode.activeTool === "circle3Point" ? "active" : ""}`}
+                  onClick={() =>
+                    toggleTool(mode.activeTool === "circle3Point" ? "circle3Point" : "circle")
+                  }
+                  render={<button aria-label="Circle" />}
+                >
+                  <CircleIcon />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Positioner side="top" sideOffset={6}>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">
+                      {mode.activeTool === "circle3Point" ? "Circle (3-Point)" : "Circle (Center)"}
+                    </Tooltip.Popup>
+                  </Tooltip.Positioner>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+              <Menu.Root>
+                <Menu.Trigger
+                  className="floating-toolbar-flyout-trigger"
+                  render={<button aria-label="Circle options" />}
+                >
+                  <ChevronDownIcon />
+                </Menu.Trigger>
+                <Menu.Portal>
+                  <Menu.Positioner sideOffset={4}>
+                    <Menu.Popup className="floating-toolbar-menu">
+                      <Menu.Item
+                        className="floating-toolbar-menu-item"
+                        onClick={() => setTool("circle")}
+                      >
+                        Centerpoint Circle (Center → Radius)
+                      </Menu.Item>
+                      <Menu.Item
+                        className="floating-toolbar-menu-item"
+                        onClick={() => setTool("circle3Point")}
+                      >
+                        3-Point Circle
+                      </Menu.Item>
+                    </Menu.Popup>
+                  </Menu.Positioner>
+                </Menu.Portal>
+              </Menu.Root>
+            </div>
+            {/* Rectangle Tool with Flyout Menu */}
+            <div className="floating-toolbar-button-group">
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  delay={300}
+                  className={`floating-toolbar-button ${mode.activeTool === "rectangle" || mode.activeTool === "rectangleCenter" ? "active" : ""}`}
+                  onClick={() =>
+                    toggleTool(
+                      mode.activeTool === "rectangleCenter" ? "rectangleCenter" : "rectangle"
+                    )
+                  }
+                  render={<button aria-label="Rectangle" />}
+                >
+                  <RectangleIcon />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Positioner side="top" sideOffset={6}>
+                    <Tooltip.Popup className="floating-toolbar-tooltip">
+                      {mode.activeTool === "rectangleCenter"
+                        ? "Rectangle (Center)"
+                        : "Rectangle (Corner)"}
+                    </Tooltip.Popup>
+                  </Tooltip.Positioner>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+              <Menu.Root>
+                <Menu.Trigger
+                  className="floating-toolbar-flyout-trigger"
+                  render={<button aria-label="Rectangle options" />}
+                >
+                  <ChevronDownIcon />
+                </Menu.Trigger>
+                <Menu.Portal>
+                  <Menu.Positioner sideOffset={4}>
+                    <Menu.Popup className="floating-toolbar-menu">
+                      <Menu.Item
+                        className="floating-toolbar-menu-item"
+                        onClick={() => setTool("rectangle")}
+                      >
+                        Corner Rectangle (Click two corners)
+                      </Menu.Item>
+                      <Menu.Item
+                        className="floating-toolbar-menu-item"
+                        onClick={() => setTool("rectangleCenter")}
+                      >
+                        Center Rectangle (Click center, then corner)
+                      </Menu.Item>
+                    </Menu.Popup>
+                  </Menu.Positioner>
+                </Menu.Portal>
+              </Menu.Root>
+            </div>
 
             {/* Constraints dropdown */}
             <Menu.Root>
@@ -593,11 +721,11 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                         viewerActions.setViewToPlane(transform);
                       } else if (mode.planeId) {
                         // Fallback for built-in planes when transform not yet available
-                      const planeViewMap: Record<string, string> = {
-                        xy: "top",
-                        xz: "front",
-                        yz: "right",
-                      };
+                        const planeViewMap: Record<string, string> = {
+                          xy: "top",
+                          xz: "front",
+                          yz: "right",
+                        };
                         const view = planeViewMap[mode.planeId];
                         if (view) {
                           viewerActions.setView(view as "top" | "front" | "right");
@@ -733,21 +861,27 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                       <Menu.Item
                         className="floating-toolbar-dropdown-item"
                         disabled
-                        onClick={() => {/* TODO: implement edge selection */}}
+                        onClick={() => {
+                          /* TODO: implement edge selection */
+                        }}
                       >
                         Along Edge (select edge)
                       </Menu.Item>
                       <Menu.Item
                         className="floating-toolbar-dropdown-item"
                         disabled
-                        onClick={() => {/* TODO: implement two-point selection */}}
+                        onClick={() => {
+                          /* TODO: implement two-point selection */
+                        }}
                       >
                         Between Two Points
                       </Menu.Item>
                       <Menu.Item
                         className="floating-toolbar-dropdown-item"
                         disabled
-                        onClick={() => {/* TODO: implement sketch line selection */}}
+                        onClick={() => {
+                          /* TODO: implement sketch line selection */
+                        }}
                       >
                         Along Sketch Line
                       </Menu.Item>
@@ -861,9 +995,9 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
         {/* Export */}
         <div className="floating-toolbar-group">
           <Menu.Root>
-          <Tooltip.Root>
-            <Tooltip.Trigger
-              delay={300}
+            <Tooltip.Root>
+              <Tooltip.Trigger
+                delay={300}
                 render={
                   <Menu.Trigger
                     className={`floating-toolbar-button has-dropdown ${!canExport ? "disabled" : ""} ${isExporting || isExportingStep ? "loading" : ""}`}
@@ -871,22 +1005,22 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
                     aria-label="Export"
                   />
                 }
-            >
-              <ExportIcon />
+              >
+                <ExportIcon />
                 <ChevronDownIcon className="dropdown-indicator" />
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-              <Tooltip.Positioner side="top" sideOffset={6}>
-                <Tooltip.Popup className="floating-toolbar-tooltip">
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Positioner side="top" sideOffset={6}>
+                  <Tooltip.Popup className="floating-toolbar-tooltip">
                     {isExporting || isExportingStep
-                    ? "Exporting..."
-                    : canExport
+                      ? "Exporting..."
+                      : canExport
                         ? "Export Model"
                         : "Export (no bodies)"}
-                </Tooltip.Popup>
-              </Tooltip.Positioner>
-            </Tooltip.Portal>
-          </Tooltip.Root>
+                  </Tooltip.Popup>
+                </Tooltip.Positioner>
+              </Tooltip.Portal>
+            </Tooltip.Root>
             <Menu.Portal>
               <Menu.Positioner side="top" sideOffset={8}>
                 <Menu.Popup className="floating-toolbar-dropdown">
@@ -912,7 +1046,6 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
           </Menu.Root>
         </div>
       </div>
-
     </Tooltip.Provider>
   );
 };

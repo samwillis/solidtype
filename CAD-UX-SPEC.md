@@ -42,68 +42,70 @@
 > **Note:** Features are categorized by implementation phase. Status shows both kernel and app readiness.
 
 **Legend:**
+
 - ✅ = Fully implemented
-- 🔧 = Partially implemented / needs work  
+- 🔧 = Partially implemented / needs work
 - ❌ = Not implemented
 
 #### 2D Sketching
 
-| Feature | Kernel | App | Notes |
-|---------|--------|-----|-------|
-| Lines | ✅ | 🔧 | Creates lines with preview, but NO chain mode (each line is separate) |
-| Arcs (3-point) | ✅ | 🔧 | 3-click works, but NO preview arc while placing |
-| Circles | ✅ | ❌ | Click twice to create, but NO preview circle, NO radius indicator, ~20% functional |
-| Rectangles | ✅ | ❌ | **BROKEN**: Toolbar button creates fixed 4×3 rect at origin, tool mode has no preview |
-| Point snapping | ✅ | 🔧 | Snaps to points, but NO visual snap indicator |
-| Grid snapping | — | 🔧 | Basic grid snap, but NO grid lines visible in sketch mode |
-| Coincident constraint | ✅ | 🔧 | Menu button exists, **NOT TESTED** if it works correctly |
-| Horizontal/Vertical | ✅ | 🔧 | Menu button exists, **NOT TESTED** if it works correctly |
-| Parallel/Perpendicular | ✅ | 🔧 | Menu button exists, **NOT TESTED** if it works correctly |
-| Tangent | ✅ | 🔧 | Menu button exists, **NOT TESTED** |
-| Equal/Midpoint | ✅ | 🔧 | Menu button exists, **NOT TESTED** |
-| Distance dimension | ✅ | 🔧 | Can create, but input UX is poor |
-| Angle dimension | ✅ | ❌ | Menu exists, **likely broken** |
-| Inference lines (H/V) | ❌ | ❌ | Not implemented |
-| Auto-constraints | ❌ | ❌ | Not implemented |
-| Trim | ❌ | ❌ | Not implemented |
-| Extend | ❌ | ❌ | Not implemented |
-| Offset | ❌ | ❌ | Not implemented |
-| Splines | ❌ | ❌ | Future |
-| Slots | ❌ | ❌ | Future |
-| Construction toggle | ✅ | 🔧 | Button exists, **NOT TESTED** |
+| Feature                | Kernel | App | Notes                                                                                 |
+| ---------------------- | ------ | --- | ------------------------------------------------------------------------------------- |
+| Lines                  | ✅     | 🔧  | Creates lines with preview, but NO chain mode (each line is separate)                 |
+| Arcs (3-point)         | ✅     | 🔧  | 3-click works, but NO preview arc while placing                                       |
+| Circles                | ✅     | ❌  | Click twice to create, but NO preview circle, NO radius indicator, ~20% functional    |
+| Rectangles             | ✅     | ❌  | **BROKEN**: Toolbar button creates fixed 4×3 rect at origin, tool mode has no preview |
+| Point snapping         | ✅     | 🔧  | Snaps to points, but NO visual snap indicator                                         |
+| Grid snapping          | —      | 🔧  | Basic grid snap, but NO grid lines visible in sketch mode                             |
+| Coincident constraint  | ✅     | 🔧  | Menu button exists, **NOT TESTED** if it works correctly                              |
+| Horizontal/Vertical    | ✅     | 🔧  | Menu button exists, **NOT TESTED** if it works correctly                              |
+| Parallel/Perpendicular | ✅     | 🔧  | Menu button exists, **NOT TESTED** if it works correctly                              |
+| Tangent                | ✅     | 🔧  | Menu button exists, **NOT TESTED**                                                    |
+| Equal/Midpoint         | ✅     | 🔧  | Menu button exists, **NOT TESTED**                                                    |
+| Distance dimension     | ✅     | 🔧  | Can create, but input UX is poor                                                      |
+| Angle dimension        | ✅     | ❌  | Menu exists, **likely broken**                                                        |
+| Inference lines (H/V)  | ❌     | ❌  | Not implemented                                                                       |
+| Auto-constraints       | ❌     | ❌  | Not implemented                                                                       |
+| Trim                   | ❌     | ❌  | Not implemented                                                                       |
+| Extend                 | ❌     | ❌  | Not implemented                                                                       |
+| Offset                 | ❌     | ❌  | Not implemented                                                                       |
+| Splines                | ❌     | ❌  | Future                                                                                |
+| Slots                  | ❌     | ❌  | Future                                                                                |
+| Construction toggle    | ✅     | 🔧  | Button exists, **NOT TESTED**                                                         |
 
-> **Reality check:** The constraint menu has buttons but most are **untested**. 
+> **Reality check:** The constraint menu has buttons but most are **untested**.
 > The `canApplyConstraint` logic may have bugs. Selection of appropriate entities is unclear.
 
 #### Part Features (Solid + Surface)
 
-| Feature | Kernel | App | Notes |
-|---------|--------|-----|-------|
-| Extrude (Blind) | ✅ | 🔧 | Works, but preview may be inconsistent |
-| Extrude (Through All) | ❌ | ❌ | Not implemented |
-| Extrude (Up To Face) | ❌ | ❌ | Not implemented |
-| Extrude Cut | ✅ | 🔧 | Works via boolean, UX clunky |
-| Revolve | ✅ | 🔧 | Works, axis selection is confusing |
-| Fillet | ✅ | ❌ | **NO UI AT ALL** - no toolbar button, no dialog |
-| Chamfer | ✅ | ❌ | **NO UI AT ALL** - no toolbar button, no dialog |
-| Boolean (Union) | ✅ | 🔧 | Auto-selects last 2 bodies, not user-friendly |
-| Boolean (Subtract) | ✅ | 🔧 | Same as union |
-| Boolean (Intersect) | ✅ | 🔧 | Same as union |
-| Face selection | ✅ | ❌ | Click works but **NO UI FEEDBACK** - no "1 Face selected" message |
-| Edge selection | ❌ | ❌ | **NOT IMPLEMENTED** - blocks Fillet/Chamfer |
-| Sketch on Face | ✅ | ❌ | **REPORTED BROKEN** - face selection doesn't trigger sketch |
-| Mirror | ❌ | ❌ | Future |
-| Linear Pattern | ❌ | ❌ | Future |
-| Circular Pattern | ❌ | ❌ | Future |
-| Sweep | ❌ | ❌ | Future |
-| Loft | ❌ | ❌ | Future |
-| Shell | ❌ | ❌ | Future |
-| Draft | ❌ | ❌ | Future |
-| Rib | ❌ | ❌ | Future |
-| Hole Wizard | ❌ | ❌ | Future |
-| Split Line | ❌ | ❌ | Future |
+| Feature               | Kernel | App | Notes                                                             |
+| --------------------- | ------ | --- | ----------------------------------------------------------------- |
+| Extrude (Blind)       | ✅     | 🔧  | Works, but preview may be inconsistent                            |
+| Extrude (Through All) | ❌     | ❌  | Not implemented                                                   |
+| Extrude (Up To Face)  | ❌     | ❌  | Not implemented                                                   |
+| Extrude Cut           | ✅     | 🔧  | Works via boolean, UX clunky                                      |
+| Revolve               | ✅     | 🔧  | Works, axis selection is confusing                                |
+| Fillet                | ✅     | ❌  | **NO UI AT ALL** - no toolbar button, no dialog                   |
+| Chamfer               | ✅     | ❌  | **NO UI AT ALL** - no toolbar button, no dialog                   |
+| Boolean (Union)       | ✅     | 🔧  | Auto-selects last 2 bodies, not user-friendly                     |
+| Boolean (Subtract)    | ✅     | 🔧  | Same as union                                                     |
+| Boolean (Intersect)   | ✅     | 🔧  | Same as union                                                     |
+| Face selection        | ✅     | ❌  | Click works but **NO UI FEEDBACK** - no "1 Face selected" message |
+| Edge selection        | ❌     | ❌  | **NOT IMPLEMENTED** - blocks Fillet/Chamfer                       |
+| Sketch on Face        | ✅     | ❌  | **REPORTED BROKEN** - face selection doesn't trigger sketch       |
+| Mirror                | ❌     | ❌  | Future                                                            |
+| Linear Pattern        | ❌     | ❌  | Future                                                            |
+| Circular Pattern      | ❌     | ❌  | Future                                                            |
+| Sweep                 | ❌     | ❌  | Future                                                            |
+| Loft                  | ❌     | ❌  | Future                                                            |
+| Shell                 | ❌     | ❌  | Future                                                            |
+| Draft                 | ❌     | ❌  | Future                                                            |
+| Rib                   | ❌     | ❌  | Future                                                            |
+| Hole Wizard           | ❌     | ❌  | Future                                                            |
+| Split Line            | ❌     | ❌  | Future                                                            |
 
 > **Blocking issues:**
+>
 > - **Fillet/Chamfer**: Kernel ready, but NO app UI exists at all
 > - **Edge selection**: Not implemented, blocks Fillet/Chamfer
 > - **Face selection feedback**: Works internally, but user has NO indication it worked
@@ -111,31 +113,31 @@
 
 #### Reference Geometry
 
-| Feature | Kernel | App | Notes |
-|---------|--------|-----|-------|
-| Origin planes (XY/XZ/YZ) | ✅ | ✅ | Works, visible in tree and viewport |
-| Origin axes (X/Y/Z) | ✅ | 🔧 | In tree, but visualization may be missing |
-| Offset plane | ✅ | 🔧 | Can create, UX for specifying distance unclear |
-| Plane from face | ✅ | ❌ | **Blocked**: Face selection has no UI feedback |
-| Midplane (2 faces) | ❌ | ❌ | Not implemented |
-| Angle plane | ❌ | ❌ | Not implemented |
-| 3-point plane | ❌ | ❌ | Not implemented |
-| Axis from edge | ❌ | ❌ | **Blocked**: Edge selection not implemented |
-| Axis from 2 points | ❌ | ❌ | Not implemented |
+| Feature                  | Kernel | App | Notes                                          |
+| ------------------------ | ------ | --- | ---------------------------------------------- |
+| Origin planes (XY/XZ/YZ) | ✅     | ✅  | Works, visible in tree and viewport            |
+| Origin axes (X/Y/Z)      | ✅     | 🔧  | In tree, but visualization may be missing      |
+| Offset plane             | ✅     | 🔧  | Can create, UX for specifying distance unclear |
+| Plane from face          | ✅     | ❌  | **Blocked**: Face selection has no UI feedback |
+| Midplane (2 faces)       | ❌     | ❌  | Not implemented                                |
+| Angle plane              | ❌     | ❌  | Not implemented                                |
+| 3-point plane            | ❌     | ❌  | Not implemented                                |
+| Axis from edge           | ❌     | ❌  | **Blocked**: Edge selection not implemented    |
+| Axis from 2 points       | ❌     | ❌  | Not implemented                                |
 
 #### 3D Selection & Interaction
 
-| Feature | Kernel | App | Notes |
-|---------|--------|-----|-------|
-| Face hover highlight | ✅ | 🔧 | Renders highlight, but subtle - easy to miss |
-| Face click selection | ✅ | ❌ | Click works internally, but **NO UI FEEDBACK** - user doesn't know it worked |
-| Face multi-select | ✅ | ❌ | Ctrl+click may work, but impossible to verify without UI feedback |
-| Properties panel shows selection | — | ❌ | **NO "Face selected" indicator** anywhere |
-| Edge tessellation | ❌ | ❌ | **NOT IN KERNEL** - needs to be added |
-| Edge rendering | — | ❌ | Blocked by tessellation |
-| Edge hover highlight | — | ❌ | Blocked by tessellation |
-| Edge click selection | — | ❌ | Blocked by tessellation |
-| Persistent naming | 🔧 | 🔧 | Partial, uses unstable indices currently. See [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md) |
+| Feature                          | Kernel | App | Notes                                                                                         |
+| -------------------------------- | ------ | --- | --------------------------------------------------------------------------------------------- |
+| Face hover highlight             | ✅     | 🔧  | Renders highlight, but subtle - easy to miss                                                  |
+| Face click selection             | ✅     | ❌  | Click works internally, but **NO UI FEEDBACK** - user doesn't know it worked                  |
+| Face multi-select                | ✅     | ❌  | Ctrl+click may work, but impossible to verify without UI feedback                             |
+| Properties panel shows selection | —      | ❌  | **NO "Face selected" indicator** anywhere                                                     |
+| Edge tessellation                | ❌     | ❌  | **NOT IN KERNEL** - needs to be added                                                         |
+| Edge rendering                   | —      | ❌  | Blocked by tessellation                                                                       |
+| Edge hover highlight             | —      | ❌  | Blocked by tessellation                                                                       |
+| Edge click selection             | —      | ❌  | Blocked by tessellation                                                                       |
+| Persistent naming                | 🔧     | 🔧  | Partial, uses unstable indices currently. See [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md) |
 
 > **Critical UX gap:** User can click on faces, the system registers it internally,
 > but there's **NO VISIBLE INDICATION** that anything was selected. This makes
@@ -143,25 +145,25 @@
 
 #### Workflow Patterns
 
-| Pattern | App | Notes |
-|---------|-----|-------|
-| Selection-first | ❌ | Selection works but **NO FEEDBACK** - users can't see what's selected |
-| PropertyManager panel | 🔧 | Shows feature params, but NO selection info |
-| Live preview | 🔧 | Lines have preview; **Missing for**: circle, rectangle, arc |
-| In-canvas handles | ❌ | Not implemented |
-| Undo/Redo | ✅ | Works via Yjs |
-| Multi-user collaboration | ✅ | Works via Yjs |
+| Pattern                  | App | Notes                                                                 |
+| ------------------------ | --- | --------------------------------------------------------------------- |
+| Selection-first          | ❌  | Selection works but **NO FEEDBACK** - users can't see what's selected |
+| PropertyManager panel    | 🔧  | Shows feature params, but NO selection info                           |
+| Live preview             | 🔧  | Lines have preview; **Missing for**: circle, rectangle, arc           |
+| In-canvas handles        | ❌  | Not implemented                                                       |
+| Undo/Redo                | ✅  | Works via Yjs                                                         |
+| Multi-user collaboration | ✅  | Works via Yjs                                                         |
 
-> **Core UX problem:** The app has backend functionality but users can't **see** 
+> **Core UX problem:** The app has backend functionality but users can't **see**
 > what's happening. No previews, no selection indicators, no feedback.
 
 #### Body Types: Solid vs Surface
 
 Following SolidWorks conventions, SolidType distinguishes between **Solid Bodies** and **Surface Bodies**:
 
-| Body Type | Description | Visual | Use Cases |
-|-----------|-------------|--------|-----------|
-| **Solid Body** | Watertight, enclosed volume | Shaded, opaque | Machined parts, 3D printing, mass properties |
+| Body Type        | Description                    | Visual                                | Use Cases                                                |
+| ---------------- | ------------------------------ | ------------------------------------- | -------------------------------------------------------- |
+| **Solid Body**   | Watertight, enclosed volume    | Shaded, opaque                        | Machined parts, 3D printing, mass properties             |
 | **Surface Body** | Open faces, no enclosed volume | Slightly transparent or colored edges | Complex shapes, imported geometry, intermediate modeling |
 
 ##### SolidWorks Behavior (Reference)
@@ -192,17 +194,18 @@ Following SolidWorks conventions, SolidType distinguishes between **Solid Bodies
 
 ##### SolidType Implementation
 
-| Feature | Kernel | App | Notes |
-|---------|--------|-----|-------|
-| Solid body creation | ✅ | 🔧 | Extrude/Revolve create solids from closed profiles |
-| Surface body creation | ❌ | ❌ | No surface-specific features yet |
-| Body type detection | ✅ | ❌ | Kernel has `isShellClosed()`, app doesn't display |
-| Body folder in tree | — | ❌ | No "Solid Bodies(n)" / "Surface Bodies(n)" folders |
-| Visual distinction | — | ❌ | All bodies rendered identically |
-| Thicken surface | ❌ | ❌ | Future |
-| Knit surfaces | ❌ | ❌ | Future |
+| Feature               | Kernel | App | Notes                                              |
+| --------------------- | ------ | --- | -------------------------------------------------- |
+| Solid body creation   | ✅     | 🔧  | Extrude/Revolve create solids from closed profiles |
+| Surface body creation | ❌     | ❌  | No surface-specific features yet                   |
+| Body type detection   | ✅     | ❌  | Kernel has `isShellClosed()`, app doesn't display  |
+| Body folder in tree   | —      | ❌  | No "Solid Bodies(n)" / "Surface Bodies(n)" folders |
+| Visual distinction    | —      | ❌  | All bodies rendered identically                    |
+| Thicken surface       | ❌     | ❌  | Future                                             |
+| Knit surfaces         | ❌     | ❌  | Future                                             |
 
 **Kernel Implementation:**
+
 ```typescript
 // In TopoModel.ts - shells have closed flag
 addShell(closed: boolean = false): ShellId;
@@ -248,12 +251,13 @@ isShellClosed(id: ShellId): boolean;
 
 Currently, if a user draws an open profile (e.g., an arc) and tries to extrude:
 
-| Current Behavior | Target Behavior (SolidWorks-like) |
-|------------------|-----------------------------------|
-| ❌ Fails with error | ✅ Creates surface body |
-| User is stuck | User can continue modeling with surfaces |
+| Current Behavior    | Target Behavior (SolidWorks-like)        |
+| ------------------- | ---------------------------------------- |
+| ❌ Fails with error | ✅ Creates surface body                  |
+| User is stuck       | User can continue modeling with surfaces |
 
 **Implementation Note:**
+
 - Kernel `extrude()` requires closed profiles for solid bodies
 - Need to add "extruded surface" variant for open profiles
 - This creates a ruled surface through the profile curve
@@ -268,13 +272,13 @@ This UX spec **supersedes** documents in `/plan/*` for UX direction. However:
 
 ### 1.2 Success Criteria
 
-| Criterion | Description |
-|-----------|-------------|
-| **Reliable References** | Axes and planes can be defined in multiple ways without dead ends. See [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md) for persistent naming. |
-| **Clear Tool Contracts** | Every tool has clear required inputs, predictable click sequences |
-| **Visual Feedback** | Visible preview and direction handles on all operations |
-| **Consistent UX** | Same confirm/cancel patterns across all tools |
-| **Muscle Memory** | Inference cues, auto-relations, tangent arc gestures, power trim |
+| Criterion                | Description                                                                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reliable References**  | Axes and planes can be defined in multiple ways without dead ends. See [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md) for persistent naming. |
+| **Clear Tool Contracts** | Every tool has clear required inputs, predictable click sequences                                                                             |
+| **Visual Feedback**      | Visible preview and direction handles on all operations                                                                                       |
+| **Consistent UX**        | Same confirm/cancel patterns across all tools                                                                                                 |
+| **Muscle Memory**        | Inference cues, auto-relations, tangent arc gestures, power trim                                                                              |
 
 ---
 
@@ -282,32 +286,33 @@ This UX spec **supersedes** documents in `/plan/*` for UX direction. However:
 
 ### 2.1 Application Modes
 
-| Mode | Description | Available Tools |
-|------|-------------|-----------------|
-| **Model Mode** | No active sketch | Selection, feature creation, reference geometry |
-| **Sketch Mode** | Editing a sketch | Sketch tools active, model entities selectable via filters |
-| **Command Active** | Any tool running | Tool captures input, selection boxes accept picks |
+| Mode               | Description      | Available Tools                                            |
+| ------------------ | ---------------- | ---------------------------------------------------------- |
+| **Model Mode**     | No active sketch | Selection, feature creation, reference geometry            |
+| **Sketch Mode**    | Editing a sketch | Sketch tools active, model entities selectable via filters |
+| **Command Active** | Any tool running | Tool captures input, selection boxes accept picks          |
 
 ### 2.2 Confirmation and Cancellation
 
-| Action | Key/Button | Effect |
-|--------|------------|--------|
-| Accept | `Enter` / ✅ | Commit feature or finish sketch tool |
-| Cancel | `Esc` / ❌ | Revert preview, exit tool |
-| Context Menu | Right-click | Show context options + OK/Cancel |
+| Action       | Key/Button   | Effect                               |
+| ------------ | ------------ | ------------------------------------ |
+| Accept       | `Enter` / ✅ | Commit feature or finish sketch tool |
+| Cancel       | `Esc` / ❌   | Revert preview, exit tool            |
+| Context Menu | Right-click  | Show context options + OK/Cancel     |
 
 #### Right-Click Precedence Rules
 
 Right-click behavior depends on context. Priority order (highest first):
 
-| Priority | Context | Right-Click Behavior |
-|----------|---------|----------------------|
-| 1 | **Sketch tool chaining** (line/arc in progress) | End chain (stay in tool, clear start point) |
-| 2 | **Second right-click** after chain end | Show sketch context menu |
-| 3 | **Entity selected** | Show entity context menu |
-| 4 | **Empty canvas** | Show global context menu |
+| Priority | Context                                         | Right-Click Behavior                        |
+| -------- | ----------------------------------------------- | ------------------------------------------- |
+| 1        | **Sketch tool chaining** (line/arc in progress) | End chain (stay in tool, clear start point) |
+| 2        | **Second right-click** after chain end          | Show sketch context menu                    |
+| 3        | **Entity selected**                             | Show entity context menu                    |
+| 4        | **Empty canvas**                                | Show global context menu                    |
 
 **Example flow for line chain:**
+
 1. Click point A → Click point B → line created, chaining from B
 2. Right-click → chain ends (no line from B), still in line tool
 3. Right-click again → context menu appears
@@ -316,29 +321,33 @@ Right-click behavior depends on context. Priority order (highest first):
 ### 2.3 Selection Model
 
 #### Preselection Support
+
 If user selects valid inputs (sketch, face, edge, axis) before starting tool:
+
 - Tool auto-fills appropriate selection boxes
 - Reduces clicks for common workflows
 
 #### In-Command Selection
+
 - Tool shows selection boxes (Profile, Axis, Direction)
 - Valid pick candidates highlighted in viewport
 - Focused selection box determines filtering
 
 #### Selection Filters (Toggles)
 
-| Filter | Entities |
-|--------|----------|
-| Faces | All face types |
-| Edges | All edge types |
-| Vertices | Points and vertices |
+| Filter          | Entities                   |
+| --------------- | -------------------------- |
+| Faces           | All face types             |
+| Edges           | All edge types             |
+| Vertices        | Points and vertices        |
 | Sketch Entities | Lines, arcs, circles, etc. |
-| Sketch Regions | Closed contours |
-| Planes | Reference planes |
-| Axes | Reference axes |
-| Bodies | Solid and surface bodies |
+| Sketch Regions  | Closed contours            |
+| Planes          | Reference planes           |
+| Axes            | Reference axes             |
+| Bodies          | Solid and surface bodies   |
 
 #### Selection Priority
+
 1. Prefer entity types the focused selection box accepts
 2. Allow cycle selection (`Tab`) through candidates under cursor
 3. `Ctrl+Click` to toggle selection
@@ -348,27 +357,27 @@ If user selects valid inputs (sketch, face, edge, axis) before starting tool:
 
 #### Snap Targets
 
-| Target | Description |
-|--------|-------------|
-| Endpoints | Start/end of lines and arcs |
-| Midpoints | Center of line segments |
-| Centers | Circle and arc centers |
-| Quadrants | 0°, 90°, 180°, 270° on circles |
-| Intersections | Real and inferred crossing points |
-| H/V Alignment | Horizontal/vertical to existing points |
-| Collinear | Along existing line direction |
-| Parallel/Perpendicular | To existing entities |
-| Tangent | To arcs and circles |
-| Point-on-Curve | Anywhere on a curve |
+| Target                 | Description                            |
+| ---------------------- | -------------------------------------- |
+| Endpoints              | Start/end of lines and arcs            |
+| Midpoints              | Center of line segments                |
+| Centers                | Circle and arc centers                 |
+| Quadrants              | 0°, 90°, 180°, 270° on circles         |
+| Intersections          | Real and inferred crossing points      |
+| H/V Alignment          | Horizontal/vertical to existing points |
+| Collinear              | Along existing line direction          |
+| Parallel/Perpendicular | To existing entities                   |
+| Tangent                | To arcs and circles                    |
+| Point-on-Curve         | Anywhere on a curve                    |
 
 #### Inference UX Requirements
 
-| Requirement | Implementation |
-|-------------|----------------|
-| Visual Cues | Dashed inference lines, snap glyphs at cursor |
-| Relation Preview | Show glyph ("Tangent", "Horizontal", "Coincident") |
-| Hysteresis | Once relation appears, don't flicker off until cursor leaves tolerance |
-| Intent Zones | Special areas around endpoints for tangent-arc gesture |
+| Requirement      | Implementation                                                         |
+| ---------------- | ---------------------------------------------------------------------- |
+| Visual Cues      | Dashed inference lines, snap glyphs at cursor                          |
+| Relation Preview | Show glyph ("Tangent", "Horizontal", "Coincident")                     |
+| Hysteresis       | Once relation appears, don't flicker off until cursor leaves tolerance |
+| Intent Zones     | Special areas around endpoints for tangent-arc gesture                 |
 
 ### 2.5 Relations/Constraints (Sketch)
 
@@ -385,11 +394,13 @@ If user selects valid inputs (sketch, face, edge, axis) before starting tool:
 ### 2.6 Live Preview Pipeline
 
 Preview must update on:
+
 - Each selection change
 - Each numeric input change
 - Drag of in-canvas manipulator
 
 Preview degradation:
+
 - If kernel compute is expensive, show approximate preview then refine
 
 ---
@@ -399,46 +410,49 @@ Preview degradation:
 ### 3.1 CommandManager Tabs (Top Toolbar)
 
 #### Sketch Tab
-| Group | Tools |
-|-------|-------|
-| Sketch Entities | Line flyout, Rectangle flyout, Circle flyout, Arc flyout, Slot flyout, Spline |
-| Other Entities | Point, Text, Sketch Picture, Polygon |
-| Modify | Smart Dimension, Add Relations, Trim, Extend, Offset, Convert, Mirror, Linear Pattern, Circular Pattern, Fillet, Chamfer |
+
+| Group           | Tools                                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Sketch Entities | Line flyout, Rectangle flyout, Circle flyout, Arc flyout, Slot flyout, Spline                                            |
+| Other Entities  | Point, Text, Sketch Picture, Polygon                                                                                     |
+| Modify          | Smart Dimension, Add Relations, Trim, Extend, Offset, Convert, Mirror, Linear Pattern, Circular Pattern, Fillet, Chamfer |
 
 #### Features Tab
-| Group | Tools |
-|-------|-------|
-| Boss/Cut | Extrude, Revolve, Sweep, Loft |
-| Modify | Fillet, Chamfer, Draft, Shell, Rib |
-| Patterns/Mirror | Linear Pattern, Circular Pattern, Mirror |
-| Holes | Hole Wizard |
-| Booleans | Combine |
-| Curves/Faces | Split Line |
-| Surfaces | Extruded Surface, Revolved Surface, Swept Surface, Lofted Surface |
+
+| Group           | Tools                                                             |
+| --------------- | ----------------------------------------------------------------- |
+| Boss/Cut        | Extrude, Revolve, Sweep, Loft                                     |
+| Modify          | Fillet, Chamfer, Draft, Shell, Rib                                |
+| Patterns/Mirror | Linear Pattern, Circular Pattern, Mirror                          |
+| Holes           | Hole Wizard                                                       |
+| Booleans        | Combine                                                           |
+| Curves/Faces    | Split Line                                                        |
+| Surfaces        | Extruded Surface, Revolved Surface, Swept Surface, Lofted Surface |
 
 #### Reference Geometry Tab
-| Tools |
-|-------|
+
+| Tools                                     |
+| ----------------------------------------- |
 | Plane, Axis, (Point), (Coordinate System) |
 
 ### 3.2 Flyout Menus
 
-| Flyout | Options |
-|--------|---------|
-| **Rectangle** | Corner, Center, 3-Point Corner, 3-Point Center |
-| **Circle** | Centerpoint, Perimeter/3-Point |
-| **Arc** | 3-Point, Centerpoint, Tangent |
-| **Slot** | Straight, Centerpoint Straight, 3-Point Arc, Centerpoint Arc |
-| **Line** | Line, Centerline, Construction Line |
-| **Trim** | Power Trim, Trim to Closest, Corner |
+| Flyout        | Options                                                      |
+| ------------- | ------------------------------------------------------------ |
+| **Rectangle** | Corner, Center, 3-Point Corner, 3-Point Center               |
+| **Circle**    | Centerpoint, Perimeter/3-Point                               |
+| **Arc**       | 3-Point, Centerpoint, Tangent                                |
+| **Slot**      | Straight, Centerpoint Straight, 3-Point Arc, Centerpoint Arc |
+| **Line**      | Line, Centerline, Construction Line                          |
+| **Trim**      | Power Trim, Trim to Closest, Corner                          |
 
 ### 3.3 Essential Gestures
 
-| Gesture | Behavior |
-|---------|----------|
+| Gesture                | Behavior                                                                                 |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
 | **Line ↔ Tangent Arc** | While line tool active, moving into endpoint intent zone switches to tangent arc preview |
-| **Power Trim** | Click-drag across segments to trim continuously |
-| **Handle Drag** | Drag feature arrows/handles to adjust direction/extent |
+| **Power Trim**         | Click-drag across segments to trim continuously                                          |
+| **Handle Drag**        | Drag feature arrows/handles to adjust direction/extent                                   |
 
 ---
 
@@ -449,6 +463,7 @@ Preview degradation:
 **Goal:** Single tool that creates planes from many reference combinations.
 
 #### PropertyManager Structure
+
 ```
 ┌─────────────────────────────────┐
 │ Plane                           │
@@ -474,24 +489,25 @@ Preview degradation:
 
 #### Accepted References
 
-| Reference Type | Accepted Entities |
-|----------------|-------------------|
-| Planar surface | `FacePlanar`, `PlaneRef` |
-| Linear entity | `EdgeLinear`, `AxisRef`, `SketchLine` |
-| Point | `Vertex`, `SketchPoint` |
+| Reference Type | Accepted Entities                              |
+| -------------- | ---------------------------------------------- |
+| Planar surface | `FacePlanar`, `PlaneRef`                       |
+| Linear entity  | `EdgeLinear`, `AxisRef`, `SketchLine`          |
+| Point          | `Vertex`, `SketchPoint`                        |
 | Curved surface | `FaceCylindrical`, `FaceConical` (for tangent) |
 
 #### Mode Detection Rules
 
-| Selection | Detected Mode |
-|-----------|---------------|
-| One planar face/plane | **Offset** (distance=0 initially) |
-| Two planar faces/planes | **Midplane** |
-| Three points/vertices | **3-Point** |
-| Plane + linear entity | **Angle** (angle=0 initially) |
+| Selection                     | Detected Mode                        |
+| ----------------------------- | ------------------------------------ |
+| One planar face/plane         | **Offset** (distance=0 initially)    |
+| Two planar faces/planes       | **Midplane**                         |
+| Three points/vertices         | **3-Point**                          |
+| Plane + linear entity         | **Angle** (angle=0 initially)        |
 | Cylindrical face + plane/edge | **Tangent** (oriented by second ref) |
 
 #### UX Requirements
+
 - Highlight valid picks for each reference slot
 - Always show preview once sufficient refs exist
 - Provide **Flip** and numeric inputs
@@ -500,6 +516,7 @@ Preview degradation:
 ### 4.2 Axis Tool
 
 #### PropertyManager Structure
+
 ```
 ┌─────────────────────────────────┐
 │ Axis                            │
@@ -519,15 +536,17 @@ Preview degradation:
 
 #### Accepted References
 
-| Method | Accepted Entities |
-|--------|-------------------|
-| Single linear | `SketchLine`, `EdgeLinear`, `AxisRef` |
-| Two points | `Vertex`, `SketchPoint` |
-| Two planes | `PlaneRef`, `FacePlanar` |
+| Method        | Accepted Entities                                     |
+| ------------- | ----------------------------------------------------- |
+| Single linear | `SketchLine`, `EdgeLinear`, `AxisRef`                 |
+| Two points    | `Vertex`, `SketchPoint`                               |
+| Two planes    | `PlaneRef`, `FacePlanar`                              |
 | Cylinder/Cone | `FaceCylindrical`, `FaceConical` → creates `TempAxis` |
 
 #### Axis Acceptance in Other Tools
+
 Any feature field requiring "Axis" must accept:
+
 - Reference axis
 - Temporary axis
 - Linear edge
@@ -540,10 +559,12 @@ Any feature field requiring "Axis" must accept:
 ### 5.1 Entering Sketch Mode
 
 **Entry Points:**
+
 1. Click **Sketch** then select plane/planar face
 2. Preselect plane/face then click **Sketch**
 
 **On Entry:**
+
 - Orient view normal to sketch plane
 - Show sketch origin and axes (optional)
 - Enable sketch inference and constraints
@@ -551,12 +572,12 @@ Any feature field requiring "Axis" must accept:
 
 ### 5.2 Sketch Status Indicators
 
-| Status | Color | Description |
-|--------|-------|-------------|
-| Under-defined | Blue | Geometry can still move |
-| Fully defined | Black/Green | All DOF constrained |
-| Construction | Dashed Orange | Reference geometry only |
-| Over-defined | Red | Conflicting constraints |
+| Status        | Color         | Description             |
+| ------------- | ------------- | ----------------------- |
+| Under-defined | Blue          | Geometry can still move |
+| Fully defined | Black/Green   | All DOF constrained     |
+| Construction  | Dashed Orange | Reference geometry only |
+| Over-defined  | Red           | Conflicting constraints |
 
 ### 5.3 Sketch Tool State Machine Pattern
 
@@ -597,32 +618,38 @@ Every sketch entity tool follows:
 ### 6.1 Line / Centerline / Construction
 
 #### States
-| State | Description |
-|-------|-------------|
-| S0 | Waiting for first point |
-| S1 | Placing next point in chain (with preview) |
+
+| State | Description                                |
+| ----- | ------------------------------------------ |
+| S0    | Waiting for first point                    |
+| S1    | Placing next point in chain (with preview) |
 
 #### Point Placement Accepts
+
 - Free space → creates new point
 - Existing point/vertex → coincident constraint
 - Point on entity → creates point-on-curve + coincident
 
 #### Auto-Relations on Placement
-| Condition | Relation Created |
-|-----------|-----------------|
-| Near horizontal | Horizontal |
-| Near vertical | Vertical |
-| Aligned with existing line | Collinear |
-| Near perpendicular to reference | Perpendicular |
-| Near parallel to reference | Parallel |
-| Snapping to endpoint | Coincident |
+
+| Condition                       | Relation Created |
+| ------------------------------- | ---------------- |
+| Near horizontal                 | Horizontal       |
+| Near vertical                   | Vertical         |
+| Aligned with existing line      | Collinear        |
+| Near perpendicular to reference | Perpendicular    |
+| Near parallel to reference      | Parallel         |
+| Snapping to endpoint            | Coincident       |
 
 #### Chain Behavior
+
 - After placing second point, remain in S1 to continue polyline
 - End chain via: double-click, right-click "End Chain", or `Esc`
 
 #### Line ↔ Tangent Arc Gesture
+
 When current point is an endpoint of an arc/circle or line:
+
 - Moving cursor into "arc intent zone" → shows tangent arc preview
 - Moving away → shows line preview
 - Click commits whichever preview is active
@@ -630,65 +657,74 @@ When current point is an endpoint of an arc/circle or line:
 ### 6.2 Rectangle Flyout
 
 #### Corner Rectangle
-| Step | Action |
-|------|--------|
-| 1 | Click corner 1 |
-| 2 | Click corner 2 |
+
+| Step | Action         |
+| ---- | -------------- |
+| 1    | Click corner 1 |
+| 2    | Click corner 2 |
 
 **Auto-relations:** H/V edges, perpendicular corners
 
 #### Center Rectangle
-| Step | Action |
-|------|--------|
-| 1 | Click center |
-| 2 | Click corner |
+
+| Step | Action       |
+| ---- | ------------ |
+| 1    | Click center |
+| 2    | Click corner |
 
 #### 3-Point Corner Rectangle
-| Step | Action |
-|------|--------|
-| 1 | Click corner A |
-| 2 | Click corner B (defines one edge) |
-| 3 | Click third point (defines width) |
+
+| Step | Action                            |
+| ---- | --------------------------------- |
+| 1    | Click corner A                    |
+| 2    | Click corner B (defines one edge) |
+| 3    | Click third point (defines width) |
 
 #### 3-Point Center Rectangle
-| Step | Action |
-|------|--------|
-| 1 | Click center |
-| 2 | Click point (half-length direction) |
-| 3 | Click point (half-width) |
+
+| Step | Action                              |
+| ---- | ----------------------------------- |
+| 1    | Click center                        |
+| 2    | Click point (half-length direction) |
+| 3    | Click point (half-width)            |
 
 ### 6.3 Circle Flyout
 
 #### Centerpoint Circle
-| Step | Action |
-|------|--------|
-| 1 | Click center |
-| 2 | Click/drag to set radius |
+
+| Step | Action                   |
+| ---- | ------------------------ |
+| 1    | Click center             |
+| 2    | Click/drag to set radius |
 
 #### 3-Point Circle
-| Step | Action |
-|------|--------|
-| 1 | Click point 1 |
-| 2 | Click point 2 |
-| 3 | Click point 3 |
+
+| Step | Action        |
+| ---- | ------------- |
+| 1    | Click point 1 |
+| 2    | Click point 2 |
+| 3    | Click point 3 |
 
 ### 6.4 Arc Flyout
 
 #### 3-Point Arc
-| Step | Action | Auto-Relations |
-|------|--------|----------------|
-| 1 | Click start | Coincident (if snapping) |
-| 2 | Click end | Coincident (if snapping) |
-| 3 | Click/drag bulge point | Tangent (if near tangent condition) |
+
+| Step | Action                 | Auto-Relations                      |
+| ---- | ---------------------- | ----------------------------------- |
+| 1    | Click start            | Coincident (if snapping)            |
+| 2    | Click end              | Coincident (if snapping)            |
+| 3    | Click/drag bulge point | Tangent (if near tangent condition) |
 
 #### Centerpoint Arc
-| Step | Action |
-|------|--------|
-| 1 | Click center |
-| 2 | Click start point (sets radius) |
-| 3 | Click end point (sets angle) |
+
+| Step | Action                          |
+| ---- | ------------------------------- |
+| 1    | Click center                    |
+| 2    | Click start point (sets radius) |
+| 3    | Click end point (sets angle)    |
 
 #### Tangent Arc
+
 **Entry paths:**
 
 1. **Explicit Tangent Arc tool:**
@@ -702,60 +738,69 @@ When current point is an endpoint of an arc/circle or line:
    - Click to place
 
 **Tangency direction fix:**
+
 - Context menu: "Reverse Endpoint Tangent" (flips tangent direction)
 
 ### 6.5 Slot Flyout
 
 #### Straight Slot
-| Step | Action |
-|------|--------|
-| 1 | Click end 1 |
-| 2 | Click end 2 |
-| 3 | Set width (drag/click or numeric) |
+
+| Step | Action                            |
+| ---- | --------------------------------- |
+| 1    | Click end 1                       |
+| 2    | Click end 2                       |
+| 3    | Set width (drag/click or numeric) |
 
 **Creates:** 2 lines + 2 end arcs + optional centerline
 
 #### Centerpoint Straight Slot
-| Step | Action |
-|------|--------|
-| 1 | Click center |
-| 2 | Click length direction point |
-| 3 | Set width |
+
+| Step | Action                       |
+| ---- | ---------------------------- |
+| 1    | Click center                 |
+| 2    | Click length direction point |
+| 3    | Set width                    |
 
 #### 3-Point Arc Slot
-| Step | Action |
-|------|--------|
-| 1 | Define arc via 3-point method |
-| 2 | Set width |
+
+| Step | Action                        |
+| ---- | ----------------------------- |
+| 1    | Define arc via 3-point method |
+| 2    | Set width                     |
 
 #### Centerpoint Arc Slot
-| Step | Action |
-|------|--------|
-| 1 | Define arc via centerpoint method |
-| 2 | Set width |
+
+| Step | Action                            |
+| ---- | --------------------------------- |
+| 1    | Define arc via centerpoint method |
+| 2    | Set width                         |
 
 ### 6.6 Spline
 
-| Step | Action |
-|------|--------|
-| 1+ | Click to place control points |
-| End | Right-click or Enter to finish |
+| Step | Action                         |
+| ---- | ------------------------------ |
+| 1+   | Click to place control points  |
+| End  | Right-click or Enter to finish |
 
 **Editing:**
+
 - Control points draggable
 - Tangent handles visible at endpoints
 - Relations allowed: coincident, tangent, curvature, H/V handles
 
 ### 6.7 Point
+
 - Single click places point
 - If placed on entity: creates point-on-curve relation
 
 ### 6.8 Text
+
 - Click to place text box
 - Type content
 - Optional: text on curve (select path)
 
 ### 6.9 Sketch Picture
+
 - Insert image
 - Manipulators: move, rotate, scale
 - Optional calibration (set known distance)
@@ -768,23 +813,25 @@ When current point is an endpoint of an arc/circle or line:
 
 #### Selection Logic
 
-| Selection | Dimension Type |
-|-----------|---------------|
-| 1 line | Length |
-| 1 arc/circle | Radius/diameter (toggle) |
-| 2 points | Distance |
-| Point + line | Perpendicular distance |
-| 2 parallel lines | Distance |
-| 2 non-parallel lines | Angle |
-| Circle + line | Distance to center or tangent |
+| Selection            | Dimension Type                |
+| -------------------- | ----------------------------- |
+| 1 line               | Length                        |
+| 1 arc/circle         | Radius/diameter (toggle)      |
+| 2 points             | Distance                      |
+| Point + line         | Perpendicular distance        |
+| 2 parallel lines     | Distance                      |
+| 2 non-parallel lines | Angle                         |
+| Circle + line        | Distance to center or tangent |
 
 #### Workflow
+
 1. Select entity(ies)
 2. Move mouse to preview dimension placement
 3. Click to place
 4. (Optional) Type value immediately
 
 #### Driven vs Driving
+
 - Allow toggling dimension to "driven/reference" if over-constraining
 
 ### 7.2 Add Relations
@@ -803,17 +850,19 @@ When current point is an endpoint of an arc/circle or line:
 
 ### 7.4 Trim Entities
 
-| Mode | Behavior |
-|------|----------|
-| **Power Trim** | Drag across segments; trim continuously |
-| **Trim to Closest** | Click segment portion to remove to nearest intersections |
-| **Corner** | Select two entities → trims/extends to meet at corner |
-| **Trim Inside/Outside** | (Optional advanced) |
+| Mode                    | Behavior                                                 |
+| ----------------------- | -------------------------------------------------------- |
+| **Power Trim**          | Drag across segments; trim continuously                  |
+| **Trim to Closest**     | Click segment portion to remove to nearest intersections |
+| **Corner**              | Select two entities → trims/extends to meet at corner    |
+| **Trim Inside/Outside** | (Optional advanced)                                      |
 
 ### 7.5 Extend Entities
+
 - Select entity end → extend to next boundary (nearest intersection)
 
 ### 7.6 Offset Entities
+
 1. Select chain/loop (auto-chain selection)
 2. Enter distance
 3. Choose side (flip)
@@ -821,11 +870,13 @@ When current point is an endpoint of an arc/circle or line:
 5. Optional: cap ends for open chains
 
 ### 7.7 Convert Entities
+
 - In sketch mode: select model edges/loops/faces
 - Creates sketch entities projected to sketch plane
 - Maintains associative link (recommended)
 
 ### 7.8 Mirror Entities (Sketch)
+
 1. Select entities to mirror
 2. Select mirror line/centerline
 3. Creates mirrored copies with symmetric relations
@@ -833,22 +884,26 @@ When current point is an endpoint of an arc/circle or line:
 ### 7.9 Sketch Patterns
 
 #### Linear Sketch Pattern
+
 1. Select entities
 2. Set direction (edge/line)
 3. Set spacing and count
 
 #### Circular Sketch Pattern
+
 1. Select entities
 2. Set center/axis
 3. Set angle and count
 
 ### 7.10 Sketch Fillet
+
 1. Select corner or 2 entities
 2. Set radius
 3. Preview tangent arc + trims
 4. Confirm
 
 ### 7.11 Sketch Chamfer
+
 1. Select corner or 2 entities
 2. Set distances or angle
 3. Preview
@@ -860,28 +915,28 @@ When current point is an endpoint of an arc/circle or line:
 
 ### 8.1 Core Constraints (Must-Have)
 
-| Constraint | Description |
-|------------|-------------|
-| **Coincident** | Point-point, point-curve |
-| **Horizontal** | Entity or point pair aligned horizontally |
-| **Vertical** | Entity or point pair aligned vertically |
-| **Parallel** | Two lines same direction |
-| **Perpendicular** | Two lines at 90° |
-| **Collinear** | Two lines on same infinite line |
-| **Tangent** | Smooth connection between curves |
-| **Concentric** | Circles/arcs share center |
-| **Equal** | Length or radius equality |
-| **Midpoint** | Point at midpoint of line |
-| **Symmetric** | Points symmetric about axis |
-| **Fix** | Lock position/angle |
-| **Merge Points** | Explicitly merge endpoints |
+| Constraint        | Description                               |
+| ----------------- | ----------------------------------------- |
+| **Coincident**    | Point-point, point-curve                  |
+| **Horizontal**    | Entity or point pair aligned horizontally |
+| **Vertical**      | Entity or point pair aligned vertically   |
+| **Parallel**      | Two lines same direction                  |
+| **Perpendicular** | Two lines at 90°                          |
+| **Collinear**     | Two lines on same infinite line           |
+| **Tangent**       | Smooth connection between curves          |
+| **Concentric**    | Circles/arcs share center                 |
+| **Equal**         | Length or radius equality                 |
+| **Midpoint**      | Point at midpoint of line                 |
+| **Symmetric**     | Points symmetric about axis               |
+| **Fix**           | Lock position/angle                       |
+| **Merge Points**  | Explicitly merge endpoints                |
 
 ### 8.2 Advanced Constraints (Future)
 
-| Constraint | Description |
-|------------|-------------|
-| **Curvature Continuity** | Smooth curvature at spline joints |
-| **Pierce/Intersection** | For 3D sketches or sweep workflows |
+| Constraint               | Description                        |
+| ------------------------ | ---------------------------------- |
+| **Curvature Continuity** | Smooth curvature at spline joints  |
+| **Pierce/Intersection**  | For 3D sketches or sweep workflows |
 
 ---
 
@@ -916,47 +971,47 @@ When current point is an endpoint of an arc/circle or line:
 
 ### 9.2 In-Viewport Elements
 
-| Element | Behavior |
-|---------|----------|
-| Preview body/surface | Shows result geometry |
-| Direction arrows | Drag to change depth, click to flip |
-| On-handle dimension | Edit value directly on manipulator |
+| Element              | Behavior                            |
+| -------------------- | ----------------------------------- |
+| Preview body/surface | Shows result geometry               |
+| Direction arrows     | Drag to change depth, click to flip |
+| On-handle dimension  | Edit value directly on manipulator  |
 
 ### 9.3 Reference Acceptance Rules
 
-| Field Type | Accepts |
-|------------|---------|
-| **Plane** | Planar faces, planes, reference planes |
-| **Axis** | Sketch lines/centerlines, linear edges, reference axes, temp axes |
-| **Direction** | Linear edge, axis, sketch line, planar face normal |
+| Field Type    | Accepts                                                           |
+| ------------- | ----------------------------------------------------------------- |
+| **Plane**     | Planar faces, planes, reference planes                            |
+| **Axis**      | Sketch lines/centerlines, linear edges, reference axes, temp axes |
+| **Direction** | Linear edge, axis, sketch line, planar face normal                |
 
 ### 9.4 Validation Rules
 
-| Condition | Behavior |
-|-----------|----------|
-| Required selections missing | Disable OK, show prompt |
-| Geometry fails | Show error with highlight, keep tool open |
-| Self-intersection | Highlight problem area, show suggestion |
+| Condition                   | Behavior                                  |
+| --------------------------- | ----------------------------------------- |
+| Required selections missing | Disable OK, show prompt                   |
+| Geometry fails              | Show error with highlight, keep tool open |
+| Self-intersection           | Highlight problem area, show suggestion   |
 
 ### 9.5 Multi-Body and Body Type Handling
 
 #### Body Type Determination
 
-| Profile Type | Feature | Result |
-|--------------|---------|--------|
-| **Closed** (rectangle, closed loop) | Extrude/Revolve | **Solid Body** |
-| **Open** (line, arc, open chain) | Extrude/Revolve | **Surface Body** |
-| **Closed** | Extruded Surface | **Surface Body** |
-| **Open** | Extruded Surface | **Surface Body** |
+| Profile Type                        | Feature          | Result           |
+| ----------------------------------- | ---------------- | ---------------- |
+| **Closed** (rectangle, closed loop) | Extrude/Revolve  | **Solid Body**   |
+| **Open** (line, arc, open chain)    | Extrude/Revolve  | **Surface Body** |
+| **Closed**                          | Extruded Surface | **Surface Body** |
+| **Open**                            | Extruded Surface | **Surface Body** |
 
 #### Merge Scope (SolidWorks-like)
 
 When creating a new boss feature, the PropertyManager includes merge options:
 
-| Option | Behavior |
-|--------|----------|
+| Option                      | Behavior                                                            |
+| --------------------------- | ------------------------------------------------------------------- |
 | **Merge result** (checkbox) | ON: Union with intersecting solid bodies; OFF: Create separate body |
-| **Selected bodies** (list) | When merge is ON, select which bodies to merge with |
+| **Selected bodies** (list)  | When merge is ON, select which bodies to merge with                 |
 
 ```
 ┌─────────────────────────────────────────┐
@@ -975,19 +1030,19 @@ When creating a new boss feature, the PropertyManager includes merge options:
 
 #### Feature Applicability by Body Type
 
-| Feature | Solid Bodies | Surface Bodies | Notes |
-|---------|-------------|----------------|-------|
-| Extrude Boss | ✅ Creates/merges | ❌ N/A | Target must be solid |
-| Extrude Cut | ✅ | ❌ | Cut requires solid target |
-| Extruded Surface | — | ✅ Creates | Always creates surface |
-| Fillet | ✅ | ❌ | Solid only |
-| Chamfer | ✅ | ❌ | Solid only |
-| Shell | ✅ | ❌ | Solid only |
-| Boolean (Combine) | ✅ | ❌ | Both operands must be solid |
-| Thicken | — | ✅ → Solid | Converts surface to solid |
-| Knit Surface | — | ✅ | Joins surfaces, can create solid |
-| Trim Surface | — | ✅ | Surface only |
-| Extend Surface | — | ✅ | Surface only |
+| Feature           | Solid Bodies      | Surface Bodies | Notes                            |
+| ----------------- | ----------------- | -------------- | -------------------------------- |
+| Extrude Boss      | ✅ Creates/merges | ❌ N/A         | Target must be solid             |
+| Extrude Cut       | ✅                | ❌             | Cut requires solid target        |
+| Extruded Surface  | —                 | ✅ Creates     | Always creates surface           |
+| Fillet            | ✅                | ❌             | Solid only                       |
+| Chamfer           | ✅                | ❌             | Solid only                       |
+| Shell             | ✅                | ❌             | Solid only                       |
+| Boolean (Combine) | ✅                | ❌             | Both operands must be solid      |
+| Thicken           | —                 | ✅ → Solid     | Converts surface to solid        |
+| Knit Surface      | —                 | ✅             | Joins surfaces, can create solid |
+| Trim Surface      | —                 | ✅             | Surface only                     |
+| Extend Surface    | —                 | ✅             | Surface only                     |
 
 #### Cut Feature Body Selection
 
@@ -1013,22 +1068,22 @@ For Cut operations (Extrude Cut, Revolve Cut):
 
 #### Error Messages
 
-| Situation | Error Message |
-|-----------|---------------|
-| Open profile with Extrude Boss | "Profile is open. Create an Extruded Surface instead?" |
-| Boolean with surface body | "Combine requires solid bodies. Convert to solid first." |
-| Fillet on surface body | "Fillet applies to solid bodies only." |
-| No closed region in sketch | "No closed contour found. Check for gaps." |
+| Situation                      | Error Message                                            |
+| ------------------------------ | -------------------------------------------------------- |
+| Open profile with Extrude Boss | "Profile is open. Create an Extruded Surface instead?"   |
+| Boolean with surface body      | "Combine requires solid bodies. Convert to solid first." |
+| Fillet on surface body         | "Fillet applies to solid bodies only."                   |
+| No closed region in sketch     | "No closed contour found. Check for gaps."               |
 
 #### Implementation Status
 
-| Feature | Kernel | App | Notes |
-|---------|--------|-----|-------|
-| Closed profile → solid | ✅ | 🔧 | Works but error handling poor |
-| Open profile → surface | ❌ | ❌ | **Currently fails** instead of creating surface |
-| Merge result checkbox | ❌ | ❌ | Not implemented |
-| Body scope selection | ❌ | ❌ | Not implemented |
-| Body type display | ✅ | ❌ | `isShellClosed()` exists, no UI |
+| Feature                | Kernel | App | Notes                                           |
+| ---------------------- | ------ | --- | ----------------------------------------------- |
+| Closed profile → solid | ✅     | 🔧  | Works but error handling poor                   |
+| Open profile → surface | ❌     | ❌  | **Currently fails** instead of creating surface |
+| Merge result checkbox  | ❌     | ❌  | Not implemented                                 |
+| Body scope selection   | ❌     | ❌  | Not implemented                                 |
+| Body type display      | ✅     | ❌  | `isShellClosed()` exists, no UI                 |
 
 ---
 
@@ -1038,48 +1093,49 @@ For Cut operations (Extrude Cut, Revolve Cut):
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
-| Profile | `SketchRegion`, `SketchContour`, `Sketch` | Multi |
-| Direction | `FacePlanar` (optional) | Single |
-| Up To Surface | `Face*` | Single |
+| Box           | Accepts                                   | Multiplicity |
+| ------------- | ----------------------------------------- | ------------ |
+| Profile       | `SketchRegion`, `SketchContour`, `Sketch` | Multi        |
+| Direction     | `FacePlanar` (optional)                   | Single       |
+| Up To Surface | `Face*`                                   | Single       |
 
 #### End Conditions
 
-| Condition | Parameters |
-|-----------|------------|
-| Blind | Distance |
-| Through All | None |
-| Up To Next | None |
-| Up To Surface | Face selection |
+| Condition           | Parameters             |
+| ------------------- | ---------------------- |
+| Blind               | Distance               |
+| Through All         | None                   |
+| Up To Next          | None                   |
+| Up To Surface       | Face selection         |
 | Offset From Surface | Face + offset distance |
-| Midplane | Distance (symmetric) |
+| Midplane            | Distance (symmetric)   |
 
 #### Multi-Body Options (Boss only)
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| Merge result | ☑ ON | Combine with intersecting bodies |
-| Selected bodies | Auto | Which bodies to merge into |
-| New body | OFF | Force creation of separate body |
+| Option          | Default | Description                      |
+| --------------- | ------- | -------------------------------- |
+| Merge result    | ☑ ON    | Combine with intersecting bodies |
+| Selected bodies | Auto    | Which bodies to merge into       |
+| New body        | OFF     | Force creation of separate body  |
 
 #### Cut Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| Feature Scope | All bodies | Which bodies to cut |
-| Auto-select | ☑ ON | Automatically select intersecting bodies |
+| Option        | Default    | Description                              |
+| ------------- | ---------- | ---------------------------------------- |
+| Feature Scope | All bodies | Which bodies to cut                      |
+| Auto-select   | ☑ ON       | Automatically select intersecting bodies |
 
 #### Profile Type Handling
 
-| Profile | Feature Type | Result |
-|---------|--------------|--------|
-| Closed contour | Extrude Boss | Solid body (merged or new) |
-| Open contour | Extrude Boss | ❌ Error → suggest Extruded Surface |
-| Closed contour | Extruded Surface | Surface body |
-| Open contour | Extruded Surface | Surface body (ruled surface) |
+| Profile        | Feature Type     | Result                              |
+| -------------- | ---------------- | ----------------------------------- |
+| Closed contour | Extrude Boss     | Solid body (merged or new)          |
+| Open contour   | Extrude Boss     | ❌ Error → suggest Extruded Surface |
+| Closed contour | Extruded Surface | Surface body                        |
+| Open contour   | Extruded Surface | Surface body (ruled surface)        |
 
 #### Interaction Flow
+
 1. Preselect sketch (optional)
 2. Activate Extrude
 3. Auto-fill Profile if possible; otherwise user selects regions
@@ -1093,30 +1149,33 @@ For Cut operations (Extrude Cut, Revolve Cut):
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
-| Profile | `SketchRegion`, `SketchContour` | Multi |
-| Axis | `SketchLine`, `EdgeLinear`, `AxisRef`, `TempAxis` | Single |
+| Box     | Accepts                                           | Multiplicity |
+| ------- | ------------------------------------------------- | ------------ |
+| Profile | `SketchRegion`, `SketchContour`                   | Multi        |
+| Axis    | `SketchLine`, `EdgeLinear`, `AxisRef`, `TempAxis` | Single       |
 
 #### Parameters
+
 - Angle (default 360°)
 - Direction 2 (optional)
 - Thin feature (optional)
 
 #### Auto-Propose Axis
+
 If sketch contains single centerline marked construction → auto-propose as axis (non-destructive, user can change)
 
 ### 10.3 Sweep Boss/Cut and Surface
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity | Chain |
-|-----|---------|--------------|-------|
-| Profile | `SketchRegion`, `SketchContour` | Single | No |
-| Path | `SketchCurve`, `EdgeCurve` | Single | Yes |
-| Guide Curves | Curve chains | Multi | Yes |
+| Box          | Accepts                         | Multiplicity | Chain |
+| ------------ | ------------------------------- | ------------ | ----- |
+| Profile      | `SketchRegion`, `SketchContour` | Single       | No    |
+| Path         | `SketchCurve`, `EdgeCurve`      | Single       | Yes   |
+| Guide Curves | Curve chains                    | Multi        | Yes   |
 
 #### Parameters
+
 - Orientation/twist type
 - Keep normal constant (optional)
 - Merge result
@@ -1125,13 +1184,14 @@ If sketch contains single centerline marked construction → auto-propose as axi
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
-| Profiles | `SketchRegion`, `SketchContour` | Ordered Multi |
-| Guide Curves | Curve chains | Multi |
-| Centerline | Curve | Single |
+| Box          | Accepts                         | Multiplicity  |
+| ------------ | ------------------------------- | ------------- |
+| Profiles     | `SketchRegion`, `SketchContour` | Ordered Multi |
+| Guide Curves | Curve chains                    | Multi         |
+| Centerline   | Curve                           | Single        |
 
 #### Parameters
+
 - Start/end constraints: None, Tangent, Curvature
 - Tangent length handles (visual)
 - Merge result
@@ -1140,12 +1200,13 @@ If sketch contains single centerline marked construction → auto-propose as axi
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
-| Profile | Open `SketchContour` | Single |
+| Box       | Accepts                                | Multiplicity      |
+| --------- | -------------------------------------- | ----------------- |
+| Profile   | Open `SketchContour`                   | Single            |
 | Direction | `FacePlanar`, `PlaneRef`, `EdgeLinear` | Single (optional) |
 
 #### Parameters
+
 - Thickness
 - Both sides toggle
 - Draft angle
@@ -1155,11 +1216,12 @@ If sketch contains single centerline marked construction → auto-propose as axi
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
+| Box             | Accepts | Multiplicity     |
+| --------------- | ------- | ---------------- |
 | Faces to Remove | `Face*` | Multi (optional) |
 
 #### Parameters
+
 - Thickness
 - Multi-thickness faces (advanced)
 
@@ -1167,13 +1229,14 @@ If sketch contains single centerline marked construction → auto-propose as axi
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
-| Neutral Plane | `PlaneRef`, `FacePlanar` | Single |
-| Pull Direction | `Face*`, `AxisRef`, `EdgeLinear` | Single |
-| Faces to Draft | `Face*` | Multi |
+| Box            | Accepts                          | Multiplicity |
+| -------------- | -------------------------------- | ------------ |
+| Neutral Plane  | `PlaneRef`, `FacePlanar`         | Single       |
+| Pull Direction | `Face*`, `AxisRef`, `EdgeLinear` | Single       |
+| Faces to Draft | `Face*`                          | Multi        |
 
 #### Parameters
+
 - Draft angle
 - Flip direction
 
@@ -1182,11 +1245,13 @@ If sketch contains single centerline marked construction → auto-propose as axi
 **Two-Stage Workflow:** "What" then "Where"
 
 #### Type Stage (What)
+
 - Standard (ISO/ANSI)
 - Hole type: simple, counterbore, countersink, tapped
 - Size, depth
 
 #### Positions Stage (Where)
+
 1. Select target face
 2. Enter placement sketch mode
 3. Click to place hole points
@@ -1197,16 +1262,18 @@ If sketch contains single centerline marked construction → auto-propose as axi
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
-| Edges | `Edge*` | Multi |
+| Box   | Accepts | Multiplicity     |
+| ----- | ------- | ---------------- |
+| Edges | `Edge*` | Multi            |
 | Faces | `Face*` | Multi (optional) |
 
 #### Parameters
+
 - Radius
 - Tangent propagation toggle
 
 #### Full Round Fillet (Optional)
+
 - Side face set 1
 - Middle face set
 - Side face set 2
@@ -1215,12 +1282,13 @@ If sketch contains single centerline marked construction → auto-propose as axi
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
-| Edges | `Edge*` | Multi |
+| Box    | Accepts  | Multiplicity      |
+| ------ | -------- | ----------------- |
+| Edges  | `Edge*`  | Multi             |
 | Vertex | `Vertex` | Single (optional) |
 
 #### Parameters
+
 - Mode: distance-distance, angle-distance
 - Values
 - Flip direction
@@ -1229,22 +1297,23 @@ If sketch contains single centerline marked construction → auto-propose as axi
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
-| Mirror Plane | `PlaneRef`, `FacePlanar` | Single |
-| Features/Bodies/Faces | `Feature`, `Body*`, `Face*` | Multi |
+| Box                   | Accepts                     | Multiplicity |
+| --------------------- | --------------------------- | ------------ |
+| Mirror Plane          | `PlaneRef`, `FacePlanar`    | Single       |
+| Features/Bodies/Faces | `Feature`, `Body*`, `Face*` | Multi        |
 
 ### 10.12 Linear Pattern
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity | Chain |
-|-----|---------|--------------|-------|
-| Direction 1 | `EdgeLinear`, `AxisRef`, `SketchLine` | Single | No |
-| Direction 2 | Same as Direction 1 | Single | No |
-| Seed | `Feature`, `Face*`, `Body*` | Multi | No |
+| Box         | Accepts                               | Multiplicity | Chain |
+| ----------- | ------------------------------------- | ------------ | ----- |
+| Direction 1 | `EdgeLinear`, `AxisRef`, `SketchLine` | Single       | No    |
+| Direction 2 | Same as Direction 1                   | Single       | No    |
+| Seed        | `Feature`, `Face*`, `Body*`           | Multi        | No    |
 
 #### Parameters
+
 - Spacing 1, Count 1
 - Spacing 2, Count 2
 - Instances to skip (interactive mode)
@@ -1253,12 +1322,13 @@ If sketch contains single centerline marked construction → auto-propose as axi
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
-| Axis | `AxisRef`, `TempAxis`, `EdgeLinear`, `SketchLine` | Single |
-| Seed | `Feature`, `Face*`, `Body*` | Multi |
+| Box  | Accepts                                           | Multiplicity |
+| ---- | ------------------------------------------------- | ------------ |
+| Axis | `AxisRef`, `TempAxis`, `EdgeLinear`, `SketchLine` | Single       |
+| Seed | `Feature`, `Face*`, `Body*`                       | Multi        |
 
 #### Parameters
+
 - Count
 - Angle (default 360°)
 - Equal spacing toggle
@@ -1267,20 +1337,20 @@ If sketch contains single centerline marked construction → auto-propose as axi
 
 #### Modes
 
-| Mode | Selection |
-|------|-----------|
-| Add (Union) | Bodies (multi) |
-| Subtract | Main body (single) + Tool bodies (multi) |
-| Common (Intersect) | Bodies (≥2) |
+| Mode               | Selection                                |
+| ------------------ | ---------------------------------------- |
+| Add (Union)        | Bodies (multi)                           |
+| Subtract           | Main body (single) + Tool bodies (multi) |
+| Common (Intersect) | Bodies (≥2)                              |
 
 ### 10.15 Split Line (Projection)
 
 #### Selection Boxes
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
-| Sketch | `Sketch`, `SketchCurve` | Single/Multi |
-| Faces to Split | `Face*` | Multi |
+| Box            | Accepts                 | Multiplicity |
+| -------------- | ----------------------- | ------------ |
+| Sketch         | `Sketch`, `SketchCurve` | Single/Multi |
+| Faces to Split | `Face*`                 | Multi        |
 
 ---
 
@@ -1289,19 +1359,21 @@ If sketch contains single centerline marked construction → auto-propose as axi
 ### 11.1 Inline Reference Creation
 
 Next to any Plane/Axis selection box:
+
 - Small **"+"** button opens plane/axis creation dialog
 - On OK, returns to feature tool with reference filled
 
 ### 11.2 Broad Reference Acceptance
 
-| Field Type | Accepts |
-|------------|---------|
-| Axis field | Sketch line/centerline, linear edge, reference axis, temp axis |
-| Plane field | Planar face, plane, reference plane |
+| Field Type  | Accepts                                                        |
+| ----------- | -------------------------------------------------------------- |
+| Axis field  | Sketch line/centerline, linear edge, reference axis, temp axis |
+| Plane field | Planar face, plane, reference plane                            |
 
 ### 11.3 Invalid Pick Feedback
 
 If user clicks non-acceptable entity:
+
 - Show near cursor: "Needs a linear edge or axis"
 - Highlight acceptable alternatives
 
@@ -1311,23 +1383,23 @@ If user clicks non-acceptable entity:
 
 ### 12.1 Sketch Entity Context Menu
 
-| Action | Description |
-|--------|-------------|
-| Toggle Construction | Switch to/from construction mode |
-| Add Relations… | Open Add Relations panel |
-| Delete Relations… | Show relations for deletion |
+| Action                   | Description                              |
+| ------------------------ | ---------------------------------------- |
+| Toggle Construction      | Switch to/from construction mode         |
+| Add Relations…           | Open Add Relations panel                 |
+| Delete Relations…        | Show relations for deletion              |
 | Reverse Endpoint Tangent | Flip tangent direction (on arcs/splines) |
-| Fix/Unfix | Toggle fixed constraint |
-| Trim/Extend | Quick access |
-| Delete | Remove entity |
+| Fix/Unfix                | Toggle fixed constraint                  |
+| Trim/Extend              | Quick access                             |
+| Delete                   | Remove entity                            |
 
 ### 12.2 Feature Preview Context Menu
 
-| Action | Description |
-|--------|-------------|
-| Flip Direction | Reverse extrude/revolve direction |
-| Change End Condition | Quick dropdown |
-| Edit Feature | Open PropertyManager |
+| Action               | Description                       |
+| -------------------- | --------------------------------- |
+| Flip Direction       | Reverse extrude/revolve direction |
+| Change End Condition | Quick dropdown                    |
+| Edit Feature         | Open PropertyManager              |
 
 ---
 
@@ -1335,20 +1407,21 @@ If user clicks non-acceptable entity:
 
 ### 13.1 Sketch Errors
 
-| Error | Display | Behavior |
-|-------|---------|----------|
-| Over-defined | Red entities, conflicting dims/relations highlighted | Non-blocking, allow edits |
-| Under-defined | Blue entities, show DOF count (optional) | Suggest adding constraints |
-| Solve failure | Message displayed | Keep edits, clear error guidance |
+| Error         | Display                                              | Behavior                         |
+| ------------- | ---------------------------------------------------- | -------------------------------- |
+| Over-defined  | Red entities, conflicting dims/relations highlighted | Non-blocking, allow edits        |
+| Under-defined | Blue entities, show DOF count (optional)             | Suggest adding constraints       |
+| Solve failure | Message displayed                                    | Keep edits, clear error guidance |
 
 ### 13.2 Feature Errors
 
-| Error | Display | Behavior |
-|-------|---------|----------|
-| Rebuild failure | Failing feature in tree | Keep last good body |
-| During tool | Highlight problem selections | Keep tool open with actionable hint |
+| Error           | Display                      | Behavior                            |
+| --------------- | ---------------------------- | ----------------------------------- |
+| Rebuild failure | Failing feature in tree      | Keep last good body                 |
+| During tool     | Highlight problem selections | Keep tool open with actionable hint |
 
 **Example hints:**
+
 - "Profile self-intersects"
 - "Zero-thickness geometry would result"
 - "Termination face is behind profile direction"
@@ -1363,10 +1436,10 @@ If user clicks non-acceptable entity:
 
 Every feature has two identifiers:
 
-| Property | Purpose | Example | Visible to User? |
-|----------|---------|---------|------------------|
-| `id` | Internal UUID for references | `"f7a8b3c2-..."` | ❌ Never |
-| `name` | User-facing display name | `"Extrude1"` | ✅ Always |
+| Property | Purpose                      | Example          | Visible to User? |
+| -------- | ---------------------------- | ---------------- | ---------------- |
+| `id`     | Internal UUID for references | `"f7a8b3c2-..."` | ❌ Never         |
+| `name`   | User-facing display name     | `"Extrude1"`     | ✅ Always        |
 
 #### Rules
 
@@ -1381,9 +1454,9 @@ Every feature has two identifiers:
 ```typescript
 // From schema.ts
 export const FeatureBaseSchema = z.object({
-  id: UUID,                        // Internal: never display
+  id: UUID, // Internal: never display
   type: z.string(),
-  name: z.string().optional(),     // Display: always show (generate if missing)
+  name: z.string().optional(), // Display: always show (generate if missing)
   suppressed: z.boolean().optional(),
   visible: z.boolean().optional(),
 });
@@ -1397,11 +1470,11 @@ When displaying a feature name, always provide a fallback:
 // CORRECT: Use getDisplayName helper
 function getFeatureDisplayName(feature: Feature): string {
   if (feature.name) return feature.name;
-  
+
   // Generate type-based default (never show raw ID)
   const typeNames: Record<string, string> = {
     sketch: "Sketch",
-    extrude: "Extrude", 
+    extrude: "Extrude",
     revolve: "Revolve",
     plane: "Plane",
     axis: "Axis",
@@ -1419,15 +1492,15 @@ const displayName = feature.name || feature.id; // ❌ BAD
 
 #### Where This Applies
 
-| UI Component | Show |
-|--------------|------|
-| Feature Tree | `name` (with type icon) |
-| Properties Panel header | `name` |
-| Error messages | `name` ("Extrude1 failed") |
-| Selection info | `name` + type |
-| Tooltips | `name` |
-| Context menus | `name` |
-| Reference displays | `name` ("Offset from Plane1") |
+| UI Component            | Show                          |
+| ----------------------- | ----------------------------- |
+| Feature Tree            | `name` (with type icon)       |
+| Properties Panel header | `name`                        |
+| Error messages          | `name` ("Extrude1 failed")    |
+| Selection info          | `name` + type                 |
+| Tooltips                | `name`                        |
+| Context menus           | `name`                        |
+| Reference displays      | `name` ("Offset from Plane1") |
 
 #### Name Generation on Create
 
@@ -1437,7 +1510,7 @@ When creating a new feature, generate a unique name:
 function generateFeatureName(type: string, existingFeatures: Feature[]): string {
   const prefix = type.charAt(0).toUpperCase() + type.slice(1);
   let maxNum = 0;
-  
+
   for (const feature of existingFeatures) {
     const name = feature.name || "";
     const match = name.match(new RegExp(`^${prefix}(\\d+)$`));
@@ -1445,7 +1518,7 @@ function generateFeatureName(type: string, existingFeatures: Feature[]): string 
       maxNum = Math.max(maxNum, parseInt(match[1], 10));
     }
   }
-  
+
   return `${prefix}${maxNum + 1}`;
 }
 
@@ -1475,7 +1548,7 @@ interface SketchTool {
 ```typescript
 interface SelectionBox {
   acceptedTypes: EntityType[];
-  multiplicity: 'single' | 'multiple';
+  multiplicity: "single" | "multiple";
   chainSelect: boolean;
   filters: SelectionFilter[];
   required: boolean;
@@ -1492,13 +1565,13 @@ interface InferenceEngine {
   cursorPosition: Vec2; // In sketch plane
   existingGeometry: SketchData;
   tolerances: ToleranceSettings;
-  
+
   // Outputs
   snappedPoint: Vec2;
   candidateRelations: RelationCandidate[];
   previewGlyphs: Glyph[];
   inferenceLines: Line[];
-  
+
   // Must support
   hysteresis: boolean;
   intentZones: IntentZone[];
@@ -1520,15 +1593,15 @@ interface InferenceEngine {
 
 ### 15.1 Top-Level UI Regions
 
-| Region | Purpose |
-|--------|---------|
-| **CommandManager** | Tabbed toolbar (Sketch, Features, Surfaces, Reference Geometry) |
-| **Bodies Section** | List of solid and surface bodies with visibility controls |
-| **Features Section** | Ordered list of features (origin, sketches, operations) |
-| **PropertyManager** | Right panel with selection boxes, parameters, OK/Cancel |
-| **Graphics Area** | Viewport with previews, manipulators, HUD |
-| **Contextual Toolbar** | Near-cursor toolbar on selection |
-| **Shortcut Bar (S key)** | Pop-up palette of common commands |
+| Region                   | Purpose                                                         |
+| ------------------------ | --------------------------------------------------------------- |
+| **CommandManager**       | Tabbed toolbar (Sketch, Features, Surfaces, Reference Geometry) |
+| **Bodies Section**       | List of solid and surface bodies with visibility controls       |
+| **Features Section**     | Ordered list of features (origin, sketches, operations)         |
+| **PropertyManager**      | Right panel with selection boxes, parameters, OK/Cancel         |
+| **Graphics Area**        | Viewport with previews, manipulators, HUD                       |
+| **Contextual Toolbar**   | Near-cursor toolbar on selection                                |
+| **Shortcut Bar (S key)** | Pop-up palette of common commands                               |
 
 > **Note:** Unlike SolidWorks' unified tree, SolidType has **two separate sections** for Bodies and Features.
 
@@ -1569,28 +1642,28 @@ interface InferenceEngine {
 
 #### Bodies Section (Flat List)
 
-| Element | Behavior |
-|---------|----------|
-| Body row | Name, visibility toggle, color swatch, type badge [Solid]/[Surface] |
-| Click body | Select body, highlight in viewport |
-| Right-click body | Context menu: Hide, Show, Delete, Appearance, Select All Faces |
-| Double-click name | Inline rename |
-| Drag body | Not supported (bodies are results, not reorderable) |
+| Element           | Behavior                                                            |
+| ----------------- | ------------------------------------------------------------------- |
+| Body row          | Name, visibility toggle, color swatch, type badge [Solid]/[Surface] |
+| Click body        | Select body, highlight in viewport                                  |
+| Right-click body  | Context menu: Hide, Show, Delete, Appearance, Select All Faces      |
+| Double-click name | Inline rename                                                       |
+| Drag body         | Not supported (bodies are results, not reorderable)                 |
 
 > **No subgroups:** Solid and surface bodies are in the same flat list, distinguished by a type badge or icon.
 
 #### Features Section (Flat List)
 
-| Element | Behavior |
-|---------|----------|
-| Origin planes | Flat list at top (Front, Top, Right) - no nesting |
-| Separator | Visual line between origin planes and user features |
-| Feature row | Icon, name, target body indicator, status icon |
-| Click feature | Select feature, show in Properties Panel |
-| Right-click feature | Context menu: Edit, Suppress, Delete, Rollback |
-| Double-click feature | Enter edit mode for that feature |
-| Drag feature | Reorder (changes evaluation order) |
-| Rebuild Gate | Visual marker, features below are not evaluated |
+| Element              | Behavior                                            |
+| -------------------- | --------------------------------------------------- |
+| Origin planes        | Flat list at top (Front, Top, Right) - no nesting   |
+| Separator            | Visual line between origin planes and user features |
+| Feature row          | Icon, name, target body indicator, status icon      |
+| Click feature        | Select feature, show in Properties Panel            |
+| Right-click feature  | Context menu: Edit, Suppress, Delete, Rollback      |
+| Double-click feature | Enter edit mode for that feature                    |
+| Drag feature         | Reorder (changes evaluation order)                  |
+| Rebuild Gate         | Visual marker, features below are not evaluated     |
 
 > **No nesting:** Origin planes are a flat list, not nested under an "Origin" folder.
 
@@ -1600,55 +1673,55 @@ Each feature shows which body(s) it affects:
 
 ```
 🔷 Extrude1 → Body 1              ← Creates/modifies Body 1
-🔷 Cut1 → Body 1, Body 2          ← Cuts through multiple bodies  
+🔷 Cut1 → Body 1, Body 2          ← Cuts through multiple bodies
 🔷 Fillet1 → Body 1               ← Applied to Body 1
 🔶 Extruded Surface1 → Surface 1  ← Creates Surface Body 1
 ```
 
 #### Current Implementation Status
 
-| Feature | Bodies Section | Features Section | Notes |
-|---------|----------------|------------------|-------|
-| Panel exists | 🔧 Partial | ✅ Works | Bodies section needs work |
-| Body type indicator | ❌ | — | No [Solid]/[Surface] badge |
-| Body visibility toggle | ❌ | — | Not implemented |
-| Body color/appearance | ❌ | — | Not implemented |
-| Body selection feedback | ❌ | — | No visible feedback |
-| Origin planes flat list | — | ✅ | Works |
-| Feature → Body indicator | — | ❌ | Features don't show target body |
-| Feature reordering | — | ❌ | Not implemented |
-| Feature status icons | — | 🔧 | Error icons exist, success/warning missing |
+| Feature                  | Bodies Section | Features Section | Notes                                      |
+| ------------------------ | -------------- | ---------------- | ------------------------------------------ |
+| Panel exists             | 🔧 Partial     | ✅ Works         | Bodies section needs work                  |
+| Body type indicator      | ❌             | —                | No [Solid]/[Surface] badge                 |
+| Body visibility toggle   | ❌             | —                | Not implemented                            |
+| Body color/appearance    | ❌             | —                | Not implemented                            |
+| Body selection feedback  | ❌             | —                | No visible feedback                        |
+| Origin planes flat list  | —              | ✅               | Works                                      |
+| Feature → Body indicator | —              | ❌               | Features don't show target body            |
+| Feature reordering       | —              | ❌               | Not implemented                            |
+| Feature status icons     | —              | 🔧               | Error icons exist, success/warning missing |
 
 #### Interaction Between Sections
 
-| Action | Bodies Section | Features Section |
-|--------|----------------|------------------|
-| Select body | Highlights body | Highlights features that affect it |
-| Select feature | Highlights affected body(s) | Shows feature selected |
-| Hide body | Body hidden in viewport | Features still visible |
-| Suppress feature | Body may change/disappear | Feature shows suppressed icon |
-| Delete body | ❓ Behavior TBD | Associated features deleted? |
+| Action           | Bodies Section              | Features Section                   |
+| ---------------- | --------------------------- | ---------------------------------- |
+| Select body      | Highlights body             | Highlights features that affect it |
+| Select feature   | Highlights affected body(s) | Shows feature selected             |
+| Hide body        | Body hidden in viewport     | Features still visible             |
+| Suppress feature | Body may change/disappear   | Feature shows suppressed icon      |
+| Delete body      | ❓ Behavior TBD             | Associated features deleted?       |
 
 #### Body Deletion Behavior (Design Decision)
 
 When user deletes a body from Bodies section:
 
-| Option | Behavior |
-|--------|----------|
-| **A. Delete body only** | Body removed, features that created it become orphaned |
-| **B. Delete body + features** | Body and all features that contributed to it are deleted |
-| **C. Suppress features** | Body hidden, contributing features suppressed (non-destructive) |
+| Option                        | Behavior                                                        |
+| ----------------------------- | --------------------------------------------------------------- |
+| **A. Delete body only**       | Body removed, features that created it become orphaned          |
+| **B. Delete body + features** | Body and all features that contributed to it are deleted        |
+| **C. Suppress features**      | Body hidden, contributing features suppressed (non-destructive) |
 
 > **Recommendation:** Option C (Suppress) as default, with Option B available via Shift+Delete
 
 ### 15.3 Contextual Toolbar Options
 
-| Selection | Available Actions |
-|-----------|-------------------|
+| Selection     | Available Actions                                              |
+| ------------- | -------------------------------------------------------------- |
 | Sketch entity | Smart Dimension, Add Relation, Construction, Trim, Fix, Delete |
-| Face | Extrude, Offset, Sketch, Hole Wizard, Fillet |
-| Edge | Fillet, Chamfer, Convert Entities (in sketch) |
-| Body | Combine, Appearance |
+| Face          | Extrude, Offset, Sketch, Hole Wizard, Fillet                   |
+| Edge          | Fillet, Chamfer, Convert Entities (in sketch)                  |
+| Body          | Combine, Appearance                                            |
 
 ### 15.4 Shortcut Bar (S Key)
 
@@ -1660,30 +1733,30 @@ Extrude, Cut, Fillet, Chamfer, Shell, Draft, Mirror, Pattern
 
 ### 15.5 Selection Filters Toolbar
 
-| Filter | Toggle |
-|--------|--------|
-| Faces | ☑ |
-| Edges | ☑ |
-| Vertices | ☑ |
-| Sketch Entities | ☑ |
-| Sketch Regions | ☑ |
-| Planes | ☑ |
-| Axes | ☑ |
-| Bodies | ☑ |
+| Filter          | Toggle |
+| --------------- | ------ |
+| Faces           | ☑      |
+| Edges           | ☑      |
+| Vertices        | ☑      |
+| Sketch Entities | ☑      |
+| Sketch Regions  | ☑      |
+| Planes          | ☑      |
+| Axes            | ☑      |
+| Bodies          | ☑      |
 
 ### 15.6 Keyboard + Mouse Conventions
 
-| Input | Action |
-|-------|--------|
-| **LMB** | Select / place |
-| **Drag** | Move manipulator / Power Trim |
-| **Ctrl+Click** | Toggle selection |
-| **Shift** | Constrain inference / lock direction |
-| **Esc** | Cancel tool |
-| **Enter** | OK / finish |
-| **Double-click** | End chain (line polyline) |
-| **Tab** | Cycle pick candidates under cursor |
-| **Right-click** | Context menu |
+| Input            | Action                               |
+| ---------------- | ------------------------------------ |
+| **LMB**          | Select / place                       |
+| **Drag**         | Move manipulator / Power Trim        |
+| **Ctrl+Click**   | Toggle selection                     |
+| **Shift**        | Constrain inference / lock direction |
+| **Esc**          | Cancel tool                          |
+| **Enter**        | OK / finish                          |
+| **Double-click** | End chain (line polyline)            |
+| **Tab**          | Cycle pick candidates under cursor   |
+| **Right-click**  | Context menu                         |
 
 ---
 
@@ -1692,95 +1765,97 @@ Extrude, Cut, Fillet, Chamfer, Shell, Draft, Mirror, Pattern
 ### 16.1 Entity Type Taxonomy
 
 #### Sketch-Level Types
-| Type | Description |
-|------|-------------|
-| `SketchPoint` | Point in sketch |
-| `SketchLine` | Line segment |
-| `SketchArc` | Arc segment |
-| `SketchCircle` | Full circle |
-| `SketchSpline` | Spline curve |
-| `SketchRegion` | Closed profile region |
+
+| Type            | Description             |
+| --------------- | ----------------------- |
+| `SketchPoint`   | Point in sketch         |
+| `SketchLine`    | Line segment            |
+| `SketchArc`     | Arc segment             |
+| `SketchCircle`  | Full circle             |
+| `SketchSpline`  | Spline curve            |
+| `SketchRegion`  | Closed profile region   |
 | `SketchContour` | Chain usable as profile |
 
 #### Model-Level Types
-| Type | Description |
-|------|-------------|
-| `FacePlanar` | Flat face |
-| `FaceCylindrical` | Cylindrical surface |
-| `FaceConical` | Conical surface |
-| `EdgeLinear` | Straight edge |
-| `EdgeCircular` | Circular edge |
-| `EdgeCurve` | General curve edge |
-| `Vertex` | Point on body |
-| `BodySolid` | Solid body |
-| `BodySurface` | Surface body |
-| `PlaneRef` | Reference plane |
-| `AxisRef` | Reference axis |
-| `TempAxis` | Derived from cylinder/cone |
+
+| Type              | Description                |
+| ----------------- | -------------------------- |
+| `FacePlanar`      | Flat face                  |
+| `FaceCylindrical` | Cylindrical surface        |
+| `FaceConical`     | Conical surface            |
+| `EdgeLinear`      | Straight edge              |
+| `EdgeCircular`    | Circular edge              |
+| `EdgeCurve`       | General curve edge         |
+| `Vertex`          | Point on body              |
+| `BodySolid`       | Solid body                 |
+| `BodySurface`     | Surface body               |
+| `PlaneRef`        | Reference plane            |
+| `AxisRef`         | Reference axis             |
+| `TempAxis`        | Derived from cylinder/cone |
 
 ### 16.2 Standard Validation Messages
 
-| Code | Message |
-|------|---------|
-| `NEED_PLANAR` | "Select a planar face or plane." |
-| `NEED_LINEAR` | "Select a linear edge, sketch line, or axis." |
-| `NEED_CLOSED` | "Select a closed sketch region." |
-| `NO_INTERSECT` | "Selection does not intersect required profiles." |
-| `OPEN_PROFILE` | "Profile is open (not closed)." |
-| `ZERO_THICKNESS` | "Feature would result in zero-thickness geometry." |
-| `PARALLEL_PLANES` | "Planes do not intersect; cannot form an axis." |
+| Code              | Message                                            |
+| ----------------- | -------------------------------------------------- |
+| `NEED_PLANAR`     | "Select a planar face or plane."                   |
+| `NEED_LINEAR`     | "Select a linear edge, sketch line, or axis."      |
+| `NEED_CLOSED`     | "Select a closed sketch region."                   |
+| `NO_INTERSECT`    | "Selection does not intersect required profiles."  |
+| `OPEN_PROFILE`    | "Profile is open (not closed)."                    |
+| `ZERO_THICKNESS`  | "Feature would result in zero-thickness geometry." |
+| `PARALLEL_PLANES` | "Planes do not intersect; cannot form an axis."    |
 
 ### 16.3 Per-Tool Acceptance
 
 #### Plane Tool
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
-| Reference 1 | `FacePlanar`, `PlaneRef`, `EdgeLinear`, `AxisRef`, `Vertex`, `FaceCylindrical`, `FaceConical` | Single |
-| Reference 2 | Same, filtered by mode | Single (optional) |
-| Reference 3 | `Vertex` | Single (optional) |
+| Box         | Accepts                                                                                       | Multiplicity      |
+| ----------- | --------------------------------------------------------------------------------------------- | ----------------- |
+| Reference 1 | `FacePlanar`, `PlaneRef`, `EdgeLinear`, `AxisRef`, `Vertex`, `FaceCylindrical`, `FaceConical` | Single            |
+| Reference 2 | Same, filtered by mode                                                                        | Single (optional) |
+| Reference 3 | `Vertex`                                                                                      | Single (optional) |
 
 #### Axis Tool
 
-| Box | Accepts | Multiplicity |
-|-----|---------|--------------|
-| Linear Entity | `EdgeLinear`, `SketchLine`, `AxisRef` | Single |
-| Point 1 | `Vertex`, `SketchPoint` | Single |
-| Point 2 | `Vertex`, `SketchPoint` | Single |
-| Plane 1 | `PlaneRef`, `FacePlanar` | Single |
-| Plane 2 | `PlaneRef`, `FacePlanar` | Single |
-| Cylindrical | `FaceCylindrical`, `FaceConical` | Single |
+| Box           | Accepts                               | Multiplicity |
+| ------------- | ------------------------------------- | ------------ |
+| Linear Entity | `EdgeLinear`, `SketchLine`, `AxisRef` | Single       |
+| Point 1       | `Vertex`, `SketchPoint`               | Single       |
+| Point 2       | `Vertex`, `SketchPoint`               | Single       |
+| Plane 1       | `PlaneRef`, `FacePlanar`              | Single       |
+| Plane 2       | `PlaneRef`, `FacePlanar`              | Single       |
+| Cylindrical   | `FaceCylindrical`, `FaceConical`      | Single       |
 
 #### Extrude
 
-| Box | Accepts | Multiplicity | Chain | Required |
-|-----|---------|--------------|-------|----------|
-| Profile | `SketchRegion`, `SketchContour`, `Sketch` | Multi | No | Yes |
-| Direction | `FacePlanar` | Single | No | No |
-| Up To Surface | `Face*` | Single | No | Conditional |
+| Box           | Accepts                                   | Multiplicity | Chain | Required    |
+| ------------- | ----------------------------------------- | ------------ | ----- | ----------- |
+| Profile       | `SketchRegion`, `SketchContour`, `Sketch` | Multi        | No    | Yes         |
+| Direction     | `FacePlanar`                              | Single       | No    | No          |
+| Up To Surface | `Face*`                                   | Single       | No    | Conditional |
 
 #### Revolve
 
-| Box | Accepts | Multiplicity | Chain | Required |
-|-----|---------|--------------|-------|----------|
-| Profile | `SketchRegion`, `SketchContour` | Multi | No | Yes |
-| Axis | `SketchLine`, `EdgeLinear`, `AxisRef`, `TempAxis` | Single | No | Yes |
+| Box     | Accepts                                           | Multiplicity | Chain | Required |
+| ------- | ------------------------------------------------- | ------------ | ----- | -------- |
+| Profile | `SketchRegion`, `SketchContour`                   | Multi        | No    | Yes      |
+| Axis    | `SketchLine`, `EdgeLinear`, `AxisRef`, `TempAxis` | Single       | No    | Yes      |
 
 #### Sweep
 
-| Box | Accepts | Multiplicity | Chain | Required |
-|-----|---------|--------------|-------|----------|
-| Profile | `SketchRegion`, `SketchContour` | Single | No | Yes |
-| Path | `SketchCurve`, `EdgeCurve` | Single | Yes | Yes |
-| Guides | Curve chains | Multi | Yes | No |
+| Box     | Accepts                         | Multiplicity | Chain | Required |
+| ------- | ------------------------------- | ------------ | ----- | -------- |
+| Profile | `SketchRegion`, `SketchContour` | Single       | No    | Yes      |
+| Path    | `SketchCurve`, `EdgeCurve`      | Single       | Yes   | Yes      |
+| Guides  | Curve chains                    | Multi        | Yes   | No       |
 
 #### Loft
 
-| Box | Accepts | Multiplicity | Chain | Required |
-|-----|---------|--------------|-------|----------|
-| Profiles | `SketchRegion`, `SketchContour` | Ordered Multi | No | Yes (≥2) |
-| Guides | Curve chains | Multi | Yes | No |
-| Centerline | Curve | Single | Yes | No |
+| Box        | Accepts                         | Multiplicity  | Chain | Required |
+| ---------- | ------------------------------- | ------------- | ----- | -------- |
+| Profiles   | `SketchRegion`, `SketchContour` | Ordered Multi | No    | Yes (≥2) |
+| Guides     | Curve chains                    | Multi         | Yes   | No       |
+| Centerline | Curve                           | Single        | Yes   | No       |
 
 ---
 
@@ -1790,64 +1865,64 @@ Extrude, Cut, Fillet, Chamfer, Shell, Draft, Mirror, Pattern
 
 ### Phase 1: Core Sketch Feel (MVP)
 
-| Feature | Priority |
-|---------|----------|
-| Line + inference + auto-relations | 🔴 Critical |
-| Smart Dimension | 🔴 Critical |
-| Trim (Power Trim) | 🔴 Critical |
-| Rectangle/Circle/Arc flyouts | 🔴 Critical |
+| Feature                                     | Priority    |
+| ------------------------------------------- | ----------- |
+| Line + inference + auto-relations           | 🔴 Critical |
+| Smart Dimension                             | 🔴 Critical |
+| Trim (Power Trim)                           | 🔴 Critical |
+| Rectangle/Circle/Arc flyouts                | 🔴 Critical |
 | Chain line behavior with right-click finish | 🔴 Critical |
 
 ### Phase 2: Constraints System
 
-| Feature | Priority |
-|---------|----------|
-| Coincident | 🔴 Critical |
-| Horizontal/Vertical | 🔴 Critical |
-| Parallel/Perpendicular | 🔴 Critical |
-| Tangent | 🔴 Critical |
-| Equal, Midpoint, Symmetric | 🟡 High |
-| Fix + Relations Manager | 🟡 High |
+| Feature                    | Priority    |
+| -------------------------- | ----------- |
+| Coincident                 | 🔴 Critical |
+| Horizontal/Vertical        | 🔴 Critical |
+| Parallel/Perpendicular     | 🔴 Critical |
+| Tangent                    | 🔴 Critical |
+| Equal, Midpoint, Symmetric | 🟡 High     |
+| Fix + Relations Manager    | 🟡 High     |
 
 ### Phase 3: Core Features
 
-| Feature | Priority |
-|---------|----------|
+| Feature                               | Priority    |
+| ------------------------------------- | ----------- |
 | Extrude Boss/Cut (all end conditions) | 🔴 Critical |
-| Revolve | 🔴 Critical |
-| Fillet/Chamfer | 🔴 Critical |
+| Revolve                               | 🔴 Critical |
+| Fillet/Chamfer                        | 🔴 Critical |
 
 ### Phase 4: Reference Geometry
 
-| Feature | Priority |
-|---------|----------|
-| Plane (Offset/Midplane/3-Point/Angle) | 🟡 High |
-| Axis (line/edge/two points/two planes) | 🟡 High |
+| Feature                                | Priority |
+| -------------------------------------- | -------- |
+| Plane (Offset/Midplane/3-Point/Angle)  | 🟡 High  |
+| Axis (line/edge/two points/two planes) | 🟡 High  |
 
 ### Phase 5: Advanced Features
 
-| Feature | Priority |
-|---------|----------|
-| Patterns + Mirror | 🟡 High |
-| Shell + Draft | 🟡 High |
-| Sweep + Loft | 🟢 Medium |
-| Hole Wizard | 🟢 Medium |
-| Combine, Split Line | 🟢 Medium |
-| Surface counterparts | 🔵 Lower |
+| Feature              | Priority  |
+| -------------------- | --------- |
+| Patterns + Mirror    | 🟡 High   |
+| Shell + Draft        | 🟡 High   |
+| Sweep + Loft         | 🟢 Medium |
+| Hole Wizard          | 🟢 Medium |
+| Combine, Split Line  | 🟢 Medium |
+| Surface counterparts | 🔵 Lower  |
 
 ### Phase 6: 3D Selection System
 
-| Feature | Priority |
-|---------|----------|
-| Edge tessellation in kernel | 🔴 Critical |
-| Edge rendering in viewer | 🔴 Critical |
-| Edge picking/selection | 🔴 Critical |
-| Edge hover highlighting | 🔴 Critical |
-| Face selection info in Properties Panel | 🟡 High |
-| Edge selection info in Properties Panel | 🟡 High |
-| Selection filters (Face/Edge/Vertex toggles) | 🟡 High |
-| Edge loop selection (double-click) | 🟢 Medium |
-| Box selection (drag to select) | 🟢 Medium |
+| Feature                                      | Priority    |
+| -------------------------------------------- | ----------- |
+| Edge tessellation in kernel                  | 🔴 Critical |
+| Edge rendering in viewer                     | 🔴 Critical |
+| Edge picking/selection                       | 🔴 Critical |
+| Edge hover highlighting                      | 🔴 Critical |
+| Face selection info in Properties Panel      | 🟡 High     |
+| Edge selection info in Properties Panel      | 🟡 High     |
+| Selection filters (Face/Edge/Vertex toggles) | 🟡 High     |
+| Edge loop selection (double-click)           | 🟢 Medium   |
+| Box selection (drag to select)               | 🟢 Medium   |
 
 > **Note:** 3D selection is a foundation for many features (Fillet, Chamfer, Shell, Draft, Patterns).
 > Edge selection must work before these features can be fully implemented.
@@ -1859,6 +1934,7 @@ Extrude, Cut, Fillet, Chamfer, Shell, Draft, Mirror, Pattern
 ### A. Inline Reference Creation
 
 Any selection box accepting `PlaneRef` or `AxisRef` gets:
+
 - **"+ Create Plane…"** button
 - **"+ Create Axis…"** button
 
@@ -1867,6 +1943,7 @@ On creation OK: return to tool, fill selection box, preserve tool state.
 ### B. Auto-Chain Selection
 
 When selection box accepts edges/curves with `ChainSelect: yes`:
+
 - Single click selects connected tangent chain
 - `Ctrl+Click` adds/removes segments from chain
 
@@ -1878,16 +1955,17 @@ When selection box accepts edges/curves with `ChainSelect: yes`:
 
 ### D. Defaulting Rules
 
-| Tool | Defaults |
-|------|----------|
+| Tool    | Defaults                                                  |
+| ------- | --------------------------------------------------------- |
 | Extrude | Direction = sketch normal, End = Blind, Depth = last-used |
-| Cut | End = Through All (or last-used) |
-| Revolve | If sketch has one centerline, auto-suggest |
-| Mirror | Suggest midplane if symmetric part implied |
+| Cut     | End = Through All (or last-used)                          |
+| Revolve | If sketch has one centerline, auto-suggest                |
+| Mirror  | Suggest midplane if symmetric part implied                |
 
 ### E. Consistent Failure UX
 
 When kernel fails:
+
 1. Keep tool open
 2. Preserve user selections
 3. Highlight failing selections
@@ -1944,16 +2022,16 @@ packages/
 
 ### 18.2 Key File Responsibilities
 
-| File | Responsibility | Lines |
-|------|----------------|-------|
-| `Viewer.tsx` | 3D rendering, sketch mouse handlers, entity visualization | ~3300 |
-| `SketchContext.tsx` | Sketch mode state, tool switching, entity CRUD | ~770 |
-| `FloatingToolbar.tsx` | Tool buttons, constraint menu, grid toggle | ~870 |
-| `schema.ts` | Zod schemas for all document types | ~580 |
-| `featureHelpers.ts` | Yjs document operations for features | ~1100 |
-| `SketchModel.ts` | Core sketch data model (kernel side) | ~660 |
-| `solver.ts` | Gauss-Newton constraint solver | ~500 |
-| `constraints.ts` | Constraint error functions | ~400 |
+| File                  | Responsibility                                            | Lines |
+| --------------------- | --------------------------------------------------------- | ----- |
+| `Viewer.tsx`          | 3D rendering, sketch mouse handlers, entity visualization | ~3300 |
+| `SketchContext.tsx`   | Sketch mode state, tool switching, entity CRUD            | ~770  |
+| `FloatingToolbar.tsx` | Tool buttons, constraint menu, grid toggle                | ~870  |
+| `schema.ts`           | Zod schemas for all document types                        | ~580  |
+| `featureHelpers.ts`   | Yjs document operations for features                      | ~1100 |
+| `SketchModel.ts`      | Core sketch data model (kernel side)                      | ~660  |
+| `solver.ts`           | Gauss-Newton constraint solver                            | ~500  |
+| `constraints.ts`      | Constraint error functions                                | ~400  |
 
 ### 18.3 Data Flow
 
@@ -1997,14 +2075,14 @@ User Input (Mouse/Keyboard)
 
 ### 19.1 Line Tool
 
-| Aspect | Current | Target | Gap |
-|--------|---------|--------|-----|
-| **Chain Mode** | ❌ Each line independent | ✅ Continue from last point | Need to track `lastEndpointId` |
-| **Right-Click Finish** | ❌ Not handled | ✅ Ends chain, stays in tool | Add `onContextMenu` handler |
-| **Click-Drag** | ❌ Same as click-click | ✅ Single line on release | Track `mouseDownPos` + `isDragging` |
-| **Auto H/V** | ❌ None | ✅ Detect near-axis lines | Check angle in `handleMouseUp` |
-| **Auto Coincident** | ❌ Point reuse only | ✅ Create constraint | Call `addConstraint` on snap |
-| **Visual Inference** | ❌ Only snap indicator | ✅ H/V/∥/⊥ icons | Add inference overlay |
+| Aspect                 | Current                  | Target                       | Gap                                 |
+| ---------------------- | ------------------------ | ---------------------------- | ----------------------------------- |
+| **Chain Mode**         | ❌ Each line independent | ✅ Continue from last point  | Need to track `lastEndpointId`      |
+| **Right-Click Finish** | ❌ Not handled           | ✅ Ends chain, stays in tool | Add `onContextMenu` handler         |
+| **Click-Drag**         | ❌ Same as click-click   | ✅ Single line on release    | Track `mouseDownPos` + `isDragging` |
+| **Auto H/V**           | ❌ None                  | ✅ Detect near-axis lines    | Check angle in `handleMouseUp`      |
+| **Auto Coincident**    | ❌ Point reuse only      | ✅ Create constraint         | Call `addConstraint` on snap        |
+| **Visual Inference**   | ❌ Only snap indicator   | ✅ H/V/∥/⊥ icons             | Add inference overlay               |
 
 **Current Code Location:** `Viewer.tsx` lines 3016-3050
 
@@ -2012,15 +2090,16 @@ User Input (Mouse/Keyboard)
 // CURRENT (simplified)
 if (sketchMode.activeTool === "line") {
   if (!tempStartPoint) {
-    setTempStartPoint({ x, y });  // First click
+    setTempStartPoint({ x, y }); // First click
   } else {
-    addLine(startId, endId);      // Second click
-    setTempStartPoint(null);      // ❌ Doesn't chain
+    addLine(startId, endId); // Second click
+    setTempStartPoint(null); // ❌ Doesn't chain
   }
 }
 ```
 
 **Target Code Pattern:**
+
 ```typescript
 if (sketchMode.activeTool === "line") {
   if (!tempStartPoint) {
@@ -2028,7 +2107,7 @@ if (sketchMode.activeTool === "line") {
   } else {
     const endId = snappedId ?? addPoint(x, y);
     addLine(startId, endId);
-    
+
     // ✅ Auto-constraints
     if (isNearHorizontal(startPt, endPt)) {
       addConstraint({ type: "horizontal", points: [startId, endId] });
@@ -2036,7 +2115,7 @@ if (sketchMode.activeTool === "line") {
     if (snappedId) {
       addConstraint({ type: "coincident", points: [prevEndId, snappedId] });
     }
-    
+
     // ✅ Chain mode: continue from endpoint
     setTempStartPoint({ x: endPt.x, y: endPt.y, id: endId });
   }
@@ -2045,42 +2124,42 @@ if (sketchMode.activeTool === "line") {
 
 ### 19.2 Arc Tool
 
-| Aspect | Current | Target | Gap |
-|--------|---------|--------|-----|
-| **Order** | start → end → center | center → start → end | Swap click sequence |
-| **Tangent Mode** | ❌ Not implemented | ✅ Auto from line endpoint | Add intent zone detection |
-| **Direction** | CCW from cross product | Drag side determines | Track cursor relative to chord |
-| **3-Point Mode** | ❌ Not available | ✅ Alternative mode | Add mode toggle |
+| Aspect           | Current                | Target                     | Gap                            |
+| ---------------- | ---------------------- | -------------------------- | ------------------------------ |
+| **Order**        | start → end → center   | center → start → end       | Swap click sequence            |
+| **Tangent Mode** | ❌ Not implemented     | ✅ Auto from line endpoint | Add intent zone detection      |
+| **Direction**    | CCW from cross product | Drag side determines       | Track cursor relative to chord |
+| **3-Point Mode** | ❌ Not available       | ✅ Alternative mode        | Add mode toggle                |
 
 **Current Code Location:** `Viewer.tsx` lines 3052-3077
 
 ### 19.3 Rectangle Tool
 
-| Aspect | Current | Target | Gap |
-|--------|---------|--------|-----|
-| **Modes** | Corner-corner only | + Center, 3-Point | Add mode state |
-| **Auto H/V** | ❌ None | ✅ All edges constrained | Add 4 constraints on create |
-| **Preview** | ❌ None | ✅ Live rectangle | Add preview line for 4 edges |
+| Aspect       | Current            | Target                   | Gap                          |
+| ------------ | ------------------ | ------------------------ | ---------------------------- |
+| **Modes**    | Corner-corner only | + Center, 3-Point        | Add mode state               |
+| **Auto H/V** | ❌ None            | ✅ All edges constrained | Add 4 constraints on create  |
+| **Preview**  | ❌ None            | ✅ Live rectangle        | Add preview line for 4 edges |
 
 **Current Code Location:** `Viewer.tsx` lines 3106-3137
 
 ### 19.4 Selection
 
-| Aspect | Current | Target | Gap |
-|--------|---------|--------|-----|
-| **Multi-Select** | ❌ Single only | ✅ Ctrl+click toggle | Check `e.ctrlKey` modifier |
-| **Box Select** | ❌ Not implemented | ✅ Drag to box select | Add selection box state |
-| **Shift+Click** | ❌ Not handled | ✅ Add to selection | Check `e.shiftKey` modifier |
+| Aspect           | Current            | Target                | Gap                         |
+| ---------------- | ------------------ | --------------------- | --------------------------- |
+| **Multi-Select** | ❌ Single only     | ✅ Ctrl+click toggle  | Check `e.ctrlKey` modifier  |
+| **Box Select**   | ❌ Not implemented | ✅ Drag to box select | Add selection box state     |
+| **Shift+Click**  | ❌ Not handled     | ✅ Add to selection   | Check `e.shiftKey` modifier |
 
 **Current Code Location:** `Viewer.tsx` lines 2995-3014
 
 ### 19.5 Constraints
 
-| Aspect | Current | Target | Gap |
-|--------|---------|--------|-----|
-| **Auto on Create** | ❌ None | ✅ H/V/Coincident | Add in entity creation |
-| **Visual Glyphs** | ✅ Dimension labels | + Constraint icons | Add glyph sprites |
-| **Suppress Ctrl** | ❌ Not implemented | ✅ Ctrl disables auto | Check modifier |
+| Aspect             | Current             | Target                | Gap                    |
+| ------------------ | ------------------- | --------------------- | ---------------------- |
+| **Auto on Create** | ❌ None             | ✅ H/V/Coincident     | Add in entity creation |
+| **Visual Glyphs**  | ✅ Dimension labels | + Constraint icons    | Add glyph sprites      |
+| **Suppress Ctrl**  | ❌ Not implemented  | ✅ Ctrl disables auto | Check modifier         |
 
 ---
 
@@ -2091,6 +2170,7 @@ if (sketchMode.activeTool === "line") {
 **Estimated Effort:** 2-3 hours
 
 #### Task A1: Add Chain Mode State
+
 **File:** `packages/app/src/editor/components/Viewer.tsx`
 
 ```typescript
@@ -2103,10 +2183,12 @@ const [chainLastEndpoint, setChainLastEndpoint] = useState<{
 ```
 
 #### Task A2: Modify Line Tool Click Handler
+
 **File:** `packages/app/src/editor/components/Viewer.tsx`
 **Location:** Inside `handleMouseUp`, around line 3016
 
 **Changes:**
+
 1. After creating line, set `chainLastEndpoint` to the end point
 2. On next click, if `chainLastEndpoint` exists, use it as start
 3. Clear `chainLastEndpoint` on tool change or Escape
@@ -2115,10 +2197,10 @@ const [chainLastEndpoint, setChainLastEndpoint] = useState<{
 // REPLACE the line tool section (lines 3016-3050)
 if (sketchMode.activeTool === "line") {
   const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
-  
+
   // Determine start point (chain mode or fresh start)
   const startSource = chainLastEndpoint || tempStartPoint;
-  
+
   if (!startSource) {
     // First click - set start point
     if (nearbyPoint) {
@@ -2146,7 +2228,7 @@ if (sketchMode.activeTool === "line") {
 
     if (startId && endId) {
       addLine(startId, endId);
-      
+
       // Chain mode: set end as new start
       const endPt = nearbyPoint || { x: snappedPos.x, y: snappedPos.y };
       setChainLastEndpoint({ x: endPt.x, y: endPt.y, id: endId });
@@ -2158,6 +2240,7 @@ if (sketchMode.activeTool === "line") {
 ```
 
 #### Task A3: Add Right-Click to End Chain
+
 **File:** `packages/app/src/editor/components/Viewer.tsx`
 **Location:** After the `onContextMenu` handler (around line 2583)
 
@@ -2165,7 +2248,7 @@ if (sketchMode.activeTool === "line") {
 // MODIFY onContextMenu to handle sketch chain finish
 const onContextMenu = (e: MouseEvent) => {
   e.preventDefault();
-  
+
   // In sketch mode with line tool: end chain
   if (sketchMode.active && sketchMode.activeTool === "line") {
     setChainLastEndpoint(null);
@@ -2176,6 +2259,7 @@ const onContextMenu = (e: MouseEvent) => {
 ```
 
 #### Task A4: Clear Chain on Tool Change
+
 **File:** `packages/app/src/editor/components/Viewer.tsx`
 **Location:** In the useEffect that clears tool state (around line 528)
 
@@ -2186,11 +2270,12 @@ useEffect(() => {
   setArcStartPoint(null);
   setArcEndPoint(null);
   setCircleCenterPoint(null);
-  setChainLastEndpoint(null);  // ADD THIS
+  setChainLastEndpoint(null); // ADD THIS
 }, [sketchMode.active, sketchMode.sketchId, sketchMode.activeTool]); // ADD activeTool
 ```
 
 #### Task A5: Update Preview Line for Chain Mode
+
 **File:** `packages/app/src/editor/components/Viewer.tsx`
 **Location:** Update the preview line effect (around line 537)
 
@@ -2213,10 +2298,18 @@ useEffect(() => {
   } else {
     setPreviewLine(null);
   }
-}, [sketchMode.active, sketchMode.activeTool, tempStartPoint, chainLastEndpoint, sketchPos, setPreviewLine]);
+}, [
+  sketchMode.active,
+  sketchMode.activeTool,
+  tempStartPoint,
+  chainLastEndpoint,
+  sketchPos,
+  setPreviewLine,
+]);
 ```
 
 **Verification Checklist for Phase A:**
+
 - [ ] Click first point → preview line appears
 - [ ] Click second point → line created, preview continues from endpoint
 - [ ] Click third point → second line created, chained to first
@@ -2232,6 +2325,7 @@ useEffect(() => {
 **Estimated Effort:** 2-3 hours
 
 #### Task B1: Add Inference Detection Functions
+
 **File:** `packages/app/src/editor/components/Viewer.tsx`
 **Location:** Add after line 98 (utility functions section)
 
@@ -2257,6 +2351,7 @@ function isNearVertical(p1: { x: number; y: number }, p2: { x: number; y: number
 ```
 
 #### Task B2: Add Auto-Constraint Setting
+
 **File:** `packages/app/src/editor/contexts/ViewerContext.tsx`
 
 ```typescript
@@ -2272,44 +2367,46 @@ setAutoConstraints: (enabled: boolean) => void;
 ```
 
 #### Task B3: Apply Auto-Constraints in Line Creation
+
 **File:** `packages/app/src/editor/components/Viewer.tsx`
 **Location:** Inside the line creation code (Task A2), after `addLine()`
 
 ```typescript
 if (startId && endId) {
   addLine(startId, endId);
-  
+
   // Auto-constraints (if enabled and Ctrl not held)
   if (viewerState.autoConstraints && !e.ctrlKey) {
     const startPt = startSource;
     const endPt = nearbyPoint || { x: snappedPos.x, y: snappedPos.y };
-    
+
     // Check for horizontal/vertical
     if (isNearHorizontal(startPt, endPt)) {
       addConstraint({ type: "horizontal", points: [startId, endId] });
     } else if (isNearVertical(startPt, endPt)) {
       addConstraint({ type: "vertical", points: [startId, endId] });
     }
-    
+
     // Auto-coincident on snap (only if end snapped to existing point)
     // Note: coincident with start is implicit from chain mode
     if (nearbyPoint && chainLastEndpoint) {
       // This creates a coincident between the chain's previous endpoint
       // and the snapped point (if they're different)
       if (chainLastEndpoint.id !== nearbyPoint.id) {
-        addConstraint({ 
-          type: "coincident", 
-          points: [chainLastEndpoint.id, nearbyPoint.id] 
+        addConstraint({
+          type: "coincident",
+          points: [chainLastEndpoint.id, nearbyPoint.id],
         });
       }
     }
   }
-  
+
   // Chain mode...
 }
 ```
 
 #### Task B4: Add Inference Visual Overlay
+
 **File:** `packages/app/src/editor/components/Viewer.tsx`
 **Location:** Add state for inference display
 
@@ -2324,6 +2421,7 @@ const [inferenceIndicator, setInferenceIndicator] = useState<{
 Then update in mousemove handler when line tool is active with a start point.
 
 **Verification Checklist for Phase B:**
+
 - [ ] Draw horizontal line → "H" indicator appears → horizontal constraint created
 - [ ] Draw vertical line → "V" indicator appears → vertical constraint created
 - [ ] Draw diagonal line → no indicator → no H/V constraint
@@ -2349,18 +2447,18 @@ The current toggle functions incorrectly clear other selection types:
 ```typescript
 // ❌ CURRENT (BROKEN): Clears lines when toggling points
 const togglePointSelection = (pointId: string) => {
-  setSelectedPoints(prev => {
+  setSelectedPoints((prev) => {
     const next = new Set(prev);
     if (next.has(pointId)) next.delete(pointId);
     else next.add(pointId);
     return next;
   });
-  setSelectedLines(new Set());  // BUG: This clears lines!
+  setSelectedLines(new Set()); // BUG: This clears lines!
 };
 
 // ✅ FIXED: Toggle only affects its own type
 const togglePointSelection = (pointId: string) => {
-  setSelectedPoints(prev => {
+  setSelectedPoints((prev) => {
     const next = new Set(prev);
     if (next.has(pointId)) next.delete(pointId);
     else next.add(pointId);
@@ -2370,7 +2468,7 @@ const togglePointSelection = (pointId: string) => {
 };
 
 const toggleLineSelection = (lineId: string) => {
-  setSelectedLines(prev => {
+  setSelectedLines((prev) => {
     const next = new Set(prev);
     if (next.has(lineId)) next.delete(lineId);
     else next.add(lineId);
@@ -2381,6 +2479,7 @@ const toggleLineSelection = (lineId: string) => {
 ```
 
 #### Task C1: Modify Click Selection Logic
+
 **File:** `packages/app/src/editor/components/Viewer.tsx`
 **Location:** In `handleMouseUp`, select tool section (lines 2995-3014)
 
@@ -2391,14 +2490,14 @@ if (sketchMode.activeTool === "select") {
 
   const tol = POINT_MERGE_TOLERANCE_MM;
   const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, tol);
-  
+
   if (nearbyPoint) {
     if (e.ctrlKey) {
       // Ctrl+click: toggle selection (preserves other selections)
       togglePointSelection(nearbyPoint.id);
     } else if (e.shiftKey) {
       // Shift+click: add to selection (preserves other selections)
-      setSelectedPoints(prev => new Set([...prev, nearbyPoint.id]));
+      setSelectedPoints((prev) => new Set([...prev, nearbyPoint.id]));
     } else {
       // Plain click: select only this (clear all others)
       setSelectedPoints(new Set([nearbyPoint.id]));
@@ -2415,7 +2514,7 @@ if (sketchMode.activeTool === "select") {
       toggleLineSelection(nearbyLine.id);
     } else if (e.shiftKey) {
       // Shift+click: add to selection (preserves other selections)
-      setSelectedLines(prev => new Set([...prev, nearbyLine.id]));
+      setSelectedLines((prev) => new Set([...prev, nearbyLine.id]));
     } else {
       // Plain click: select only this (clear all others)
       setSelectedLines(new Set([nearbyLine.id]));
@@ -2434,12 +2533,14 @@ if (sketchMode.activeTool === "select") {
 ```
 
 **Verification Checklist for Task C0:**
+
 - [ ] Ctrl+click point → point toggles, lines stay selected
 - [ ] Ctrl+click line → line toggles, points stay selected
 - [ ] Shift+click → adds to selection, doesn't clear others
 - [ ] Plain click → clears all, selects only clicked item
 
 #### Task C2: Update SketchContext Toggle Functions
+
 **File:** `packages/app/src/editor/contexts/SketchContext.tsx`
 **Location:** Modify `togglePointSelection` and `toggleLineSelection`
 
@@ -2464,6 +2565,7 @@ const togglePointSelection = useCallback((pointId: string, additive?: boolean) =
 ```
 
 **Verification Checklist for Phase C:**
+
 - [ ] Click point → only that point selected
 - [ ] Ctrl+click another point → both points selected
 - [ ] Ctrl+click selected point → deselects it
@@ -2478,6 +2580,7 @@ const togglePointSelection = useCallback((pointId: string, additive?: boolean) =
 **Estimated Effort:** 1-2 hours
 
 #### Task D1: Add Rectangle Constraint Application
+
 **File:** `packages/app/src/editor/contexts/SketchContext.tsx`
 **Location:** Modify `addRectangle` function (around line 395)
 
@@ -2505,9 +2608,9 @@ const addRectangle = useCallback(
     // Add auto-constraints for rectangle
     addConstraintToSketch(sketch, { type: "horizontal", points: [p1, p2] }); // bottom
     addConstraintToSketch(sketch, { type: "horizontal", points: [p3, p4] }); // top
-    addConstraintToSketch(sketch, { type: "vertical", points: [p2, p3] });   // right
-    addConstraintToSketch(sketch, { type: "vertical", points: [p4, p1] });   // left
-    
+    addConstraintToSketch(sketch, { type: "vertical", points: [p2, p3] }); // right
+    addConstraintToSketch(sketch, { type: "vertical", points: [p4, p1] }); // left
+
     // Optional: equal length constraints for square-like rectangles
     // addConstraintToSketch(sketch, { type: "equalLength", lines: [l1, l3] });
     // addConstraintToSketch(sketch, { type: "equalLength", lines: [l2, l4] });
@@ -2517,6 +2620,7 @@ const addRectangle = useCallback(
 ```
 
 **Verification Checklist for Phase D:**
+
 - [ ] Create rectangle → 4 lines created
 - [ ] Rectangle has horizontal constraints on top/bottom
 - [ ] Rectangle has vertical constraints on left/right
@@ -2529,17 +2633,27 @@ const addRectangle = useCallback(
 **Estimated Effort:** 3-4 hours
 
 #### Task E1: Add Arc Tool Mode State
+
 **File:** `packages/app/src/editor/contexts/SketchContext.tsx`
 
 ```typescript
 // ADD to SketchTool type
-export type SketchTool = "none" | "select" | "line" | "arc" | "arcCenterpoint" | "arcTangent" | "circle" | "rectangle";
+export type SketchTool =
+  | "none"
+  | "select"
+  | "line"
+  | "arc"
+  | "arcCenterpoint"
+  | "arcTangent"
+  | "circle"
+  | "rectangle";
 
 // Or use a separate state for arc mode:
 export type ArcMode = "threePoint" | "centerpoint" | "tangent";
 ```
 
 #### Task E2: Implement Centerpoint Arc Sequence
+
 **File:** `packages/app/src/editor/components/Viewer.tsx`
 
 The centerpoint arc follows: center → start (defines radius) → end (defines angle)
@@ -2578,6 +2692,7 @@ if (sketchMode.activeTool === "arcCenterpoint") {
 ```
 
 #### Task E3: Implement Tangent Arc Detection
+
 **File:** `packages/app/src/editor/components/Viewer.tsx`
 
 Add intent zone detection in the line tool:
@@ -2594,15 +2709,15 @@ function isInTangentIntentZone(
   // 2. On the "arc side" (perpendicular to the entity direction)
   const dist = Math.sqrt((cursor.x - endpoint.x) ** 2 + (cursor.y - endpoint.y) ** 2);
   if (dist > TANGENT_INTENT_RADIUS) return false;
-  
+
   // Check angle between cursor direction and entity direction
   const cursorDir = { dx: cursor.x - endpoint.x, dy: cursor.y - endpoint.y };
   const dot = cursorDir.dx * entityDir.dx + cursorDir.dy * entityDir.dy;
   const cursorMag = Math.sqrt(cursorDir.dx ** 2 + cursorDir.dy ** 2);
   const entityMag = Math.sqrt(entityDir.dx ** 2 + entityDir.dy ** 2);
-  
+
   if (cursorMag < 0.01 || entityMag < 0.01) return false;
-  
+
   const cosAngle = dot / (cursorMag * entityMag);
   // If angle > 45° from extension, we're in arc territory
   return Math.abs(cosAngle) < 0.7;
@@ -2610,6 +2725,7 @@ function isInTangentIntentZone(
 ```
 
 **Verification Checklist for Phase E:**
+
 - [ ] Centerpoint arc: click center → click radius point → click end → arc created
 - [ ] Arc direction follows cursor position (above/below chord)
 - [ ] Tangent arc: after line, moving perpendicular shows arc preview
@@ -2666,7 +2782,7 @@ export const SketchConstraintSchema = z.union([
 ]);
 
 // 3. Add to ConstraintType (SketchContext.tsx)
-export type ConstraintType = 
+export type ConstraintType =
   | "horizontal" | "vertical" | /* ... */ | "newConstraint";
 
 // 4. Add canApplyConstraint logic (SketchContext.tsx)
@@ -2697,7 +2813,7 @@ useEffect(() => {
   const visual = new THREE.Line(geometry, material);
   visualRef.current = visual;
   sceneRef.current?.add(visual);
-  
+
   return () => {
     sceneRef.current?.remove(visual);
     geometry.dispose();
@@ -2708,7 +2824,7 @@ useEffect(() => {
 // 3. Update in state change effect
 useEffect(() => {
   if (!visualRef.current) return;
-  
+
   if (visualState) {
     // Update geometry positions
     visualRef.current.visible = true;
@@ -2726,6 +2842,7 @@ useEffect(() => {
 ### 22.1 Sketch Tool Verification
 
 **For Each Tool:**
+
 - [ ] Tool activates when clicked in toolbar
 - [ ] Tool button shows active state
 - [ ] Escape clears in-progress operation
@@ -2739,6 +2856,7 @@ useEffect(() => {
 ### 22.2 Constraint Verification
 
 **For Each Constraint Type:**
+
 - [ ] Constraint appears in dropdown when valid selection exists
 - [ ] Constraint grayed out when selection invalid
 - [ ] Applying constraint updates geometry immediately
@@ -2749,12 +2867,14 @@ useEffect(() => {
 ### 22.3 Integration Verification
 
 **Document Persistence:**
+
 - [ ] Entities persist after page refresh
 - [ ] Constraints persist after page refresh
 - [ ] Undo reverts last operation
 - [ ] Redo re-applies operation
 
 **Multi-User (if applicable):**
+
 - [ ] Other user sees entities in real-time
 - [ ] Constraint changes sync correctly
 - [ ] No conflicts on simultaneous edits
@@ -2774,10 +2894,10 @@ describe("Horizontal constraint", () => {
     const sketch = new SketchModel(testPlane);
     const p1 = sketch.addPoint(0, 0);
     const p2 = sketch.addPoint(10, 5);
-    
+
     const solver = new ConstraintSolver(sketch);
     solver.addConstraint({ type: "horizontal", points: [p1, p2] });
-    
+
     const result = solver.solve();
     expect(result.status).toBe("success");
     expect(sketch.getPoint(p1)?.y).toBeCloseTo(sketch.getPoint(p2)?.y);
@@ -2795,19 +2915,19 @@ describe("Line tool chain mode", () => {
   it("should continue from last endpoint", async () => {
     // Setup
     const { container } = render(<Editor />);
-    
+
     // Activate line tool
     fireEvent.click(screen.getByLabelText("Line"));
-    
+
     // Click first point
     fireEvent.mouseUp(container, { clientX: 100, clientY: 100 });
-    
+
     // Click second point (creates first line)
     fireEvent.mouseUp(container, { clientX: 200, clientY: 100 });
-    
+
     // Click third point (should chain)
     fireEvent.mouseUp(container, { clientX: 200, clientY: 200 });
-    
+
     // Verify two lines created
     const sketch = getActiveSketch();
     expect(sketch.entities.filter(e => e.type === "line")).toHaveLength(2);
@@ -2852,7 +2972,7 @@ setChainLastEndpoint({ x, y, id });
 setInferenceIndicator(null);
 
 // ✅ GOOD: Use functional updates or combine into single state
-setToolState(prev => ({
+setToolState((prev) => ({
   ...prev,
   tempStart: null,
   chainEnd: { x, y, id },
@@ -2889,7 +3009,7 @@ const geometry = new THREE.BufferGeometry();
 useEffect(() => {
   const geometry = new THREE.BufferGeometry();
   geometryRef.current = geometry;
-  
+
   return () => {
     geometry.dispose();
   };
@@ -2904,12 +3024,12 @@ useEffect(() => {
 // ❌ BAD: Solve on every move
 onMouseMove: () => {
   solver.solve(); // Expensive!
-}
+};
 
 // ✅ GOOD: Debounce or only solve on commit
 onMouseUp: () => {
   solver.solve(); // Only when done
-}
+};
 ```
 
 ### 24.5 Displaying Feature IDs in UI
@@ -2939,18 +3059,25 @@ throw new Error(`${getFeatureDisplayName(feature)} failed to build`);
 ```typescript
 function getFeatureDisplayName(feature: Feature): string {
   if (feature.name) return feature.name;
-  
+
   // Type-based fallback (never raw ID)
   const typeNames: Record<string, string> = {
-    sketch: "Sketch", extrude: "Extrude", revolve: "Revolve",
-    plane: "Plane", axis: "Axis", origin: "Origin",
-    fillet: "Fillet", chamfer: "Chamfer", boolean: "Boolean",
+    sketch: "Sketch",
+    extrude: "Extrude",
+    revolve: "Revolve",
+    plane: "Plane",
+    axis: "Axis",
+    origin: "Origin",
+    fillet: "Fillet",
+    chamfer: "Chamfer",
+    boolean: "Boolean",
   };
   return typeNames[feature.type] || "Feature";
 }
 ```
 
 **Where to look for violations:**
+
 - `FeatureTree.tsx` - node labels
 - `PropertiesPanel.tsx` - feature headers
 - Error messages in worker and contexts
@@ -2966,8 +3093,8 @@ addFeature({ id: uuid(), type: "extrude", ... });
 // Result: Feature shows as "Extrude" or worse, just blank
 
 // ✅ GOOD: Generate unique name at creation time
-addFeature({ 
-  id: uuid(), 
+addFeature({
+  id: uuid(),
   type: "extrude",
   name: generateFeatureName("extrude", existingFeatures), // "Extrude1"
   ...
@@ -3007,6 +3134,7 @@ Phase E: Arc
 ```
 
 **Recommended Build Order:**
+
 1. A1-A5 (Line chain mode) - Foundation
 2. C1-C2 (Multi-select) - Quick win
 3. B1-B4 (Auto-constraints) - High impact
@@ -3021,38 +3149,40 @@ Phase E: Arc
 
 #### Face Selection - Partially Working ✅
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| `SelectionContext.tsx` | ✅ Done | `SelectedFace` type, `selectFace()` function |
-| `useRaycast.ts` | ✅ Done | Returns faceIndex via triangle picking |
-| `Viewer.tsx` click handler | ✅ Done | Calls `selectFace()` on mesh click |
-| `Viewer.tsx` hover highlighting | ✅ Done | Renders semi-transparent overlay on hovered face |
-| `Viewer.tsx` selection highlight | ✅ Done | Renders selected face with distinct color |
-| Kernel `faceMap` generation | ✅ Done | `tessellate.ts` maps triangles to face indices |
-| PropertiesPanel | ⚠️ Partial | Shows parent feature but no face-specific info |
+| Component                        | Status     | Notes                                            |
+| -------------------------------- | ---------- | ------------------------------------------------ |
+| `SelectionContext.tsx`           | ✅ Done    | `SelectedFace` type, `selectFace()` function     |
+| `useRaycast.ts`                  | ✅ Done    | Returns faceIndex via triangle picking           |
+| `Viewer.tsx` click handler       | ✅ Done    | Calls `selectFace()` on mesh click               |
+| `Viewer.tsx` hover highlighting  | ✅ Done    | Renders semi-transparent overlay on hovered face |
+| `Viewer.tsx` selection highlight | ✅ Done    | Renders selected face with distinct color        |
+| Kernel `faceMap` generation      | ✅ Done    | `tessellate.ts` maps triangles to face indices   |
+| PropertiesPanel                  | ⚠️ Partial | Shows parent feature but no face-specific info   |
 
 #### Edge Selection - NOT Implemented ❌
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| `SelectionContext.tsx` types | ✅ Done | `SelectedEdge` type, `selectEdge()` exists |
-| Edge tessellation in kernel | ❌ Missing | Only faces tessellated, no edge curves |
-| Edge mesh data to viewer | ❌ Missing | No edge line geometry sent |
-| Edge rendering in viewer | ❌ Missing | No visible edge lines displayed |
-| Edge picking/raycasting | ❌ Missing | Can't select edges |
-| Edge hover highlighting | ❌ Missing | No edge highlights |
-| Edge selection highlighting | ❌ Missing | No edge selection visuals |
-| PropertiesPanel edge info | ❌ Missing | No edge info shown |
+| Component                    | Status     | Notes                                      |
+| ---------------------------- | ---------- | ------------------------------------------ |
+| `SelectionContext.tsx` types | ✅ Done    | `SelectedEdge` type, `selectEdge()` exists |
+| Edge tessellation in kernel  | ❌ Missing | Only faces tessellated, no edge curves     |
+| Edge mesh data to viewer     | ❌ Missing | No edge line geometry sent                 |
+| Edge rendering in viewer     | ❌ Missing | No visible edge lines displayed            |
+| Edge picking/raycasting      | ❌ Missing | Can't select edges                         |
+| Edge hover highlighting      | ❌ Missing | No edge highlights                         |
+| Edge selection highlighting  | ❌ Missing | No edge selection visuals                  |
+| PropertiesPanel edge info    | ❌ Missing | No edge info shown                         |
 
 ### 26.2 Target Behavior
 
 #### Face Selection
+
 - Hover over face → face highlights (semi-transparent overlay)
 - Click face → face selected, shown in selection color
 - Selected face info shown in Properties Panel (area, normal, adjacent edges)
 - Right-click face → context menu (Sketch on Face, Extrude, Offset, etc.)
 
 #### Edge Selection
+
 - Hover near edge → edge highlights (thicker line, different color)
 - Click near edge → edge selected
 - Hold **Alt** or toggle filter → prioritize edge over face
@@ -3060,6 +3190,7 @@ Phase E: Arc
 - Right-click edge → context menu (Fillet, Chamfer, Select Loop, etc.)
 
 #### Multi-Selection
+
 - **Ctrl+Click** → toggle face/edge in selection
 - **Shift+Click** → add to selection
 - **Click empty space** → clear selection
@@ -3144,20 +3275,20 @@ export interface EdgeMesh {
  */
 tessellateEdges(bodyId: BodyId, quality: TessellationQuality = 'medium'): EdgeMesh {
   this.ensureInitialized();
-  
+
   const body = this.bodies.get(bodyId);
   if (!body) {
     throw new Error(`Body ${bodyId} not found`);
   }
-  
+
   // Delegate to kernel tessellate module (internal)
   const result = tessellateBodyEdges(body, quality);
-  
+
   // Generate persistent refs for each edge
-  const persistentRefs = result.edgeIds.map((edgeId, index) => 
+  const persistentRefs = result.edgeIds.map((edgeId, index) =>
     this.getEdgePersistentRef(bodyId, index)
   );
-  
+
   return {
     vertices: result.vertices,
     indices: result.indices,
@@ -3192,7 +3323,7 @@ getFacePersistentRef(bodyId: BodyId, faceIndex: number): string {
 ```typescript
 // Internal function - only called by SolidSession, never imported by app
 export function tessellateBodyEdges(
-  shape: Shape, 
+  shape: Shape,
   quality: TessellationQuality
 ): { vertices: Float32Array; indices: Uint32Array; edgeIds: string[]; edgeMap: Uint32Array } {
   const oc = getOC();
@@ -3200,54 +3331,54 @@ export function tessellateBodyEdges(
   const indices: number[] = [];
   const edgeIds: string[] = [];
   const edgeMap: number[] = [];
-  
-  const deflection = quality === 'high' ? 0.01 : quality === 'medium' ? 0.05 : 0.1;
-  
+
+  const deflection = quality === "high" ? 0.01 : quality === "medium" ? 0.05 : 0.1;
+
   const edgeExplorer = new oc.TopExp_Explorer_2(
     shape,
     oc.TopAbs_ShapeEnum.TopAbs_EDGE,
     oc.TopAbs_ShapeEnum.TopAbs_SHAPE
   );
-  
+
   let edgeIndex = 0;
-  
+
   while (edgeExplorer.More()) {
     const edge = oc.TopoDS.Edge_1(edgeExplorer.Current());
     const edgeId = `edge-${edgeIndex}`; // Session-local ID
     edgeIds.push(edgeId);
-    
+
     // Get edge curve and discretize
     const curve = new oc.BRepAdaptor_Curve_2(edge);
     const deflector = new oc.GCPnts_TangentialDeflection_2(
       curve,
-      0.1,      // angular deflection (radians)
+      0.1, // angular deflection (radians)
       deflection,
-      2,        // minimum points
-      1e-7,     // U tolerance
-      100       // max points
+      2, // minimum points
+      1e-7, // U tolerance
+      100 // max points
     );
-    
+
     const numPoints = deflector.NbPoints();
     const startVertexIdx = vertices.length / 3;
-    
+
     for (let i = 1; i <= numPoints; i++) {
       const pnt = deflector.Value(i);
       vertices.push(pnt.X(), pnt.Y(), pnt.Z());
     }
-    
+
     for (let i = 0; i < numPoints - 1; i++) {
       indices.push(startVertexIdx + i, startVertexIdx + i + 1);
       edgeMap.push(edgeIndex);
     }
-    
+
     deflector.delete();
     curve.delete();
     edgeExplorer.Next();
     edgeIndex++;
   }
-  
+
   edgeExplorer.delete();
-  
+
   return {
     vertices: new Float32Array(vertices),
     indices: new Uint32Array(indices),
@@ -3268,7 +3399,7 @@ export function tessellateBodyEdges(
 ```typescript
 // Add to existing mesh message type
 export interface MeshMessage {
-  type: 'meshes';
+  type: "meshes";
   bodyId: string;
   featureId: string;
   mesh: {
@@ -3296,17 +3427,16 @@ export interface MeshMessage {
 
 ```typescript
 // In mesh generation (after tessellate call):
-const faceMesh = session.tessellate(bodyId, 'medium');
-const edgeMesh = session.tessellateEdges(bodyId, 'medium');
+const faceMesh = session.tessellate(bodyId, "medium");
+const edgeMesh = session.tessellateEdges(bodyId, "medium");
 
 // Get persistent refs for faces
-const facePersistentRefs = Array.from(
-  { length: faceMesh.faceMap.length },
-  (_, i) => session.getFacePersistentRef(bodyId, faceMesh.faceMap[i])
+const facePersistentRefs = Array.from({ length: faceMesh.faceMap.length }, (_, i) =>
+  session.getFacePersistentRef(bodyId, faceMesh.faceMap[i])
 );
 
 postMessage({
-  type: 'meshes',
+  type: "meshes",
   bodyId: bodyEntry.id,
   featureId: feature.id,
   mesh: {
@@ -3376,26 +3506,26 @@ useEffect(() => {
   // Render edges for each body
   for (const [bodyId, meshData] of meshes) {
     if (!meshData.edges) continue;
-    
+
     const { vertices, indices } = meshData.edges;
-    
+
     // Create geometry
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-    
+
     // Dark edge lines
     const material = new THREE.LineBasicMaterial({
       color: 0x333333,
       linewidth: 1,
     });
-    
+
     const lineSegments = new THREE.LineSegments(geometry, material);
     lineSegments.name = `edges-${bodyId}`;
     lineSegments.renderOrder = 1; // Render on top of faces
     edgeGroup.add(lineSegments);
   }
-  
+
   needsRenderRef.current = true;
 }, [meshes, sceneReady]);
 
@@ -3428,8 +3558,8 @@ export interface RaycastHit {
   facePersistentRef: string;
   // NEW: Edge info (if edge was closer than face)
   edgeIndex?: number;
-  edgeScreenDistance?: number;  // Distance in pixels
-  edgePersistentRef?: string;   // Persistent reference for the edge
+  edgeScreenDistance?: number; // Distance in pixels
+  edgePersistentRef?: string; // Persistent reference for the edge
 }
 
 /**
@@ -3444,7 +3574,7 @@ function worldToScreenDistance(
 ): number {
   // Get distance from camera to point
   const cameraDistance = camera.position.distanceTo(worldPoint);
-  
+
   // For perspective camera, use FOV to compute screen size
   if (camera instanceof THREE.PerspectiveCamera) {
     const vFov = (camera.fov * Math.PI) / 180;
@@ -3452,14 +3582,14 @@ function worldToScreenDistance(
     const pixelsPerUnit = containerWidth / (worldHeightAtPoint * camera.aspect);
     return worldDistance * pixelsPerUnit;
   }
-  
+
   // For orthographic camera, use zoom directly
   if (camera instanceof THREE.OrthographicCamera) {
     const worldWidth = (camera.right - camera.left) / camera.zoom;
     const pixelsPerUnit = containerWidth / worldWidth;
     return worldDistance * pixelsPerUnit;
   }
-  
+
   return worldDistance * 100; // Fallback
 }
 
@@ -3471,39 +3601,39 @@ function findNearestEdge(
   meshData: MeshData,
   camera: THREE.Camera,
   containerWidth: number,
-  thresholdPixels: number = 8  // 8 pixels is comfortable for mouse selection
+  thresholdPixels: number = 8 // 8 pixels is comfortable for mouse selection
 ): { edgeIndex: number; screenDistance: number; persistentRef: string } | null {
   if (!meshData.edges) return null;
-  
+
   const { vertices, indices, edgeMap, edgePersistentRefs } = meshData.edges;
   let nearestEdge = -1;
   let nearestScreenDistance = Infinity;
-  
+
   for (let i = 0; i < indices.length; i += 2) {
     const i1 = indices[i] * 3;
     const i2 = indices[i + 1] * 3;
-    
-    const p1 = new THREE.Vector3(vertices[i1], vertices[i1+1], vertices[i1+2]);
-    const p2 = new THREE.Vector3(vertices[i2], vertices[i2+1], vertices[i2+2]);
-    
+
+    const p1 = new THREE.Vector3(vertices[i1], vertices[i1 + 1], vertices[i1 + 2]);
+    const p2 = new THREE.Vector3(vertices[i2], vertices[i2 + 1], vertices[i2 + 2]);
+
     // Distance from point to line segment in world space
     const line = new THREE.Line3(p1, p2);
     const closest = new THREE.Vector3();
     line.closestPointToPoint(worldPoint, true, closest);
     const worldDist = worldPoint.distanceTo(closest);
-    
+
     // Convert to screen space
     const screenDist = worldToScreenDistance(closest, worldDist, camera, containerWidth);
-    
+
     if (screenDist < nearestScreenDistance && screenDist < thresholdPixels) {
       nearestScreenDistance = screenDist;
       nearestEdge = edgeMap[i / 2];
     }
   }
-  
+
   if (nearestEdge >= 0) {
-    return { 
-      edgeIndex: nearestEdge, 
+    return {
+      edgeIndex: nearestEdge,
       screenDistance: nearestScreenDistance,
       persistentRef: edgePersistentRefs[nearestEdge],
     };
@@ -3539,7 +3669,7 @@ export interface SelectedFace {
 export interface SelectedEdge {
   bodyId: string;
   featureId: string;
-  // DEPRECATED: Do not use for storage/features - unstable across rebuilds  
+  // DEPRECATED: Do not use for storage/features - unstable across rebuilds
   edgeIndex: number;
   /** Persistent reference string - USE THIS for storage */
   persistentRef: string;
@@ -3553,55 +3683,63 @@ export interface SelectedEdge {
 ```typescript
 const handleClick = (e: MouseEvent) => {
   if (sketchMode.active) return; // Sketch mode handles its own clicks
-  
+
   const hit = raycastRef.current(e.clientX, e.clientY);
   if (!hit) {
     clearFaceSelection();
     return;
   }
-  
+
   const meshData = meshes.get(hit.bodyId);
   if (!meshData) return;
-  
+
   const containerWidth = containerRef.current?.clientWidth || 800;
-  
+
   // Find nearest edge in screen space (8 pixel threshold)
   const nearestEdge = findNearestEdge(
-    hit.point, 
-    meshData, 
+    hit.point,
+    meshData,
     cameraRef.current!,
     containerWidth,
-    8  // pixels
+    8 // pixels
   );
-  
+
   // Edge selection priority:
   // - Alt key held → prefer edge
-  // - Edge within 4 pixels → prefer edge  
+  // - Edge within 4 pixels → prefer edge
   // - Otherwise → prefer face
   const preferEdge = e.altKey || (nearestEdge && nearestEdge.screenDistance < 4);
-  
+
   const isMultiSelect = e.ctrlKey || e.metaKey;
   const isAdditive = e.shiftKey;
-  
+
   if (preferEdge && nearestEdge) {
-    selectEdgeRef.current({
-      bodyId: hit.bodyId,
-      edgeIndex: nearestEdge.edgeIndex,
-      featureId: hit.featureId,
-      persistentRef: nearestEdge.persistentRef,  // Store persistent ref
-    }, isMultiSelect, isAdditive);
+    selectEdgeRef.current(
+      {
+        bodyId: hit.bodyId,
+        edgeIndex: nearestEdge.edgeIndex,
+        featureId: hit.featureId,
+        persistentRef: nearestEdge.persistentRef, // Store persistent ref
+      },
+      isMultiSelect,
+      isAdditive
+    );
   } else {
     // Get persistent ref from mesh data
     const faceIndex = getFaceIdRef.current(hit.bodyId, hit.faceIndex);
-    const persistentRef = meshData.facePersistentRefs?.[faceIndex] || 
-                          `face:${hit.featureId}:${faceIndex}`;
-    
-    selectFaceRef.current({
-      bodyId: hit.bodyId,
-      faceIndex,
-      featureId: hit.featureId,
-      persistentRef,  // Store persistent ref
-    }, isMultiSelect, isAdditive);
+    const persistentRef =
+      meshData.facePersistentRefs?.[faceIndex] || `face:${hit.featureId}:${faceIndex}`;
+
+    selectFaceRef.current(
+      {
+        bodyId: hit.bodyId,
+        faceIndex,
+        featureId: hit.featureId,
+        persistentRef, // Store persistent ref
+      },
+      isMultiSelect,
+      isAdditive
+    );
   }
 };
 ```
@@ -3620,20 +3758,20 @@ Add edge highlight rendering (similar to face highlights):
 for (const selected of selectedEdges) {
   const meshData = meshes.get(selected.bodyId);
   if (!meshData?.edges) continue;
-  
+
   const edgeGeometry = extractEdgeSegments(meshData, selected.edgeIndex);
   if (!edgeGeometry) continue;
-  
+
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(edgeGeometry.vertices, 3));
+  geometry.setAttribute("position", new THREE.BufferAttribute(edgeGeometry.vertices, 3));
   geometry.setIndex(new THREE.BufferAttribute(edgeGeometry.indices, 1));
-  
+
   const material = new THREE.LineBasicMaterial({
-    color: 0x00aaff,  // Selection blue
+    color: 0x00aaff, // Selection blue
     linewidth: 3,
     depthTest: false,
   });
-  
+
   const highlightLine = new THREE.LineSegments(geometry, material);
   highlightLine.name = `selected-edge-${selected.bodyId}-${selected.edgeIndex}`;
   highlightLine.renderOrder = 101;
@@ -3642,23 +3780,23 @@ for (const selected of selectedEdges) {
 
 // ADD: Helper function to extract edge segments
 function extractEdgeSegments(
-  meshData: MeshData, 
+  meshData: MeshData,
   edgeIndex: number
 ): { vertices: Float32Array; indices: Uint32Array } | null {
   if (!meshData.edges) return null;
-  
+
   const { vertices, indices, edgeMap } = meshData.edges;
   const segmentIndices: number[] = [];
-  
+
   // Find all segments belonging to this edge
   for (let i = 0; i < edgeMap.length; i++) {
     if (edgeMap[i] === edgeIndex) {
       segmentIndices.push(indices[i * 2], indices[i * 2 + 1]);
     }
   }
-  
+
   if (segmentIndices.length === 0) return null;
-  
+
   return {
     vertices: vertices, // Reuse full vertex array
     indices: new Uint32Array(segmentIndices),
@@ -3683,11 +3821,11 @@ const SelectionInfo: React.FC<{
   if (selectedFaces.length === 0 && selectedEdges.length === 0) {
     return null;
   }
-  
+
   return (
     <div className="properties-panel-selection-info">
       <h4 className="properties-panel-section-title">Selection</h4>
-      
+
       {selectedFaces.length > 0 && (
         <div className="properties-panel-selection-faces">
           <span className="selection-label">
@@ -3701,7 +3839,7 @@ const SelectionInfo: React.FC<{
           ))}
         </div>
       )}
-      
+
       {selectedEdges.length > 0 && (
         <div className="properties-panel-selection-edges">
           <span className="selection-label">
@@ -3721,9 +3859,9 @@ const SelectionInfo: React.FC<{
 
 // ADD: In main PropertiesPanel render, before feature content
 {selectedFaces.length > 0 || selectedEdges.length > 0 ? (
-  <SelectionInfo 
-    selectedFaces={selectedFaces} 
-    selectedEdges={selectedEdges} 
+  <SelectionInfo
+    selectedFaces={selectedFaces}
+    selectedEdges={selectedEdges}
   />
 ) : null}
 ```
@@ -3733,6 +3871,7 @@ const SelectionInfo: React.FC<{
 ### 26.5 Verification Checklist
 
 #### Face Selection
+
 - [ ] Hover over face → semi-transparent highlight appears
 - [ ] Click face → face selected with distinct highlight color
 - [ ] Ctrl+Click → toggle face in selection
@@ -3741,6 +3880,7 @@ const SelectionInfo: React.FC<{
 - [ ] Selected face shows in Properties Panel
 
 #### Edge Selection
+
 - [ ] Visible edges rendered on all bodies
 - [ ] Hover near edge → edge highlights
 - [ ] Click near edge → edge selected (with Alt key or very close)
@@ -3749,6 +3889,7 @@ const SelectionInfo: React.FC<{
 - [ ] Selected edge shows in Properties Panel
 
 #### Multi-Selection
+
 - [ ] Can select multiple faces
 - [ ] Can select multiple edges
 - [ ] Can select mix of faces and edges
@@ -3780,10 +3921,8 @@ Phase F7: Properties Panel Info
 1. **Edge selection threshold**: How close must click be to edge?
    - ✅ **Decision:** 8 pixels in screen space (computed via camera projection)
    - See Phase F4 for implementation
-   
 2. **Hidden edge display**: Show hidden edges as dashed lines?
    - ✅ **Decision:** Future enhancement, not in initial implementation
-   
 3. **Edge loop selection**: Double-click to select connected edge loop?
    - ✅ **Decision:** Yes, add in Phase F5 extension
 

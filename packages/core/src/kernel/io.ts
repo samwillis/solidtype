@@ -31,7 +31,7 @@ export function exportSTEP(shape: Shape): Uint8Array {
   // Create the filename as a TCollection_AsciiString for proper C++ string handling
   const filename = "export.step";
   const filenameStr = new oc.TCollection_AsciiString_2(filename);
-  
+
   // Write using the TCollection_AsciiString overload
   const status = writer.Write(filenameStr.ToCString());
 

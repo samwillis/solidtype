@@ -471,7 +471,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
           >
             {node.visible === false ? <LuEyeOff size={12} /> : <LuEye size={12} />}
           </button>
-      )}
+        )}
     </li>
   );
 

@@ -358,7 +358,8 @@ function PlaneProperties({ feature, onUpdate }: FeaturePropertiesProps) {
   const { doc, features } = useDocument();
 
   // Get the definition (with fallback for legacy data)
-  const definition = (plane as { definition?: { kind: string; [key: string]: unknown } }).definition;
+  const definition = (plane as { definition?: { kind: string; [key: string]: unknown } })
+    .definition;
   const definitionKind = definition?.kind ?? "datum";
   const isDatumPlane = definitionKind === "datum";
 
@@ -553,19 +554,19 @@ function PlaneProperties({ feature, onUpdate }: FeaturePropertiesProps) {
         {isDatumPlane && (
           <>
             <PropertyRow label="Display Offset X">
-          <NumberInput
+              <NumberInput
                 value={(plane as { displayOffsetX?: number }).displayOffsetX ?? 0}
                 onChange={(displayOffsetX) => onUpdate({ displayOffsetX })}
-            unit="mm"
-          />
-        </PropertyRow>
+                unit="mm"
+              />
+            </PropertyRow>
             <PropertyRow label="Display Offset Y">
-          <NumberInput
+              <NumberInput
                 value={(plane as { displayOffsetY?: number }).displayOffsetY ?? 0}
                 onChange={(displayOffsetY) => onUpdate({ displayOffsetY })}
-            unit="mm"
-          />
-        </PropertyRow>
+                unit="mm"
+              />
+            </PropertyRow>
           </>
         )}
         <PropertyRow label="Color">

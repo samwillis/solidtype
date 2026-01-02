@@ -31,7 +31,13 @@ const StatusOverlay: React.FC<StatusOverlayProps> = ({ status }) => {
   const showCustomStatus = !!status;
 
   // Don't render if nothing to show
-  if (!showConnectionIcon && !showErrors && !showRebuilding && !showCoordinates && !showCustomStatus) {
+  if (
+    !showConnectionIcon &&
+    !showErrors &&
+    !showRebuilding &&
+    !showCoordinates &&
+    !showCustomStatus
+  ) {
     return null;
   }
 

@@ -38,6 +38,59 @@ import "./Viewer.css";
 // Point merge tolerance in sketch units (mm)
 const POINT_MERGE_TOLERANCE_MM = 5;
 
+// Angle tolerance for H/V inference (radians) - 5 degrees
+const HV_INFERENCE_TOLERANCE = 5 * (Math.PI / 180);
+
+/** Check if a line is near horizontal */
+function isNearHorizontal(p1: { x: number; y: number }, p2: { x: number; y: number }): boolean {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const angle = Math.abs(Math.atan2(dy, dx));
+  return angle < HV_INFERENCE_TOLERANCE || angle > Math.PI - HV_INFERENCE_TOLERANCE;
+}
+
+/** Check if a line is near vertical */
+function isNearVertical(p1: { x: number; y: number }, p2: { x: number; y: number }): boolean {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const angle = Math.abs(Math.atan2(dy, dx));
+  return Math.abs(angle - Math.PI / 2) < HV_INFERENCE_TOLERANCE;
+}
+
+/**
+ * Calculate the circumcircle center from 3 points (for 3-point arc).
+ * Returns null if points are collinear.
+ */
+function calculateCircumcircleCenter(
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  p3: { x: number; y: number }
+): { x: number; y: number; radius: number } | null {
+  const ax = p1.x,
+    ay = p1.y;
+  const bx = p2.x,
+    by = p2.y;
+  const cx = p3.x,
+    cy = p3.y;
+
+  const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+
+  if (Math.abs(d) < 1e-10) {
+    // Points are collinear
+    return null;
+  }
+
+  const aSq = ax * ax + ay * ay;
+  const bSq = bx * bx + by * by;
+  const cSq = cx * cx + cy * cy;
+
+  const centerX = (aSq * (by - cy) + bSq * (cy - ay) + cSq * (ay - by)) / d;
+  const centerY = (aSq * (cx - bx) + bSq * (ax - cx) + cSq * (bx - ax)) / d;
+  const radius = Math.sqrt((ax - centerX) ** 2 + (ay - centerY) ** 2);
+
+  return { x: centerX, y: centerY, radius };
+}
+
 /** Get default color for a datum plane based on its ID */
 function getDefaultPlaneColor(planeId: string): number {
   switch (planeId) {
@@ -161,7 +214,9 @@ const Viewer: React.FC = () => {
     addPoint,
     addLine,
     addArc,
+    addCircle,
     addRectangle,
+    addConstraint,
     findNearbyPoint,
     setSketchMousePos,
     setPreviewLine,
@@ -170,6 +225,9 @@ const Viewer: React.FC = () => {
     selectedPoints,
     selectedLines,
     selectedConstraints,
+    setSelectedPoints,
+    setSelectedLines,
+    setSelectedConstraints,
     togglePointSelection,
     toggleLineSelection,
     toggleConstraintSelection,
@@ -187,18 +245,54 @@ const Viewer: React.FC = () => {
     y: number;
     id?: string;
   } | null>(null);
+  // Chain mode: tracks the last endpoint for continuous line drawing
+  const [chainLastEndpoint, setChainLastEndpoint] = useState<{
+    x: number;
+    y: number;
+    id: string;
+  } | null>(null);
   const [arcStartPoint, setArcStartPoint] = useState<{ x: number; y: number; id?: string } | null>(
     null
   );
   const [arcEndPoint, setArcEndPoint] = useState<{ x: number; y: number; id?: string } | null>(
     null
   );
+  // Arc center point for centerpoint arc mode
+  const [arcCenterPoint, setArcCenterPoint] = useState<{
+    x: number;
+    y: number;
+    id?: string;
+  } | null>(null);
   const [circleCenterPoint, setCircleCenterPoint] = useState<{
     x: number;
     y: number;
     id?: string;
   } | null>(null);
   const [sketchPos, setSketchPos] = useState<{ x: number; y: number } | null>(null);
+
+  // Inference indicator for showing H/V/parallel/perpendicular hints
+  // TODO: Render this indicator in the viewport near the cursor
+  const [_inferenceIndicator, setInferenceIndicator] = useState<{
+    type: "horizontal" | "vertical" | "parallel" | "perpendicular" | null;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  // Preview shapes for tools (circle, arc, rectangle)
+  const [previewCircle, setPreviewCircle] = useState<{
+    center: { x: number; y: number };
+    radius: number;
+  } | null>(null);
+
+  const [previewArc, setPreviewArc] = useState<{
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+    bulge: { x: number; y: number };
+  } | null>(null);
+
+  const [previewRect, setPreviewRect] = useState<{
+    corner1: { x: number; y: number };
+    corner2: { x: number; y: number };
+  } | null>(null);
 
   // Snap target for visual indicator when hovering near a snap-able point
   const [snapTarget, setSnapTarget] = useState<{
@@ -210,14 +304,19 @@ const Viewer: React.FC = () => {
   // Inline dimension editing state
   const [editingDimensionId, setEditingDimensionId] = useState<string | null>(null);
   const [editingDimensionValue, setEditingDimensionValue] = useState<string>("");
-  const [editingDimensionPos, setEditingDimensionPos] = useState<{ x: number; y: number } | null>(null);
-  const [editingDimensionType, setEditingDimensionType] = useState<"distance" | "angle">("distance");
+  const [editingDimensionPos, setEditingDimensionPos] = useState<{ x: number; y: number } | null>(
+    null
+  );
+  const [editingDimensionType, setEditingDimensionType] = useState<"distance" | "angle">(
+    "distance"
+  );
   const editingDimensionWorldPos = useRef<THREE.Vector3 | null>(null);
   const dimensionInputRef = React.useRef<HTMLInputElement>(null);
 
   // Ref to hold dimension double-click handler for use in label creation
   const handleDimensionDblClickRef = useRef<
-    ((constraintId: string, constraintType: "distance" | "angle", element: HTMLElement) => void) | null
+    | ((constraintId: string, constraintType: "distance" | "angle", element: HTMLElement) => void)
+    | null
   >(null);
 
   // Dimension dragging state
@@ -514,10 +613,10 @@ const Viewer: React.FC = () => {
         return { x, y };
       }
       const gridSize = viewerState.gridSize;
-    return {
+      return {
         x: Math.round(x / gridSize) * gridSize,
         y: Math.round(y / gridSize) * gridSize,
-    };
+      };
     },
     [viewerState.snapToGrid, viewerState.gridSize]
   );
@@ -530,31 +629,156 @@ const Viewer: React.FC = () => {
     return getSketchDataAsArrays(sketch);
   }, [doc.featuresById, sketchMode.sketchId]);
 
-  // Clear tool state when entering/exiting sketch mode or changing sketchId
+  // Clear tool state when entering/exiting sketch mode, changing sketchId, or changing tools
   useEffect(() => {
-    // Reset all draft state when sketch mode changes
+    // Reset all draft state when sketch mode or tool changes
     setTempStartPoint(null);
+    setChainLastEndpoint(null);
     setArcStartPoint(null);
     setArcEndPoint(null);
+    setArcCenterPoint(null);
     setCircleCenterPoint(null);
-  }, [sketchMode.active, sketchMode.sketchId]);
+    setInferenceIndicator(null);
+    setPreviewCircle(null);
+    setPreviewArc(null);
+    setPreviewRect(null);
+  }, [sketchMode.active, sketchMode.sketchId, sketchMode.activeTool]);
 
-  // Update preview line based on current tool state
+  // Update preview line based on current tool state (chain mode aware)
+  // Update preview shapes based on current tool state
   useEffect(() => {
-    if (!sketchMode.active) {
+    if (!sketchMode.active || !sketchPos) {
       setPreviewLine(null);
+      setPreviewCircle(null);
+      setPreviewArc(null);
+      setPreviewRect(null);
+      setInferenceIndicator(null);
       return;
     }
 
-    if (sketchMode.activeTool === "line" && tempStartPoint && sketchPos) {
-      setPreviewLine({
-        start: { x: tempStartPoint.x, y: tempStartPoint.y },
-        end: { x: sketchPos.x, y: sketchPos.y },
-      });
-    } else {
-      setPreviewLine(null);
+    // Reset all previews first
+    setPreviewLine(null);
+    setPreviewCircle(null);
+    setPreviewArc(null);
+    setPreviewRect(null);
+    setInferenceIndicator(null);
+
+    // LINE TOOL: Use chain endpoint if available, otherwise temp start
+    if (sketchMode.activeTool === "line") {
+      const startPt = chainLastEndpoint || tempStartPoint;
+      if (startPt) {
+        setPreviewLine({
+          start: { x: startPt.x, y: startPt.y },
+          end: { x: sketchPos.x, y: sketchPos.y },
+        });
+
+        // Update inference indicator
+        if (isNearHorizontal(startPt, sketchPos)) {
+          setInferenceIndicator({ type: "horizontal", position: sketchPos });
+        } else if (isNearVertical(startPt, sketchPos)) {
+          setInferenceIndicator({ type: "vertical", position: sketchPos });
+        }
+      }
     }
-  }, [sketchMode.active, sketchMode.activeTool, tempStartPoint, sketchPos, setPreviewLine]);
+
+    // RECTANGLE TOOL (CORNER): Show rectangle preview from first corner to cursor
+    else if (sketchMode.activeTool === "rectangle" && tempStartPoint) {
+      setPreviewRect({
+        corner1: { x: tempStartPoint.x, y: tempStartPoint.y },
+        corner2: { x: sketchPos.x, y: sketchPos.y },
+      });
+    }
+
+    // RECTANGLE TOOL (CENTER): Show rectangle preview from center, symmetric
+    else if (sketchMode.activeTool === "rectangleCenter" && tempStartPoint) {
+      const cx = tempStartPoint.x;
+      const cy = tempStartPoint.y;
+      const halfW = Math.abs(sketchPos.x - cx);
+      const halfH = Math.abs(sketchPos.y - cy);
+      setPreviewRect({
+        corner1: { x: cx - halfW, y: cy - halfH },
+        corner2: { x: cx + halfW, y: cy + halfH },
+      });
+    }
+
+    // CIRCLE TOOL: Show circle preview from center with radius to cursor
+    else if (sketchMode.activeTool === "circle" && circleCenterPoint) {
+      const dx = sketchPos.x - circleCenterPoint.x;
+      const dy = sketchPos.y - circleCenterPoint.y;
+      const radius = Math.sqrt(dx * dx + dy * dy);
+      setPreviewCircle({
+        center: { x: circleCenterPoint.x, y: circleCenterPoint.y },
+        radius,
+      });
+    }
+
+    // 3-POINT ARC TOOL
+    else if (sketchMode.activeTool === "arc") {
+      if (arcStartPoint && !arcEndPoint) {
+        // Step 1→2: Show line from start to cursor
+        setPreviewLine({
+          start: { x: arcStartPoint.x, y: arcStartPoint.y },
+          end: { x: sketchPos.x, y: sketchPos.y },
+        });
+      } else if (arcStartPoint && arcEndPoint) {
+        // Step 2→3: Show arc preview through bulge point (cursor)
+        setPreviewArc({
+          start: arcStartPoint,
+          end: arcEndPoint,
+          bulge: sketchPos,
+        });
+      }
+    }
+
+    // CENTERPOINT ARC TOOL
+    else if (sketchMode.activeTool === "arcCenterpoint") {
+      if (arcCenterPoint && !arcStartPoint) {
+        // Step 1→2: Show line from center to cursor (radius)
+        setPreviewLine({
+          start: { x: arcCenterPoint.x, y: arcCenterPoint.y },
+          end: { x: sketchPos.x, y: sketchPos.y },
+        });
+      } else if (arcCenterPoint && arcStartPoint) {
+        // Step 2→3: Show arc preview from start to cursor around center
+        setPreviewArc({
+          start: arcStartPoint,
+          end: sketchPos,
+          bulge: arcCenterPoint,
+        });
+      }
+    }
+
+    // 3-POINT CIRCLE TOOL
+    else if (sketchMode.activeTool === "circle3Point") {
+      if (arcStartPoint && !arcEndPoint) {
+        // Step 1→2: Show line from first point to cursor
+        setPreviewLine({
+          start: { x: arcStartPoint.x, y: arcStartPoint.y },
+          end: { x: sketchPos.x, y: sketchPos.y },
+        });
+      } else if (arcStartPoint && arcEndPoint) {
+        // Step 2→3: Show circle preview through three points
+        const circleInfo = calculateCircumcircleCenter(arcStartPoint, arcEndPoint, sketchPos);
+        if (circleInfo) {
+          setPreviewCircle({
+            center: { x: circleInfo.x, y: circleInfo.y },
+            radius: circleInfo.radius,
+          });
+        }
+      }
+    }
+  }, [
+    sketchMode.active,
+    sketchMode.activeTool,
+    tempStartPoint,
+    chainLastEndpoint,
+    sketchPos,
+    circleCenterPoint,
+    arcStartPoint,
+    arcEndPoint,
+    arcCenterPoint,
+    setPreviewLine,
+  ]);
 
   // Update snap indicator visual
   useEffect(() => {
@@ -663,11 +887,17 @@ const Viewer: React.FC = () => {
       if (!sketchMode.active) return;
 
       if (e.key === "Escape") {
-        // Clear any in-progress draft operations
+        // Clear any in-progress draft operations (including chain mode)
         setTempStartPoint(null);
+        setChainLastEndpoint(null);
         setArcStartPoint(null);
         setArcEndPoint(null);
+        setArcCenterPoint(null);
         setCircleCenterPoint(null);
+        setInferenceIndicator(null);
+        setPreviewCircle(null);
+        setPreviewArc(null);
+        setPreviewRect(null);
         // Also clear sketch selection
         clearSketchSelection();
       } else if (e.key === "Backspace" || e.key === "Delete") {
@@ -1504,6 +1734,27 @@ const Viewer: React.FC = () => {
               createLine2(positions, isConstruction ? constructionColor : color, isConstruction)
             );
           }
+        } else if (entity.type === "circle") {
+          // Circle entity: center point + radius (no edge point needed)
+          const centerPoint = pointMap.get(entity.center);
+          if (centerPoint && entity.radius > 0) {
+            const segments = 64;
+            const positions: number[] = [];
+
+            for (let i = 0; i <= segments; i++) {
+              const angle = (i / segments) * Math.PI * 2;
+              const worldPos = toWorld(
+                centerPoint.x + entity.radius * Math.cos(angle),
+                centerPoint.y + entity.radius * Math.sin(angle)
+              );
+              positions.push(worldPos.x, worldPos.y, worldPos.z);
+            }
+
+            const isConstruction = (entity as { construction?: boolean }).construction === true;
+            sketchGroup.add(
+              createLine2(positions, isConstruction ? constructionColor : color, isConstruction)
+            );
+          }
         }
       }
 
@@ -1546,20 +1797,24 @@ const Viewer: React.FC = () => {
         renderSketch(sketchData, sketchMode.planeId, 0x00aaff, 1.5, sketchMode.sketchId!); // Blue, larger points
       }
 
+      // Helper: Get plane transform for preview rendering
+      const getPreviewTransform = () => {
+        return getPlaneTransform(sketchMode.planeId!, sketchMode.sketchId!);
+      };
+
+      const toWorldCoord = (x: number, y: number): THREE.Vector3 => {
+        const { origin, xDir, yDir } = getPreviewTransform();
+        return new THREE.Vector3(
+          origin.x + x * xDir.x + y * yDir.x,
+          origin.y + x * xDir.y + y * yDir.y,
+          origin.z + x * xDir.z + y * yDir.z
+        );
+      };
+
       // Render preview line (green dashed) for line tool
       if (previewLine && sketchMode.planeId) {
-        const { origin, xDir, yDir } = getPlaneTransform(sketchMode.planeId, sketchMode.sketchId!);
-
-        const toWorld = (x: number, y: number): THREE.Vector3 => {
-          return new THREE.Vector3(
-            origin.x + x * xDir.x + y * yDir.x,
-            origin.y + x * xDir.y + y * yDir.y,
-            origin.z + x * xDir.z + y * yDir.z
-          );
-        };
-
-        const startWorld = toWorld(previewLine.start.x, previewLine.start.y);
-        const endWorld = toWorld(previewLine.end.x, previewLine.end.y);
+        const startWorld = toWorldCoord(previewLine.start.x, previewLine.start.y);
+        const endWorld = toWorldCoord(previewLine.end.x, previewLine.end.y);
 
         const geometry = new LineGeometry();
         geometry.setPositions([
@@ -1584,6 +1839,199 @@ const Viewer: React.FC = () => {
         line.computeLineDistances();
         line.renderOrder = 3; // On top of everything
         sketchGroup.add(line);
+      }
+
+      // Render preview circle (green dashed)
+      if (previewCircle && sketchMode.planeId && previewCircle.radius > 0.01) {
+        const segments = 64;
+        const positions: number[] = [];
+
+        for (let i = 0; i <= segments; i++) {
+          const angle = (i / segments) * Math.PI * 2;
+          const x = previewCircle.center.x + previewCircle.radius * Math.cos(angle);
+          const y = previewCircle.center.y + previewCircle.radius * Math.sin(angle);
+          const pt = toWorldCoord(x, y);
+          positions.push(pt.x, pt.y, pt.z);
+        }
+
+        const geometry = new LineGeometry();
+        geometry.setPositions(positions);
+        const material = new LineMaterial({
+          color: 0x00ff00,
+          linewidth: 2,
+          resolution: rendererSize || new THREE.Vector2(800, 600),
+          depthTest: false,
+          dashed: true,
+          dashScale: 10,
+          dashSize: 3,
+          gapSize: 3,
+        });
+        const circle = new Line2(geometry, material);
+        circle.computeLineDistances();
+        circle.renderOrder = 3;
+        sketchGroup.add(circle);
+      }
+
+      // Render preview rectangle (green dashed)
+      if (previewRect && sketchMode.planeId) {
+        const { corner1, corner2 } = previewRect;
+        const minX = Math.min(corner1.x, corner2.x);
+        const minY = Math.min(corner1.y, corner2.y);
+        const maxX = Math.max(corner1.x, corner2.x);
+        const maxY = Math.max(corner1.y, corner2.y);
+
+        const p1 = toWorldCoord(minX, minY);
+        const p2 = toWorldCoord(maxX, minY);
+        const p3 = toWorldCoord(maxX, maxY);
+        const p4 = toWorldCoord(minX, maxY);
+
+        const positions = [
+          p1.x,
+          p1.y,
+          p1.z,
+          p2.x,
+          p2.y,
+          p2.z,
+          p3.x,
+          p3.y,
+          p3.z,
+          p4.x,
+          p4.y,
+          p4.z,
+          p1.x,
+          p1.y,
+          p1.z, // Close the loop
+        ];
+
+        const geometry = new LineGeometry();
+        geometry.setPositions(positions);
+        const material = new LineMaterial({
+          color: 0x00ff00,
+          linewidth: 2,
+          resolution: rendererSize || new THREE.Vector2(800, 600),
+          depthTest: false,
+          dashed: true,
+          dashScale: 10,
+          dashSize: 3,
+          gapSize: 3,
+        });
+        const rect = new Line2(geometry, material);
+        rect.computeLineDistances();
+        rect.renderOrder = 3;
+        sketchGroup.add(rect);
+      }
+
+      // Render preview arc (green dashed) - 3 point arc through start, bulge, end
+      if (previewArc && sketchMode.planeId) {
+        const { start, end, bulge } = previewArc;
+
+        // Calculate arc center from 3 points using circumcircle formula
+        const ax = start.x,
+          ay = start.y;
+        const bx = bulge.x,
+          by = bulge.y;
+        const cx = end.x,
+          cy = end.y;
+
+        const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+
+        if (Math.abs(d) > 1e-10) {
+          const aSq = ax * ax + ay * ay;
+          const bSq = bx * bx + by * by;
+          const cSq = cx * cx + cy * cy;
+
+          const centerX = (aSq * (by - cy) + bSq * (cy - ay) + cSq * (ay - by)) / d;
+          const centerY = (aSq * (cx - bx) + bSq * (ax - cx) + cSq * (bx - ax)) / d;
+          const radius = Math.sqrt((ax - centerX) ** 2 + (ay - centerY) ** 2);
+
+          // Calculate angles
+          const startAngle = Math.atan2(ay - centerY, ax - centerX);
+          const endAngle = Math.atan2(cy - centerY, cx - centerX);
+          const bulgeAngle = Math.atan2(by - centerY, bx - centerX);
+
+          // Determine direction (CCW or CW) based on bulge point position
+          const normalizeAngle = (a: number) => (a + Math.PI * 2) % (Math.PI * 2);
+          const startNorm = normalizeAngle(startAngle);
+          const endNorm = normalizeAngle(endAngle);
+          const bulgeNorm = normalizeAngle(bulgeAngle);
+
+          // Check if bulge is between start and end going CCW
+          let ccw: boolean;
+          if (startNorm < endNorm) {
+            ccw = bulgeNorm > startNorm && bulgeNorm < endNorm;
+          } else {
+            ccw = bulgeNorm > startNorm || bulgeNorm < endNorm;
+          }
+
+          // Generate arc points
+          const segments = 32;
+          const positions: number[] = [];
+
+          let angleDiff: number;
+          if (ccw) {
+            angleDiff = endAngle - startAngle;
+            if (angleDiff < 0) angleDiff += Math.PI * 2;
+          } else {
+            angleDiff = endAngle - startAngle;
+            if (angleDiff > 0) angleDiff -= Math.PI * 2;
+          }
+
+          for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const angle = startAngle + t * angleDiff;
+            const x = centerX + radius * Math.cos(angle);
+            const y = centerY + radius * Math.sin(angle);
+            const pt = toWorldCoord(x, y);
+            positions.push(pt.x, pt.y, pt.z);
+          }
+
+          if (positions.length >= 6) {
+            const geometry = new LineGeometry();
+            geometry.setPositions(positions);
+            const material = new LineMaterial({
+              color: 0x00ff00,
+              linewidth: 2,
+              resolution: rendererSize || new THREE.Vector2(800, 600),
+              depthTest: false,
+              dashed: true,
+              dashScale: 10,
+              dashSize: 3,
+              gapSize: 3,
+            });
+            const arc = new Line2(geometry, material);
+            arc.computeLineDistances();
+            arc.renderOrder = 3;
+            sketchGroup.add(arc);
+          }
+        } else {
+          // Points are collinear - just draw a line from start to end
+          const startWorld = toWorldCoord(start.x, start.y);
+          const endWorld = toWorldCoord(end.x, end.y);
+
+          const geometry = new LineGeometry();
+          geometry.setPositions([
+            startWorld.x,
+            startWorld.y,
+            startWorld.z,
+            endWorld.x,
+            endWorld.y,
+            endWorld.z,
+          ]);
+          const material = new LineMaterial({
+            color: 0x00ff00,
+            linewidth: 2,
+            resolution: rendererSize || new THREE.Vector2(800, 600),
+            depthTest: false,
+            dashed: true,
+            dashScale: 10,
+            dashSize: 3,
+            gapSize: 3,
+          });
+          const line = new Line2(geometry, material);
+          line.computeLineDistances();
+          line.renderOrder = 3;
+          sketchGroup.add(line);
+        }
       }
     }
 
@@ -1627,6 +2075,9 @@ const Viewer: React.FC = () => {
     selectedFeatureId,
     hoveredFeatureId,
     previewLine,
+    previewCircle,
+    previewArc,
+    previewRect,
     sketchPlaneTransforms,
   ]);
 
@@ -2172,14 +2623,14 @@ const Viewer: React.FC = () => {
       }
 
       if (isDragging) {
-      // Calculate offset delta (scaled to sketch units - approximate)
+        // Calculate offset delta (scaled to sketch units - approximate)
         const deltaX = dx * 0.5; // Rough scaling factor
         const deltaY = -dy * 0.5; // Invert Y for sketch coords
 
-      setDragCurrentOffset({
-        x: initialOffsetX + deltaX,
-        y: initialOffsetY + deltaY,
-      });
+        setDragCurrentOffset({
+          x: initialOffsetX + deltaX,
+          y: initialOffsetY + deltaY,
+        });
       }
     };
 
@@ -2191,10 +2642,10 @@ const Viewer: React.FC = () => {
         const dy = _e.clientY - startY;
         const deltaX = dx * 0.5;
         const deltaY = -dy * 0.5;
-      const finalOffsetX = initialOffsetX + deltaX;
-      const finalOffsetY = initialOffsetY + deltaY;
+        const finalOffsetX = initialOffsetX + deltaX;
+        const finalOffsetY = initialOffsetY + deltaY;
 
-      updateConstraintOffset(currentDragId, finalOffsetX, finalOffsetY);
+        updateConstraintOffset(currentDragId, finalOffsetX, finalOffsetY);
       }
 
       // Reset all state
@@ -2603,6 +3054,31 @@ const Viewer: React.FC = () => {
 
     const onContextMenu = (e: MouseEvent) => {
       e.preventDefault(); // Prevent context menu on right click
+
+      // In sketch mode: right-click ends current tool operation
+      if (sketchModeRef.current.active) {
+        const tool = sketchModeRef.current.activeTool;
+        if (tool === "line") {
+          // End line chain
+          setChainLastEndpoint(null);
+          setTempStartPoint(null);
+          setInferenceIndicator(null);
+        } else if (tool === "arc" || tool === "arcCenterpoint") {
+          // Cancel arc in progress
+          setArcStartPoint(null);
+          setArcEndPoint(null);
+          setArcCenterPoint(null);
+          setPreviewArc(null);
+        } else if (tool === "circle") {
+          // Cancel circle in progress
+          setCircleCenterPoint(null);
+          setPreviewCircle(null);
+        } else if (tool === "rectangle") {
+          // Cancel rectangle in progress
+          setTempStartPoint(null);
+          setPreviewRect(null);
+        }
+      }
     };
 
     // Click handler for 3D selection
@@ -2844,20 +3320,24 @@ const Viewer: React.FC = () => {
             const newX = snapped.x;
             const newY = snapped.y;
             updatePointPosition(draggingEntity.id, newX, newY);
-          } else if (draggingEntity.type === "line" && draggingEntity.originalPositions && draggingEntity.linePointIds) {
+          } else if (
+            draggingEntity.type === "line" &&
+            draggingEntity.originalPositions &&
+            draggingEntity.linePointIds
+          ) {
             // For lines, calculate delta from original drag start position
             // and apply to original endpoint positions (not updated positions)
             const dx = sketchCoords.x - draggingEntity.startPos.x;
             const dy = sketchCoords.y - draggingEntity.startPos.y;
             const orig = draggingEntity.originalPositions;
             const ids = draggingEntity.linePointIds;
-            
+
             // Apply delta to original positions, then snap
             const newStartX = snapToGrid(orig.startX + dx, 0).x;
             const newStartY = snapToGrid(0, orig.startY + dy).y;
             const newEndX = snapToGrid(orig.endX + dx, 0).x;
             const newEndY = snapToGrid(0, orig.endY + dy).y;
-            
+
             updatePointPosition(ids.startId, newStartX, newStartY);
             updatePointPosition(ids.endId, newEndX, newEndY);
             // Note: Do NOT update originalPositions or startPos here!
@@ -3005,25 +3485,81 @@ const Viewer: React.FC = () => {
 
         const tol = POINT_MERGE_TOLERANCE_MM;
         const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, tol);
+
         if (nearbyPoint) {
-          togglePointSelection(nearbyPoint.id);
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl+click: toggle selection (preserves other selections)
+            setSelectedPoints((prev) => {
+              const next = new Set(prev);
+              if (next.has(nearbyPoint.id)) {
+                next.delete(nearbyPoint.id);
+              } else {
+                next.add(nearbyPoint.id);
+              }
+              return next;
+            });
+          } else if (e.shiftKey) {
+            // Shift+click: add to selection (preserves other selections)
+            setSelectedPoints((prev) => new Set([...prev, nearbyPoint.id]));
+          } else {
+            // Plain click: select only this (clear all others)
+            setSelectedPoints(new Set([nearbyPoint.id]));
+            setSelectedLines(new Set());
+            setSelectedConstraints(new Set());
+          }
           return;
         }
 
         const nearbyLine = findNearbyLineInSketch(sketch, snappedPos.x, snappedPos.y, tol);
         if (nearbyLine) {
-          toggleLineSelection(nearbyLine.id);
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl+click: toggle selection (preserves other selections)
+            setSelectedLines((prev) => {
+              const next = new Set(prev);
+              if (next.has(nearbyLine.id)) {
+                next.delete(nearbyLine.id);
+              } else {
+                next.add(nearbyLine.id);
+              }
+              return next;
+            });
+          } else if (e.shiftKey) {
+            // Shift+click: add to selection (preserves other selections)
+            setSelectedLines((prev) => new Set([...prev, nearbyLine.id]));
+          } else {
+            // Plain click: select only this (clear all others)
+            setSelectedLines(new Set([nearbyLine.id]));
+            setSelectedPoints(new Set());
+            setSelectedConstraints(new Set());
+          }
           return;
         }
 
-        clearSketchSelection();
+        // Click on empty space: clear selection (unless modifier held)
+        if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+          clearSketchSelection();
+        }
+        return;
+      }
+
+      if (sketchMode.activeTool === "point") {
+        // Point tool: single click to add a point
+        const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
+        if (!nearbyPoint) {
+          // Only add a new point if not clicking on an existing one
+          addPoint(snappedPos.x, snappedPos.y);
+        }
         return;
       }
 
       if (sketchMode.activeTool === "line") {
         const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
 
-        if (!tempStartPoint) {
+        // Determine start point (chain mode or fresh start)
+        const startSource = chainLastEndpoint || tempStartPoint;
+
+        if (!startSource) {
+          // First click - set start point
           if (nearbyPoint) {
             setTempStartPoint({
               x: nearbyPoint.x,
@@ -3034,11 +3570,12 @@ const Viewer: React.FC = () => {
             setTempStartPoint({ x: snappedPos.x, y: snappedPos.y });
           }
         } else {
-          let startId: string | null | undefined = tempStartPoint.id;
+          // Second+ click - create line
+          let startId: string | null | undefined = startSource.id;
           let endId: string | null = null;
 
           if (!startId) {
-            startId = addPoint(tempStartPoint.x, tempStartPoint.y);
+            startId = addPoint(startSource.x, startSource.y);
           }
 
           if (nearbyPoint) {
@@ -3049,32 +3586,66 @@ const Viewer: React.FC = () => {
 
           if (startId && endId) {
             addLine(startId, endId);
-          }
 
-          setTempStartPoint(null);
+            // Auto-constraints: apply H/V if near axis (unless Ctrl is held or autoConstraints is off)
+            if (viewerState.autoConstraints && !e.ctrlKey && !e.metaKey) {
+              const endPt = nearbyPoint || { x: snappedPos.x, y: snappedPos.y };
+
+              if (isNearHorizontal(startSource, endPt)) {
+                addConstraint({ type: "horizontal", points: [startId, endId] });
+              } else if (isNearVertical(startSource, endPt)) {
+                addConstraint({ type: "vertical", points: [startId, endId] });
+              }
+            }
+
+            // Chain mode: if we clicked on an existing point, END the chain (closed loop)
+            // Otherwise continue from the new endpoint
+            if (nearbyPoint) {
+              // Clicked on existing point - end chain (closing loop or connecting to existing geometry)
+              setChainLastEndpoint(null);
+              setTempStartPoint(null);
+            } else {
+              // Created new point - continue chain from it
+              setChainLastEndpoint({ x: snappedPos.x, y: snappedPos.y, id: endId });
+              setTempStartPoint(null);
+            }
+          }
         }
         return;
       }
 
       if (sketchMode.activeTool === "arc") {
+        // 3-point arc: start → end → bulge (point on curve)
+        // The bulge point is a point on the arc between start and end.
+        // We calculate the actual center from these 3 points using circumcircle formula.
         const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
         const clickPoint = nearbyPoint
           ? { x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined }
           : { x: snappedPos.x, y: snappedPos.y };
 
         if (!arcStartPoint) {
+          // First click: start point
           setArcStartPoint(clickPoint);
         } else if (!arcEndPoint) {
+          // Second click: end point
           setArcEndPoint(clickPoint);
         } else {
-          // Third click: center point
-          const startId = arcStartPoint.id ?? addPoint(arcStartPoint.x, arcStartPoint.y);
-          const endId = arcEndPoint.id ?? addPoint(arcEndPoint.x, arcEndPoint.y);
-          const centerId = clickPoint.id ?? addPoint(clickPoint.x, clickPoint.y);
+          // Third click: bulge point (on the curve between start and end)
+          // Calculate the actual center from all three points
+          const circleInfo = calculateCircumcircleCenter(arcStartPoint, arcEndPoint, clickPoint);
 
-          if (startId && endId && centerId) {
-            const ccw = isCounterClockwise(arcStartPoint, arcEndPoint, clickPoint);
-            addArc(startId, endId, centerId, ccw);
+          if (circleInfo) {
+            // Add start and end points
+            const startId = arcStartPoint.id ?? addPoint(arcStartPoint.x, arcStartPoint.y);
+            const endId = arcEndPoint.id ?? addPoint(arcEndPoint.x, arcEndPoint.y);
+            // Add the calculated center point
+            const centerId = addPoint(circleInfo.x, circleInfo.y);
+
+            if (startId && endId && centerId) {
+              // Determine CCW based on the bulge point position
+              const ccw = isCounterClockwise(arcStartPoint, arcEndPoint, clickPoint);
+              addArc(startId, endId, centerId, ccw);
+            }
           }
 
           setArcStartPoint(null);
@@ -3083,10 +3654,43 @@ const Viewer: React.FC = () => {
         return;
       }
 
+      if (sketchMode.activeTool === "arcCenterpoint") {
+        // Centerpoint arc: center → start (defines radius) → end (defines angle)
+        const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
+        const clickPoint = nearbyPoint
+          ? { x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined }
+          : { x: snappedPos.x, y: snappedPos.y };
+
+        if (!arcCenterPoint) {
+          // First click: center
+          setArcCenterPoint(clickPoint);
+        } else if (!arcStartPoint) {
+          // Second click: start point (defines radius)
+          setArcStartPoint(clickPoint);
+        } else {
+          // Third click: end point (defines angle)
+          const centerId = arcCenterPoint.id ?? addPoint(arcCenterPoint.x, arcCenterPoint.y);
+          const startId = arcStartPoint.id ?? addPoint(arcStartPoint.x, arcStartPoint.y);
+          const endId = clickPoint.id ?? addPoint(clickPoint.x, clickPoint.y);
+
+          if (centerId && startId && endId) {
+            // Determine CCW based on cursor position relative to center-start line
+            const ccw = isCounterClockwise(arcCenterPoint, arcStartPoint, clickPoint);
+            addArc(startId, endId, centerId, ccw);
+          }
+
+          // Reset for next arc
+          setArcCenterPoint(null);
+          setArcStartPoint(null);
+        }
+        return;
+      }
+
       if (sketchMode.activeTool === "circle") {
         const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
 
         if (!circleCenterPoint) {
+          // First click: set center point
           if (nearbyPoint) {
             setCircleCenterPoint({
               x: nearbyPoint.x,
@@ -3097,12 +3701,18 @@ const Viewer: React.FC = () => {
             setCircleCenterPoint({ x: snappedPos.x, y: snappedPos.y });
           }
         } else {
+          // Second click: create circle with radius from center to click position
+          // Only the center point is added - no edge point needed
           const centerId =
             circleCenterPoint.id ?? addPoint(circleCenterPoint.x, circleCenterPoint.y);
-          const edgeId = nearbyPoint?.id ?? addPoint(snappedPos.x, snappedPos.y);
 
-          if (centerId && edgeId) {
-            addArc(edgeId, edgeId, centerId, true);
+          // Calculate radius from center to click position
+          const dx = snappedPos.x - circleCenterPoint.x;
+          const dy = snappedPos.y - circleCenterPoint.y;
+          const radius = Math.sqrt(dx * dx + dy * dy);
+
+          if (centerId && radius > 0.01) {
+            addCircle(centerId, radius);
           }
 
           setCircleCenterPoint(null);
@@ -3114,6 +3724,7 @@ const Viewer: React.FC = () => {
         const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
 
         if (!tempStartPoint) {
+          // First click - set first corner
           if (nearbyPoint) {
             setTempStartPoint({
               x: nearbyPoint.x,
@@ -3124,21 +3735,93 @@ const Viewer: React.FC = () => {
             setTempStartPoint({ x: snappedPos.x, y: snappedPos.y });
           }
         } else {
+          // Second click - create rectangle from corner to corner
           const x1 = tempStartPoint.x;
           const y1 = tempStartPoint.y;
-          const x2 = snappedPos.x;
-          const y2 = snappedPos.y;
+          const x2 = nearbyPoint ? nearbyPoint.x : snappedPos.x;
+          const y2 = nearbyPoint ? nearbyPoint.y : snappedPos.y;
 
-          const centerX = (x1 + x2) / 2;
-          const centerY = (y1 + y2) / 2;
           const width = Math.abs(x2 - x1);
           const height = Math.abs(y2 - y1);
 
           if (width > 0.01 && height > 0.01) {
-            addRectangle(centerX, centerY, width, height);
+            // Create corner-to-corner rectangle (min/max to ensure proper ordering)
+            const minX = Math.min(x1, x2);
+            const minY = Math.min(y1, y2);
+            const maxX = Math.max(x1, x2);
+            const maxY = Math.max(y1, y2);
+            addRectangle(minX, minY, maxX, maxY);
           }
 
           setTempStartPoint(null);
+        }
+        return;
+      }
+
+      if (sketchMode.activeTool === "rectangleCenter") {
+        // Center rectangle: first click is center, second click is corner
+        const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
+
+        if (!tempStartPoint) {
+          // First click - set center point
+          if (nearbyPoint) {
+            setTempStartPoint({
+              x: nearbyPoint.x,
+              y: nearbyPoint.y,
+              id: nearbyPoint.id ?? undefined,
+            });
+          } else {
+            setTempStartPoint({ x: snappedPos.x, y: snappedPos.y });
+          }
+        } else {
+          // Second click - create rectangle from center to corner
+          const cx = tempStartPoint.x;
+          const cy = tempStartPoint.y;
+          const cornerX = nearbyPoint ? nearbyPoint.x : snappedPos.x;
+          const cornerY = nearbyPoint ? nearbyPoint.y : snappedPos.y;
+
+          // Half-widths from center to corner
+          const halfW = Math.abs(cornerX - cx);
+          const halfH = Math.abs(cornerY - cy);
+
+          if (halfW > 0.01 && halfH > 0.01) {
+            // Create rectangle centered at (cx, cy)
+            addRectangle(cx - halfW, cy - halfH, cx + halfW, cy + halfH);
+          }
+
+          setTempStartPoint(null);
+        }
+        return;
+      }
+
+      if (sketchMode.activeTool === "circle3Point") {
+        // 3-point circle: three points on the circumference
+        const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
+        const clickPoint = nearbyPoint
+          ? { x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id ?? undefined }
+          : { x: snappedPos.x, y: snappedPos.y };
+
+        if (!arcStartPoint) {
+          // First point
+          setArcStartPoint(clickPoint);
+        } else if (!arcEndPoint) {
+          // Second point
+          setArcEndPoint(clickPoint);
+        } else {
+          // Third point - calculate circle through all three points
+          const circleInfo = calculateCircumcircleCenter(arcStartPoint, arcEndPoint, clickPoint);
+
+          if (circleInfo) {
+            // Add center point and create circle
+            const centerId = addPoint(circleInfo.x, circleInfo.y);
+
+            if (centerId && circleInfo.radius > 0.01) {
+              addCircle(centerId, circleInfo.radius);
+            }
+          }
+
+          setArcStartPoint(null);
+          setArcEndPoint(null);
         }
         return;
       }
@@ -3165,19 +3848,25 @@ const Viewer: React.FC = () => {
     togglePointSelection,
     toggleLineSelection,
     clearSketchSelection,
+    setSelectedPoints,
+    setSelectedLines,
+    setSelectedConstraints,
     addPoint,
     addLine,
     addArc,
     addRectangle,
+    addConstraint,
     tempStartPoint,
+    chainLastEndpoint,
     arcStartPoint,
     arcEndPoint,
+    arcCenterPoint,
     circleCenterPoint,
     draggingEntity,
     updatePointPosition,
     getSketchPoints,
+    viewerState.autoConstraints,
   ]);
-
 
   // Determine cursor style based on current state
   const viewerCursor = useMemo(() => {
@@ -3188,11 +3877,7 @@ const Viewer: React.FC = () => {
   }, [draggingEntity, hoveredDraggable, sketchMode.active, sketchMode.activeTool]);
 
   return (
-    <div
-      ref={containerRef}
-      className="viewer-container"
-      style={{ cursor: viewerCursor }}
-    >
+    <div ref={containerRef} className="viewer-container" style={{ cursor: viewerCursor }}>
       {/* Collaborative 3D cursors */}
       <UserCursors3D
         scene={sceneRef.current}
@@ -3202,15 +3887,14 @@ const Viewer: React.FC = () => {
       {/* 2D cursor overlay for followed user when not over model */}
       <UserCursor2D followedUser={followedUser} containerRef={containerRef} />
 
-
       {/* Inline dimension edit - positioned at the label */}
       {editingDimensionId && editingDimensionPos && (
-            <input
+        <input
           ref={dimensionInputRef}
-              type="number"
+          type="number"
           className="dimension-inline-input"
-              value={editingDimensionValue}
-              onChange={(e) => setEditingDimensionValue(e.target.value)}
+          value={editingDimensionValue}
+          onChange={(e) => setEditingDimensionValue(e.target.value)}
           onBlur={handleDimensionEditSubmit}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -3218,8 +3902,8 @@ const Viewer: React.FC = () => {
               handleDimensionEditSubmit();
             } else if (e.key === "Escape") {
               e.preventDefault();
-                  setEditingDimensionId(null);
-                  setEditingDimensionValue("");
+              setEditingDimensionId(null);
+              setEditingDimensionValue("");
               setEditingDimensionPos(null);
             }
           }}
@@ -3230,7 +3914,10 @@ const Viewer: React.FC = () => {
             left: `${editingDimensionPos.x}px`,
             top: `${editingDimensionPos.y}px`,
             transform: "translate(-50%, -50%)",
-            background: editingDimensionType === "distance" ? "rgba(0, 170, 0, 0.95)" : "rgba(170, 85, 0, 0.95)",
+            background:
+              editingDimensionType === "distance"
+                ? "rgba(0, 170, 0, 0.95)"
+                : "rgba(170, 85, 0, 0.95)",
             color: "white",
             border: "2px solid white",
             borderRadius: "4px",

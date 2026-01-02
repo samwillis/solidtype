@@ -335,7 +335,7 @@ function getSketchPlane(
     const parts = planeRef.ref.split(":");
     if (parts.length !== 3 || parts[0] !== "face") {
       console.warn(`[Worker] Invalid face reference format: ${planeRef.ref}`);
-    return null;
+      return null;
     }
 
     const featureId = parts[1];
@@ -529,6 +529,26 @@ function interpretSketch(
       if (startId !== undefined && endId !== undefined && centerId !== undefined) {
         const eid = sketch.addArc(startId, endId, centerId, entity.ccw ?? true);
         entityIdMap.set(entity.id, eid);
+      }
+    }
+    // Circle: center + radius (no edge point needed)
+    // In the kernel, we represent this as a full arc (360°) by creating a point on the circle
+    // and using it as both start and end of the arc.
+    if (entity.type === "circle" && entity.center && entity.radius > 0) {
+      const centerId = pointIdMap.get(entity.center);
+      if (centerId !== undefined) {
+        // Get center point position
+        const centerPoint = data.pointsById[entity.center];
+        if (centerPoint) {
+          // Create a point on the circle circumference (at angle 0)
+          const edgeX = centerPoint.x + entity.radius;
+          const edgeY = centerPoint.y;
+          const edgePointId = sketch.addPoint(edgeX, edgeY);
+
+          // Create a full arc (circle) using the same start/end point
+          const eid = sketch.addArc(edgePointId, edgePointId, centerId, true);
+          entityIdMap.set(entity.id, eid);
+        }
       }
     }
   }

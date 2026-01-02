@@ -23,6 +23,6 @@
   margin: 0;
 }
 
-.dimension-inline-input[type=number] {
+.dimension-inline-input[type="number"] {
   -moz-appearance: textfield;
 }

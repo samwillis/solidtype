@@ -159,15 +159,15 @@ function validateDatumPlanes(snapshot: DocSnapshot, errors: string[]): void {
       const definition = feature.definition as { kind: string; role?: string };
       if (definition.kind === "datum" && definition.role) {
         const role = definition.role;
-      if (role === "xy") {
-        xyCount++;
-        xyId = id;
-      } else if (role === "xz") {
-        xzCount++;
-        xzId = id;
-      } else if (role === "yz") {
-        yzCount++;
-        yzId = id;
+        if (role === "xy") {
+          xyCount++;
+          xyId = id;
+        } else if (role === "xz") {
+          xzCount++;
+          xzId = id;
+        } else if (role === "yz") {
+          yzCount++;
+          yzId = id;
         }
       }
     }

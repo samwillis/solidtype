@@ -51,7 +51,14 @@ export type { NewSketchConstraint } from "../document/featureHelpers";
 export type DocumentUnits = "mm" | "cm" | "m" | "in" | "ft";
 
 /** Feature type discriminator */
-export type FeatureType = "origin" | "plane" | "axis" | "sketch" | "extrude" | "revolve" | "boolean";
+export type FeatureType =
+  | "origin"
+  | "plane"
+  | "axis"
+  | "sketch"
+  | "extrude"
+  | "revolve"
+  | "boolean";
 
 // ============================================================================
 // Build State Types (transient, not stored in Yjs)

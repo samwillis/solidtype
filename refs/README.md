@@ -93,13 +93,13 @@ This directory contains source code from open-source CAD kernels for reference w
 
 **Key directories to study**:
 
-| Path                               | Purpose                                        |
-| ---------------------------------- | ---------------------------------------------- |
-| `src/Mod/Part/App/TopoShapeEx.cpp` | **Core naming algorithm** (`makESHAPE()`)      |
-| `src/Mod/Part/App/TopoShape.h`     | Shape wrapper with `Mapper` abstraction        |
-| `src/Mod/Part/App/TopoShapeOpCode.h` | Operation codes (XTR, RVL, FUS, CUT, etc.)   |
-| `src/App/ComplexGeoData.h`         | Base class with `ElementMap`, postfix markers  |
-| `src/App/StringHasher.h`           | Name compression for large element maps        |
+| Path                                 | Purpose                                       |
+| ------------------------------------ | --------------------------------------------- |
+| `src/Mod/Part/App/TopoShapeEx.cpp`   | **Core naming algorithm** (`makESHAPE()`)     |
+| `src/Mod/Part/App/TopoShape.h`       | Shape wrapper with `Mapper` abstraction       |
+| `src/Mod/Part/App/TopoShapeOpCode.h` | Operation codes (XTR, RVL, FUS, CUT, etc.)    |
+| `src/App/ComplexGeoData.h`           | Base class with `ElementMap`, postfix markers |
+| `src/App/StringHasher.h`             | Name compression for large element maps       |
 
 **When to reference**:
 
