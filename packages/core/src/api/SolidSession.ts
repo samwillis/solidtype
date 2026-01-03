@@ -66,6 +66,8 @@ export interface Mesh {
   readonly faceMap: Uint32Array;
   /** B-Rep edge line segments for CAD-style rendering (x1y1z1 x2y2z2...) */
   readonly edges?: Float32Array;
+  /** Maps each edge segment to its edge index (for 3D edge selection) */
+  readonly edgeMap?: Uint32Array;
 }
 
 /** Bounding box */
@@ -613,6 +615,7 @@ export class SolidSession {
       indices: result.indices,
       faceMap: result.faceMap,
       edges: result.edges,
+      edgeMap: result.edgeMap,
     };
   }
 

@@ -182,6 +182,93 @@ function getOriginStyle(state: FeatureDisplayState): { opacity: number; scale: n
   }
 }
 
+/** Result of edge raycasting */
+interface EdgeRaycastHit {
+  bodyId: string;
+  featureId: string;
+  edgeIndex: number;
+  distance: number;
+  point: THREE.Vector3;
+}
+
+/**
+ * Find the closest edge segment to a ray.
+ * Returns null if no edge is within the threshold distance.
+ */
+function raycastEdges(
+  raycaster: THREE.Raycaster,
+  edgeGroup: THREE.Group,
+  screenThreshold: number,
+  camera: THREE.Camera,
+  containerWidth: number
+): EdgeRaycastHit | null {
+  let closestHit: EdgeRaycastHit | null = null;
+  let closestScreenDist = screenThreshold;
+
+  const ray = raycaster.ray;
+
+  edgeGroup.traverse((child) => {
+    if (!(child instanceof LineSegments2)) return;
+
+    const userData = child.userData as {
+      bodyId?: string;
+      featureId?: string;
+      edgePositions?: Float32Array;
+      edgeMap?: Uint32Array;
+    };
+
+    if (!userData.edgePositions || !userData.edgeMap) return;
+
+    const positions = userData.edgePositions;
+    const edgeMap = userData.edgeMap;
+
+    // Each segment has 2 points = 6 floats
+    const numSegments = positions.length / 6;
+
+    for (let i = 0; i < numSegments; i++) {
+      const p1 = new THREE.Vector3(
+        positions[i * 6 + 0],
+        positions[i * 6 + 1],
+        positions[i * 6 + 2]
+      );
+      const p2 = new THREE.Vector3(
+        positions[i * 6 + 3],
+        positions[i * 6 + 4],
+        positions[i * 6 + 5]
+      );
+
+      // Find closest point on ray to line segment
+      const closestOnRay = new THREE.Vector3();
+      const closestOnSegment = new THREE.Vector3();
+      ray.distanceSqToSegment(p1, p2, closestOnRay, closestOnSegment);
+
+      // Project to screen space to check pixel distance
+      const screenPoint = closestOnSegment.clone().project(camera);
+      const rayScreenPoint = closestOnRay.clone().project(camera);
+
+      // Convert to pixel coordinates
+      const screenDist =
+        Math.sqrt(
+          Math.pow((screenPoint.x - rayScreenPoint.x) * containerWidth * 0.5, 2) +
+            Math.pow((screenPoint.y - rayScreenPoint.y) * containerWidth * 0.5, 2)
+        );
+
+      if (screenDist < closestScreenDist) {
+        closestScreenDist = screenDist;
+        closestHit = {
+          bodyId: userData.bodyId || "",
+          featureId: userData.featureId || "",
+          edgeIndex: edgeMap[i],
+          distance: closestOnRay.distanceTo(ray.origin),
+          point: closestOnSegment.clone(),
+        };
+      }
+    }
+  });
+
+  return closestHit;
+}
+
 const Viewer: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -211,11 +298,13 @@ const Viewer: React.FC = () => {
   const { meshes, bodies, sketchPlaneTransforms, featureStatus } = useKernel();
   const {
     selectFace,
+    selectEdge,
     setHover,
     clearSelection: clearFaceSelection,
     selectedFeatureId,
     hoveredFeatureId,
     selectedFaces,
+    selectedEdges,
     hover,
   } = useSelection();
   const {
@@ -439,6 +528,8 @@ const Viewer: React.FC = () => {
   getFaceIdRef.current = getFaceId;
   const selectFaceRef = useRef(selectFace);
   selectFaceRef.current = selectFace;
+  const selectEdgeRef = useRef(selectEdge);
+  selectEdgeRef.current = selectEdge;
   const setHoverRef = useRef(setHover);
   setHoverRef.current = setHover;
   const clearSelectionRef = useRef(clearFaceSelection);
@@ -1223,15 +1314,6 @@ const Viewer: React.FC = () => {
       meshGroup.add(mesh);
 
       // Add CAD-style edge lines from B-Rep edges (not tessellation edges)
-      console.log(
-        "[Viewer] Edge data for",
-        bodyId,
-        ":",
-        meshData.edges?.length ?? 0,
-        "floats,",
-        meshData.edges ? meshData.edges.length / 6 : 0,
-        "segments"
-      );
       if (!isPreview && containerRef.current && meshData.edges && meshData.edges.length > 0) {
         // Use LineSegmentsGeometry for disconnected line segments (pairs of points)
         const lineGeometry = new LineSegmentsGeometry();
@@ -1253,7 +1335,13 @@ const Viewer: React.FC = () => {
         const edgeLines = new LineSegments2(lineGeometry, edgeMaterial);
         edgeLines.computeLineDistances();
         edgeLines.name = `edges-${bodyId}`;
-        edgeLines.userData.bodyId = bodyId;
+        // Store edge data for raycasting and selection
+        edgeLines.userData = {
+          bodyId,
+          featureId: bodyId,
+          edgePositions: meshData.edges,
+          edgeMap: meshData.edgeMap,
+        };
         edgeGroup.add(edgeLines);
       }
     });
@@ -1447,8 +1535,101 @@ const Viewer: React.FC = () => {
       }
     }
 
+    // Helper to extract edge segments for a specific edge from mesh data
+    const extractEdgeSegments = (
+      meshData: {
+        edges?: Float32Array;
+        edgeMap?: Uint32Array;
+      },
+      targetEdgeIndex: number
+    ): Float32Array | null => {
+      if (!meshData.edges || !meshData.edgeMap) return null;
+
+      const segments: number[] = [];
+      for (let i = 0; i < meshData.edgeMap.length; i++) {
+        if (meshData.edgeMap[i] === targetEdgeIndex) {
+          // Each segment has 2 points = 6 floats
+          segments.push(
+            meshData.edges[i * 6 + 0],
+            meshData.edges[i * 6 + 1],
+            meshData.edges[i * 6 + 2],
+            meshData.edges[i * 6 + 3],
+            meshData.edges[i * 6 + 4],
+            meshData.edges[i * 6 + 5]
+          );
+        }
+      }
+
+      if (segments.length === 0) return null;
+      return new Float32Array(segments);
+    };
+
+    // Render hover highlight for edges
+    if (hover && hover.type === "edge" && containerRef.current) {
+      const meshData = meshes.get(hover.bodyId);
+      if (meshData) {
+        const edgePositions = extractEdgeSegments(meshData, hover.index);
+        if (edgePositions) {
+          const lineGeometry = new LineSegmentsGeometry();
+          lineGeometry.setPositions(edgePositions);
+
+          const edgeMaterial = new LineMaterial({
+            color: 0x00ff88,
+            linewidth: 6.0,
+            resolution: new THREE.Vector2(
+              containerRef.current.clientWidth,
+              containerRef.current.clientHeight
+            ),
+          });
+
+          const highlightLine = new LineSegments2(lineGeometry, edgeMaterial);
+          highlightLine.computeLineDistances();
+          highlightLine.name = `hover-edge-${hover.bodyId}-${hover.index}`;
+          highlightLine.renderOrder = 101;
+          faceHighlightGroup.add(highlightLine);
+        }
+      }
+    }
+
+    // Render selected edges
+    for (const selected of selectedEdges) {
+      // Skip if this edge is also being hovered
+      if (
+        hover &&
+        hover.type === "edge" &&
+        hover.bodyId === selected.bodyId &&
+        hover.index === selected.edgeIndex
+      ) {
+        continue;
+      }
+
+      const meshData = meshes.get(selected.bodyId);
+      if (meshData && containerRef.current) {
+        const edgePositions = extractEdgeSegments(meshData, selected.edgeIndex);
+        if (edgePositions) {
+          const lineGeometry = new LineSegmentsGeometry();
+          lineGeometry.setPositions(edgePositions);
+
+          const edgeMaterial = new LineMaterial({
+            color: 0x4488ff,
+            linewidth: 6.0,
+            resolution: new THREE.Vector2(
+              containerRef.current.clientWidth,
+              containerRef.current.clientHeight
+            ),
+          });
+
+          const highlightLine = new LineSegments2(lineGeometry, edgeMaterial);
+          highlightLine.computeLineDistances();
+          highlightLine.name = `selected-edge-${selected.bodyId}-${selected.edgeIndex}`;
+          highlightLine.renderOrder = 101;
+          faceHighlightGroup.add(highlightLine);
+        }
+      }
+    }
+
     needsRenderRef.current = true;
-  }, [meshes, selectedFaces, hover, sceneReady]);
+  }, [meshes, selectedFaces, selectedEdges, hover, sceneReady]);
 
   // Render datum planes
   useEffect(() => {
@@ -3455,7 +3636,35 @@ const Viewer: React.FC = () => {
 
       const hit = raycastRef.current(e.clientX, e.clientY);
 
-      if (hit) {
+      // Always check for edge hits first - edges should be selectable even on faces
+      const edgeGroup = edgeGroupRef.current;
+      const cam = cameraRef.current;
+      const container = containerRef.current;
+      let edgeHit: EdgeRaycastHit | null = null;
+
+      if (edgeGroup && cam && container && viewerState.showEdges) {
+        const rect = container.getBoundingClientRect();
+        const raycaster = new THREE.Raycaster();
+        const ndc = new THREE.Vector2(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        raycaster.setFromCamera(ndc, cam);
+        edgeHit = raycastEdges(raycaster, edgeGroup, 8, cam, rect.width);
+      }
+
+      // If we have an edge hit close enough, prefer edge selection
+      if (edgeHit) {
+        selectEdgeRef.current(
+          {
+            bodyId: edgeHit.bodyId,
+            edgeIndex: edgeHit.edgeIndex,
+            featureId: edgeHit.featureId,
+          },
+          e.ctrlKey || e.metaKey
+        );
+      } else if (hit) {
+        // No edge nearby, select the face
         const faceId = getFaceIdRef.current(hit.bodyId, hit.faceIndex);
         selectFaceRef.current(
           {
@@ -3491,7 +3700,38 @@ const Viewer: React.FC = () => {
 
       const hit = raycastRef.current(e.clientX, e.clientY);
 
-      if (hit) {
+      // Always check for edge hits first - edges should be hoverable even on faces
+      const edgeGroup = edgeGroupRef.current;
+      const cam = cameraRef.current;
+      const container = containerRef.current;
+      let edgeHit: EdgeRaycastHit | null = null;
+
+      if (edgeGroup && cam && container && edgeGroup.visible) {
+        const rect = container.getBoundingClientRect();
+        const raycaster = new THREE.Raycaster();
+        const ndc = new THREE.Vector2(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        raycaster.setFromCamera(ndc, cam);
+        edgeHit = raycastEdges(raycaster, edgeGroup, 8, cam, rect.width);
+      }
+
+      // If we have an edge hit close enough, show edge hover
+      if (edgeHit) {
+        setHoverRef.current({
+          type: "edge",
+          bodyId: edgeHit.bodyId,
+          index: edgeHit.edgeIndex,
+          featureId: edgeHit.featureId,
+        });
+        // Broadcast 3D cursor position for collaborative cursors
+        broadcastCursorRef.current(hit);
+        // Clear 2D cursor when over model
+        if (awarenessRef.current) {
+          awarenessRef.current.updateCursor2D({ x: 0, y: 0, visible: false });
+        }
+      } else if (hit) {
         const faceId = getFaceIdRef.current(hit.bodyId, hit.faceIndex);
         setHoverRef.current({
           type: "face",

@@ -19,8 +19,10 @@ export interface TessellatedMesh {
   indices: Uint32Array;
   /** Maps each triangle index to its face ID (for 3D selection) */
   faceMap: Uint32Array;
-  /** Optional: B-Rep edge line segments [x1,y1,z1, x2,y2,z2, ...] */
+  /** B-Rep edge line segments [x1,y1,z1, x2,y2,z2, ...] for each segment pair */
   edges?: Float32Array;
+  /** Maps each edge segment to its edge ID (for 3D edge selection) */
+  edgeMap?: Uint32Array;
 }
 
 /**
@@ -158,16 +160,27 @@ export function tessellateWithParams(
   // Compute normals from triangles
   const computedNormals = computeNormals(vertices, indices);
 
-  // Extract B-Rep edges from the triangulation
-  const edges = extractEdges(shape);
+  // Extract B-Rep edges
+  const edgeResult = extractEdges(shape);
 
   return {
     vertices: new Float32Array(vertices),
     normals: new Float32Array(computedNormals),
     indices: new Uint32Array(indices),
     faceMap: new Uint32Array(faceMap),
-    edges,
+    edges: edgeResult.positions,
+    edgeMap: edgeResult.edgeMap,
   };
+}
+
+/**
+ * Edge extraction result with positions and edge-to-segment mapping.
+ */
+interface EdgeExtractionResult {
+  /** Line segment positions [x1,y1,z1, x2,y2,z2, ...] */
+  positions: Float32Array;
+  /** Maps each segment to its B-Rep edge index */
+  edgeMap: Uint32Array;
 }
 
 /**
@@ -176,12 +189,14 @@ export function tessellateWithParams(
  * @param shape - The shape to extract edges from
  * @param numSamples - Number of samples per edge for curved edges
  */
-function extractEdges(shape: Shape, numSamples = 32): Float32Array {
+function extractEdges(shape: Shape, numSamples = 32): EdgeExtractionResult {
   const oc = getOC();
   const edgePoints: number[] = [];
+  const edgeIndices: number[] = [];
 
   // Track processed edges to avoid duplicates (edges are shared between faces)
   const processedEdges = new Set<number>();
+  let edgeIndex = 0;
 
   // Iterate over all edges in the shape
   const edgeExplorer = new oc.TopExp_Explorer_2(
@@ -228,9 +243,12 @@ function extractEdges(shape: Shape, numSamples = 32): Float32Array {
         const p2 = points[i + 1];
         edgePoints.push(p1.x, p1.y, p1.z);
         edgePoints.push(p2.x, p2.y, p2.z);
+        // Map this segment to the current edge index
+        edgeIndices.push(edgeIndex);
       }
 
       adaptor.delete();
+      edgeIndex++;
     } catch {
       // Skip edges that fail to extract (e.g., degenerate edges)
     }
@@ -240,7 +258,10 @@ function extractEdges(shape: Shape, numSamples = 32): Float32Array {
 
   edgeExplorer.delete();
 
-  return new Float32Array(edgePoints);
+  return {
+    positions: new Float32Array(edgePoints),
+    edgeMap: new Uint32Array(edgeIndices),
+  };
 }
 
 /**
