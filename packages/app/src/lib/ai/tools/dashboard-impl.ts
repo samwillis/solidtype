@@ -612,7 +612,8 @@ export async function getDashboardTools(userId: string): Promise<ServerTool[]> {
       if (!branch) throw new Error("Branch not found");
 
       // Normalize parentFolderId: treat empty string as null (root level)
-      const normalizedParentId = parentFolderId && parentFolderId.trim() !== "" ? parentFolderId : null;
+      const normalizedParentId =
+        parentFolderId && parentFolderId.trim() !== "" ? parentFolderId : null;
 
       const [folder] = await db
         .insert(folders)

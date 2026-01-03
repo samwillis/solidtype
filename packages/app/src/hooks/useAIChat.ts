@@ -281,10 +281,7 @@ export function useAIChat(options: UseAIChatOptions) {
     // Only invalidate if the session exists AND is archived
     // Don't invalidate if session is not found - it might be a newly created session pending sync
     if (currentSession && currentSession.status === "archived") {
-      console.log(
-        "[useAIChat] Active session is archived, resetting:",
-        activeSessionId
-      );
+      console.log("[useAIChat] Active session is archived, resetting:", activeSessionId);
       setActiveSessionId(null, "session-invalidated");
     }
   }, [activeSessionId, sessions, sessionsLoaded, setActiveSessionId]);

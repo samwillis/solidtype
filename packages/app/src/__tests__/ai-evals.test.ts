@@ -40,12 +40,22 @@ const shouldRun = process.env.RUN_AI_EVALS === "true";
 const MOCK_WORKSPACE = { id: "ws-123", name: "Test Workspace", slug: "test-workspace" };
 const MOCK_PROJECT = { id: "proj-456", name: "Project 1", workspaceId: MOCK_WORKSPACE.id };
 const MOCK_BRANCH = { id: "branch-789", name: "main", isMain: true, projectId: MOCK_PROJECT.id };
-const MOCK_DOCUMENT = { id: "doc-abc", name: "Part A", type: "part" as const, branchId: MOCK_BRANCH.id };
+const MOCK_DOCUMENT = {
+  id: "doc-abc",
+  name: "Part A",
+  type: "part" as const,
+  branchId: MOCK_BRANCH.id,
+};
 const MOCK_FOLDER = { id: "folder-xyz", name: "Components", parentId: undefined };
 const MOCK_EXISTING_DOCS = [
   { id: "doc-1", name: "Bracket", type: "part" as const, updatedAt: new Date().toISOString() },
   { id: "doc-2", name: "Housing", type: "part" as const, updatedAt: new Date().toISOString() },
-  { id: "doc-3", name: "Main Assembly", type: "assembly" as const, updatedAt: new Date().toISOString() },
+  {
+    id: "doc-3",
+    name: "Main Assembly",
+    type: "assembly" as const,
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 // Track tool calls for assertions
@@ -335,7 +345,10 @@ describe.skipIf(!shouldRun)("AI Eval Tests", () => {
         MOCK_PROJECT.id
       );
 
-      console.log("[Folder Creation Test] Tool calls:", toolCalls.map((c) => c.name));
+      console.log(
+        "[Folder Creation Test] Tool calls:",
+        toolCalls.map((c) => c.name)
+      );
       console.log("[Folder Creation Test] Response:", response.slice(0, 200));
 
       const createFolderCall = toolCalls.find((c) => c.name === "createFolder");

@@ -648,7 +648,13 @@ const Viewer: React.FC = () => {
       console.log("[SketchBroadcast] Clearing sketch state");
       awareness.clearSketchState();
     }
-  }, [awareness, sketchMode.active, sketchMode.sketchId, sketchMode.planeId, sketchMode.activeTool]);
+  }, [
+    awareness,
+    sketchMode.active,
+    sketchMode.sketchId,
+    sketchMode.planeId,
+    sketchMode.activeTool,
+  ]);
 
   // Extract the followed user's sketch ID as a primitive for reliable effect dependencies
   const followedUserSketchId = followedUser?.sketch?.sketchId ?? null;
@@ -661,10 +667,20 @@ const Viewer: React.FC = () => {
       return;
     }
 
-    console.log("[SketchFollow] Effect check - followedSketchId:", followedUserSketchId, "ourActive:", sketchMode.active, "ourSketchId:", sketchMode.sketchId);
+    console.log(
+      "[SketchFollow] Effect check - followedSketchId:",
+      followedUserSketchId,
+      "ourActive:",
+      sketchMode.active,
+      "ourSketchId:",
+      sketchMode.sketchId
+    );
 
     // If followed user is in sketch mode and we're not (or in a different sketch)
-    if (followedUserSketchId && (!sketchMode.active || sketchMode.sketchId !== followedUserSketchId)) {
+    if (
+      followedUserSketchId &&
+      (!sketchMode.active || sketchMode.sketchId !== followedUserSketchId)
+    ) {
       // Look up the sketch to find its plane
       console.log("[SketchFollow] Looking up sketch feature:", followedUserSketchId);
       const sketchFeature = doc.featuresById.get(followedUserSketchId);
@@ -684,7 +700,15 @@ const Viewer: React.FC = () => {
       console.log("[SketchFollow] Exiting sketch mode");
       finishSketch();
     }
-  }, [followingUserId, followedUserSketchId, sketchMode.active, sketchMode.sketchId, doc.featuresById, editSketch, finishSketch]);
+  }, [
+    followingUserId,
+    followedUserSketchId,
+    sketchMode.active,
+    sketchMode.sketchId,
+    doc.featuresById,
+    editSketch,
+    finishSketch,
+  ]);
 
   // Update camera projection
   const updateCamera = useCallback((projection: ProjectionMode) => {

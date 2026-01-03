@@ -268,7 +268,6 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
             }
 
             if (chunk.type === "content" && chunk.delta) {
-
               // If we had a tool call and content resumes, insert a paragraph break
               // This prevents text from running together like "...error.The folder..."
               if (hadToolCallSinceLastContent && seq > 0) {
@@ -347,11 +346,7 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
               const toolResult = chunk.content;
 
               // Log all tool results
-              if (
-                toolResult &&
-                typeof toolResult === "object" &&
-                "error" in toolResult
-              ) {
+              if (toolResult && typeof toolResult === "object" && "error" in toolResult) {
                 console.warn("[AI Tool Result - ERROR]", {
                   toolCallId: chunk.toolCallId,
                   error: (toolResult as { error: unknown }).error,

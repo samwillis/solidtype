@@ -377,7 +377,11 @@ function BranchView() {
       <div className="dashboard-sort-filter">
         <Select.Root value={fileFilter} onValueChange={(value) => setFileFilter(value || "all")}>
           <Select.Trigger className="dashboard-select-trigger">
-            {fileFilter === "all" ? "All files" : fileFilter === "folders" ? "Folders" : "Documents"}
+            {fileFilter === "all"
+              ? "All files"
+              : fileFilter === "folders"
+                ? "Folders"
+                : "Documents"}
             <LuChevronDown size={12} />
           </Select.Trigger>
           <Select.Portal>
@@ -397,10 +401,7 @@ function BranchView() {
           </Select.Portal>
         </Select.Root>
 
-        <Select.Root
-          value={sortBy}
-          onValueChange={(value) => setSortBy(value || "last-modified")}
-        >
+        <Select.Root value={sortBy} onValueChange={(value) => setSortBy(value || "last-modified")}>
           <Select.Trigger className="dashboard-select-trigger">
             {sortBy === "last-modified" ? "Last modified" : sortBy === "name" ? "Name" : "Created"}
             <LuChevronDown size={12} />
