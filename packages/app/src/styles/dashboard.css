@@ -325,10 +325,12 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto; /* Main area is scrollable */
+  overflow-x: hidden;
   background: var(--color-viewer-bg);
   position: relative;
 }
+
 
 /* Content Header */
 .dashboard-content-header {
@@ -373,6 +375,11 @@
   gap: 8px;
   padding-right: 264px; /* Space for properties panel (244px width + 20px margin) */
   padding-top: 0; /* Align with properties panel top */
+}
+
+/* Remove padding when using new header (properties panel is inline) */
+.dashboard-main--with-header .dashboard-content-header-actions {
+  padding-right: 0;
 }
 
 .dashboard-sort-filter {
@@ -434,6 +441,13 @@
 
 .dashboard-select-trigger[data-state="open"] svg {
   transform: rotate(180deg);
+}
+
+/* Base UI positioners need z-index to appear above sticky headers */
+.dashboard-select-positioner,
+.create-dialog-select-positioner,
+.context-menu-positioner {
+  z-index: 1000 !important;
 }
 
 .dashboard-select-popup {
@@ -790,9 +804,9 @@
 /* Content area */
 .dashboard-content {
   flex: 1;
-  overflow-y: auto;
-  padding: 24px;
+  padding: 0 24px 24px 24px;
 }
+
 
 .dashboard-loading-inline {
   display: flex;

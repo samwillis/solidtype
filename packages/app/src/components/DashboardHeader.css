@@ -1,0 +1,99 @@
+/**
+ * Dashboard Header - Responsive sticky header styles
+ * 
+ * Float-based layout:
+ * - Title floats left
+ * - Props panel floats right (rightmost)
+ * - Controls float right (drops down when no space)
+ */
+
+.dashboard-header {
+  position: sticky;
+  top: 0;
+  z-index: 10; /* Above content, below dropdowns (z-index: 1000) */
+  background: var(--color-viewer-bg);
+  flex-shrink: 0;
+  transition: border-color 0.15s ease;
+  border-bottom: 1px solid transparent;
+  padding: 16px 20px 6px 24px;
+}
+
+/* Show border when scrolled */
+.dashboard-header--scrolled {
+  border-bottom-color: var(--color-border);
+}
+
+/* Clearfix */
+.dashboard-header::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+/* Title - float left */
+.dashboard-header__left {
+  float: left;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px; /* Match props panel height */
+  margin-right: 16px;
+  margin-bottom: 10px;
+}
+
+.dashboard-header__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.dashboard-header__title-action {
+  display: flex;
+  align-items: center;
+}
+
+/* Props panel container - float right */
+.dashboard-header__right {
+  float: right;
+  margin-left: 16px;
+  margin-bottom: 10px;
+}
+
+/* Props wrapper - reserves fixed space (230x46), panel is absolute inside */
+.dashboard-header__props-wrapper {
+  position: relative;
+  width: 230px;
+  height: 46px;
+}
+
+/* Props container - constrains the expanded panel height */
+/* pointer-events: none allows clicks to pass through to elements below */
+.dashboard-header__props-container {
+  position: absolute;
+  top: 0;
+  right: 0;
+  max-height: 90vh;
+  width: 100%;
+  pointer-events: none; /* Clicks pass through */
+}
+
+/* Re-enable pointer events on the actual panel */
+.dashboard-header__props-container > * {
+  pointer-events: auto;
+}
+
+/* Controls - float right, drops down when no space */
+.dashboard-header__controls {
+  float: right;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px; /* Match props panel height */
+}
+
+/* Prevent individual controls from shrinking */
+.dashboard-header__controls > * {
+  flex-shrink: 0;
+}

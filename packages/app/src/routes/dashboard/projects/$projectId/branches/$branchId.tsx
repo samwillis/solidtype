@@ -48,6 +48,7 @@ import { Menu } from "@base-ui/react/menu";
 import { BranchVisualization } from "../../../../../components/BranchVisualization";
 import { FolderBreadcrumbs } from "../../../../../components/FolderBreadcrumbs";
 import DashboardPropertiesPanel from "../../../../../components/DashboardPropertiesPanel";
+import { DashboardHeader } from "../../../../../components/DashboardHeader";
 import { ProjectSettingsDialog } from "../../../../../components/dialogs/ProjectSettingsDialog";
 import { MoveDialog } from "../../../../../components/dialogs/MoveDialog";
 import { DeleteConfirmDialog } from "../../../../../components/dialogs/DeleteConfirmDialog";
@@ -311,13 +312,145 @@ function BranchView() {
     );
   }
 
+  // Build view controls JSX
+  const viewControls = (
+    <>
+      {/* Branch Selector with View All button */}
+      <div className="dashboard-branch-selector">
+        {branches && branches.length > 0 && (
+          <Select.Root
+            value={currentBranch.id}
+            onValueChange={(value) => {
+              if (value) {
+                navigate({ to: `/dashboard/projects/${projectId}/branches/${value}` });
+              }
+            }}
+          >
+            <Select.Trigger className="dashboard-select-trigger">
+              <LuGitBranch size={14} style={{ marginRight: "6px" }} />
+              {currentBranch.name}
+              <LuChevronDown size={12} />
+            </Select.Trigger>
+            <Select.Portal>
+              <Select.Positioner className="dashboard-select-positioner">
+                <Select.Popup className="dashboard-select-popup">
+                  {branches.map((branch) => (
+                    <Select.Item
+                      key={branch.id}
+                      value={branch.id}
+                      className="dashboard-select-option"
+                    >
+                      {branch.name}
+                    </Select.Item>
+                  ))}
+                </Select.Popup>
+              </Select.Positioner>
+            </Select.Portal>
+          </Select.Root>
+        )}
+
+        {/* View All Branches button */}
+        <button
+          className="dashboard-view-branches-btn"
+          onClick={() => setShowBranchVisualization(true)}
+          title="View all branches"
+        >
+          <LuGitNetwork size={14} />
+        </button>
+
+        {/* Merge Branch button - only show for non-main branches */}
+        {currentBranch && !currentBranch.is_main && !currentBranch.merged_at && (
+          <button
+            className="dashboard-view-branches-btn dashboard-merge-btn"
+            onClick={() => setShowMergeBranch(true)}
+            title="Merge this branch"
+          >
+            <LuGitMerge size={14} />
+          </button>
+        )}
+      </div>
+
+      {/* Separator */}
+      <div className="dashboard-header-separator" />
+
+      {/* Sort and Filter */}
+      <div className="dashboard-sort-filter">
+        <Select.Root value={fileFilter} onValueChange={(value) => setFileFilter(value || "all")}>
+          <Select.Trigger className="dashboard-select-trigger">
+            {fileFilter === "all" ? "All files" : fileFilter === "folders" ? "Folders" : "Documents"}
+            <LuChevronDown size={12} />
+          </Select.Trigger>
+          <Select.Portal>
+            <Select.Positioner className="dashboard-select-positioner">
+              <Select.Popup className="dashboard-select-popup">
+                <Select.Item value="all" className="dashboard-select-option">
+                  All files
+                </Select.Item>
+                <Select.Item value="folders" className="dashboard-select-option">
+                  Folders
+                </Select.Item>
+                <Select.Item value="documents" className="dashboard-select-option">
+                  Documents
+                </Select.Item>
+              </Select.Popup>
+            </Select.Positioner>
+          </Select.Portal>
+        </Select.Root>
+
+        <Select.Root
+          value={sortBy}
+          onValueChange={(value) => setSortBy(value || "last-modified")}
+        >
+          <Select.Trigger className="dashboard-select-trigger">
+            {sortBy === "last-modified" ? "Last modified" : sortBy === "name" ? "Name" : "Created"}
+            <LuChevronDown size={12} />
+          </Select.Trigger>
+          <Select.Portal>
+            <Select.Positioner className="dashboard-select-positioner">
+              <Select.Popup className="dashboard-select-popup">
+                <Select.Item value="last-modified" className="dashboard-select-option">
+                  Last modified
+                </Select.Item>
+                <Select.Item value="name" className="dashboard-select-option">
+                  Name
+                </Select.Item>
+                <Select.Item value="created" className="dashboard-select-option">
+                  Created
+                </Select.Item>
+              </Select.Popup>
+            </Select.Positioner>
+          </Select.Portal>
+        </Select.Root>
+
+        {/* View Toggle */}
+        <ToggleGroup
+          value={[viewMode]}
+          onValueChange={(groupValue) => {
+            if (groupValue && groupValue.length > 0) {
+              setViewMode(groupValue[0] as "grid" | "list");
+            }
+          }}
+          className="dashboard-view-toggle"
+          aria-label="View mode"
+        >
+          <Toggle value="grid" className="dashboard-view-toggle-btn" aria-label="Grid view">
+            <LuLayoutGrid size={16} />
+          </Toggle>
+          <Toggle value="list" className="dashboard-view-toggle-btn" aria-label="List view">
+            <LuList size={16} />
+          </Toggle>
+        </ToggleGroup>
+      </div>
+    </>
+  );
+
   return (
     <>
-      <main className="dashboard-main">
-        {/* Header */}
-        <header className="dashboard-content-header">
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <h1 className="dashboard-content-title">{project.name}</h1>
+      <main className="dashboard-main dashboard-main--with-header">
+        {/* Responsive Header */}
+        <DashboardHeader
+          title={project.name}
+          titleAction={
             <button
               className="dashboard-project-settings-btn"
               onClick={() => setShowProjectSettings(true)}
@@ -326,148 +459,17 @@ function BranchView() {
             >
               <LuSettings size={16} />
             </button>
-          </div>
-
-          <div className="dashboard-content-header-actions">
-            {/* Branch Selector with View All button */}
-            <div className="dashboard-branch-selector">
-              {branches && branches.length > 0 && (
-                <Select.Root
-                  value={currentBranch.id}
-                  onValueChange={(value) => {
-                    if (value) {
-                      navigate({ to: `/dashboard/projects/${projectId}/branches/${value}` });
-                    }
-                  }}
-                >
-                  <Select.Trigger className="dashboard-select-trigger">
-                    <LuGitBranch size={14} style={{ marginRight: "6px" }} />
-                    {currentBranch.name}
-                    <LuChevronDown size={12} />
-                  </Select.Trigger>
-                  <Select.Portal>
-                    <Select.Positioner>
-                      <Select.Popup className="dashboard-select-popup">
-                        {branches.map((branch) => (
-                          <Select.Item
-                            key={branch.id}
-                            value={branch.id}
-                            className="dashboard-select-option"
-                          >
-                            {branch.name}
-                          </Select.Item>
-                        ))}
-                      </Select.Popup>
-                    </Select.Positioner>
-                  </Select.Portal>
-                </Select.Root>
-              )}
-
-              {/* View All Branches button */}
-              <button
-                className="dashboard-view-branches-btn"
-                onClick={() => setShowBranchVisualization(true)}
-                title="View all branches"
-              >
-                <LuGitNetwork size={14} />
-              </button>
-
-              {/* Merge Branch button - only show for non-main branches */}
-              {currentBranch && !currentBranch.is_main && !currentBranch.merged_at && (
-                <button
-                  className="dashboard-view-branches-btn dashboard-merge-btn"
-                  onClick={() => setShowMergeBranch(true)}
-                  title="Merge this branch"
-                >
-                  <LuGitMerge size={14} />
-                </button>
-              )}
-            </div>
-
-            {/* Separator */}
-            <div className="dashboard-header-separator" />
-
-            {/* Sort and Filter */}
-            <div className="dashboard-sort-filter">
-              <Select.Root
-                value={fileFilter}
-                onValueChange={(value) => setFileFilter(value || "all")}
-              >
-                <Select.Trigger className="dashboard-select-trigger">
-                  {fileFilter === "all"
-                    ? "All files"
-                    : fileFilter === "folders"
-                      ? "Folders"
-                      : "Documents"}
-                  <LuChevronDown size={12} />
-                </Select.Trigger>
-                <Select.Portal>
-                  <Select.Positioner>
-                    <Select.Popup className="dashboard-select-popup">
-                      <Select.Item value="all" className="dashboard-select-option">
-                        All files
-                      </Select.Item>
-                      <Select.Item value="folders" className="dashboard-select-option">
-                        Folders
-                      </Select.Item>
-                      <Select.Item value="documents" className="dashboard-select-option">
-                        Documents
-                      </Select.Item>
-                    </Select.Popup>
-                  </Select.Positioner>
-                </Select.Portal>
-              </Select.Root>
-
-              <Select.Root
-                value={sortBy}
-                onValueChange={(value) => setSortBy(value || "last-modified")}
-              >
-                <Select.Trigger className="dashboard-select-trigger">
-                  {sortBy === "last-modified"
-                    ? "Last modified"
-                    : sortBy === "name"
-                      ? "Name"
-                      : "Created"}
-                  <LuChevronDown size={12} />
-                </Select.Trigger>
-                <Select.Portal>
-                  <Select.Positioner>
-                    <Select.Popup className="dashboard-select-popup">
-                      <Select.Item value="last-modified" className="dashboard-select-option">
-                        Last modified
-                      </Select.Item>
-                      <Select.Item value="name" className="dashboard-select-option">
-                        Name
-                      </Select.Item>
-                      <Select.Item value="created" className="dashboard-select-option">
-                        Created
-                      </Select.Item>
-                    </Select.Popup>
-                  </Select.Positioner>
-                </Select.Portal>
-              </Select.Root>
-
-              {/* View Toggle */}
-              <ToggleGroup
-                value={[viewMode]}
-                onValueChange={(groupValue) => {
-                  if (groupValue && groupValue.length > 0) {
-                    setViewMode(groupValue[0] as "grid" | "list");
-                  }
-                }}
-                className="dashboard-view-toggle"
-                aria-label="View mode"
-              >
-                <Toggle value="grid" className="dashboard-view-toggle-btn" aria-label="Grid view">
-                  <LuLayoutGrid size={16} />
-                </Toggle>
-                <Toggle value="list" className="dashboard-view-toggle-btn" aria-label="List view">
-                  <LuList size={16} />
-                </Toggle>
-              </ToggleGroup>
-            </div>
-          </div>
-        </header>
+          }
+          viewControls={viewControls}
+          propertiesPanel={
+            <DashboardPropertiesPanel
+              currentProjectId={projectId}
+              currentBranchId={branchId}
+              currentFolderId={currentFolderId}
+              inline
+            />
+          }
+        />
 
         {/* Folder Breadcrumbs */}
         <FolderBreadcrumbs
@@ -625,13 +627,6 @@ function BranchView() {
             </div>
           )}
         </div>
-
-        {/* Properties Panel - context-aware for dialogs */}
-        <DashboardPropertiesPanel
-          currentProjectId={projectId}
-          currentBranchId={branchId}
-          currentFolderId={currentFolderId}
-        />
       </main>
 
       {/* Branch Visualization Dialog */}

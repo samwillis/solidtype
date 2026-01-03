@@ -39,12 +39,15 @@ interface DashboardPropertiesPanelProps {
   currentBranchId?: string;
   /** Current folder ID - used to preselect in dialogs */
   currentFolderId?: string | null;
+  /** When true, renders inline (not floating/absolute positioned) */
+  inline?: boolean;
 }
 
 const DashboardPropertiesPanel: React.FC<DashboardPropertiesPanelProps> = ({
   currentProjectId,
   currentBranchId,
   currentFolderId,
+  inline = false,
 }) => {
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const { data: session } = useSession();
@@ -224,9 +227,13 @@ const DashboardPropertiesPanel: React.FC<DashboardPropertiesPanelProps> = ({
 
   const content = showAIChat ? <AIPanel context="dashboard" projectId={currentProjectId} /> : null;
 
+  const panelClassName = inline
+    ? "properties-panel properties-panel-inline dashboard-properties-panel"
+    : "properties-panel properties-panel-floating dashboard-properties-panel";
+
   return (
     <>
-      <div className="properties-panel properties-panel-floating dashboard-properties-panel">
+      <div className={panelClassName}>
         {renderHeader()}
         {content && <div className="properties-panel-content">{content}</div>}
       </div>

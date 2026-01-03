@@ -6,6 +6,58 @@
   width: 244px; /* 20px wider than editor version (224px) */
 }
 
+/* Inline mode - within the container wrapper */
+.dashboard-properties-panel.properties-panel-inline {
+  position: relative;
+  width: 230px;
+  max-height: 90vh;
+  max-width: none;
+  background: rgba(37, 37, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 13px;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+  z-index: 100; /* Above other header elements when expanded */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Content area in inline mode - flex child that can scroll */
+.dashboard-properties-panel.properties-panel-inline .properties-panel-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0; /* Required for flex child to shrink */
+}
+
+/* AI Panel in inline mode needs to fill and scroll */
+.dashboard-properties-panel.properties-panel-inline .ai-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-properties-panel.properties-panel-inline .ai-panel-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-properties-panel.properties-panel-inline .ai-panel-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+[data-theme="light"] .dashboard-properties-panel.properties-panel-inline {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
 .properties-panel-user-avatar {
   width: 28px;
   height: 28px;
