@@ -1,159 +1,357 @@
-import React, { useState, useCallback } from "react";
+/**
+ * AI Panel Component
+ *
+ * Main chat interface for AI assistant.
+ * Works in both dashboard and editor contexts.
+ */
+
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { LuTrash2 } from "react-icons/lu";
+import ReactMarkdown from "react-markdown";
+import { useAIChat } from "../../hooks/useAIChat";
+import { ToolApprovalPanel } from "../../components/ai/ToolApprovalPanel";
+import AISettingsMenu from "../../components/ai/AISettingsMenu";
 import "./AIPanel.css";
 import { AIIcon } from "./Icons";
 
-interface ChatSession {
-  id: string;
-  title: string;
-  createdAt: Date;
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
+interface AIPanelProps {
+  context?: "dashboard" | "editor";
+  documentId?: string;
+  projectId?: string;
 }
 
-const AIPanel: React.FC = () => {
-  const [sessions, setSessions] = useState<ChatSession[]>([
-    { id: "1", title: "New Chat", createdAt: new Date(), messages: [] },
-  ]);
-  const [activeSessionId, setActiveSessionId] = useState<string>("1");
+const AIPanel: React.FC<AIPanelProps> = ({ context = "editor", documentId, projectId }) => {
   const [showHistory, setShowHistory] = useState(false);
-  const [closedSessions, setClosedSessions] = useState<ChatSession[]>([]);
+  const [historyPosition, setHistoryPosition] = useState({ top: 0, right: 0 });
+  const [inputValue, setInputValue] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const historyBtnRef = useRef<HTMLButtonElement>(null);
+  const historyDropdownRef = useRef<HTMLDivElement>(null);
 
-  const activeSession = sessions.find((s) => s.id === activeSessionId);
+  // Connect to backend via useAIChat hook
+  const {
+    messages,
+    isLoading,
+    isReady,
+    sessions,
+    activeSessionId,
+    toolApprovalRequests,
+    approveToolCall,
+    rejectToolCall,
+    sendMessage,
+    startNewChat,
+    switchToSession,
+    archiveSession,
+    deleteSession,
+  } = useAIChat({
+    context,
+    documentId,
+    projectId,
+  });
 
-  const createNewSession = useCallback(() => {
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title: "New Chat",
-      createdAt: new Date(),
-      messages: [],
-    };
-    setSessions((prev) => [...prev, newSession]);
-    setActiveSessionId(newSession.id);
+  const activeSessions = sessions.filter((s) => s.status === "active");
+  const archivedSessions = sessions.filter((s) => s.status === "archived");
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Calculate position for history dropdown
+  const updateHistoryPosition = useCallback(() => {
+    if (historyBtnRef.current) {
+      const rect = historyBtnRef.current.getBoundingClientRect();
+      setHistoryPosition({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      });
+    }
   }, []);
 
-  const closeSession = useCallback(
-    (sessionId: string) => {
-      const session = sessions.find((s) => s.id === sessionId);
-      if (session) {
-        setClosedSessions((prev) => [session, ...prev]);
+  // Handle outside click for history dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        historyDropdownRef.current &&
+        !historyDropdownRef.current.contains(target) &&
+        historyBtnRef.current &&
+        !historyBtnRef.current.contains(target)
+      ) {
+        setShowHistory(false);
       }
-      setSessions((prev) => {
-        const filtered = prev.filter((s) => s.id !== sessionId);
-        if (filtered.length === 0) {
-          // Create a new session if we closed the last one
-          const newSession: ChatSession = {
-            id: Date.now().toString(),
-            title: "New Chat",
-            createdAt: new Date(),
-            messages: [],
-          };
-          setActiveSessionId(newSession.id);
-          return [newSession];
-        }
-        // Switch to another tab if we closed the active one
-        if (sessionId === activeSessionId) {
-          setActiveSessionId(filtered[filtered.length - 1].id);
-        }
-        return filtered;
-      });
+    }
+    if (showHistory) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+    return undefined;
+  }, [showHistory]);
+
+  // Update position on scroll/resize
+  useEffect(() => {
+    if (showHistory) {
+      updateHistoryPosition();
+      window.addEventListener("scroll", updateHistoryPosition, true);
+      window.addEventListener("resize", updateHistoryPosition);
+      return () => {
+        window.removeEventListener("scroll", updateHistoryPosition, true);
+        window.removeEventListener("resize", updateHistoryPosition);
+      };
+    }
+    return undefined;
+  }, [showHistory, updateHistoryPosition]);
+
+  const toggleHistory = useCallback(() => {
+    if (!showHistory) {
+      updateHistoryPosition();
+    }
+    setShowHistory(!showHistory);
+  }, [showHistory, updateHistoryPosition]);
+
+  const handleSend = useCallback(async () => {
+    if (!inputValue.trim() || isLoading || !isReady) return;
+    const message = inputValue.trim();
+    setInputValue("");
+    try {
+      await sendMessage(message);
+    } catch (error) {
+      console.error("Failed to send message:", error);
+    }
+  }, [inputValue, isLoading, isReady, sendMessage]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
     },
-    [sessions, activeSessionId]
+    [handleSend]
   );
 
-  const restoreSession = useCallback((session: ChatSession) => {
-    setSessions((prev) => [...prev, session]);
-    setActiveSessionId(session.id);
-    setClosedSessions((prev) => prev.filter((s) => s.id !== session.id));
-    setShowHistory(false);
-  }, []);
+  const handleCloseSession = useCallback(
+    (e: React.MouseEvent, sessionId: string) => {
+      e.stopPropagation();
+      archiveSession(sessionId);
+    },
+    [archiveSession]
+  );
 
   return (
     <div className="ai-panel">
       {/* Tab bar */}
       <div className="ai-panel-tabs">
         <div className="ai-panel-tabs-list">
-          {sessions.map((session) => (
+          {/* Show "New Chat" tab when in new chat mode (no active session) */}
+          {activeSessionId === null && (
+            <div className="ai-panel-tab active">
+              <span className="ai-panel-tab-title">New Chat</span>
+            </div>
+          )}
+          {/* Show saved active sessions */}
+          {activeSessions.map((session) => (
             <div
               key={session.id}
               className={`ai-panel-tab ${session.id === activeSessionId ? "active" : ""}`}
-              onClick={() => setActiveSessionId(session.id)}
+              onClick={() => switchToSession(session.id)}
             >
-              <span className="ai-panel-tab-title">{session.title}</span>
+              <span className="ai-panel-tab-title">{session.title || "Untitled"}</span>
               <button
                 className="ai-panel-tab-close"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeSession(session.id);
-                }}
-                aria-label="Close tab"
+                onClick={(e) => handleCloseSession(e, session.id)}
+                aria-label="Archive chat"
               >
                 <CloseIcon />
               </button>
             </div>
           ))}
-          <button className="ai-panel-new-tab" onClick={createNewSession} aria-label="New chat">
-            <PlusIcon />
-          </button>
+          {/* Only show + button if we're viewing a saved session */}
+          {activeSessionId !== null && (
+            <button className="ai-panel-new-tab" onClick={startNewChat} aria-label="New chat">
+              <PlusIcon />
+            </button>
+          )}
         </div>
         <div className="ai-panel-tabs-actions">
           <button
+            ref={historyBtnRef}
             className="ai-panel-history-btn"
-            onClick={() => setShowHistory(!showHistory)}
+            onClick={toggleHistory}
             aria-label="Session history"
+            aria-expanded={showHistory}
           >
             <HistoryIcon />
           </button>
-          {showHistory && (
-            <div className="ai-panel-history-dropdown">
-              <div className="ai-panel-history-header">Previous Sessions</div>
-              {closedSessions.length > 0 ? (
-                closedSessions.map((session) => (
-                  <button
-                    key={session.id}
-                    className="ai-panel-history-item"
-                    onClick={() => restoreSession(session)}
-                  >
-                    <span>{session.title}</span>
-                    <span className="ai-panel-history-date">
-                      {session.createdAt.toLocaleDateString()}
-                    </span>
-                  </button>
-                ))
-              ) : (
-                <div className="ai-panel-history-empty">No previous sessions</div>
-              )}
-            </div>
-          )}
+          {showHistory &&
+            createPortal(
+              <div
+                ref={historyDropdownRef}
+                className="ai-panel-history-dropdown"
+                style={{
+                  position: "fixed",
+                  top: historyPosition.top,
+                  right: historyPosition.right,
+                  zIndex: 10000,
+                }}
+              >
+                <div className="ai-panel-history-header">Chat History</div>
+                {activeSessions.length > 0 && (
+                  <>
+                    {activeSessions.map((session) => (
+                      <div key={session.id} className="ai-panel-history-item">
+                        <button
+                          className="ai-panel-history-item-content"
+                          onClick={() => {
+                            switchToSession(session.id);
+                            setShowHistory(false);
+                          }}
+                        >
+                          <span className="ai-panel-history-title">
+                            {session.title || "Untitled"}
+                          </span>
+                          <span className="ai-panel-history-date">
+                            {new Date(session.createdAt).toLocaleDateString()}
+                          </span>
+                        </button>
+                        <button
+                          className="ai-panel-history-delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteSession(session.id);
+                          }}
+                          aria-label="Delete session"
+                        >
+                          <LuTrash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    {archivedSessions.length > 0 && (
+                      <div className="ai-panel-history-divider" />
+                    )}
+                  </>
+                )}
+                {archivedSessions.length > 0 ? (
+                  archivedSessions.map((session) => (
+                    <div key={session.id} className="ai-panel-history-item">
+                      <button
+                        className="ai-panel-history-item-content"
+                        onClick={() => {
+                          switchToSession(session.id);
+                          setShowHistory(false);
+                        }}
+                      >
+                        <span className="ai-panel-history-title">
+                          {session.title || "Untitled"}
+                        </span>
+                        <span className="ai-panel-history-date">
+                          {new Date(session.createdAt).toLocaleDateString()}
+                        </span>
+                      </button>
+                      <button
+                        className="ai-panel-history-delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteSession(session.id);
+                        }}
+                        aria-label="Delete session"
+                      >
+                        <LuTrash2 size={12} />
+                      </button>
+                    </div>
+                  ))
+                ) : activeSessions.length === 0 ? (
+                  <div className="ai-panel-history-empty">No sessions</div>
+                ) : null}
+              </div>,
+              document.body
+            )}
         </div>
       </div>
 
       {/* Chat content */}
       <div className="ai-panel-content">
-        {activeSession && activeSession.messages.length === 0 ? (
+        {messages.length === 0 ? (
           <div className="ai-panel-empty">
             <AIIcon />
             <div className="ai-panel-empty-title">AI Assistant</div>
             <div className="ai-panel-empty-hint">
-              Start a conversation to get help with your design
+              {context === "dashboard"
+                ? "Ask about projects, documents, workspaces..."
+                : "Describe what you want to create or modify..."}
             </div>
           </div>
         ) : (
           <div className="ai-panel-messages">
-            {activeSession?.messages.map((msg, idx) => (
-              <div key={idx} className={`ai-panel-message ai-panel-message-${msg.role}`}>
-                {msg.content}
+            {messages.map((msg, idx) => (
+              <div key={msg.id || idx} className={`ai-panel-message ai-panel-message-${msg.role}`}>
+                {msg.role === "assistant" ? (
+                  <div className="ai-panel-markdown">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  msg.content
+                )}
               </div>
             ))}
+            {isLoading && (
+              <div className="ai-panel-message ai-panel-message-assistant ai-panel-message-loading">
+                <span className="ai-panel-loading-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </span>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
           </div>
+        )}
+
+        {/* Tool approval requests */}
+        {toolApprovalRequests.length > 0 && (
+          <ToolApprovalPanel
+            requests={toolApprovalRequests}
+            onApprove={approveToolCall}
+            onReject={rejectToolCall}
+          />
         )}
       </div>
 
-      {/* Input area */}
+      {/* Input area - Cursor-style */}
       <div className="ai-panel-input-area">
-        <div className="ai-panel-input-wrapper">
-          <textarea className="ai-panel-input" placeholder="Ask the AI assistant..." rows={2} />
-          <button className="ai-panel-send" aria-label="Send message">
-            <SendIcon />
-          </button>
+        <div className="ai-panel-input-card">
+          <textarea
+            className="ai-panel-input"
+            placeholder={
+              !isReady
+                ? "Loading..."
+                : context === "dashboard"
+                  ? "Ask about projects, documents, or workspaces..."
+                  : "Describe what you want to create or modify..."
+            }
+            aria-label="Chat message input"
+            rows={2}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={!isReady}
+          />
+          <div className="ai-panel-input-footer">
+            <div className="ai-panel-input-left">
+              <AISettingsMenu />
+            </div>
+            <div className="ai-panel-input-right">
+              <button
+                className="ai-panel-send"
+                aria-label="Send message"
+                onClick={handleSend}
+                disabled={!isReady || isLoading || !inputValue.trim()}
+              >
+                <SendIcon />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -186,16 +384,6 @@ const HistoryIcon = () => (
   >
     <circle cx="12" cy="12" r="9" />
     <polyline points="12 7 12 12 15 15" />
-  </svg>
-);
-
-const AgentIcon = () => (
-  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-    <rect x="3" y="11" width="18" height="10" rx="2" />
-    <circle cx="8.5" cy="16" r="1.5" fill="currentColor" />
-    <circle cx="15.5" cy="16" r="1.5" fill="currentColor" />
-    <path d="M12 3v4" />
-    <path d="M8 5l4-2 4 2" />
   </svg>
 );
 

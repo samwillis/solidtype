@@ -230,51 +230,289 @@ psql postgresql://solidtype:solidtype@localhost:54321/solidtype
 
 ## Architecture
 
-SolidType uses a modern local-first architecture, **serving as a production example** of Electric SQL and Durable Streams working together:
+SolidType uses a modern local-first architecture, **serving as a production example** of Electric SQL and Durable Streams working together, with integrated AI assistance:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Client (Browser)                          │
-├──────────────────────┬──────────────────────────────────────┤
-│  TanStack DB         │  Yjs + Durable Streams               │
-│  (Electric sync)     │  (Document content)                  │
-│  - Live queries      │  - CRDT-based sync                   │
-│  - Optimistic writes │  - Awareness/presence                │
-└──────────────────────┴──────────────────────────────────────┘
-                          │                │
-                    HTTP/SSE         WebSocket/SSE
-                          ▼                ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Server (TanStack Start)                   │
-│  - API routes (server functions)                            │
-│  - Electric proxy (auth + shapes)                           │
-│  - Durable Streams proxy (auth)                             │
-└─────────────────────────────────────────────────────────────┘
-                          │                │
-                          ▼                ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────────┐
-│  PostgreSQL  │  │ ElectricSQL  │  │ Durable Streams  │
-│  (primary)   │  │  (sync)      │  │  (Yjs docs)      │
-└──────────────┘  └──────────────┘  └──────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│                          Client (Browser)                                  │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────┐  │
+│  │  TanStack DB         │  │  Yjs + Durable       │  │  AI Chat System  │  │
+│  │  (Electric sync)     │  │  Streams             │  │                  │  │
+│  │  - Live queries      │  │  - Document content  │  │  - Chat UI       │  │
+│  │  - Optimistic writes │  │  - CRDT-based sync   │  │  - Tool approval │  │
+│  │  - Metadata cache    │  │  - Awareness/presence│  │  - Agent runtime │  │
+│  └──────────────────────┘  └──────────────────────┘  └──────────────────┘  │
+│           │                         │                          │           │
+│           │                         │                          │           │
+│           │                         │                          │           │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │                    Web Worker (Modeling Kernel)                    │    │
+│  │  - OpenCascade.js (OCCT) - B-Rep operations                        │    │
+│  │  - Document rebuild from Yjs                                       │    │
+│  │  - Mesh generation for Three.js                                    │    │
+│  │  - Agent runtime (SharedWorker) for AI tool execution              │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+           │                         │                          │
+       HTTP/SSE                  HTTP/SSE                   HTTP/SSE
+           │                         │                          │
+           ▼                         ▼                          ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                    Server (TanStack Start)                                 │
+│                                                                            │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────┐  │
+│  │  Electric Proxy      │  │  Durable Streams     │  │  AI Chat API     │  │
+│  │  - Auth + shapes     │  │  Proxy (auth)        │  │  - SSE streaming │  │
+│  │  - Authorization     │  │  - Document streams  │  │  - Tool execution│  │
+│  └──────────────────────┘  └──────────────────────┘  │  - Persistence   │  │
+│                                                      └──────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                    Server Functions (API Routes)                     │  │
+│  │  - Session management (PostgreSQL)                                   │  │
+│  │  - Document operations                                               │  │
+│  │  - Tool implementations (dashboard, sketch, modeling)                │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────────┘
+           │                         │                          │
+           ▼                         ▼                          ▼
+┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────┐
+│  PostgreSQL          │  │  Electric SQL        │  │  Durable Streams │
+│  (primary database)  │  │  (sync engine)       │  │  (LMDB storage)  │
+│                      │  │                      │  │                  │
+│  • Metadata tables   │  │  • Real-time sync    │  │  • Document      │
+│  • Workspaces        │  │  • Logical repl      │  │    streams       │
+│  • Projects          │  │  • Authorization     │  │  • Chat streams  │
+│  • Documents         │  │  • Optimistic txns   │  │  • Awareness     │
+│  • Chat sessions     │  │                      │  │    streams       │
+│  • User auth         │  │                      │  │                  │
+└──────────────────────┘  └──────────────────────┘  └──────────────────┘
 ```
 
-**This architecture demonstrates:**
+### Data Flow Architecture
 
-- **Electric SQL** handles structured metadata (workspaces, projects, branches, documents, folders) with real-time Postgres sync, authorization via server proxy, and optimistic mutations with txid reconciliation
-- **Durable Streams** handles unstructured document content (Yjs CRDTs) with append-only streams, perfect for CAD model data that needs conflict-free merging
-- **Separation of concerns**: Different sync technologies for different data types, each optimized for their use case
+**This architecture demonstrates three distinct data synchronization patterns:**
+
+#### 1. Structured Metadata (Electric SQL + PostgreSQL)
+
+**Electric SQL** handles structured, relational metadata with real-time Postgres sync:
+
+- **Data types**: Workspaces, projects, documents, folders, branches, chat session metadata
+- **Sync mechanism**: PostgreSQL logical replication → Electric SQL → TanStack DB (client)
+- **Features**:
+  - Real-time bidirectional sync
+  - Authorization via server proxy (shapes)
+  - Optimistic mutations with transaction ID reconciliation
+  - Live queries that update automatically
+- **Use case**: Perfect for hierarchical, relational data that needs querying and filtering
+
+**Example flow:**
+```
+User creates project → Server writes to PostgreSQL → Electric syncs → 
+TanStack DB updates → UI re-renders automatically
+```
+
+#### 2. Unstructured Document Content (Durable Streams + Yjs)
+
+**Durable Streams** handles unstructured, CRDT-based document content:
+
+- **Data types**: CAD model features, sketches, constraints, undo/redo history
+- **Sync mechanism**: Yjs CRDT → Durable Streams (append-only) → WebSocket/SSE → Other clients
+- **Features**:
+  - Conflict-free merging (CRDTs)
+  - Append-only persistence (LMDB)
+  - Awareness/presence (cursors, selections)
+  - Deterministic rebuild order
+- **Use case**: Perfect for collaborative editing where order matters and conflicts must merge automatically
+
+**Example flow:**
+```
+User adds sketch point → Yjs update → Durable Stream append → 
+Other clients receive update → CRDT merge → UI updates
+```
+
+#### 3. AI Chat Sessions (Hybrid: PostgreSQL + Durable Streams)
+
+**AI chat uses a hybrid approach** combining both systems:
+
+- **PostgreSQL** stores session metadata:
+  - Session ID, user ID, context (dashboard/editor)
+  - Document/project references
+  - Status, title, message count
+  - Timestamps
+  - **Purpose**: Fast listing, querying, UI display
+
+- **Durable Streams** stores message content:
+  - Stream ID: `ai-chat/{sessionId}`
+  - Actual message content (streaming chunks)
+  - Tool calls and results
+  - Full conversation history
+  - **Purpose**: Streaming, resumption, message replay
+
+**Example flow:**
+```
+User sends message → Server persists to Durable Stream → 
+LLM streams response → Chunks persisted to stream → 
+Client receives SSE → UI updates in real-time
+```
+
+### AI Integration Architecture
+
+#### Chat Session Management
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                     Chat Session Architecture                  │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  PostgreSQL (ai_chat_sessions table)                           │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ • Session metadata (id, userId, context, status)        │   │
+│  │ • References (documentId, projectId)                    │   │
+│  │ • Timestamps (createdAt, updatedAt)                     │   │
+│  │ • Display info (title, messageCount)                    │   │
+│  │ → Used for: listing sessions, querying, UI display      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              │                                 │
+│                              │ sessionId                       │
+│                              ▼                                 │
+│  Durable Streams (ai-chat/{sessionId})                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ • Actual message content (streaming chunks)             │   │
+│  │ • Tool calls and results                                │   │
+│  │ • Full conversation history                             │   │
+│  │ → Used for: streaming, resumption, message replay       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────┘
+```
+
+#### Tool System
+
+AI tools are organized by context:
+
+- **Dashboard tools**: List workspaces, create projects, navigate documents
+- **Sketch tools**: Add points, lines, arcs, apply constraints
+- **Modeling tools**: Extrude, revolve, boolean operations, fillet/chamfer
+- **Client tools**: Navigation, selection, view manipulation (run in browser)
+
+Tools execute in two modes:
+1. **Server-side**: Modeling operations that modify the document (via Yjs updates)
+2. **Client-side**: UI operations like navigation and selection
+
+#### Agent Runtime System
+
+Agents can run in multiple environments with a unified abstraction:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Agent Runtime Architecture                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Main Thread                          Agent Runtime (Worker/Remote)         │
+│  ┌────────────────────┐              ┌────────────────────────────────┐     │
+│  │  AgentClient       │◄────────────►│  AgentRuntime                  │     │
+│  │  • spawn()         │   Messages   │  • Modeling Kernel (OCCT)      │     │
+│  │  • terminate()     │              │  • LLM Connection              │     │
+│  │  • sendMessage()   │              │  • Tool Execution              │     │
+│  │  • onToolCall()    │              │  • Document Sync               │     │
+│  └────────────────────┘              └────────────────────────────────┘     │
+│           │                                        │                        │
+│           │                                        │                        │
+│           ▼                                        ▼                        │
+│  ┌────────────────────┐              ┌────────────────────────────────┐     │
+│  │  Awareness/Yjs     │◄────────────►│  Awareness Client              │     │
+│  │  (presence)        │    Sync      │  (agent appears as user)       │     │
+│  └────────────────────┘              └────────────────────────────────┘     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Runtime Options:
+┌─────────────────────────┐  ┌─────────────────────────┐  ┌────────────────────┐
+│  BrowserAgentRuntime    │  │  EdgeAgentRuntime       │  │  DOAgentRuntime    │
+│  • SharedWorker         │  │  • Cloudflare Worker    │  │  • Durable Object  │
+│  • Worker fallback      │  │  • Vercel Edge          │  │  • Stateful        │
+│  • Local OCCT kernel    │  │  • Remote kernel        │  │  • Persistent      │
+└─────────────────────────┘  └─────────────────────────┘  └────────────────────┘
+```
+
+**Current implementation**: Browser runtime using SharedWorker (with Worker fallback)
+- Modeling kernel (OCCT) runs in worker thread
+- Agents appear in presence/awareness system
+- Generic interface for future remote execution (edge, Durable Objects)
+
+#### Tool Approval System
+
+Three-layer approval system:
+
+1. **Default rules**: Built-in per-tool approval levels
+   - Dashboard: Auto for reads, confirm for destructive operations
+   - Editor: Auto for all operations (everything is undoable via Yjs)
+
+2. **User preferences**: Per-tool overrides stored in localStorage
+   - "Always allow" list (skip confirmation)
+   - "Always confirm" list (require confirmation)
+
+3. **YOLO mode**: Global override to auto-approve everything
+
+### Component Integration
+
+#### How Components Slot Together
+
+1. **User creates a document**:
+   - Metadata → PostgreSQL (via Electric sync)
+   - Document content → Durable Stream (Yjs)
+
+2. **User opens AI chat**:
+   - Session created → PostgreSQL (metadata)
+   - Messages → Durable Stream (`ai-chat/{sessionId}`)
+
+3. **AI executes a tool**:
+   - Tool call → Server API route
+   - Tool implementation → Modifies Yjs document
+   - Document update → Durable Stream → All clients sync
+   - Worker rebuilds → Mesh sent to UI
+
+4. **Multiple users collaborate**:
+   - Electric syncs metadata changes (project structure)
+   - Durable Streams syncs document changes (CRDT merge)
+   - Awareness syncs presence (cursors, selections)
+   - AI agents appear in awareness system
+
+### Key Design Principles
+
+- **Separation of concerns**: Different sync technologies for different data types
+- **Local-first**: All data is available locally, sync happens in background
+- **Conflict-free**: CRDTs ensure automatic merging without conflicts
+- **Real-time**: Changes propagate instantly to all connected clients
+- **Undoable**: All operations are reversible via Yjs undo/redo
+- **Secure**: Authorization enforced at server proxy layer
+- **Extensible**: Agent runtime abstraction supports multiple execution environments
 
 See [`packages/app/src/lib/electric-proxy.ts`](./packages/app/src/lib/electric-proxy.ts) and [`packages/app/src/lib/electric-collections.ts`](./packages/app/src/lib/electric-collections.ts) for Electric integration examples.
 
+See [`plan/23-ai-core-infrastructure.md`](./plan/23-ai-core-infrastructure.md) for detailed AI architecture specification.
+
 ### Key Technologies
 
+**Core Framework:**
 - **TanStack Start**: Full-stack React framework
-- **Electric SQL**: Real-time Postgres sync for metadata
 - **TanStack DB**: Client-side embedded database with live queries
-- **Durable Streams**: Append-only streams for Yjs document persistence
-- **OpenCascade.js**: B-Rep kernel (WASM) for 3D geometry
 - **Drizzle ORM**: Type-safe database queries and migrations
+
+**Sync & Collaboration:**
+- **Electric SQL**: Real-time Postgres sync for structured metadata
+- **Durable Streams**: Append-only streams for Yjs document persistence
 - **Yjs**: CRDT-based collaborative editing
+
+**CAD Kernel:**
+- **OpenCascade.js**: B-Rep kernel (WASM) for 3D geometry operations
+
+**AI Integration:**
+- **TanStack AI**: Unified AI interface with tool calling support
+- **Anthropic Claude**: LLM for chat-based modeling assistance
+- **Agent Runtime**: Background execution system (SharedWorker/Worker)
 
 ## Troubleshooting
 
@@ -381,6 +619,41 @@ This project is an excellent reference implementation for:
   - Handle awareness/presence via separate streams
   - Implement reconnection and error handling
   - Check out `packages/app/src/lib/vendor/y-durable-streams/` for the provider implementation
+
+### Learning AI Integration Architecture
+
+This project demonstrates a production-ready AI integration pattern:
+
+- **Hybrid Storage**: PostgreSQL for metadata + Durable Streams for content
+  - Session metadata in PostgreSQL (fast queries, listing)
+  - Message content in Durable Streams (streaming, resumption)
+  - See `packages/app/src/lib/ai/session-functions.ts` and `persistence.ts`
+
+- **Tool System**: Context-aware tool definitions
+  - Dashboard tools: Project/document management
+  - Sketch tools: 2D geometry creation
+  - Modeling tools: 3D feature operations
+  - Client tools: UI navigation and selection
+  - See `packages/app/src/lib/ai/tools/` for implementations
+
+- **Agent Runtime**: Unified abstraction for multiple execution environments
+  - Browser runtime (SharedWorker/Worker) - current implementation
+  - Edge runtime (Cloudflare Workers) - future
+  - Durable Objects runtime - future
+  - See `packages/app/src/lib/ai/runtime/` for the abstraction
+
+- **Tool Approval**: Three-layer approval system
+  - Default rules per context
+  - User preferences (localStorage)
+  - YOLO mode (global override)
+  - See `packages/app/src/lib/ai/approval.ts` for the registry
+
+- **TanStack AI Integration**: See how to:
+  - Set up TanStack AI with custom adapters
+  - Implement tool calling with server/client split
+  - Handle streaming responses with SSE
+  - Integrate with existing document model (Yjs)
+  - Reference: [TanStack AI Documentation](https://tanstack.com/ai/latest)
 
 ## License
 

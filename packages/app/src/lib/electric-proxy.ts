@@ -163,3 +163,14 @@ export const foldersProxy = createElectricProxy("folders", (userId) => {
     params: [userId],
   };
 });
+
+/**
+ * Proxy for AI chat sessions
+ * Shape: chat sessions owned by the user
+ */
+export const aiChatSessionsProxy = createElectricProxy("ai_chat_sessions", (userId) => {
+  return {
+    where: `user_id = $1`,
+    params: [userId],
+  };
+});

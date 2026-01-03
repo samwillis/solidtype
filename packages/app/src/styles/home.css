@@ -219,6 +219,17 @@
   margin: 0 auto 2.5rem;
 }
 
+.home-hero-strap a {
+  color: var(--color-accent);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.home-hero-strap a:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
 .home-hero-actions {
   display: flex;
   align-items: center;
@@ -451,6 +462,24 @@
   line-height: 1.6;
   color: var(--color-text-secondary);
   margin: 0;
+}
+
+.home-showcase-also {
+  margin-top: 2rem;
+  font-size: 1rem;
+  color: var(--color-text-secondary);
+}
+
+.home-showcase-also a {
+  color: var(--color-accent);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.15s ease;
+}
+
+.home-showcase-also a:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
 }
 
 /* CTA section */

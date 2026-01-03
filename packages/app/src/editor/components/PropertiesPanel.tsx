@@ -1753,7 +1753,7 @@ const PropertiesPanel: React.FC = () => {
     }
   };
 
-  const content = showAIChat ? <AIPanel /> : renderProperties();
+  const content = showAIChat ? <AIPanel context="editor" /> : renderProperties();
 
   return (
     <>

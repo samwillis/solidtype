@@ -34,6 +34,9 @@ import {
   createProjectMutation,
   updateProjectMutation,
   deleteProjectMutation,
+  createChatSessionMutation,
+  updateChatSessionMutation,
+  deleteChatSessionMutation,
 } from "./server-functions";
 
 // ============================================================================
@@ -106,12 +109,28 @@ export const projectSchema = z.object({
   updated_at: z.string().datetime(),
 });
 
+export const aiChatSessionSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string(), // text ID from better-auth
+  context: z.enum(["dashboard", "editor"]),
+  document_id: z.string().uuid().nullable(),
+  project_id: z.string().uuid().nullable(),
+  status: z.enum(["active", "archived", "error"]),
+  title: z.string().nullable(),
+  message_count: z.number(),
+  last_message_at: z.string().nullable(), // Relaxed from .datetime() - PG format may vary
+  durable_stream_id: z.string().nullable(),
+  created_at: z.string(), // Relaxed from .datetime() - PG format may vary
+  updated_at: z.string(), // Relaxed from .datetime() - PG format may vary
+});
+
 // Type exports
 export type Branch = z.infer<typeof branchSchema>;
 export type Document = z.infer<typeof documentSchema>;
 export type Folder = z.infer<typeof folderSchema>;
 export type Workspace = z.infer<typeof workspaceSchema>;
 export type Project = z.infer<typeof projectSchema>;
+export type AIChatSession = z.infer<typeof aiChatSessionSchema>;
 
 // ============================================================================
 // Singleton Collections (one per table)
@@ -319,6 +338,41 @@ export const foldersCollection = createCollection(
     onDelete: async ({ transaction }) => {
       const deleted = transaction.mutations[0].original;
       const { txid } = await deleteFolderMutation({ data: { folderId: deleted.id } });
+      return { txid };
+    },
+  })
+);
+
+/**
+ * AI Chat Sessions collection
+ * Syncs all chat sessions for the authenticated user.
+ */
+export const aiChatSessionsCollection = createCollection(
+  electricCollectionOptions({
+    id: "ai_chat_sessions",
+    schema: aiChatSessionSchema,
+    getKey: (row) => row.id,
+    shapeOptions: {
+      url: `${getApiBase()}/api/shapes/ai-chat-sessions`,
+      parser: {
+        timestamptz: (date: string) => date,
+      },
+    },
+    onInsert: async ({ transaction }) => {
+      const newSession = transaction.mutations[0].modified;
+      const { txid } = await createChatSessionMutation({ data: { session: newSession } });
+      return { txid };
+    },
+    onUpdate: async ({ transaction }) => {
+      const updated = transaction.mutations[0].modified;
+      const { txid } = await updateChatSessionMutation({
+        data: { sessionId: updated.id, updates: updated },
+      });
+      return { txid };
+    },
+    onDelete: async ({ transaction }) => {
+      const deleted = transaction.mutations[0].original;
+      const { txid } = await deleteChatSessionMutation({ data: { sessionId: deleted.id } });
       return { txid };
     },
   })

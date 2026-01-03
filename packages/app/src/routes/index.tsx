@@ -88,14 +88,16 @@ function Home() {
             <div className="home-hero-alpha-badge">Very Alpha!</div>
             <h1 className="home-hero-title">Modern CAD, Built for the Web</h1>
             <h2 className="home-hero-subtitle">
-              Demonstrating how to build a collaborative application, with agentic AI, using{" "}
+              Demonstrating how to build a collaborative application with agentic AI, using{" "}
               <a href="https://electric-sql.com/" target="_blank" rel="noopener noreferrer">
                 ElectricSQL
               </a>
               ,{" "}
               <a href="https://tanstack.com/db" target="_blank" rel="noopener noreferrer">
                 TanStack&nbsp;DB
-              </a>
+              </a>{" "}
+              and{" "}
+              <a href="https://tanstack.com/ai" target="_blank" rel="noopener noreferrer">AI</a>
               ,{" "}
               <a
                 href="https://github.com/durable-streams/durable-streams"
@@ -103,16 +105,20 @@ function Home() {
                 rel="noopener noreferrer"
               >
                 Durable&nbsp;Streams
-              </a>{" "}
-              and{" "}
+              </a>
+              , and{" "}
               <a href="https://yjs.dev/" target="_blank" rel="noopener noreferrer">
                 Yjs
               </a>
               .
             </h2>
             <p className="home-hero-strap">
-              A web-based parametric CAD application powered by OpenCascade.js. Create complex 3D
-              models with 2D sketches, constraints, and AI assistance—all in your browser.
+              A web-based parametric CAD application powered by{" "}
+              <a href="https://ocjs.org" target="_blank" rel="noopener noreferrer">
+                OpenCascade.js
+              </a>
+              . Create complex 3D models with 2D sketches, constraints, and AI assistance—all in your
+              browser.
             </p>
             <div className="home-hero-actions">
               <Link to="/signup" className="home-cta-primary">
@@ -329,7 +335,39 @@ function Home() {
                 <h3>TanStack DB</h3>
                 <p>Client-side embedded database with live queries powered by Electric SQL</p>
               </a>
+              <a
+                href="https://tanstack.com/ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="home-showcase-tech-item"
+              >
+                <div className="home-showcase-logo">
+                  <img
+                    src={tanstackLogo}
+                    alt="TanStack AI"
+                    className="home-showcase-logo-img"
+                    style={{ width: "60px", height: "60px" }}
+                  />
+                </div>
+                <h3>TanStack AI</h3>
+                <p>Unified AI interface across providers with type-safe tool calling support</p>
+              </a>
             </div>
+            <p className="home-showcase-also">
+              Also built with{" "}
+              <a href="https://tanstack.com/start" target="_blank" rel="noopener noreferrer">
+                TanStack Start
+              </a>
+              ,{" "}
+              <a href="https://orm.drizzle.team" target="_blank" rel="noopener noreferrer">
+                Drizzle
+              </a>
+              , and{" "}
+              <a href="https://ocjs.org" target="_blank" rel="noopener noreferrer">
+                OpenCascade.js
+              </a>
+              .
+            </p>
           </div>
         </section>
 
@@ -351,13 +389,8 @@ function Home() {
       <footer className="home-footer">
         <div className="home-footer-content">
           <p className="home-footer-text">
-            SolidType is an open-source, modern, history-capable, parametric CAD application. Built
-            with TypeScript, React, OpenCascade.js, Electric SQL, and Durable Streams.
-          </p>
-          <p className="home-footer-links">
-            This project serves as a production reference implementation for Electric SQL and
-            Durable Streams, demonstrating how to build collaborative applications with local-first
-            architecture.
+            SolidType is an open-source, modern, parametric CAD application demonstrating how to
+            build collaborative, local-first applications with real-time sync and AI assistance.
           </p>
           <p className="home-footer-links">
             <a

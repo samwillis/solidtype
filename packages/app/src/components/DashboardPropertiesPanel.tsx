@@ -222,7 +222,7 @@ const DashboardPropertiesPanel: React.FC<DashboardPropertiesPanelProps> = ({
     </Tooltip.Provider>
   );
 
-  const content = showAIChat ? <AIPanel /> : null;
+  const content = showAIChat ? <AIPanel context="dashboard" projectId={currentProjectId} /> : null;
 
   return (
     <>

@@ -37,3 +37,12 @@ export type { Folder, NewFolder } from "./folders";
 
 export { documents, documentsRelations, documentTypeEnum } from "./documents";
 export type { Document, NewDocument, DocumentType } from "./documents";
+
+// AI Chat Sessions
+export {
+  aiChatSessions,
+  aiChatSessionsRelations,
+  aiChatContextEnum,
+  aiChatStatusEnum,
+} from "./ai-chat-sessions";
+export type { AIChatSession, NewAIChatSession, AIChatContext, AIChatStatus } from "./ai-chat-sessions";

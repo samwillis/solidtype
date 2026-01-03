@@ -21,6 +21,7 @@ import {
   branches,
   documents,
   folders,
+  aiChatSessions,
 } from "../db/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 
@@ -1493,4 +1494,80 @@ export const removeProjectMemberMutation = createServerFn({ method: "POST" })
       );
 
     return { success: true };
+  });
+
+// AI Chat Session mutations
+export const createChatSessionMutation = createServerFn({ method: "POST" })
+  .inputValidator((d: { session: any }) => d)
+  // @ts-expect-error - request is provided at runtime by TanStack Start
+  .handler(async ({ data, request }) => {
+    const session = await requireAuth(request);
+
+    const sessionId = crypto.randomUUID();
+    const durableStreamId = `ai-chat/${sessionId}`;
+
+    const [created] = await db
+      .insert(aiChatSessions)
+      .values({
+        id: sessionId,
+        userId: session.user.id, // Override with session user ID for security
+        context: data.session.context,
+        documentId: data.session.documentId || null,
+        projectId: data.session.projectId || null,
+        title: data.session.title || "New Chat",
+        durableStreamId,
+      })
+      .returning();
+
+    const txid = await getCurrentTxid();
+    return { data: created, txid };
+  });
+
+export const updateChatSessionMutation = createServerFn({ method: "POST" })
+  .inputValidator((d: { sessionId: string; updates: any }) => d)
+  // @ts-expect-error - request is provided at runtime by TanStack Start
+  .handler(async ({ data, request }) => {
+    const session = await requireAuth(request);
+
+    // Ensure user owns the session
+    const existing = await db.query.aiChatSessions.findFirst({
+      where: and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, session.user.id)),
+    });
+
+    if (!existing) {
+      throw new Error("Session not found or access denied");
+    }
+
+    const [updated] = await db
+      .update(aiChatSessions)
+      .set({
+        ...data.updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(aiChatSessions.id, data.sessionId))
+      .returning();
+
+    const txid = await getCurrentTxid();
+    return { data: updated, txid };
+  });
+
+export const deleteChatSessionMutation = createServerFn({ method: "POST" })
+  .inputValidator((d: { sessionId: string }) => d)
+  // @ts-expect-error - request is provided at runtime by TanStack Start
+  .handler(async ({ data, request }) => {
+    const session = await requireAuth(request);
+
+    // Ensure user owns the session
+    const existing = await db.query.aiChatSessions.findFirst({
+      where: and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, session.user.id)),
+    });
+
+    if (!existing) {
+      throw new Error("Session not found or access denied");
+    }
+
+    await db.delete(aiChatSessions).where(eq(aiChatSessions.id, data.sessionId));
+
+    const txid = await getCurrentTxid();
+    return { data: { id: data.sessionId }, txid };
   });
