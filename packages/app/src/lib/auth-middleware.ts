@@ -5,8 +5,18 @@
 import { auth } from "./auth";
 
 /**
+ * Authentication error that can be caught and converted to a Response
+ */
+export class AuthenticationError extends Error {
+  constructor() {
+    super("Unauthorized");
+    this.name = "AuthenticationError";
+  }
+}
+
+/**
  * Require authentication for a request
- * Throws 401 if not authenticated
+ * Throws AuthenticationError if not authenticated
  */
 export async function requireAuth(request: Request) {
   const session = await auth.api.getSession({
@@ -14,7 +24,7 @@ export async function requireAuth(request: Request) {
   });
 
   if (!session) {
-    throw new Response("Unauthorized", { status: 401 });
+    throw new AuthenticationError();
   }
 
   return session;

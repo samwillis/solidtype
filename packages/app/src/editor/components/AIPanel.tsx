@@ -53,10 +53,47 @@ const AIPanel: React.FC<AIPanelProps> = ({ context = "editor", documentId, proje
   const activeSessions = sessions.filter((s) => s.status === "active");
   const archivedSessions = sessions.filter((s) => s.status === "archived");
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom only during active streaming
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const wasLoadingRef = useRef(false);
+  const userScrolledRef = useRef(false);
+
+  // Track if user manually scrolled away during streaming
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      // If user scrolls while loading, mark it
+      if (isLoading) {
+        const isNearBottom =
+          container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+        if (!isNearBottom) {
+          userScrolledRef.current = true;
+        }
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [isLoading]);
+
+  // Auto-scroll during streaming (unless user scrolled away)
+  useEffect(() => {
+    // Only auto-scroll if:
+    // 1. We're actively loading/streaming
+    // 2. User hasn't manually scrolled away
+    if (isLoading && !userScrolledRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+
+    // Reset user scroll flag when loading starts fresh
+    if (isLoading && !wasLoadingRef.current) {
+      userScrolledRef.current = false;
+    }
+
+    wasLoadingRef.current = isLoading;
+  }, [messages, isLoading]);
 
   // Calculate position for history dropdown
   const updateHistoryPosition = useCallback(() => {
@@ -281,18 +318,23 @@ const AIPanel: React.FC<AIPanelProps> = ({ context = "editor", documentId, proje
             </div>
           </div>
         ) : (
-          <div className="ai-panel-messages">
-            {messages.map((msg, idx) => (
-              <div key={msg.id || idx} className={`ai-panel-message ai-panel-message-${msg.role}`}>
-                {msg.role === "assistant" ? (
-                  <div className="ai-panel-markdown">
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
-                  </div>
-                ) : (
-                  msg.content
-                )}
-              </div>
-            ))}
+          <div className="ai-panel-messages" ref={messagesContainerRef}>
+            {messages
+              .filter((msg) => msg.role === "user" || msg.role === "assistant")
+              .map((msg, idx) => (
+                <div
+                  key={msg.id || idx}
+                  className={`ai-panel-message ai-panel-message-${msg.role}`}
+                >
+                  {msg.role === "assistant" ? (
+                    <div className="ai-panel-markdown">
+                      <ReactMarkdown>{msg.content || ""}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    msg.content
+                  )}
+                </div>
+              ))}
             {isLoading && (
               <div className="ai-panel-message ai-panel-message-assistant ai-panel-message-loading">
                 <span className="ai-panel-loading-dots">

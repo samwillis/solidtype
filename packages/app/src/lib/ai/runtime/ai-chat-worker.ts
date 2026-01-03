@@ -1,11 +1,13 @@
 /**
  * AI Chat SharedWorker
  *
- * Manages local session state and CAD kernel instance for local tool execution.
+ * Manages local session state, run coordination, and CAD kernel instance.
  * LLM calls remain server-side, this worker handles:
  * - Session state management
+ * - Run coordination across tabs (single run at a time per session)
  * - CAD kernel initialization (for editor context)
  * - Local tool execution (Phase 25/26)
+ * - Idle shutdown after inactivity
  */
 
 /// <reference lib="webworker" />
@@ -26,6 +28,25 @@ let initializationPromise: Promise<void> | null = null;
 // Connection management for SharedWorker
 const ports = new Set<MessagePort>();
 
+// Idle shutdown configuration
+const IDLE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+let lastActivity = Date.now();
+
+// Check for idle shutdown periodically
+const idleCheckInterval = setInterval(() => {
+  if (ports.size === 0 && Date.now() - lastActivity > IDLE_TIMEOUT_MS) {
+    console.log("[AI Chat Worker] Idle timeout, shutting down");
+    if (kernelSession) {
+      kernelSession.dispose();
+    }
+    clearInterval(idleCheckInterval);
+    self.close();
+  }
+}, 30_000);
+
+/**
+ * Broadcast an event to all connected ports
+ */
 function broadcast(event: AIChatWorkerEvent) {
   for (const port of ports) {
     try {
@@ -34,7 +55,7 @@ function broadcast(event: AIChatWorkerEvent) {
       console.error("[AI Chat Worker] Error posting to port:", e);
     }
   }
-  // Also post to self if regular Worker
+  // Also post to self if regular Worker (no ports)
   if (typeof self !== "undefined" && "postMessage" in self && ports.size === 0) {
     self.postMessage(event);
   }
@@ -76,6 +97,8 @@ async function ensureKernelInitialized(): Promise<void> {
  * Handle commands from main thread
  */
 async function handleCommand(command: AIChatWorkerCommand) {
+  lastActivity = Date.now();
+
   try {
     switch (command.type) {
       case "init-session": {
@@ -85,6 +108,7 @@ async function handleCommand(command: AIChatWorkerCommand) {
           documentId,
           projectId,
           kernelInitialized: false,
+          activeRunId: null,
         });
 
         // Initialize kernel if we have a documentId (editor context)
@@ -98,6 +122,93 @@ async function handleCommand(command: AIChatWorkerCommand) {
         }
 
         broadcast({ type: "session-ready", sessionId });
+        break;
+      }
+
+      case "start-run": {
+        const { sessionId, content } = command;
+        const session = sessions.get(sessionId);
+
+        if (!session) {
+          broadcast({
+            type: "run-rejected",
+            sessionId,
+            reason: "session-not-initialized",
+          });
+          return;
+        }
+
+        if (session.activeRunId) {
+          broadcast({
+            type: "run-rejected",
+            sessionId,
+            reason: "already-running",
+          });
+          return;
+        }
+
+        // Call server /run endpoint
+        // Note: credentials: 'include' is required to pass auth cookies from worker
+        try {
+          const response = await fetch(`/api/ai/sessions/${sessionId}/run`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ content }),
+          });
+
+          if (response.status === 409) {
+            // Run already in progress (detected server-side)
+            const data = await response.json();
+            session.activeRunId = data.runId;
+            broadcast({
+              type: "run-rejected",
+              sessionId,
+              reason: "already-running",
+            });
+            return;
+          }
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            broadcast({
+              type: "run-error",
+              sessionId,
+              error: errorData.error || `HTTP ${response.status}`,
+            });
+            return;
+          }
+
+          const { runId, userMessageId, assistantMessageId } = await response.json();
+          session.activeRunId = runId;
+
+          broadcast({
+            type: "run-started",
+            sessionId,
+            runId,
+            userMessageId,
+            assistantMessageId,
+          });
+
+          // Note: Run completion is detected by the UI observing Durable State
+          // The UI will call run-complete when it sees the run status change
+        } catch (err) {
+          broadcast({
+            type: "run-error",
+            sessionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        break;
+      }
+
+      case "run-complete": {
+        const { sessionId } = command;
+        const session = sessions.get(sessionId);
+        if (session) {
+          session.activeRunId = null;
+        }
+        broadcast({ type: "run-complete", sessionId });
         break;
       }
 
@@ -140,7 +251,7 @@ async function handleCommand(command: AIChatWorkerCommand) {
     broadcast({
       type: "error",
       message: error instanceof Error ? error.message : String(error),
-      sessionId: command.type === "init-session" ? command.sessionId : undefined,
+      sessionId: "sessionId" in command ? command.sessionId : undefined,
     });
   }
 }

@@ -244,6 +244,14 @@
   overflow-x: hidden; /* Prevent horizontal scroll, but allow vertical */
 }
 
+/* When containing AI panel, don't scroll - let AI panel handle its own scrolling */
+.properties-panel-content:has(.ai-panel) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
 .properties-panel-content:not(:empty) {
   border-top: 1px solid var(--color-border);
 }

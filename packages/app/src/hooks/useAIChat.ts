@@ -1,17 +1,46 @@
 /**
  * AI Chat Hook
  *
- * Simple hook for managing AI chat UI state.
- * Makes direct fetch calls to /api/ai/chat (no TanStack AI React hooks).
- * The actual AI logic runs server-side.
+ * Hook for managing AI chat UI state with Durable State persistence.
+ * Uses live queries to subscribe to chat transcript updates across tabs.
+ *
+ * Architecture:
+ * - StreamDB provides live queries over Durable Streams
+ * - Messages and chunks are hydrated into a complete transcript
+ * - Runs are coordinated via SharedWorker to prevent conflicts
+ * - All state survives page refresh and is synced across tabs
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useLiveQuery } from "@tanstack/react-db";
 import { useAuth } from "./useAuth";
-import { loadChatHistory, persistChunk } from "../lib/ai/persistence";
-import { updateChatSession } from "../lib/ai/session-functions";
-import { aiChatSessionsCollection, type AIChatSession } from "../lib/electric-collections";
+import { createChatStreamDB, type ChatStreamDB } from "../lib/ai/state/db";
+import { hydrateFromArrays } from "../lib/ai/state/hydrate";
+import {
+  approveToolCall as approveToolCallState,
+  rejectToolCall as rejectToolCallState,
+} from "../lib/ai/state/tool-approval";
+import type { Message, Chunk, Run } from "../lib/ai/state/schema";
+import { aiChatSessionsCollection } from "../lib/electric-collections";
+import { createChatSessionDirect } from "../lib/server-functions";
+
+/**
+ * Camel-case session type (converted from snake_case DB schema)
+ */
+interface CamelCaseSession {
+  id: string;
+  userId: string;
+  context: "dashboard" | "editor";
+  documentId: string | null;
+  projectId: string | null;
+  status: "active" | "archived" | "error";
+  title: string | null;
+  messageCount: number;
+  lastMessageAt: string | null;
+  durableStreamId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 import { getAIChatWorkerClient } from "../lib/ai/runtime/ai-chat-worker-client";
 
 interface UseAIChatOptions {
@@ -22,15 +51,21 @@ interface UseAIChatOptions {
 
 interface ChatMessage {
   id: string;
-  role: "user" | "assistant" | "tool" | "system";
+  role: "user" | "assistant" | "tool" | "system" | "error";
   content: string;
+  toolName?: string;
+  toolArgs?: unknown;
+  toolCallId?: string;
+  toolResult?: unknown;
+  requiresApproval?: boolean;
+  status?: string;
 }
 
 interface ToolApprovalRequest {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
-  resolve: (approved: boolean) => void;
+  messageId: string;
 }
 
 /**
@@ -52,7 +87,7 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
   );
 
   // Transform to camelCase for compatibility
-  const sessions: AIChatSession[] = sortedSessions.map((row) => ({
+  const sessions: CamelCaseSession[] = sortedSessions.map((row) => ({
     id: row.id,
     userId: row.user_id,
     context: row.context,
@@ -154,7 +189,7 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
 }
 
 /**
- * Main chat hook - simple fetch-based implementation
+ * Main chat hook - uses Durable State for persistence and live queries
  *
  * Session creation is LAZY - no session is created until the user sends their first message.
  * This prevents creating empty sessions just by opening the chat UI.
@@ -162,11 +197,14 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
 export function useAIChat(options: UseAIChatOptions) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [streamDb, setStreamDb] = useState<ChatStreamDB | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [toolApprovalRequests, setToolApprovalRequests] = useState<ToolApprovalRequest[]>([]);
-  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Track messages and chunks from StreamDB
+  const [messagesData, setMessagesData] = useState<Message[]>([]);
+  const [chunksData, setChunksData] = useState<Chunk[]>([]);
+  const [runsData, setRunsData] = useState<Run[]>([]);
 
   const {
     sessions,
@@ -176,7 +214,6 @@ export function useAIChat(options: UseAIChatOptions) {
     archiveSession,
     unarchiveSession,
     deleteSession,
-    refetch: refetchSessions,
   } = useAIChatSessions({ context: options.context });
 
   // Find existing active session for this context on initial load (but don't create one)
@@ -243,6 +280,91 @@ export function useAIChat(options: UseAIChatOptions) {
     createSession,
   ]);
 
+  // Create StreamDB when session changes
+  useEffect(() => {
+    if (!activeSessionId) {
+      setStreamDb(null);
+      setMessagesData([]);
+      setChunksData([]);
+      setRunsData([]);
+      return;
+    }
+
+    let db: ChatStreamDB | null = null;
+    let cancelled = false;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let retryCount = 0;
+    const MAX_RETRIES = 5;
+    const RETRY_DELAY = 500; // 500ms between retries
+
+    const updateState = () => {
+      if (cancelled || !db) return;
+      setMessagesData(Array.from(db.collections.messages.values()));
+      setChunksData(Array.from(db.collections.chunks.values()));
+      setRunsData(Array.from(db.collections.runs.values()));
+    };
+
+    const tryPreload = async (): Promise<boolean> => {
+      if (cancelled) return false;
+
+      try {
+        await db!.preload();
+        return true;
+      } catch (err) {
+        // If we get a 403, it might be because the session doesn't exist
+        // or belongs to another user. After retries, clear the session.
+        const is403 = err instanceof Error && err.message.includes("403");
+        if (is403 && retryCount < MAX_RETRIES) {
+          retryCount++;
+          console.debug(
+            `[useAIChat] StreamDB preload failed (attempt ${retryCount}/${MAX_RETRIES}), retrying...`
+          );
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+          return tryPreload();
+        }
+        throw err;
+      }
+    };
+
+    (async () => {
+      db = createChatStreamDB(activeSessionId);
+
+      try {
+        await tryPreload();
+        if (!cancelled) {
+          setStreamDb(db);
+          updateState();
+
+          // Poll for updates while the session is active
+          pollInterval = setInterval(() => {
+            if (!cancelled && db) {
+              updateState();
+            }
+          }, 100);
+        }
+      } catch (err) {
+        console.error("[useAIChat] Failed to preload StreamDB:", err);
+
+        // If we get 403 after all retries, the session is invalid
+        // Clear it so the user can start fresh
+        const is403 = err instanceof Error && err.message.includes("403");
+        if (is403 && !cancelled) {
+          console.warn("[useAIChat] Session appears invalid (403), clearing...");
+          setActiveSessionId(null);
+          setStreamDb(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+      db?.close();
+    };
+  }, [activeSessionId]);
+
   // Initialize session in worker when it becomes active
   useEffect(() => {
     if (!activeSessionId) return;
@@ -269,16 +391,43 @@ export function useAIChat(options: UseAIChatOptions) {
     };
   }, [activeSessionId, sessions]);
 
-  // Load history from Durable Stream when session changes
+  // Hydrate transcript from messages and chunks
+  const transcript = useMemo(() => {
+    return hydrateFromArrays(messagesData, chunksData);
+  }, [messagesData, chunksData]);
+
+  // Convert hydrated transcript to ChatMessage format for UI compatibility
+  const messages: ChatMessage[] = useMemo(() => {
+    return transcript.map((m) => ({
+      id: m.id,
+      role: m.role === "tool_call" || m.role === "tool_result" ? "tool" : m.role,
+      content: m.content,
+      toolName: m.toolName,
+      toolArgs: m.toolArgs,
+      toolCallId: m.toolCallId,
+      toolResult: m.toolResult,
+      requiresApproval: m.requiresApproval,
+      status: m.status,
+    }));
+  }, [transcript]);
+
+  // Check if there's an active run
+  const activeRun = useMemo(() => {
+    return runsData.find((r) => r.status === "running");
+  }, [runsData]);
+
+  const isStreaming = activeRun !== undefined;
+
+  // Notify worker when run completes
+  const prevActiveRun = useRef<Run | undefined>();
   useEffect(() => {
-    if (activeSessionId) {
-      loadChatHistory(activeSessionId).then((history) => {
-        if (history.length > 0) {
-          setMessages(history);
-        }
-      });
+    if (prevActiveRun.current && !activeRun && activeSessionId) {
+      // Run just completed
+      const workerClient = getAIChatWorkerClient();
+      workerClient.notifyRunComplete(activeSessionId);
     }
-  }, [activeSessionId]);
+    prevActiveRun.current = activeRun;
+  }, [activeRun, activeSessionId]);
 
   // Computed ready state - ready to send messages (session will be created on first send)
   const isReady = isAuthenticated && sessionsLoaded;
@@ -293,207 +442,132 @@ export function useAIChat(options: UseAIChatOptions) {
         throw new Error("Sessions not loaded yet");
       }
 
-      // Ensure we have a session before sending
-      const session = activeSessionId ? { id: activeSessionId } : await ensureSession();
-
-      // Add user message to UI
-      const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content,
-      };
-      setMessages((prev) => [...prev, userMessage]);
       setIsLoading(true);
       setError(null);
 
-      // Abort any existing request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      abortControllerRef.current = new AbortController();
-
-      // Generate assistant message ID early so we can reference it in catch block
-      const assistantMessageId = crypto.randomUUID();
-      let assistantMessageAdded = false;
-
       try {
-        // Send to API
-        const response = await fetch("/api/ai/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId: session.id,
-            messages: [...messages, userMessage].map((m) => ({
-              role: m.role,
-              content: m.content,
-            })),
-            context: options.context,
-            documentId: options.documentId,
-            projectId: options.projectId,
-          }),
-          signal: abortControllerRef.current.signal,
-        });
+        // Ensure we have a session before sending
+        let sessionId = activeSessionId;
 
-        if (!response.ok) {
-          throw new Error(`Chat request failed: ${response.statusText}`);
-        }
+        if (!sessionId) {
+          // Check if there's already an active session in the list
+          const existingSession = sessions.find(
+            (s) =>
+              s.status === "active" &&
+              (options.context === "editor"
+                ? s.documentId === options.documentId
+                : s.context === "dashboard")
+          );
 
-        // Read SSE stream
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error("No response body");
-
-        const decoder = new TextDecoder();
-        let assistantContent = "";
-
-        // Add assistant message placeholder
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: assistantMessageId,
-            role: "assistant",
-            content: "",
-          },
-        ]);
-        assistantMessageAdded = true;
-
-        // Buffer for incomplete SSE lines
-        let sseBuffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          sseBuffer += chunk;
-
-          // Parse complete SSE events (split by double newline)
-          const events = sseBuffer.split("\n\n");
-          // Keep incomplete event in buffer
-          sseBuffer = events.pop() || "";
-
-          for (const event of events) {
-            const lines = event.split("\n");
-            for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                const data = line.slice(6);
-                if (data === "[DONE]") continue;
-                try {
-                  const parsed = JSON.parse(data);
-                  // TanStack AI StreamChunk format:
-                  // type: 'content' | 'tool_call' | 'tool_result' | 'done' | 'error' | ...
-                  // For 'content' type:
-                  //   delta: string (incremental token)
-                  //   content: string (full accumulated content)
-                  if (parsed.type === "content") {
-                    // Use delta for incremental updates (preferred)
-                    if (parsed.delta) {
-                      assistantContent += parsed.delta;
-                      // Persist each chunk to Durable Streams
-                      persistChunk(session.id, {
-                        type: "assistant-chunk",
-                        messageId: assistantMessageId,
-                        content: parsed.delta,
-                        timestamp: new Date().toISOString(),
-                      }).catch((error) => {
-                        console.debug("Failed to persist assistant chunk:", error);
-                        // Non-fatal - continue even if persistence fails
-                      });
-                    } else if (parsed.content !== undefined) {
-                      // Fallback to full content if no delta
-                      assistantContent = parsed.content;
-                    }
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMessageId ? { ...m, content: assistantContent } : m
-                      )
-                    );
-                  } else if (parsed.type === "done") {
-                    // Message complete - persist completion marker
-                    persistChunk(session.id, {
-                      type: "assistant-complete",
-                      messageId: assistantMessageId,
-                      timestamp: new Date().toISOString(),
-                    }).catch((error) => {
-                      console.debug("Failed to persist assistant complete:", error);
-                    });
-                  }
-                } catch {
-                  // Ignore parse errors for non-JSON lines
-                }
-              }
-            }
+          if (existingSession) {
+            sessionId = existingSession.id;
+            setActiveSessionId(sessionId);
+          } else {
+            // Create a new session using the direct server function
+            // This is synchronous - it waits for the server to create the session
+            // before returning, avoiding race conditions with Electric sync
+            console.debug("[useAIChat] Creating new session via direct server call...");
+            const newSession = await createChatSessionDirect({
+              data: {
+                context: options.context,
+                documentId: options.documentId,
+                projectId: options.projectId,
+              },
+            });
+            sessionId = newSession.id;
+            setActiveSessionId(sessionId);
+            console.debug("[useAIChat] Session created:", sessionId);
           }
         }
 
-        // Update message count in PostgreSQL
-        await updateChatSession({
-          data: {
-            sessionId: session.id,
-            messageCount: messages.length + 2,
-          },
+        // Call the run endpoint directly from main thread (cookies work here)
+        // The worker is only used for CAD kernel operations, not HTTP requests
+        const response = await fetch(`/api/ai/sessions/${sessionId}/run`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ content }),
         });
 
-        // Auto-generate title from first message
-        if (messages.length === 0) {
-          const title = content.slice(0, 50) + (content.length > 50 ? "..." : "");
-          await updateChatSession({
-            data: { sessionId: session.id, title },
-          });
-          refetchSessions();
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}`);
         }
+
+        // Run has started - UI will update via live queries from Durable State
+        // StreamDB subscription will automatically show streaming content
       } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") {
-          // Request was cancelled, ignore
-          return;
-        }
         console.error("AI chat error:", err);
         setError(err instanceof Error ? err : new Error("Unknown error"));
-        // Remove the empty assistant placeholder on error (keep user message)
-        if (assistantMessageAdded) {
-          setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
-        }
       } finally {
         setIsLoading(false);
-        abortControllerRef.current = null;
       }
     },
     [
-      messages,
-      options,
       activeSessionId,
-      ensureSession,
-      refetchSessions,
+      sessions,
       isAuthenticated,
       sessionsLoaded,
+      options.context,
+      options.documentId,
+      options.projectId,
     ]
   );
 
-  // Tool approval handlers
-  const approveToolCall = useCallback((requestId: string) => {
-    setToolApprovalRequests((prev) => {
-      const request = prev.find((r) => r.id === requestId);
-      if (request) {
-        request.resolve(true);
-      }
-      return prev.filter((r) => r.id !== requestId);
-    });
-  }, []);
+  // Derive pending tool approvals from messages
+  const pendingToolApprovals: ToolApprovalRequest[] = useMemo(() => {
+    return messagesData
+      .filter(
+        (m) => m.role === "tool_call" && m.status === "pending" && m.requiresApproval === true
+      )
+      .map((m) => ({
+        id: m.toolCallId || m.id,
+        name: m.toolName || "",
+        arguments: (m.toolArgs as Record<string, unknown>) || {},
+        messageId: m.id,
+      }));
+  }, [messagesData]);
 
-  const rejectToolCall = useCallback((requestId: string) => {
-    setToolApprovalRequests((prev) => {
-      const request = prev.find((r) => r.id === requestId);
-      if (request) {
-        request.resolve(false);
+  // Tool approval handlers - update state via Durable State
+  const approveToolCall = useCallback(
+    async (messageId: string) => {
+      if (!streamDb) {
+        console.error("Cannot approve tool call: StreamDB not initialized");
+        return;
       }
-      return prev.filter((r) => r.id !== requestId);
-    });
-  }, []);
+      try {
+        await approveToolCallState(streamDb, messageId);
+      } catch (err) {
+        console.error("Failed to approve tool call:", err);
+        setError(err instanceof Error ? err : new Error("Failed to approve tool call"));
+      }
+    },
+    [streamDb]
+  );
+
+  const rejectToolCall = useCallback(
+    async (messageId: string) => {
+      if (!streamDb) {
+        console.error("Cannot reject tool call: StreamDB not initialized");
+        return;
+      }
+      try {
+        await rejectToolCallState(streamDb, messageId);
+      } catch (err) {
+        console.error("Failed to reject tool call:", err);
+        setError(err instanceof Error ? err : new Error("Failed to reject tool call"));
+      }
+    },
+    [streamDb]
+  );
 
   // Start new chat - just clears UI state, session is created on first message
   const startNewChat = useCallback(() => {
     setActiveSessionId(null);
-    setMessages([]);
     setError(null);
+    setMessagesData([]);
+    setChunksData([]);
+    setRunsData([]);
   }, []);
 
   // Switch to existing session (unarchives if needed)
@@ -509,8 +583,7 @@ export function useAIChat(options: UseAIChatOptions) {
 
       setActiveSessionId(sessionId);
       setError(null);
-      const history = await loadChatHistory(sessionId);
-      setMessages(history);
+      // StreamDB will be created by the effect when activeSessionId changes
     },
     [sessions, unarchiveSession]
   );
@@ -552,7 +625,7 @@ export function useAIChat(options: UseAIChatOptions) {
   return {
     // Chat state
     messages,
-    isLoading,
+    isLoading: isLoading || isStreaming,
     error,
     // Auth state
     isAuthenticated,
@@ -562,7 +635,7 @@ export function useAIChat(options: UseAIChatOptions) {
     sessionsLoading: sessionsLoading || authLoading,
     activeSessionId,
     // Tool approval
-    toolApprovalRequests,
+    toolApprovalRequests: pendingToolApprovals,
     approveToolCall,
     rejectToolCall,
     // Actions

@@ -13,3 +13,12 @@ export type { DashboardClientToolName, EditorClientToolName, ClientToolName } fr
 
 // Tool implementations (server-side) - Phase 24
 export { getDashboardTools } from "./dashboard-impl";
+
+// Tool execution registry (server vs local)
+export {
+  getToolExecutionMode,
+  isLocalTool,
+  isServerTool,
+  registerToolExecutionMode,
+} from "./execution-registry";
+export type { ToolExecutionMode } from "./execution-registry";

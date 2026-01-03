@@ -247,11 +247,10 @@ function raycastEdges(
       const rayScreenPoint = closestOnRay.clone().project(camera);
 
       // Convert to pixel coordinates
-      const screenDist =
-        Math.sqrt(
-          Math.pow((screenPoint.x - rayScreenPoint.x) * containerWidth * 0.5, 2) +
-            Math.pow((screenPoint.y - rayScreenPoint.y) * containerWidth * 0.5, 2)
-        );
+      const screenDist = Math.sqrt(
+        Math.pow((screenPoint.x - rayScreenPoint.x) * containerWidth * 0.5, 2) +
+          Math.pow((screenPoint.y - rayScreenPoint.y) * containerWidth * 0.5, 2)
+      );
 
       if (screenDist < closestScreenDist) {
         closestScreenDist = screenDist;

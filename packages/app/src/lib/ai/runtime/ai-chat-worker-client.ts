@@ -2,7 +2,7 @@
  * AI Chat Worker Client
  *
  * Client-side interface for managing AI chat sessions in SharedWorker.
- * Handles connection, session initialization, and local tool execution.
+ * Handles connection, session initialization, run coordination, and local tool execution.
  */
 
 import type { AIChatWorkerCommand, AIChatWorkerEvent } from "./types";
@@ -92,6 +92,61 @@ export class AIChatWorkerClient {
       documentId: options?.documentId,
       projectId: options?.projectId,
     });
+  }
+
+  /**
+   * Start a new run (user message + assistant response)
+   *
+   * @param sessionId - The chat session UUID
+   * @param content - The user message content
+   * @returns Promise that resolves when the run is started (not completed)
+   */
+  async startRun(
+    sessionId: string,
+    content: string
+  ): Promise<{ runId: string; userMessageId: string; assistantMessageId: string }> {
+    await this.connect();
+    this.sendCommand({ type: "start-run", sessionId, content });
+
+    // Wait for response
+    return new Promise((resolve, reject) => {
+      const handler = (event: AIChatWorkerEvent) => {
+        if ("sessionId" in event && event.sessionId !== sessionId) return;
+
+        if (event.type === "run-started") {
+          this.eventHandlers.delete(handler);
+          resolve({
+            runId: event.runId,
+            userMessageId: event.userMessageId,
+            assistantMessageId: event.assistantMessageId,
+          });
+        } else if (event.type === "run-rejected") {
+          this.eventHandlers.delete(handler);
+          reject(new Error(event.reason));
+        } else if (event.type === "run-error") {
+          this.eventHandlers.delete(handler);
+          reject(new Error(event.error));
+        }
+      };
+      this.eventHandlers.add(handler);
+
+      // Timeout after 30 seconds
+      setTimeout(() => {
+        this.eventHandlers.delete(handler);
+        reject(new Error("Start run timeout"));
+      }, 30000);
+    });
+  }
+
+  /**
+   * Notify worker that a run has completed
+   * Called when the UI observes the run status change in Durable State
+   *
+   * @param sessionId - The chat session UUID
+   */
+  notifyRunComplete(sessionId: string): void {
+    if (!this.connected) return;
+    this.sendCommand({ type: "run-complete", sessionId });
   }
 
   /**

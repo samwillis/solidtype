@@ -43,10 +43,8 @@ function buildResponseHeaders(response: Response): HeadersInit {
       headers[headerName] = value;
     }
   }
-  // Ensure content-type has a default
-  if (!headers["content-type"]) {
-    headers["content-type"] = "application/octet-stream";
-  }
+  // Always use application/json for AI chat streams
+  headers["content-type"] = "application/json";
   return headers;
 }
 
@@ -85,22 +83,19 @@ export async function proxyToDurableStream(
     // Create the stream with PUT, then retry the GET
     if (response.status === 404 && request.method === "GET") {
       // Create the stream with PUT (this is the Durable Streams protocol)
+      // Use application/json for AI chat streams (required for @durable-streams/state)
       const createResponse = await fetch(durableUrl.toString().split("?")[0], {
         method: "PUT",
         headers: {
-          "Content-Type": "application/octet-stream",
+          "Content-Type": "application/json",
         },
       });
 
       if (createResponse.ok) {
         // Retry the original GET request now that the stream exists
-        // This preserves the original query params including live=long-poll
         const retryResponse = await fetch(durableUrl.toString(), {
           method: "GET",
-          headers: {
-            "Content-Type": request.headers.get("Content-Type") || "application/octet-stream",
-            Accept: request.headers.get("Accept") || "*/*",
-          },
+          headers: { Accept: "application/json" },
         });
 
         return new Response(retryResponse.body, {

@@ -16,20 +16,20 @@ This refactor moves us to a "local-first" architecture where the **Durable Strea
 
 ### Persistent Truth
 
-| Layer | Stores |
-|-------|--------|
+| Layer                               | Stores                                      |
+| ----------------------------------- | ------------------------------------------- |
 | **Postgres/Electric (TanStack DB)** | Session metadata (`ai_chat_sessions` table) |
-| **Durable Streams + Durable State** | Chat transcript: messages, chunks, runs |
+| **Durable Streams + Durable State** | Chat transcript: messages, chunks, runs     |
 
 **Key insight**: Each Durable Stream corresponds to exactly one chat session. The stream URL encodes the session identity (`/api/ai/sessions/${sessionId}/stream`), so we do **not** store `sessionId` on individual records within the stream.
 
 ### Roles
 
-| Component | Responsibility |
-|-----------|----------------|
-| **Server** (`/api/ai/sessions/:id/run`) | Runs `@tanstack/ai` `chat()`, writes transcript events to Durable State (messages + chunks), bridges local tools |
-| **Client UI** | Does **not** consume SSE. Uses Durable State live queries to render transcript. Sends input via SharedWorker |
-| **SharedWorker (singleton)** | Coordinates runs across tabs, enforces "single run at a time per session", hosts local tool execution (CAD kernel) |
+| Component                               | Responsibility                                                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Server** (`/api/ai/sessions/:id/run`) | Runs `@tanstack/ai` `chat()`, writes transcript events to Durable State (messages + chunks), bridges local tools   |
+| **Client UI**                           | Does **not** consume SSE. Uses Durable State live queries to render transcript. Sends input via SharedWorker       |
+| **SharedWorker (singleton)**            | Coordinates runs across tabs, enforces "single run at a time per session", hosts local tool execution (CAD kernel) |
 
 ### Data Flow
 
@@ -107,6 +107,7 @@ packages/app/src/lib/ai/state/
 Using `createStateSchema` from `@durable-streams/state`. See [README][1] for full API.
 
 **Design principles:**
+
 - **No `sessionId`** on records — the stream itself represents the session
 - **Chunks are insert-only** — never update, just append
 - **Messages have lifecycle status** — `streaming` → `complete` or `error`
@@ -116,43 +117,43 @@ Using `createStateSchema` from `@durable-streams/state`. See [README][1] for ful
 
 #### `messages`
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | `string` (uuid) | Primary key |
-| `runId` | `string` (uuid) | Links to the run this message belongs to |
-| `role` | `"system" \| "user" \| "assistant" \| "tool_call" \| "tool_result" \| "error"` | Message type |
-| `status` | `"streaming" \| "complete" \| "pending" \| "running" \| "error"` | Lifecycle state |
-| `content` | `string?` | Present for user/system/error; derived from chunks for assistant |
-| `parentMessageId` | `string?` | tool_call/tool_result point to assistant message |
-| `toolName` | `string?` | For tool_call messages |
-| `toolArgs` | `unknown?` | For tool_call messages |
-| `toolCallId` | `string?` | Correlation ID for tool_call ↔ tool_result |
-| `toolResult` | `unknown?` | For tool_result messages |
-| `requiresApproval` | `boolean?` | For tool_call: does this need user approval? |
-| `createdAt` | `string` (ISO) | |
-| `updatedAt` | `string?` (ISO) | |
+| Field              | Type                                                                           | Notes                                                            |
+| ------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `id`               | `string` (uuid)                                                                | Primary key                                                      |
+| `runId`            | `string` (uuid)                                                                | Links to the run this message belongs to                         |
+| `role`             | `"system" \| "user" \| "assistant" \| "tool_call" \| "tool_result" \| "error"` | Message type                                                     |
+| `status`           | `"streaming" \| "complete" \| "pending" \| "running" \| "error"`               | Lifecycle state                                                  |
+| `content`          | `string?`                                                                      | Present for user/system/error; derived from chunks for assistant |
+| `parentMessageId`  | `string?`                                                                      | tool_call/tool_result point to assistant message                 |
+| `toolName`         | `string?`                                                                      | For tool_call messages                                           |
+| `toolArgs`         | `unknown?`                                                                     | For tool_call messages                                           |
+| `toolCallId`       | `string?`                                                                      | Correlation ID for tool_call ↔ tool_result                       |
+| `toolResult`       | `unknown?`                                                                     | For tool_result messages                                         |
+| `requiresApproval` | `boolean?`                                                                     | For tool_call: does this need user approval?                     |
+| `createdAt`        | `string` (ISO)                                                                 |                                                                  |
+| `updatedAt`        | `string?` (ISO)                                                                |                                                                  |
 
 #### `chunks` (insert-only)
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | `string` | `${messageId}:${seq}` — deterministic for idempotent retries |
-| `messageId` | `string` (uuid) | Links to assistant message |
-| `seq` | `number` | Monotonic sequence within message |
-| `delta` | `string` | The text fragment |
-| `createdAt` | `string` (ISO) | |
+| Field       | Type            | Notes                                                        |
+| ----------- | --------------- | ------------------------------------------------------------ |
+| `id`        | `string`        | `${messageId}:${seq}` — deterministic for idempotent retries |
+| `messageId` | `string` (uuid) | Links to assistant message                                   |
+| `seq`       | `number`        | Monotonic sequence within message                            |
+| `delta`     | `string`        | The text fragment                                            |
+| `createdAt` | `string` (ISO)  |                                                              |
 
 #### `runs`
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | `string` (uuid) | Primary key |
-| `status` | `"running" \| "complete" \| "error"` | Run lifecycle |
-| `userMessageId` | `string` (uuid) | The user message that started this run |
-| `assistantMessageId` | `string` (uuid) | The assistant message being generated |
-| `startedAt` | `string` (ISO) | |
-| `endedAt` | `string?` (ISO) | |
-| `error` | `string?` | Error message if status is error |
+| Field                | Type                                 | Notes                                  |
+| -------------------- | ------------------------------------ | -------------------------------------- |
+| `id`                 | `string` (uuid)                      | Primary key                            |
+| `status`             | `"running" \| "complete" \| "error"` | Run lifecycle                          |
+| `userMessageId`      | `string` (uuid)                      | The user message that started this run |
+| `assistantMessageId` | `string` (uuid)                      | The assistant message being generated  |
+| `startedAt`          | `string` (ISO)                       |                                        |
+| `endedAt`            | `string?` (ISO)                      |                                        |
+| `error`              | `string?`                            | Error message if status is error       |
 
 ### Schema Implementation
 
@@ -594,10 +595,10 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
 
           streamDb.close();
 
-          return new Response(
-            JSON.stringify({ runId, userMessageId, assistantMessageId }),
-            { status: 200, headers: { "Content-Type": "application/json" } }
-          );
+          return new Response(JSON.stringify({ runId, userMessageId, assistantMessageId }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
         } catch (error) {
           // 12. Handle error
           const endTime = new Date().toISOString();
@@ -751,12 +752,14 @@ export function hydrateTranscript(db: StreamDB): HydratedMessage[] {
 ### Replace `useAIChat.ts` Streaming Path
 
 **Current behaviour:**
+
 - Sends `fetch('/api/ai/chat')`
 - Reads SSE
 - `setMessages([...])` as chunks arrive
 - Persists chunks client-side via `persistChunk()`
 
 **New behaviour:**
+
 - Creates StreamDB for active session
 - Renders via live queries (messages + chunks)
 - Sends messages via SharedWorker
@@ -808,22 +811,13 @@ export function useAIChat(options: UseAIChatOptions) {
   // Live query messages
   const messagesQuery = useLiveQuery(
     () =>
-      streamDb
-        ? streamDb.collections.messages
-            .query()
-            .orderBy((m) => m.createdAt, "asc")
-        : null,
+      streamDb ? streamDb.collections.messages.query().orderBy((m) => m.createdAt, "asc") : null,
     [streamDb]
   );
 
   // Live query chunks
   const chunksQuery = useLiveQuery(
-    () =>
-      streamDb
-        ? streamDb.collections.chunks
-            .query()
-            .orderBy((c) => c.seq, "asc")
-        : null,
+    () => (streamDb ? streamDb.collections.chunks.query().orderBy((c) => c.seq, "asc") : null),
     [streamDb]
   );
 
@@ -1311,6 +1305,7 @@ After this refactor is complete, delete:
 9. [ ] Delete or deprecate `/api/ai/chat.ts`
 
 **Definition of Done (Phase A):**
+
 - Refresh tab mid-stream: transcript resumes from Durable State
 - Open second tab: shows same transcript (no SSE dependence)
 - Connection drop: reconnects and catches up automatically
@@ -1323,6 +1318,7 @@ After this refactor is complete, delete:
 13. [ ] UI notifies worker when run completes (observed via live query)
 
 **Definition of Done (Phase B):**
+
 - Two tabs, same session: only one run starts
 - Close all tabs, reopen: worker recreates, transcript resumes
 - Worker shuts down after 3 minutes of inactivity
@@ -1335,6 +1331,7 @@ After this refactor is complete, delete:
 17. [ ] Add approval/rejection flow via worker
 
 **Definition of Done (Phase C):**
+
 - Tool calls appear as durable events
 - Approval UI survives page refresh
 - Multi-tab: approval in one tab reflects in others
@@ -1347,6 +1344,7 @@ After this refactor is complete, delete:
 21. [ ] Worker writes tool_result to Durable State
 
 **Definition of Done (Phase D):**
+
 - Local tool called by LLM
 - Result returns to LLM and visible in transcript
 - Works across tab refresh and reconnect
@@ -1362,6 +1360,7 @@ The Durable State schema is designed to be compatible with a future TanStack AI 
 - Tool call/result messages preserve all required fields
 
 A generic `durableStateConnectionAdapter()` could:
+
 - `send(messages)` → POST `/run`
 - `connect(runId)` → tail Durable State, yield `StreamChunk`s
 
