@@ -9,24 +9,26 @@ A modern, history-capable, parametric CAD application.
 
 ## 🚀 Demo Showcase
 
-**SolidType is also a comprehensive demonstration of modern local-first sync technologies:**
+**SolidType is also a comprehensive demonstration of modern sync technologies:**
 
-- **Electric SQL** - Real-time Postgres sync for structured metadata
-- **Durable Streams** - Append-only streams for Yjs document persistence
-- **TanStack DB** - Client-side embedded database with live queries
+- **[Electric SQL](https://electric-sql.com)** - Real-time Postgres sync for structured metadata
+- **[Durable Streams](https://github.com/durable-streams/durable-streams)** - Append-only streams for Yjs document persistence
+- **[TanStack DB](https://tanstack.com/db)** - Client-side embedded database with live queries
 
 This project showcases how to build a production-ready collaborative application using Electric + Durable Streams for different data types (structured vs. CRDT-based documents).
+
+It's also a great demonstration of AI integration using **[TanStack AI](https://tanstack.com/ai)**, and the **[TanStack Start](https://tanstack.com/start)** framework.
 
 ## Overview
 
 SolidType is a collaborative CAD platform featuring:
 
-- **Parametric 3D modeling** powered by OpenCascade.js (OCCT)
+- **Parametric 3D modeling** powered by **[OpenCascade.js](https://ocjs.org)** (OCCT)
 - **2D sketching with constraint solving** for interactive design
-- **Real-time collaboration** via Electric SQL Durable Streams and Yjs
+- **Real-time collaboration** via **[Electric SQL](https://electric-sql.com)** and **[Durable Streams](https://github.com/durable-streams/durable-streams)**
 - **Multi-user workspaces and projects** with branching support
 - **AI-assisted modeling** through chat-based tool calling
-- **Conflict-free merging** of CAD models using Yjs (CRDTs)
+- **Conflict-free merging** of CAD models using **[Yjs](https://yjs.dev)** (CRDTs)
 
 ## Prerequisites
 
