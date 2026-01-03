@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/samwillis/solidtype/main/artwork/hero-dark.jpg">
-  <img src="https://raw.githubusercontent.com/samwillis/solidtype/main/artwork/hero.jpg" alt="SolidType - Modern CAD, Built for the Web" style="width: 100%; max-width: 1200px; margin: 2rem 0;">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/samwillis/solidtype/refs/heads/main/artwork/hero-dark.png">
+  <img src="https://raw.githubusercontent.com/samwillis/solidtype/refs/heads/main/artwork/hero.png" alt="SolidType - Modern CAD, Built for the Web" style="width: 100%; max-width: 1200px; margin: 2rem 0;">
 </picture>
 
 # SolidType
@@ -340,7 +340,7 @@ User adds sketch point → Yjs update → Durable Stream append →
 Other clients receive update → CRDT merge → UI updates
 ```
 
-#### 3. AI Chat Sessions (Hybrid: PostgreSQL + Durable Streams)
+#### 3. AI Chat Sessions (Hybrid: PostgreSQL + Durable Streams + Durable State)
 
 **AI chat uses a hybrid approach** combining both systems:
 
@@ -351,19 +351,23 @@ Other clients receive update → CRDT merge → UI updates
   - Timestamps
   - **Purpose**: Fast listing, querying, UI display
 
-- **Durable Streams** stores message content:
+- **Durable Streams + Durable State Protocol** stores chat transcript:
   - Stream ID: `ai-chat/{sessionId}`
-  - Actual message content (streaming chunks)
-  - Tool calls and results
-  - Full conversation history
-  - **Purpose**: Streaming, resumption, message replay
+  - **Durable State collections**: `messages`, `chunks`, `runs`
+  - Message content (user, assistant, tool_call, tool_result)
+  - Streaming chunks with sequence numbers
+  - Run lifecycle tracking (running, complete, error)
+  - Tool calls with approval status
+  - **Purpose**: Durable, resumable transcript with live queries
 
 **Example flow:**
 
 ```
-User sends message → Server persists to Durable Stream →
-LLM streams response → Chunks persisted to stream →
-Client receives SSE → UI updates in real-time
+User sends message → SharedWorker coordinates run →
+Server POST /api/ai/sessions/{id}/run → Server writes to Durable State →
+LLM streams response → Chunks persisted as events →
+Client StreamDB live queries → UI updates automatically →
+Multi-tab sync via Durable State → Resumable on refresh
 ```
 
 ### AI Integration Architecture
@@ -386,12 +390,25 @@ Client receives SSE → UI updates in real-time
 │                              │                                 │
 │                              │ sessionId                       │
 │                              ▼                                 │
-│  Durable Streams (ai-chat/{sessionId})                         │
+│  Durable Streams + Durable State (ai-chat/{sessionId})         │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │ • Actual message content (streaming chunks)             │   │
-│  │ • Tool calls and results                                │   │
-│  │ • Full conversation history                             │   │
-│  │ → Used for: streaming, resumption, message replay       │   │
+│  │  Collections:                                           │   │
+│  │  • messages: user, assistant, tool_call, tool_result    │   │
+│  │  • chunks: streaming deltas with sequence numbers       │   │
+│  │  • runs: run lifecycle (running, complete, error)       │   │
+│  │                                                         │   │
+│  │  → Used for: durable transcript, live queries,          │   │
+│  │    resumption, multi-tab sync, tool approval state      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              │                                 │
+│                              │ StreamDB (client)               │
+│                              ▼                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Client Live Queries                                    │   │
+│  │  • Observes messages, chunks, runs                      │   │
+│  │  • Hydrates assistant content from chunks               │   │
+│  │  • UI updates automatically as events arrive            │   │
+│  │  → No SSE dependency, fully resumable                   │   │
 │  └─────────────────────────────────────────────────────────┘   │
 └────────────────────────────────────────────────────────────────┘
 ```
@@ -408,31 +425,44 @@ AI tools are organized by context:
 Tools execute in two modes:
 
 1. **Server-side**: Modeling operations that modify the document (via Yjs updates)
-2. **Client-side**: UI operations like navigation and selection
+   - Server writes `tool_call` message to Durable State
+   - Server executes tool and writes `tool_result` message
+   - TanStack AI continues with result
+
+2. **Local (future)**: CAD operations executed in SharedWorker
+   - Server writes `tool_call` message with `status: "pending"`
+   - SharedWorker observes pending tool_call
+   - Worker requests approval (or auto-approves)
+   - Worker executes tool locally, writes `tool_result` message
+   - Server observes result and continues
+
+**Tool calls and results are persisted in Durable State** with approval status, making them resumable and visible across tabs.
 
 #### Agent Runtime System
 
-Agents can run in multiple environments with a unified abstraction:
+Agents run in a **SharedWorker singleton** that coordinates runs across tabs and hosts local tool execution:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          Agent Runtime Architecture                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Main Thread                          Agent Runtime (Worker/Remote)         │
+│  Main Thread (Multiple Tabs)        SharedWorker (Singleton)                │
 │  ┌────────────────────┐              ┌────────────────────────────────┐     │
-│  │  AgentClient       │◄────────────►│  AgentRuntime                  │     │
-│  │  • spawn()         │   Messages   │  • Modeling Kernel (OCCT)      │     │
-│  │  • terminate()     │              │  • LLM Connection              │     │
-│  │  • sendMessage()   │              │  • Tool Execution              │     │
-│  │  • onToolCall()    │              │  • Document Sync               │     │
-│  └────────────────────┘              └────────────────────────────────┘     │
+│  │  UI Components     │              │  AI Chat Worker                │     │
+│  │  • useAIChat()     │◄────────────►│  • Run coordination            │     │
+│  │  • StreamDB        │   Messages   │  • Single run per session      │     │
+│  │  • Live queries    │              │  • CAD kernel (OCCT)           │     │
+│  └────────────────────┘              │  • Local tool execution        │     │
+│           │                          └────────────────────────────────┘     │
 │           │                                        │                        │
 │           │                                        │                        │
 │           ▼                                        ▼                        │
 │  ┌────────────────────┐              ┌────────────────────────────────┐     │
-│  │  Awareness/Yjs     │◄────────────►│  Awareness Client              │     │
-│  │  (presence)        │    Sync      │  (agent appears as user)       │     │
+│  │  StreamDB          │              │  Server /run endpoint          │     │
+│  │  • Live queries    │              │  • TanStack AI chat()          │     │
+│  │  • Hydrates chunks │              │  • Writes to Durable State     │     │
+│  │  • Multi-tab sync  │              │  • Tool call bridge            │     │
 │  └────────────────────┘              └────────────────────────────────┘     │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -443,14 +473,18 @@ Runtime Options:
 │  • SharedWorker         │  │  • Cloudflare Worker    │  │  • Durable Object  │
 │  • Worker fallback      │  │  • Vercel Edge          │  │  • Stateful        │
 │  • Local OCCT kernel    │  │  • Remote kernel        │  │  • Persistent      │
+│  • Run coordination     │  │  • Future               │  │  • Future          │
+│  • Idle shutdown        │  │                         │  │                    │
 └─────────────────────────┘  └─────────────────────────┘  └────────────────────┘
 ```
 
 **Current implementation**: Browser runtime using SharedWorker (with Worker fallback)
 
-- Modeling kernel (OCCT) runs in worker thread
-- Agents appear in presence/awareness system
-- Generic interface for future remote execution (edge, Durable Objects)
+- **Run coordination**: Only one run per session across all tabs
+- **Modeling kernel (OCCT)**: Runs in worker thread, shared across tabs
+- **Idle shutdown**: Worker shuts down after 3 minutes of inactivity
+- **Resumable**: Transcript persists in Durable State, resumes on reconnect
+- **Multi-tab sync**: All tabs observe the same Durable State via live queries
 
 #### Tool Approval System
 
@@ -476,19 +510,30 @@ Three-layer approval system:
 
 2. **User opens AI chat**:
    - Session created → PostgreSQL (metadata)
-   - Messages → Durable Stream (`ai-chat/{sessionId}`)
+   - Client creates StreamDB for session → Live queries observe transcript
+   - Messages persist to Durable State (`ai-chat/{sessionId}`)
 
-3. **AI executes a tool**:
-   - Tool call → Server API route
-   - Tool implementation → Modifies Yjs document
+3. **User sends message**:
+   - UI calls SharedWorker `startRun()`
+   - Worker coordinates: ensures only one run per session
+   - Worker POSTs to `/api/ai/sessions/{id}/run`
+   - Server writes run + user message + assistant placeholder to Durable State
+   - Server streams LLM response, writes chunks as events
+   - Client StreamDB live queries update UI automatically
+   - Multi-tab: all tabs observe same Durable State
+
+4. **AI executes a tool**:
+   - Server writes `tool_call` message to Durable State
+   - Server executes tool → Modifies Yjs document
+   - Server writes `tool_result` message to Durable State
    - Document update → Durable Stream → All clients sync
    - Worker rebuilds → Mesh sent to UI
 
-4. **Multiple users collaborate**:
+5. **Multiple users collaborate**:
    - Electric syncs metadata changes (project structure)
    - Durable Streams syncs document changes (CRDT merge)
    - Awareness syncs presence (cursors, selections)
-   - AI agents appear in awareness system
+   - AI chat transcripts sync via Durable State (multi-tab, resumable)
 
 ### Key Design Principles
 
@@ -521,6 +566,10 @@ See [`plan/23-ai-core-infrastructure.md`](./plan/23-ai-core-infrastructure.md) f
 **CAD Kernel:**
 
 - **OpenCascade.js**: B-Rep kernel (WASM) for 3D geometry operations
+
+**Rendering:**
+
+- **Three.js**: 3D graphics library for WebGL-based visualization
 
 **AI Integration:**
 
@@ -638,34 +687,46 @@ This project is an excellent reference implementation for:
 
 This project demonstrates a production-ready AI integration pattern:
 
-- **Hybrid Storage**: PostgreSQL for metadata + Durable Streams for content
+- **Hybrid Storage**: PostgreSQL for metadata + Durable Streams + Durable State for content
   - Session metadata in PostgreSQL (fast queries, listing)
-  - Message content in Durable Streams (streaming, resumption)
-  - See `packages/app/src/lib/ai/session-functions.ts` and `persistence.ts`
+  - Chat transcript in Durable State Protocol (messages, chunks, runs collections)
+  - Fully resumable: refresh mid-stream, transcript resumes automatically
+  - Multi-tab sync: all tabs observe same Durable State via live queries
+  - See `packages/app/src/lib/ai/state/` for schema and StreamDB helpers
 
-- **Tool System**: Context-aware tool definitions
+- **Durable State Protocol**: Event-sourced transcript storage
+  - `messages` collection: user, assistant, tool_call, tool_result
+  - `chunks` collection: streaming deltas with sequence numbers
+  - `runs` collection: run lifecycle tracking
+  - Client uses StreamDB with live queries (no SSE dependency)
+  - See `packages/app/src/lib/ai/state/schema.ts` for the schema
+
+- **Run Coordination**: SharedWorker singleton pattern
+  - Only one run per session across all tabs
+  - Idle shutdown after 3 minutes of inactivity
+  - Coordinates tool execution and CAD kernel access
+  - See `packages/app/src/lib/ai/runtime/ai-chat-worker.ts` for implementation
+
+- **Tool System**: Context-aware tool definitions with Durable State persistence
   - Dashboard tools: Project/document management
   - Sketch tools: 2D geometry creation
   - Modeling tools: 3D feature operations
   - Client tools: UI navigation and selection
+  - Tool calls and results persisted in Durable State with approval status
   - See `packages/app/src/lib/ai/tools/` for implementations
-
-- **Agent Runtime**: Unified abstraction for multiple execution environments
-  - Browser runtime (SharedWorker/Worker) - current implementation
-  - Edge runtime (Cloudflare Workers) - future
-  - Durable Objects runtime - future
-  - See `packages/app/src/lib/ai/runtime/` for the abstraction
 
 - **Tool Approval**: Three-layer approval system
   - Default rules per context
   - User preferences (localStorage)
   - YOLO mode (global override)
+  - Approval state persisted in Durable State (survives refresh)
   - See `packages/app/src/lib/ai/approval.ts` for the registry
 
 - **TanStack AI Integration**: See how to:
   - Set up TanStack AI with custom adapters
   - Implement tool calling with server/client split
-  - Handle streaming responses with SSE
+  - Bridge streaming to Durable State (chunks as events)
+  - Use StreamDB live queries instead of direct SSE consumption
   - Integrate with existing document model (Yjs)
   - Reference: [TanStack AI Documentation](https://tanstack.com/ai/latest)
 

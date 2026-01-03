@@ -108,7 +108,7 @@ function Home() {
               >
                 Durable&nbsp;Streams
               </a>
-              , and{" "}
+              , and&nbsp;
               <a href="https://yjs.dev/" target="_blank" rel="noopener noreferrer">
                 Yjs
               </a>
@@ -118,9 +118,13 @@ function Home() {
               A web-based parametric CAD application powered by{" "}
               <a href="https://ocjs.org" target="_blank" rel="noopener noreferrer">
                 OpenCascade.js
+              </a>{" "}
+              and{" "}
+              <a href="https://threejs.org" target="_blank" rel="noopener noreferrer">
+                Three.js
               </a>
               . Create complex 3D models with 2D sketches, constraints, and AI assistance—all in
-              your browser.
+              your&nbsp;browser.
             </p>
             <div className="home-hero-actions">
               <Link to="/signup" className="home-cta-primary">
@@ -367,6 +371,10 @@ function Home() {
               ,{" "}
               <a href="https://orm.drizzle.team" target="_blank" rel="noopener noreferrer">
                 Drizzle
+              </a>
+              ,{" "}
+              <a href="https://threejs.org" target="_blank" rel="noopener noreferrer">
+                Three.js
               </a>
               , and{" "}
               <a href="https://ocjs.org" target="_blank" rel="noopener noreferrer">
