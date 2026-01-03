@@ -18,9 +18,10 @@ import { createAndPreloadServerChatStreamDB, chatStateSchema } from "../../../..
 import { hydrateTranscript, toModelMessages } from "../../../../../lib/ai/state/hydrate";
 import { getApprovalLevel, type AIChatContext } from "../../../../../lib/ai/approval";
 import { db } from "../../../../../lib/db";
-import { aiChatSessions } from "../../../../../db/schema";
-import { eq } from "drizzle-orm";
+import { aiChatSessions, projects, branches, workspaces } from "../../../../../db/schema";
+import { eq, and } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
+import type { DashboardContext } from "../../../../../lib/ai/prompts/dashboard";
 
 // Stale run threshold - runs older than this are marked as error
 const STALE_RUN_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
@@ -77,6 +78,11 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
 
         // 4. Create StreamDB for this session
         const streamDb = await createAndPreloadServerChatStreamDB(sessionId);
+
+        // Declare IDs at this scope so they're available in catch block
+        let runId: string | undefined;
+        let userMessageId: string | undefined;
+        let assistantMessageId: string | undefined;
 
         try {
           const now = new Date();
@@ -135,9 +141,9 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
           const historyMessages = toModelMessages(transcript);
 
           // 8. Generate IDs for this run
-          const runId = uuid();
-          const userMessageId = uuid();
-          const assistantMessageId = uuid();
+          runId = uuid();
+          userMessageId = uuid();
+          assistantMessageId = uuid();
           const timestamp = now.toISOString();
 
           // 9. Append run + user message + assistant placeholder
@@ -184,9 +190,41 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
 
           if (chatSession.context === "dashboard") {
             tools = await getDashboardTools(authSession.user.id);
+
+            // Fetch full context for dashboard prompt
+            let dashboardContext: Partial<DashboardContext> = {};
+
+            if (chatSession.projectId) {
+              // Fetch project with workspace
+              const project = await db.query.projects.findFirst({
+                where: eq(projects.id, chatSession.projectId),
+                with: { workspace: true },
+              });
+
+              if (project) {
+                dashboardContext.projectName = project.name;
+                dashboardContext.workspaceId = project.workspaceId;
+                dashboardContext.workspaceName = project.workspace.name;
+
+                // Fetch main branch for this project
+                const mainBranch = await db.query.branches.findFirst({
+                  where: and(
+                    eq(branches.projectId, chatSession.projectId),
+                    eq(branches.isMain, true)
+                  ),
+                });
+
+                if (mainBranch) {
+                  dashboardContext.branchId = mainBranch.id;
+                  dashboardContext.branchName = mainBranch.name;
+                }
+              }
+            }
+
             systemPrompt = buildDashboardSystemPrompt(
               authSession.user.id,
-              chatSession.projectId || undefined
+              chatSession.projectId || undefined,
+              dashboardContext
             );
           } else {
             // Editor context - for now, use empty tools (Phase 25/26 will add these)
@@ -208,8 +246,56 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
           });
 
           // 12. Process stream chunks
+          // Track the last content we saw to detect when we need a separator
+          let lastContentEndsWithPunctuation = false;
+          let hadToolCallSinceLastContent = false;
+
           for await (const chunk of stream) {
+            // Known chunk types we handle or can ignore:
+            // - content: text from assistant
+            // - tool_call: tool invocation
+            // - tool_result: tool response
+            // - done: stream completion (ignore)
+            // - error: stream error (logged below)
+            if (
+              chunk.type !== "content" &&
+              chunk.type !== "tool_call" &&
+              chunk.type !== "tool_result" &&
+              chunk.type !== "done"
+            ) {
+              // Log unexpected chunk types for debugging
+              console.debug("[AI Stream] Unhandled chunk type:", chunk.type, chunk);
+            }
+
             if (chunk.type === "content" && chunk.delta) {
+
+              // If we had a tool call and content resumes, insert a paragraph break
+              // This prevents text from running together like "...error.The folder..."
+              if (hadToolCallSinceLastContent && seq > 0) {
+                const firstChar = chunk.delta.trimStart()[0];
+                const startsWithCapital =
+                  firstChar && firstChar === firstChar.toUpperCase() && /[A-Z]/.test(firstChar);
+
+                if (lastContentEndsWithPunctuation && startsWithCapital) {
+                  await streamDb.stream.append(
+                    chatStateSchema.chunks.insert({
+                      value: {
+                        id: `${assistantMessageId}:${seq}`,
+                        messageId: assistantMessageId,
+                        seq: seq++,
+                        delta: "\n\n",
+                        createdAt: new Date().toISOString(),
+                      },
+                    })
+                  );
+                }
+                hadToolCallSinceLastContent = false;
+              }
+
+              // Track if content ends with sentence-ending punctuation
+              const trimmed = chunk.delta.trimEnd();
+              lastContentEndsWithPunctuation = /[.!?]$/.test(trimmed);
+
               // Text content from assistant
               await streamDb.stream.append(
                 chatStateSchema.chunks.insert({
@@ -227,6 +313,13 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
               const toolName = chunk.toolCall.function.name;
               const toolArgs = JSON.parse(chunk.toolCall.function.arguments || "{}");
               const toolCallId = chunk.toolCall.id;
+
+              // Log tool call for debugging
+              console.log("[AI Tool Call]", {
+                toolName,
+                toolCallId,
+                args: toolArgs,
+              });
 
               // Check if this tool requires approval
               const approvalLevel = getApprovalLevel(toolName, approvalContext);
@@ -250,7 +343,26 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
                 })
               );
             } else if (chunk.type === "tool_result") {
-              // Tool result
+              // Tool result - log for debugging
+              const toolResult = chunk.content;
+
+              // Log all tool results
+              if (
+                toolResult &&
+                typeof toolResult === "object" &&
+                "error" in toolResult
+              ) {
+                console.warn("[AI Tool Result - ERROR]", {
+                  toolCallId: chunk.toolCallId,
+                  error: (toolResult as { error: unknown }).error,
+                });
+              } else {
+                console.log("[AI Tool Result - SUCCESS]", {
+                  toolCallId: chunk.toolCallId,
+                  result: toolResult,
+                });
+              }
+
               await streamDb.stream.append(
                 chatStateSchema.messages.insert({
                   value: {
@@ -260,11 +372,14 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
                     status: "complete",
                     parentMessageId: assistantMessageId,
                     toolCallId: chunk.toolCallId,
-                    toolResult: chunk.content,
+                    toolResult,
                     createdAt: new Date().toISOString(),
                   },
                 })
               );
+
+              // Mark that we had a tool call, so we can add paragraph break if needed
+              hadToolCallSinceLastContent = true;
             }
             // Other chunk types (done, error, etc.) are handled implicitly
           }
@@ -324,31 +439,50 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
             headers: { "Content-Type": "application/json" },
           });
         } catch (error) {
-          // 15. Handle error - write error records to stream
+          // 15. Handle error - mark run and assistant message as failed
           const endTime = new Date().toISOString();
           const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error("[AI Chat Run] Error:", error);
 
           try {
-            // Try to append error message
-            await streamDb.stream.append(
-              chatStateSchema.messages.insert({
-                value: {
-                  id: uuid(),
-                  runId: uuid(), // May not have a valid runId if error occurred early
-                  role: "error",
-                  status: "complete",
-                  content: errorMessage,
-                  createdAt: endTime,
-                },
-              })
-            );
-          } catch {
+            // If we have a runId and assistantMessageId, mark them as error
+            if (runId && assistantMessageId) {
+              const currentAssistantMsg = streamDb.collections.messages.get(assistantMessageId);
+              if (currentAssistantMsg && currentAssistantMsg.status === "streaming") {
+                await streamDb.stream.append(
+                  chatStateSchema.messages.update({
+                    value: {
+                      ...currentAssistantMsg,
+                      status: "error",
+                      updatedAt: endTime,
+                    },
+                    oldValue: currentAssistantMsg,
+                  })
+                );
+              }
+
+              const currentRun = streamDb.collections.runs.get(runId);
+              if (currentRun && currentRun.status === "running") {
+                await streamDb.stream.append(
+                  chatStateSchema.runs.update({
+                    value: {
+                      ...currentRun,
+                      status: "error",
+                      error: errorMessage,
+                      endedAt: endTime,
+                    },
+                    oldValue: currentRun,
+                  })
+                );
+              }
+            }
+          } catch (cleanupError) {
             // Ignore errors when writing error state
+            console.warn("[AI Chat Run] Failed to write error state:", cleanupError);
           }
 
           streamDb.close();
 
-          console.error("[AI Chat Run] Error:", error);
           return new Response(JSON.stringify({ error: errorMessage }), {
             status: 500,
             headers: { "Content-Type": "application/json" },

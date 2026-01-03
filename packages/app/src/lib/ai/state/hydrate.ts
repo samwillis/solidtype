@@ -145,10 +145,13 @@ export function hydrateFromArrays(messages: Message[], chunks: Chunk[]): Hydrate
  * Model message role type (for LLM APIs)
  * Note: "system" is not included as it's passed separately to TanStack AI
  */
-type ModelRole = "user" | "assistant" | "tool";
+type ModelRole = "user" | "assistant";
 
 /**
  * Model message format (for LLM APIs)
+ *
+ * We only include user and assistant messages in history.
+ * Tool calls/results are handled by TanStack AI during the current run.
  */
 export interface ModelMessage {
   role: ModelRole;
@@ -164,19 +167,34 @@ export interface ModelMessage {
  * @returns Messages in LLM API format
  */
 export function toModelMessages(transcript: HydratedMessage[]): ModelMessage[] {
-  return transcript
-    .filter((m) => {
-      // Only include roles that are valid for the model
-      // Exclude system (passed separately), tool_call (handled differently), error
-      return ["user", "assistant", "tool_result"].includes(m.role);
-    })
-    .map((m) => {
-      // Convert our roles to model roles
-      const role: ModelRole = m.role === "tool_result" ? "tool" : (m.role as ModelRole);
+  const result: ModelMessage[] = [];
 
-      return {
-        role,
-        content: m.content,
-      };
-    });
+  for (const m of transcript) {
+    // Only include user and assistant messages
+    // Tool calls and results are complex to replay correctly and TanStack AI
+    // handles them internally during the current run. For history, we just
+    // need the user prompts and final assistant responses.
+    if (m.role !== "user" && m.role !== "assistant") {
+      continue;
+    }
+
+    // Skip assistant messages that are streaming or error (incomplete)
+    if (m.role === "assistant" && (m.status === "streaming" || m.status === "error")) {
+      continue;
+    }
+
+    // Skip assistant messages with no content (tool-call-only messages)
+    if (m.role === "assistant" && (!m.content || m.content.trim() === "")) {
+      continue;
+    }
+
+    const message: ModelMessage = {
+      role: m.role,
+      content: m.content,
+    };
+
+    result.push(message);
+  }
+
+  return result;
 }

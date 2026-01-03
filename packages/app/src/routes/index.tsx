@@ -361,6 +361,10 @@ function Home() {
                 TanStack Start
               </a>
               ,{" "}
+              <a href="https://yjs.dev" target="_blank" rel="noopener noreferrer">
+                Yjs
+              </a>
+              ,{" "}
               <a href="https://orm.drizzle.team" target="_blank" rel="noopener noreferrer">
                 Drizzle
               </a>

@@ -266,6 +266,9 @@ export async function getDashboardTools(userId: string): Promise<ServerTool[]> {
       const docId = crypto.randomUUID();
       const durableStreamId = `project/${branch.projectId}/doc/${docId}/branch/${branchId}`;
 
+      // Normalize folderId: treat empty string as null (root level)
+      const normalizedFolderId = folderId && folderId.trim() !== "" ? folderId : null;
+
       const [doc] = await db
         .insert(documents)
         .values({
@@ -273,7 +276,7 @@ export async function getDashboardTools(userId: string): Promise<ServerTool[]> {
           baseDocumentId: docId,
           projectId: branch.projectId,
           branchId,
-          folderId,
+          folderId: normalizedFolderId,
           name,
           type,
           durableStreamId,
@@ -608,12 +611,15 @@ export async function getDashboardTools(userId: string): Promise<ServerTool[]> {
       });
       if (!branch) throw new Error("Branch not found");
 
+      // Normalize parentFolderId: treat empty string as null (root level)
+      const normalizedParentId = parentFolderId && parentFolderId.trim() !== "" ? parentFolderId : null;
+
       const [folder] = await db
         .insert(folders)
         .values({
           projectId: branch.projectId,
           branchId,
-          parentId: parentFolderId,
+          parentId: normalizedParentId,
           name,
           createdBy: userId,
         })

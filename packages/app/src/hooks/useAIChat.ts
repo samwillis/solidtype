@@ -20,7 +20,7 @@ import {
   approveToolCall as approveToolCallState,
   rejectToolCall as rejectToolCallState,
 } from "../lib/ai/state/tool-approval";
-import type { Message, Chunk, Run } from "../lib/ai/state/schema";
+import type { Run } from "../lib/ai/state/schema";
 import { aiChatSessionsCollection } from "../lib/electric-collections";
 import { createChatSessionDirect } from "../lib/server-functions";
 
@@ -196,15 +196,43 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
  */
 export function useAIChat(options: UseAIChatOptions) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionId, setActiveSessionIdRaw] = useState<string | null>(null);
   const [streamDb, setStreamDb] = useState<ChatStreamDB | null>(null);
+  // Track which session the current streamDb belongs to
+  // This ensures we don't show cached data from wrong session
+  const [loadedSessionId, setLoadedSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Track messages and chunks from StreamDB
-  const [messagesData, setMessagesData] = useState<Message[]>([]);
-  const [chunksData, setChunksData] = useState<Chunk[]>([]);
-  const [runsData, setRunsData] = useState<Run[]>([]);
+  // Wrapper around setActiveSessionId to log all transitions for debugging
+  const setActiveSessionId = useCallback((newId: string | null, source?: string) => {
+    setActiveSessionIdRaw((prev) => {
+      console.log(`[setActiveSessionId] ${prev} → ${newId} (source: ${source || "unknown"})`);
+      return newId;
+    });
+  }, []);
+
+  // Live query on StreamDB collections - automatically updates when data changes
+  // IMPORTANT: Include streamDb in dependency array so useLiveQuery re-subscribes on session change
+  // Without the dependency array, useLiveQuery doesn't know when the collection changes
+  const { data: rawMessagesData } = useLiveQuery(
+    () => (streamDb ? streamDb.collections.messages : null),
+    [streamDb]
+  );
+  const { data: rawChunksData } = useLiveQuery(
+    () => (streamDb ? streamDb.collections.chunks : null),
+    [streamDb]
+  );
+  const { data: rawRunsData } = useLiveQuery(
+    () => (streamDb ? streamDb.collections.runs : null),
+    [streamDb]
+  );
+
+  // Only use data if it's from the correct session
+  // This prevents showing stale data from previous session while loading new one
+  const messagesData = loadedSessionId === activeSessionId ? rawMessagesData : undefined;
+  const chunksData = loadedSessionId === activeSessionId ? rawChunksData : undefined;
+  const runsData = loadedSessionId === activeSessionId ? rawRunsData : undefined;
 
   const {
     sessions,
@@ -217,10 +245,12 @@ export function useAIChat(options: UseAIChatOptions) {
   } = useAIChatSessions({ context: options.context });
 
   // Find existing active session for this context on initial load (but don't create one)
-  // Only run once when sessions first load
+  // Only run once when sessions first load - uses ref to prevent re-running
   const initialSessionSet = useRef(false);
   useEffect(() => {
-    if (sessionsLoaded && !initialSessionSet.current) {
+    // CRITICAL: Only run ONCE on initial load
+    // Don't re-run when sessions array updates (which happens frequently via Electric sync)
+    if (!initialSessionSet.current && sessionsLoaded && sessions.length > 0) {
       initialSessionSet.current = true;
       // Look for an existing active session matching the context
       const existingSession = sessions.find(
@@ -231,11 +261,33 @@ export function useAIChat(options: UseAIChatOptions) {
             : s.context === "dashboard")
       );
       if (existingSession) {
-        setActiveSessionId(existingSession.id);
+        console.log("[useAIChat init] Setting initial session to:", existingSession.id);
+        setActiveSessionId(existingSession.id, "initial-load");
+      } else {
+        console.log("[useAIChat init] No existing session, staying in new chat mode");
       }
-      // If no existing session, stay in "new chat" mode (activeSessionId = null)
     }
   }, [sessionsLoaded, sessions, options.context, options.documentId]);
+
+  // Validate activeSessionId - reset if session is archived
+  // This handles race conditions where Electric sync updates session status after we select it
+  // NOTE: We only reset if the session EXISTS and is archived, not if it's missing
+  // (missing could mean a newly created session that hasn't synced yet)
+  useEffect(() => {
+    if (!activeSessionId || !sessionsLoaded) return;
+
+    const currentSession = sessions.find((s) => s.id === activeSessionId);
+
+    // Only invalidate if the session exists AND is archived
+    // Don't invalidate if session is not found - it might be a newly created session pending sync
+    if (currentSession && currentSession.status === "archived") {
+      console.log(
+        "[useAIChat] Active session is archived, resetting:",
+        activeSessionId
+      );
+      setActiveSessionId(null, "session-invalidated");
+    }
+  }, [activeSessionId, sessions, sessionsLoaded, setActiveSessionId]);
 
   // Get or create active session (called lazily on first message)
   const ensureSession = useCallback(async () => {
@@ -259,7 +311,7 @@ export function useAIChat(options: UseAIChatOptions) {
     );
 
     if (activeSession) {
-      setActiveSessionId(activeSession.id);
+      setActiveSessionId(activeSession.id, "ensureSession-found");
       return activeSession;
     }
 
@@ -268,7 +320,7 @@ export function useAIChat(options: UseAIChatOptions) {
       documentId: options.documentId,
       projectId: options.projectId,
     });
-    setActiveSessionId(newSession.id);
+    setActiveSessionId(newSession.id, "ensureSession-created");
     return newSession;
   }, [
     sessions,
@@ -281,28 +333,25 @@ export function useAIChat(options: UseAIChatOptions) {
   ]);
 
   // Create StreamDB when session changes
+  // Live queries (above) will automatically update when StreamDB collections change
   useEffect(() => {
+    console.log("[useAIChat effect] activeSessionId changed to:", activeSessionId);
+
+    // IMMEDIATELY clear the old streamDb so UI doesn't show stale data
+    // This ensures messages show as empty while loading the new session
+    setStreamDb(null);
+    setLoadedSessionId(null);
+
     if (!activeSessionId) {
-      setStreamDb(null);
-      setMessagesData([]);
-      setChunksData([]);
-      setRunsData([]);
+      console.log("[useAIChat effect] No activeSessionId, done");
       return;
     }
 
     let db: ChatStreamDB | null = null;
     let cancelled = false;
-    let pollInterval: ReturnType<typeof setInterval> | null = null;
     let retryCount = 0;
     const MAX_RETRIES = 5;
     const RETRY_DELAY = 500; // 500ms between retries
-
-    const updateState = () => {
-      if (cancelled || !db) return;
-      setMessagesData(Array.from(db.collections.messages.values()));
-      setChunksData(Array.from(db.collections.chunks.values()));
-      setRunsData(Array.from(db.collections.runs.values()));
-    };
 
     const tryPreload = async (): Promise<boolean> => {
       if (cancelled) return false;
@@ -326,41 +375,48 @@ export function useAIChat(options: UseAIChatOptions) {
       }
     };
 
+    // Capture the session ID this effect is loading for
+    const sessionBeingLoaded = activeSessionId;
+
     (async () => {
-      db = createChatStreamDB(activeSessionId);
+      console.log("[useAIChat effect] Creating StreamDB for:", sessionBeingLoaded);
+      db = createChatStreamDB(sessionBeingLoaded);
 
       try {
         await tryPreload();
         if (!cancelled) {
+          console.log(
+            "[useAIChat effect] StreamDB preloaded, setting state for:",
+            sessionBeingLoaded
+          );
+          // Once preloaded, set the streamDb and mark which session it belongs to
           setStreamDb(db);
-          updateState();
-
-          // Poll for updates while the session is active
-          pollInterval = setInterval(() => {
-            if (!cancelled && db) {
-              updateState();
-            }
-          }, 100);
+          setLoadedSessionId(sessionBeingLoaded);
+        } else {
+          console.log("[useAIChat effect] Cancelled before setting streamDb, closing db");
+          db?.close();
         }
       } catch (err) {
         console.error("[useAIChat] Failed to preload StreamDB:", err);
 
-        // If we get 403 after all retries, the session is invalid
-        // Clear it so the user can start fresh
+        // Don't reset activeSessionId on 403 - user explicitly chose this session
+        // Just set error state and let them retry or switch manually
         const is403 = err instanceof Error && err.message.includes("403");
         if (is403 && !cancelled) {
-          console.warn("[useAIChat] Session appears invalid (403), clearing...");
-          setActiveSessionId(null);
-          setStreamDb(null);
+          console.warn("[useAIChat] Session preload failed with 403, keeping session selected");
+          setError(new Error("Failed to load chat history"));
+        }
+        // Set the db anyway for degraded mode (messages may not load but session stays selected)
+        if (!cancelled && db) {
+          setStreamDb(db);
+          setLoadedSessionId(sessionBeingLoaded);
         }
       }
     })();
 
     return () => {
+      console.log("[useAIChat effect cleanup] Cancelling and closing db for:", sessionBeingLoaded);
       cancelled = true;
-      if (pollInterval) {
-        clearInterval(pollInterval);
-      }
       db?.close();
     };
   }, [activeSessionId]);
@@ -392,7 +448,9 @@ export function useAIChat(options: UseAIChatOptions) {
   }, [activeSessionId, sessions]);
 
   // Hydrate transcript from messages and chunks
+  // Live queries return arrays or undefined when collection not available
   const transcript = useMemo(() => {
+    if (!messagesData || !chunksData) return [];
     return hydrateFromArrays(messagesData, chunksData);
   }, [messagesData, chunksData]);
 
@@ -411,8 +469,42 @@ export function useAIChat(options: UseAIChatOptions) {
     }));
   }, [transcript]);
 
+  // Log tool call errors to console for debugging
+  const loggedErrorsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const m of transcript) {
+      // Skip if we've already logged this error
+      if (loggedErrorsRef.current.has(m.id)) continue;
+
+      // Log tool calls with error status
+      if (m.role === "tool_call" && m.status === "error") {
+        console.warn("[AI Tool Call Error]", {
+          messageId: m.id,
+          toolName: m.toolName,
+          toolCallId: m.toolCallId,
+          toolArgs: m.toolArgs,
+        });
+        loggedErrorsRef.current.add(m.id);
+      }
+
+      // Log tool results that contain errors
+      if (m.role === "tool_result" && m.toolResult) {
+        const result = m.toolResult as Record<string, unknown>;
+        if (result.error) {
+          console.warn("[AI Tool Result Error]", {
+            messageId: m.id,
+            toolCallId: m.toolCallId,
+            error: result.error,
+          });
+          loggedErrorsRef.current.add(m.id);
+        }
+      }
+    }
+  }, [transcript]);
+
   // Check if there's an active run
   const activeRun = useMemo(() => {
+    if (!runsData) return undefined;
     return runsData.find((r) => r.status === "running");
   }, [runsData]);
 
@@ -450,34 +542,19 @@ export function useAIChat(options: UseAIChatOptions) {
         let sessionId = activeSessionId;
 
         if (!sessionId) {
-          // Check if there's already an active session in the list
-          const existingSession = sessions.find(
-            (s) =>
-              s.status === "active" &&
-              (options.context === "editor"
-                ? s.documentId === options.documentId
-                : s.context === "dashboard")
-          );
-
-          if (existingSession) {
-            sessionId = existingSession.id;
-            setActiveSessionId(sessionId);
-          } else {
-            // Create a new session using the direct server function
-            // This is synchronous - it waits for the server to create the session
-            // before returning, avoiding race conditions with Electric sync
-            console.debug("[useAIChat] Creating new session via direct server call...");
-            const newSession = await createChatSessionDirect({
-              data: {
-                context: options.context,
-                documentId: options.documentId,
-                projectId: options.projectId,
-              },
-            });
-            sessionId = newSession.id;
-            setActiveSessionId(sessionId);
-            console.debug("[useAIChat] Session created:", sessionId);
-          }
+          // We're in "New Chat" mode - always create a NEW session
+          // Don't reuse existing sessions - user explicitly wanted a new chat
+          console.debug("[useAIChat] Creating new session via direct server call...");
+          const newSession = await createChatSessionDirect({
+            data: {
+              context: options.context,
+              documentId: options.documentId,
+              projectId: options.projectId,
+            },
+          });
+          sessionId = newSession.id;
+          setActiveSessionId(sessionId, "sendMessage-created");
+          console.debug("[useAIChat] Session created:", sessionId);
         }
 
         // Call the run endpoint directly from main thread (cookies work here)
@@ -516,6 +593,7 @@ export function useAIChat(options: UseAIChatOptions) {
 
   // Derive pending tool approvals from messages
   const pendingToolApprovals: ToolApprovalRequest[] = useMemo(() => {
+    if (!messagesData) return [];
     return messagesData
       .filter(
         (m) => m.role === "tool_call" && m.status === "pending" && m.requiresApproval === true
@@ -561,65 +639,91 @@ export function useAIChat(options: UseAIChatOptions) {
     [streamDb]
   );
 
-  // Start new chat - just clears UI state, session is created on first message
+  // Start new chat - clears active session, live queries will return empty
   const startNewChat = useCallback(() => {
-    setActiveSessionId(null);
+    console.log("[startNewChat] Starting new chat");
+    // Just set activeSessionId to null - the effect will handle closing StreamDB
+    setActiveSessionId(null, "startNewChat");
     setError(null);
-    setMessagesData([]);
-    setChunksData([]);
-    setRunsData([]);
-  }, []);
+    // Live queries will automatically return null/empty when streamDb is null
+  }, [setActiveSessionId]);
 
   // Switch to existing session (unarchives if needed)
   const switchToSession = useCallback(
     async (sessionId: string) => {
+      console.log("[switchToSession] Called with:", sessionId, "current:", activeSessionId);
+
+      // Don't switch to already active session
+      if (sessionId === activeSessionId) {
+        console.log("[switchToSession] Already active, skipping");
+        return;
+      }
+
       const session = sessions.find((s) => s.id === sessionId);
-      if (!session) return;
+      console.log("[switchToSession] Found session:", session?.id, session?.title);
+
+      if (!session) {
+        console.warn("[switchToSession] Session not found in list");
+        return;
+      }
 
       // If session is archived, unarchive it first
       if (session.status === "archived") {
+        console.log("[switchToSession] Unarchiving session");
         await unarchiveSession(sessionId);
       }
 
-      setActiveSessionId(sessionId);
+      // Just update the activeSessionId - the effect will handle closing old
+      // StreamDB and creating new one
+      setActiveSessionId(sessionId, "switchToSession");
       setError(null);
-      // StreamDB will be created by the effect when activeSessionId changes
+      console.log("[switchToSession] Switched to:", sessionId);
     },
-    [sessions, unarchiveSession]
+    [sessions, unarchiveSession, activeSessionId, setActiveSessionId]
   );
 
   // Archive session and switch away if it was active
   const handleArchiveSession = useCallback(
     async (sessionId: string) => {
-      await archiveSession(sessionId);
-      // If we just archived the active session, switch to another or start new chat
+      console.log("[handleArchiveSession] Archiving:", sessionId);
+      // If archiving the active session, switch away FIRST
       if (activeSessionId === sessionId) {
         const remainingActive = sessions.find((s) => s.id !== sessionId && s.status === "active");
         if (remainingActive) {
-          await switchToSession(remainingActive.id);
+          console.log("[handleArchiveSession] Switching to:", remainingActive.id);
+          setActiveSessionId(remainingActive.id, "archive-switch");
         } else {
-          startNewChat();
+          console.log("[handleArchiveSession] No remaining active, starting new chat");
+          setActiveSessionId(null, "archive-newchat");
         }
+        setError(null);
       }
+      // Then archive
+      await archiveSession(sessionId);
     },
-    [archiveSession, activeSessionId, sessions, switchToSession, startNewChat]
+    [archiveSession, activeSessionId, sessions, setActiveSessionId]
   );
 
   // Delete session permanently and switch away if it was active
   const handleDeleteSession = useCallback(
     async (sessionId: string) => {
-      await deleteSession(sessionId);
-      // If we just deleted the active session, switch to another or start new chat
+      console.log("[handleDeleteSession] Deleting:", sessionId);
+      // If deleting the active session, switch away FIRST
       if (activeSessionId === sessionId) {
         const remainingActive = sessions.find((s) => s.id !== sessionId && s.status === "active");
         if (remainingActive) {
-          await switchToSession(remainingActive.id);
+          console.log("[handleDeleteSession] Switching to:", remainingActive.id);
+          setActiveSessionId(remainingActive.id, "delete-switch");
         } else {
-          startNewChat();
+          console.log("[handleDeleteSession] No remaining active, starting new chat");
+          setActiveSessionId(null, "delete-newchat");
         }
+        setError(null);
       }
+      // Then delete
+      await deleteSession(sessionId);
     },
-    [deleteSession, activeSessionId, sessions, switchToSession, startNewChat]
+    [deleteSession, activeSessionId, sessions, setActiveSessionId]
   );
 
   return {

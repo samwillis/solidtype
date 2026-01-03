@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/samwillis/solidtype/main/artwork/hero-dark.jpg">
+  <img src="https://raw.githubusercontent.com/samwillis/solidtype/main/artwork/hero.jpg" alt="SolidType - Modern CAD, Built for the Web" style="width: 100%; max-width: 1200px; margin: 2rem 0;">
+</picture>
+
 # SolidType
 
 A modern, history-capable, parametric CAD application.

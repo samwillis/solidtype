@@ -9,6 +9,7 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { LuTrash2 } from "react-icons/lu";
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import { useAIChat } from "../../hooks/useAIChat";
 import { ToolApprovalPanel } from "../../components/ai/ToolApprovalPanel";
 import AISettingsMenu from "../../components/ai/AISettingsMenu";
@@ -204,14 +205,12 @@ const AIPanel: React.FC<AIPanelProps> = ({ context = "editor", documentId, proje
               </button>
             </div>
           ))}
-          {/* Only show + button if we're viewing a saved session */}
-          {activeSessionId !== null && (
-            <button className="ai-panel-new-tab" onClick={startNewChat} aria-label="New chat">
-              <PlusIcon />
-            </button>
-          )}
         </div>
         <div className="ai-panel-tabs-actions">
+          {/* New chat button - always visible */}
+          <button className="ai-panel-new-tab" onClick={startNewChat} aria-label="New chat">
+            <PlusIcon />
+          </button>
           <button
             ref={historyBtnRef}
             className="ai-panel-history-btn"
@@ -328,7 +327,9 @@ const AIPanel: React.FC<AIPanelProps> = ({ context = "editor", documentId, proje
                 >
                   {msg.role === "assistant" ? (
                     <div className="ai-panel-markdown">
-                      <ReactMarkdown>{msg.content || ""}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkBreaks]}>
+                        {msg.content || ""}
+                      </ReactMarkdown>
                     </div>
                   ) : (
                     msg.content

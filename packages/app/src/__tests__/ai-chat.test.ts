@@ -457,7 +457,10 @@ describe("toModelMessages", () => {
     expect(modelMessages[0].role).toBe("user");
   });
 
-  it("should convert tool_result to tool role", () => {
+  it("should exclude tool_result from history (tool calls handled by TanStack AI)", () => {
+    // Tool results are not included in the message history sent to the model.
+    // TanStack AI handles tool calls internally during the current run.
+    // For multi-turn conversations, we only need user prompts and final assistant responses.
     const transcript = [
       {
         id: "msg1",
@@ -472,9 +475,45 @@ describe("toModelMessages", () => {
 
     const modelMessages = toModelMessages(transcript);
 
-    expect(modelMessages).toHaveLength(1);
-    expect(modelMessages[0].role).toBe("tool");
-    expect(modelMessages[0].content).toBe('{"result":"success"}');
+    // Tool results are filtered out
+    expect(modelMessages).toHaveLength(0);
+  });
+
+  it("should skip empty assistant messages (tool-call-only)", () => {
+    const transcript = [
+      {
+        id: "msg1",
+        runId: "run1",
+        role: "user" as const,
+        status: "complete" as const,
+        content: "Create a project",
+        createdAt: "2024-01-01T00:00:00Z",
+      },
+      {
+        id: "msg2",
+        runId: "run1",
+        role: "assistant" as const,
+        status: "complete" as const,
+        content: "", // Empty - assistant only made tool calls
+        createdAt: "2024-01-01T00:00:01Z",
+      },
+      {
+        id: "msg3",
+        runId: "run1",
+        role: "assistant" as const,
+        status: "complete" as const,
+        content: "I created the project for you!",
+        createdAt: "2024-01-01T00:00:02Z",
+      },
+    ];
+
+    const modelMessages = toModelMessages(transcript);
+
+    // Empty assistant message is filtered out
+    expect(modelMessages).toHaveLength(2);
+    expect(modelMessages[0].role).toBe("user");
+    expect(modelMessages[1].role).toBe("assistant");
+    expect(modelMessages[1].content).toBe("I created the project for you!");
   });
 });
 
