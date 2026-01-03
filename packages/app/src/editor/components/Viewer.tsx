@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import { EffectComposer, EffectPass, RenderPass, SSAOEffect, NormalPass } from "postprocessing";
 import { useTheme } from "../contexts/ThemeContext";
 import { useViewer, ProjectionMode } from "../contexts/ViewerContext";
 import { useKernel } from "../contexts/KernelContext";
@@ -183,6 +186,9 @@ const Viewer: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const composerRef = useRef<EffectComposer | null>(null);
+  const aoEffectRef = useRef<SSAOEffect | null>(null);
+  const aoEnabledRef = useRef(true); // Track AO state for render loop
   const labelRendererRef = useRef<CSS2DRenderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | THREE.OrthographicCamera | null>(null);
   const targetRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
@@ -190,6 +196,7 @@ const Viewer: React.FC = () => {
   const needsRenderRef = useRef(true);
   const projectionModeRef = useRef<ProjectionMode>("perspective");
   const meshGroupRef = useRef<THREE.Group | null>(null);
+  const edgeGroupRef = useRef<THREE.Group | null>(null);
   const sketchGroupRef = useRef<THREE.Group | null>(null);
   const selectionGroupRef = useRef<THREE.Group | null>(null);
   const constraintLabelsGroupRef = useRef<THREE.Group | null>(null);
@@ -311,9 +318,7 @@ const Viewer: React.FC = () => {
     corner2: { x: number; y: number };
   } | null>(null);
   // For angled rectangle (4 corners, not axis-aligned)
-  const [previewPolygon, setPreviewPolygon] = useState<
-    { x: number; y: number }[] | null
-  >(null);
+  const [previewPolygon, setPreviewPolygon] = useState<{ x: number; y: number }[] | null>(null);
 
   // Snap target for visual indicator when hovering near a snap-able point
   const [snapTarget, setSnapTarget] = useState<{
@@ -833,12 +838,12 @@ const Viewer: React.FC = () => {
 
       if (PElen > 0.01) {
         const perpPE = { x: -PE.y / PElen, y: PE.x / PElen };
-        const det = N.x * (-perpPE.y) - N.y * (-perpPE.x);
+        const det = N.x * -perpPE.y - N.y * -perpPE.x;
 
         if (Math.abs(det) > 1e-10) {
           const dx = M.x - P.x;
           const dy = M.y - P.y;
-          const s = (dx * (-perpPE.y) - dy * (-perpPE.x)) / det;
+          const s = (dx * -perpPE.y - dy * -perpPE.x) / det;
           const center = { x: P.x + s * N.x, y: P.y + s * N.y };
 
           // Use bulge as the center for preview rendering (centerpoint arc style)
@@ -1140,7 +1145,8 @@ const Viewer: React.FC = () => {
   // Update meshes when kernel sends new mesh data
   useEffect(() => {
     const meshGroup = meshGroupRef.current;
-    if (!meshGroup) {
+    const edgeGroup = edgeGroupRef.current;
+    if (!meshGroup || !edgeGroup) {
       console.log("[Viewer] meshGroup not ready yet, sceneReady:", sceneReady);
       return;
     }
@@ -1154,6 +1160,18 @@ const Viewer: React.FC = () => {
       if (child instanceof THREE.Mesh) {
         child.geometry.dispose();
         if (child.material instanceof THREE.Material) {
+          child.material.dispose();
+        }
+      }
+    }
+
+    // Clear existing edge lines
+    while (edgeGroup.children.length > 0) {
+      const child = edgeGroup.children[0];
+      edgeGroup.remove(child);
+      if (child instanceof LineSegments2) {
+        child.geometry.dispose();
+        if (child.material instanceof LineMaterial) {
           child.material.dispose();
         }
       }
@@ -1184,23 +1202,80 @@ const Viewer: React.FC = () => {
 
       // Get body color from bodies list if available
       const bodyInfo = bodies.find((b) => b.featureId === bodyId);
-      const bodyColor = parseHexColor(bodyInfo?.color, 0x0078d4);
+      const bodyColor = parseHexColor(bodyInfo?.color, 0x3b82f6); // Default to a nice blue
 
+      // Enhanced CAD-style material with better visual properties
       const material = new THREE.MeshStandardMaterial({
-        color: isPreview ? (isCutPreview ? 0xff4444 : 0x44aaff) : bodyColor,
+        color: isPreview ? (isCutPreview ? 0xff4444 : 0x60a5fa) : bodyColor,
         side: THREE.DoubleSide,
         transparent: isPreview,
-        opacity: isPreview ? 0.45 : 1,
+        opacity: isPreview ? 0.5 : 1,
         depthWrite: !isPreview,
+        // CAD-style material properties for machined/plastic look
+        metalness: 0.1,
+        roughness: 0.4,
+        // Slight environment map contribution for subtle reflections
+        envMapIntensity: 0.5,
       });
 
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = bodyId;
       meshGroup.add(mesh);
+
+      // Add CAD-style edge lines from B-Rep edges (not tessellation edges)
+      console.log(
+        "[Viewer] Edge data for",
+        bodyId,
+        ":",
+        meshData.edges?.length ?? 0,
+        "floats,",
+        meshData.edges ? meshData.edges.length / 6 : 0,
+        "segments"
+      );
+      if (!isPreview && containerRef.current && meshData.edges && meshData.edges.length > 0) {
+        // Use LineSegmentsGeometry for disconnected line segments (pairs of points)
+        const lineGeometry = new LineSegmentsGeometry();
+        lineGeometry.setPositions(meshData.edges);
+
+        // Strong dark edges for CAD-style appearance with proper width
+        const edgeColor = theme === "dark" ? 0x000000 : 0x1a1a1a;
+        const edgeMaterial = new LineMaterial({
+          color: edgeColor,
+          linewidth: 2.0, // Line width in pixels - thicker for visibility
+          resolution: new THREE.Vector2(
+            containerRef.current.clientWidth,
+            containerRef.current.clientHeight
+          ),
+          dashed: false,
+        });
+
+        // Use LineSegments2 for rendering disconnected segments
+        const edgeLines = new LineSegments2(lineGeometry, edgeMaterial);
+        edgeLines.computeLineDistances();
+        edgeLines.name = `edges-${bodyId}`;
+        edgeLines.userData.bodyId = bodyId;
+        edgeGroup.add(edgeLines);
+      }
     });
 
     needsRenderRef.current = true;
-  }, [meshes, bodies, sceneReady, features]);
+  }, [meshes, bodies, sceneReady, features, theme]);
+
+  // Toggle ambient occlusion based on viewerState
+  useEffect(() => {
+    // Update ref for render loop to check
+    aoEnabledRef.current = viewerState.ambientOcclusion;
+    needsRenderRef.current = true;
+  }, [viewerState.ambientOcclusion]);
+
+  // Toggle edge visibility based on viewerState
+  useEffect(() => {
+    const edgeGroup = edgeGroupRef.current;
+    if (edgeGroup) {
+      edgeGroup.visible = viewerState.showEdges;
+      needsRenderRef.current = true;
+    }
+  }, [viewerState.showEdges]);
 
   // Render 3D face/edge selection highlights
   useEffect(() => {
@@ -3035,30 +3110,95 @@ const Viewer: React.FC = () => {
     camera.lookAt(targetRef.current);
     cameraRef.current = camera;
 
-    // Renderer setup
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    // Renderer setup with improved tone mapping for better contrast
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: "high-performance",
+    });
     renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap for performance
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     containerRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Post-processing setup for ambient occlusion
+    const composer = new EffectComposer(renderer, {
+      frameBufferType: THREE.HalfFloatType,
+    });
+
+    // Render pass
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    // Normal pass required for SSAO
+    const normalPass = new NormalPass(scene, camera);
+    composer.addPass(normalPass);
+
+    // SSAO Effect - screen-space ambient occlusion for depth perception
+    const ssaoEffect = new SSAOEffect(camera, normalPass.texture, {
+      worldDistanceThreshold: 100, // Distance threshold in world units
+      worldDistanceFalloff: 50,
+      worldProximityThreshold: 5,
+      worldProximityFalloff: 2,
+      luminanceInfluence: 0.5, // How much scene luminance affects AO
+      radius: 0.1, // Occlusion sampling radius
+      intensity: 2.5, // AO intensity for visible effect
+      bias: 0.025,
+      samples: 16, // Quality samples
+      rings: 4,
+      color: new THREE.Color(0x000000), // Black AO shadows
+    });
+    aoEffectRef.current = ssaoEffect;
+
+    // Effect pass to apply SSAO
+    const effectPass = new EffectPass(camera, ssaoEffect);
+    composer.addPass(effectPass);
+
+    composerRef.current = composer;
+
+    // Enhanced CAD-style lighting with better contrast
+    // Stronger ambient for base visibility
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(5, 10, 5);
-    scene.add(directionalLight);
+    // Key light - main illumination from upper-front-right (stronger for contrast)
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    keyLight.position.set(200, 350, 300);
+    scene.add(keyLight);
 
-    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
-    directionalLight2.position.set(-5, -5, -5);
-    scene.add(directionalLight2);
+    // Fill light - softer from opposite side to reduce harsh shadows
+    const fillLight = new THREE.DirectionalLight(0xf0f0ff, 0.4);
+    fillLight.position.set(-200, 50, -100);
+    scene.add(fillLight);
+
+    // Rim/back light - highlights edges from behind (gives depth)
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    rimLight.position.set(-50, 100, -300);
+    scene.add(rimLight);
+
+    // Top light - soft overhead illumination
+    const topLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    topLight.position.set(0, 400, 0);
+    scene.add(topLight);
+
+    // Hemisphere light for natural sky/ground gradient
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.3);
+    scene.add(hemiLight);
 
     // Group for kernel meshes
     const meshGroup = new THREE.Group();
     meshGroup.name = "kernel-meshes";
     scene.add(meshGroup);
     meshGroupRef.current = meshGroup;
+
+    // Group for edge lines (rendered on top of meshes)
+    const edgeGroup = new THREE.Group();
+    edgeGroup.name = "edge-lines";
+    edgeGroup.renderOrder = 0.1; // Slightly above meshes
+    scene.add(edgeGroup);
+    edgeGroupRef.current = edgeGroup;
 
     // Group for sketch visualization (rendered in 3D space)
     const sketchGroup = new THREE.Group();
@@ -3403,7 +3543,12 @@ const Viewer: React.FC = () => {
         cameraStateRef.current.distance = distance;
         cameraStateRef.current.version++;
 
-        renderer.render(scene, cameraRef.current);
+        // Use composer for post-processing when AO is enabled, direct render otherwise
+        if (composerRef.current && aoEnabledRef.current) {
+          composerRef.current.render();
+        } else {
+          renderer.render(scene, cameraRef.current);
+        }
         labelRenderer.render(scene, cameraRef.current);
       }
     };
@@ -3440,8 +3585,26 @@ const Viewer: React.FC = () => {
       renderer.setSize(width, height);
       labelRenderer.setSize(width, height);
 
+      // Resize post-processing composer (handles all passes automatically)
+      if (composerRef.current) {
+        composerRef.current.setSize(width, height);
+      }
+
+      // Update LineMaterial resolution for edge lines
+      if (edgeGroupRef.current) {
+        edgeGroupRef.current.traverse((child) => {
+          if (child instanceof LineSegments2 && child.material instanceof LineMaterial) {
+            child.material.resolution.set(width, height);
+          }
+        });
+      }
+
       // Immediately render to prevent black flash
-      renderer.render(scene, currentCamera);
+      if (composerRef.current && aoEnabledRef.current) {
+        composerRef.current.render();
+      } else {
+        renderer.render(scene, currentCamera);
+      }
       labelRenderer.render(scene, currentCamera);
     };
 
@@ -3488,6 +3651,12 @@ const Viewer: React.FC = () => {
       if (containerRef.current && labelRenderer.domElement.parentNode) {
         labelRenderer.domElement.parentNode.removeChild(labelRenderer.domElement);
       }
+      // Dispose post-processing composer
+      if (composerRef.current) {
+        composerRef.current.dispose();
+        composerRef.current = null;
+      }
+      aoEffectRef.current = null;
       renderer.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3520,9 +3689,7 @@ const Viewer: React.FC = () => {
         // Determine selection mode based on drag direction
         // Left-to-right = window (only inside), right-to-left = crossing (intersecting)
         const mode = dx >= 0 ? "window" : "crossing";
-        setBoxSelection((prev) =>
-          prev ? { ...prev, current: { x: cx, y: cy }, mode } : null
-        );
+        setBoxSelection((prev) => (prev ? { ...prev, current: { x: cx, y: cy }, mode } : null));
       }
 
       // Update sketch coordinates using 3D ray casting
@@ -3732,7 +3899,11 @@ const Viewer: React.FC = () => {
           if (!rect) return;
 
           const topLeft = screenToSketch(minX + rect.left, minY + rect.top, sketchMode.planeId!);
-          const bottomRight = screenToSketch(maxX + rect.left, maxY + rect.top, sketchMode.planeId!);
+          const bottomRight = screenToSketch(
+            maxX + rect.left,
+            maxY + rect.top,
+            sketchMode.planeId!
+          );
           if (!topLeft || !bottomRight) return;
 
           const boxMinX = Math.min(topLeft.x, bottomRight.x);
@@ -3746,8 +3917,8 @@ const Viewer: React.FC = () => {
 
           // Check points
           for (const point of sketch.points) {
-            const inside = point.x >= boxMinX && point.x <= boxMaxX &&
-                          point.y >= boxMinY && point.y <= boxMaxY;
+            const inside =
+              point.x >= boxMinX && point.x <= boxMaxX && point.y >= boxMinY && point.y <= boxMaxY;
             if (inside) {
               newSelectedPoints.add(point.id);
             }
@@ -3761,25 +3932,38 @@ const Viewer: React.FC = () => {
               const startPt = sketch.points.find((p) => p.id === entity.start);
               const endPt = sketch.points.find((p) => p.id === entity.end);
               if (startPt && endPt) {
-                const startInside = startPt.x >= boxMinX && startPt.x <= boxMaxX &&
-                                   startPt.y >= boxMinY && startPt.y <= boxMaxY;
-                const endInside = endPt.x >= boxMinX && endPt.x <= boxMaxX &&
-                                 endPt.y >= boxMinY && endPt.y <= boxMaxY;
+                const startInside =
+                  startPt.x >= boxMinX &&
+                  startPt.x <= boxMaxX &&
+                  startPt.y >= boxMinY &&
+                  startPt.y <= boxMaxY;
+                const endInside =
+                  endPt.x >= boxMinX &&
+                  endPt.x <= boxMaxX &&
+                  endPt.y >= boxMinY &&
+                  endPt.y <= boxMaxY;
                 if (mode === "window") {
                   // Window: both endpoints must be inside
                   shouldSelect = startInside && endInside;
                 } else {
                   // Crossing: at least one endpoint inside, or line intersects box
-                  shouldSelect = startInside || endInside ||
+                  shouldSelect =
+                    startInside ||
+                    endInside ||
                     lineIntersectsBox(startPt, endPt, boxMinX, boxMinY, boxMaxX, boxMaxY);
                 }
               }
             } else if (entity.type === "arc" || entity.type === "circle") {
               // For arcs and circles, use center point for simplicity
-              const center = sketch.points.find((p) => p.id === (entity as SketchArc | SketchCircle).center);
+              const center = sketch.points.find(
+                (p) => p.id === (entity as SketchArc | SketchCircle).center
+              );
               if (center) {
-                const centerInside = center.x >= boxMinX && center.x <= boxMaxX &&
-                                    center.y >= boxMinY && center.y <= boxMaxY;
+                const centerInside =
+                  center.x >= boxMinX &&
+                  center.x <= boxMaxX &&
+                  center.y >= boxMinY &&
+                  center.y <= boxMaxY;
                 if (mode === "window") {
                   // For window mode, check if entire arc/circle is inside
                   // Simplified: just check center
@@ -3894,8 +4078,15 @@ const Viewer: React.FC = () => {
             if (pointId) {
               // Add appropriate constraint based on entity type
               if (nearestEntity.entity.type === "line") {
-                addConstraint({ type: "pointOnLine", point: pointId, line: nearestEntity.entity.id });
-              } else if (nearestEntity.entity.type === "arc" || nearestEntity.entity.type === "circle") {
+                addConstraint({
+                  type: "pointOnLine",
+                  point: pointId,
+                  line: nearestEntity.entity.id,
+                });
+              } else if (
+                nearestEntity.entity.type === "arc" ||
+                nearestEntity.entity.type === "circle"
+              ) {
                 addConstraint({ type: "pointOnArc", point: pointId, arc: nearestEntity.entity.id });
               }
             }
@@ -4123,10 +4314,10 @@ const Viewer: React.FC = () => {
           // For a tangent arc from P with tangent direction T to end point E:
           // The center lies on the line perpendicular to T at P, and also on the
           // perpendicular bisector of segment PE.
-          // 
+          //
           // Perpendicular to T at P: P + s * (-T.y, T.x) for some s
           // Perpendicular bisector of PE: midpoint M + t * perpendicular to PE
-          // 
+          //
           // Solve for intersection:
           const P = tangentSource.point;
           const E = endPoint;
@@ -4157,7 +4348,7 @@ const Viewer: React.FC = () => {
           // s * N.y - t * perpPE.y = M.y - P.y
 
           // Use Cramer's rule
-          const det = N.x * (-perpPE.y) - N.y * (-perpPE.x);
+          const det = N.x * -perpPE.y - N.y * -perpPE.x;
           if (Math.abs(det) < 1e-10) {
             // Lines are parallel - can't form tangent arc (end point is on tangent line)
             setTangentSource(null);
@@ -4166,7 +4357,7 @@ const Viewer: React.FC = () => {
 
           const dx = M.x - P.x;
           const dy = M.y - P.y;
-          const s = (dx * (-perpPE.y) - dy * (-perpPE.x)) / det;
+          const s = (dx * -perpPE.y - dy * -perpPE.x) / det;
 
           // Center of the arc
           const center = {
@@ -4508,9 +4699,7 @@ const Viewer: React.FC = () => {
             height: Math.abs(boxSelection.current.y - boxSelection.start.y),
             border: `2px ${boxSelection.mode === "window" ? "solid" : "dashed"} #00aaff`,
             backgroundColor:
-              boxSelection.mode === "window"
-                ? "rgba(0, 170, 255, 0.1)"
-                : "rgba(0, 255, 170, 0.1)",
+              boxSelection.mode === "window" ? "rgba(0, 170, 255, 0.1)" : "rgba(0, 255, 170, 0.1)",
             pointerEvents: "none",
             zIndex: 1000,
           }}

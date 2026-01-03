@@ -1397,9 +1397,10 @@ function sendMesh(
     const normals = new Float32Array(mesh.normals);
     const indices = new Uint32Array(mesh.indices);
     const faceMap = mesh.faceMap ? new Uint32Array(mesh.faceMap) : undefined;
+    const edges = mesh.edges ? new Float32Array(mesh.edges) : undefined;
 
     console.log(
-      `[Worker] Mesh stats: ${positions.length / 3} vertices, ${indices.length / 3} triangles, ${faceMap?.length ?? 0} faces`
+      `[Worker] Mesh stats: ${positions.length / 3} vertices, ${indices.length / 3} triangles, ${faceMap?.length ?? 0} faces, ${edges ? edges.length / 6 : 0} edge segments`
     );
 
     const transferableMesh: TransferableMesh = {
@@ -1407,11 +1408,15 @@ function sendMesh(
       normals,
       indices,
       faceMap,
+      edges,
     };
 
     const transferBuffers: ArrayBuffer[] = [positions.buffer, normals.buffer, indices.buffer];
     if (faceMap) {
       transferBuffers.push(faceMap.buffer);
+    }
+    if (edges) {
+      transferBuffers.push(edges.buffer);
     }
 
     self.postMessage(

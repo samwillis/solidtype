@@ -182,7 +182,10 @@ function reconstructMessages(chunks: StreamChunk[]): ChatMessage[] {
   const messages: ChatMessage[] = [];
   const assistantMessages = new Map<
     string,
-    { content: string; toolCalls: { id: string; name: string; arguments: Record<string, unknown> }[] }
+    {
+      content: string;
+      toolCalls: { id: string; name: string; arguments: Record<string, unknown> }[];
+    }
   >();
 
   for (const chunk of chunks) {

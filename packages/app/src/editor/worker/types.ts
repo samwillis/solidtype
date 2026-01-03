@@ -196,6 +196,8 @@ export interface TransferableMesh {
   indices: Uint32Array;
   /** Maps triangle index to face ID for 3D selection */
   faceMap?: Uint32Array;
+  /** B-Rep edge line segments [x1,y1,z1, x2,y2,z2, ...] for CAD-style edge rendering */
+  edges?: Float32Array;
 }
 
 /** Request to resolve a persistent reference */

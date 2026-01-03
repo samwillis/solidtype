@@ -64,6 +64,8 @@ export interface Mesh {
   readonly indices: Uint32Array;
   /** Maps each triangle to its face index (for 3D selection) */
   readonly faceMap: Uint32Array;
+  /** B-Rep edge line segments for CAD-style rendering (x1y1z1 x2y2z2...) */
+  readonly edges?: Float32Array;
 }
 
 /** Bounding box */
@@ -610,6 +612,7 @@ export class SolidSession {
       normals: result.normals,
       indices: result.indices,
       faceMap: result.faceMap,
+      edges: result.edges,
     };
   }
 

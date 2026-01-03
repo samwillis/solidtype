@@ -11,7 +11,9 @@
   border-radius: 4px;
   cursor: pointer;
   color: var(--color-text-muted, #888);
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .ai-settings-trigger:hover {

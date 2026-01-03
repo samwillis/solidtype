@@ -104,6 +104,9 @@ importers:
       pg:
         specifier: ^8.16.3
         version: 8.16.3
+      postprocessing:
+        specifier: ^6.38.2
+        version: 6.38.2(three@0.161.0)
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -3474,6 +3477,11 @@ packages:
   postgres-interval@1.2.0:
     resolution: {integrity: sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==}
     engines: {node: '>=0.10.0'}
+
+  postprocessing@6.38.2:
+    resolution: {integrity: sha512-7DwuT7Tkst41ZjSj287g7C9c5/D3Xx5rMgBosg0dadbUPoZD2HNzkadKPol1d2PJAoI9f+Jeh1/v9YfLzpFGVw==}
+    peerDependencies:
+      three: '>= 0.157.0 < 0.183.0'
 
   prelude-ls@1.2.1:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
@@ -7656,6 +7664,10 @@ snapshots:
   postgres-interval@1.2.0:
     dependencies:
       xtend: 4.0.2
+
+  postprocessing@6.38.2(three@0.161.0):
+    dependencies:
+      three: 0.161.0
 
   prelude-ls@1.2.1: {}
 

@@ -107,9 +107,7 @@ export function AISettingsMenu() {
             </button>
 
             <div className="ai-settings-hint">
-              {yoloMode
-                ? "All tools auto-approved"
-                : "Destructive operations require confirmation"}
+              {yoloMode ? "All tools auto-approved" : "Destructive operations require confirmation"}
             </div>
 
             {/* Show count of always-allowed tools */}

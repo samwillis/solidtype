@@ -43,6 +43,10 @@ interface ViewerState {
   gridSize: number;
   /** Whether auto-constraints (H/V, coincident) are applied during sketching */
   autoConstraints: boolean;
+  /** Whether ambient occlusion post-processing is enabled */
+  ambientOcclusion: boolean;
+  /** Whether edge rendering is enabled for CAD-style appearance */
+  showEdges: boolean;
 }
 
 interface PlaneTransform {
@@ -66,6 +70,10 @@ interface ViewerActions {
   toggleAutoConstraints: () => void;
   /** Set auto-constraints enabled/disabled */
   setAutoConstraints: (enabled: boolean) => void;
+  /** Toggle ambient occlusion on/off */
+  toggleAmbientOcclusion: () => void;
+  /** Toggle edge rendering on/off */
+  toggleShowEdges: () => void;
 }
 
 // Shared camera state ref for real-time sync between Viewer and ViewCube
@@ -171,6 +179,8 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     snapToGrid: true,
     gridSize: 1, // 1mm default
     autoConstraints: true, // Auto-apply H/V constraints
+    ambientOcclusion: false, // Disabled by default for performance
+    showEdges: true, // Enable edges by default for CAD-style appearance
   });
 
   // Shared ref for camera state (avoids React state updates during drag)
@@ -310,6 +320,14 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     setState((prev) => ({ ...prev, autoConstraints: enabled }));
   }, []);
 
+  const toggleAmbientOcclusion = useCallback(() => {
+    setState((prev) => ({ ...prev, ambientOcclusion: !prev.ambientOcclusion }));
+  }, []);
+
+  const toggleShowEdges = useCallback(() => {
+    setState((prev) => ({ ...prev, showEdges: !prev.showEdges }));
+  }, []);
+
   // Convert screen coordinates to sketch coordinates via ray-plane intersection
   const screenToSketch = useCallback(
     (screenX: number, screenY: number, planeId: string): { x: number; y: number } | null => {
@@ -336,6 +354,8 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
           setGridSize,
           toggleAutoConstraints,
           setAutoConstraints,
+          toggleAmbientOcclusion,
+          toggleShowEdges,
         },
         registerRefs,
         cameraStateRef,

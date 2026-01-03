@@ -97,7 +97,9 @@ function Home() {
                 TanStack&nbsp;DB
               </a>{" "}
               and{" "}
-              <a href="https://tanstack.com/ai" target="_blank" rel="noopener noreferrer">AI</a>
+              <a href="https://tanstack.com/ai" target="_blank" rel="noopener noreferrer">
+                AI
+              </a>
               ,{" "}
               <a
                 href="https://github.com/durable-streams/durable-streams"
@@ -117,8 +119,8 @@ function Home() {
               <a href="https://ocjs.org" target="_blank" rel="noopener noreferrer">
                 OpenCascade.js
               </a>
-              . Create complex 3D models with 2D sketches, constraints, and AI assistance—all in your
-              browser.
+              . Create complex 3D models with 2D sketches, constraints, and AI assistance—all in
+              your browser.
             </p>
             <div className="home-hero-actions">
               <Link to="/signup" className="home-cta-primary">

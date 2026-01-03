@@ -1600,6 +1600,41 @@ const PropertiesPanel: React.FC = () => {
                       </svg>
                       <span>Wireframe</span>
                     </Menu.Item>
+                    <Menu.Separator className="properties-panel-header-dropdown-separator" />
+                    <Menu.Item
+                      className={`properties-panel-header-dropdown-item ${viewerState.ambientOcclusion ? "active" : ""}`}
+                      onClick={() => viewerActions.toggleAmbientOcclusion()}
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 2a10 10 0 0 0 0 20" fill="currentColor" opacity="0.3" />
+                      </svg>
+                      <span>Ambient Occlusion</span>
+                    </Menu.Item>
+                    <Menu.Item
+                      className={`properties-panel-header-dropdown-item ${viewerState.showEdges ? "active" : ""}`}
+                      onClick={() => viewerActions.toggleShowEdges()}
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <path d="M3 3h18v18H3z" />
+                        <path d="M3 3l18 18M21 3L3 21" />
+                      </svg>
+                      <span>Show Edges</span>
+                    </Menu.Item>
                   </Menu.Group>
                   <Menu.Group>
                     <Menu.GroupLabel className="properties-panel-header-dropdown-label">

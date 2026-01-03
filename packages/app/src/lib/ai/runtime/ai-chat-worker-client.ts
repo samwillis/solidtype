@@ -22,18 +22,17 @@ export class AIChatWorkerClient {
     try {
       // Try SharedWorker first
       if (typeof SharedWorker !== "undefined") {
-        this.worker = new SharedWorker(
-          new URL("./ai-chat-worker.ts", import.meta.url),
-          { type: "module", name: "ai-chat-worker" }
-        );
+        this.worker = new SharedWorker(new URL("./ai-chat-worker.ts", import.meta.url), {
+          type: "module",
+          name: "ai-chat-worker",
+        });
         this.port = this.worker.port;
         this.port.start();
       } else {
         // Fallback to regular Worker
-        this.worker = new Worker(
-          new URL("./ai-chat-worker.ts", import.meta.url),
-          { type: "module" }
-        );
+        this.worker = new Worker(new URL("./ai-chat-worker.ts", import.meta.url), {
+          type: "module",
+        });
       }
 
       this.setupMessageHandler();
@@ -98,10 +97,7 @@ export class AIChatWorkerClient {
   /**
    * Execute a local tool (CAD operations in worker kernel)
    */
-  async executeLocalTool(
-    toolName: string,
-    args: Record<string, unknown>
-  ): Promise<unknown> {
+  async executeLocalTool(toolName: string, args: Record<string, unknown>): Promise<unknown> {
     await this.connect();
     this.sendCommand({
       type: "execute-local-tool",

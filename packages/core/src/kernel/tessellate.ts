@@ -19,6 +19,8 @@ export interface TessellatedMesh {
   indices: Uint32Array;
   /** Maps each triangle index to its face ID (for 3D selection) */
   faceMap: Uint32Array;
+  /** Optional: B-Rep edge line segments [x1,y1,z1, x2,y2,z2, ...] */
+  edges?: Float32Array;
 }
 
 /**
@@ -156,12 +158,89 @@ export function tessellateWithParams(
   // Compute normals from triangles
   const computedNormals = computeNormals(vertices, indices);
 
+  // Extract B-Rep edges from the triangulation
+  const edges = extractEdges(shape);
+
   return {
     vertices: new Float32Array(vertices),
     normals: new Float32Array(computedNormals),
     indices: new Uint32Array(indices),
     faceMap: new Uint32Array(faceMap),
+    edges,
   };
+}
+
+/**
+ * Extract B-Rep edges from a shape by sampling the 3D curves.
+ *
+ * @param shape - The shape to extract edges from
+ * @param numSamples - Number of samples per edge for curved edges
+ */
+function extractEdges(shape: Shape, numSamples = 32): Float32Array {
+  const oc = getOC();
+  const edgePoints: number[] = [];
+
+  // Track processed edges to avoid duplicates (edges are shared between faces)
+  const processedEdges = new Set<number>();
+
+  // Iterate over all edges in the shape
+  const edgeExplorer = new oc.TopExp_Explorer_2(
+    shape.raw,
+    oc.TopAbs_ShapeEnum.TopAbs_EDGE,
+    oc.TopAbs_ShapeEnum.TopAbs_SHAPE
+  );
+
+  while (edgeExplorer.More()) {
+    const edge = oc.TopoDS.Edge_1(edgeExplorer.Current());
+
+    // Get a hash to deduplicate edges
+    const edgeHash = edge.HashCode(1000000);
+    if (processedEdges.has(edgeHash)) {
+      edgeExplorer.Next();
+      continue;
+    }
+    processedEdges.add(edgeHash);
+
+    try {
+      // Use BRepAdaptor_Curve to get the 3D curve from the edge
+      const adaptor = new oc.BRepAdaptor_Curve_2(edge);
+      const paramStart = adaptor.FirstParameter();
+      const paramEnd = adaptor.LastParameter();
+
+      // Check if it's a line (only needs 2 points) or curve (needs more samples)
+      const curveType = adaptor.GetType();
+      const isLine = curveType === oc.GeomAbs_CurveType.GeomAbs_Line;
+      const samples = isLine ? 2 : numSamples;
+
+      // Sample the curve
+      const points: { x: number; y: number; z: number }[] = [];
+
+      for (let i = 0; i < samples; i++) {
+        const t = paramStart + (paramEnd - paramStart) * (i / (samples - 1));
+        const pnt = adaptor.Value(t);
+        points.push({ x: pnt.X(), y: pnt.Y(), z: pnt.Z() });
+        pnt.delete();
+      }
+
+      // Create line segments between consecutive points
+      for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        edgePoints.push(p1.x, p1.y, p1.z);
+        edgePoints.push(p2.x, p2.y, p2.z);
+      }
+
+      adaptor.delete();
+    } catch {
+      // Skip edges that fail to extract (e.g., degenerate edges)
+    }
+
+    edgeExplorer.Next();
+  }
+
+  edgeExplorer.delete();
+
+  return new Float32Array(edgePoints);
 }
 
 /**

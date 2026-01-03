@@ -227,9 +227,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ context = "editor", documentId, proje
                         </button>
                       </div>
                     ))}
-                    {archivedSessions.length > 0 && (
-                      <div className="ai-panel-history-divider" />
-                    )}
+                    {archivedSessions.length > 0 && <div className="ai-panel-history-divider" />}
                   </>
                 )}
                 {archivedSessions.length > 0 ? (

@@ -723,7 +723,9 @@ export function DashboardAIChat() {
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
   z-index: 100;
 }
 
@@ -783,12 +785,13 @@ export function DashboardLayout() {
 
 **Default behavior:** All dashboard tools auto-execute except destructive operations.
 
-| Tool | Approval Level |
-|------|----------------|
-| All read, create, rename, move, navigation tools | `auto` (default) |
-| `deleteDocument`, `deleteFolder`, `deleteBranch`, `deleteWorkspace`, `deleteProject` | `confirm` |
+| Tool                                                                                 | Approval Level   |
+| ------------------------------------------------------------------------------------ | ---------------- |
+| All read, create, rename, move, navigation tools                                     | `auto` (default) |
+| `deleteDocument`, `deleteFolder`, `deleteBranch`, `deleteWorkspace`, `deleteProject` | `confirm`        |
 
 Users can override via:
+
 - **YOLO mode** - auto-approve everything including deletions
 - **Per-tool "always allow"** - bypass confirmation for specific tools
 

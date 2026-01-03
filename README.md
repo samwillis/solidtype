@@ -309,8 +309,9 @@ SolidType uses a modern local-first architecture, **serving as a production exam
 - **Use case**: Perfect for hierarchical, relational data that needs querying and filtering
 
 **Example flow:**
+
 ```
-User creates project → Server writes to PostgreSQL → Electric syncs → 
+User creates project → Server writes to PostgreSQL → Electric syncs →
 TanStack DB updates → UI re-renders automatically
 ```
 
@@ -328,8 +329,9 @@ TanStack DB updates → UI re-renders automatically
 - **Use case**: Perfect for collaborative editing where order matters and conflicts must merge automatically
 
 **Example flow:**
+
 ```
-User adds sketch point → Yjs update → Durable Stream append → 
+User adds sketch point → Yjs update → Durable Stream append →
 Other clients receive update → CRDT merge → UI updates
 ```
 
@@ -352,9 +354,10 @@ Other clients receive update → CRDT merge → UI updates
   - **Purpose**: Streaming, resumption, message replay
 
 **Example flow:**
+
 ```
-User sends message → Server persists to Durable Stream → 
-LLM streams response → Chunks persisted to stream → 
+User sends message → Server persists to Durable Stream →
+LLM streams response → Chunks persisted to stream →
 Client receives SSE → UI updates in real-time
 ```
 
@@ -398,6 +401,7 @@ AI tools are organized by context:
 - **Client tools**: Navigation, selection, view manipulation (run in browser)
 
 Tools execute in two modes:
+
 1. **Server-side**: Modeling operations that modify the document (via Yjs updates)
 2. **Client-side**: UI operations like navigation and selection
 
@@ -438,6 +442,7 @@ Runtime Options:
 ```
 
 **Current implementation**: Browser runtime using SharedWorker (with Worker fallback)
+
 - Modeling kernel (OCCT) runs in worker thread
 - Agents appear in presence/awareness system
 - Generic interface for future remote execution (edge, Durable Objects)
@@ -497,19 +502,23 @@ See [`plan/23-ai-core-infrastructure.md`](./plan/23-ai-core-infrastructure.md) f
 ### Key Technologies
 
 **Core Framework:**
+
 - **TanStack Start**: Full-stack React framework
 - **TanStack DB**: Client-side embedded database with live queries
 - **Drizzle ORM**: Type-safe database queries and migrations
 
 **Sync & Collaboration:**
+
 - **Electric SQL**: Real-time Postgres sync for structured metadata
 - **Durable Streams**: Append-only streams for Yjs document persistence
 - **Yjs**: CRDT-based collaborative editing
 
 **CAD Kernel:**
+
 - **OpenCascade.js**: B-Rep kernel (WASM) for 3D geometry operations
 
 **AI Integration:**
+
 - **TanStack AI**: Unified AI interface with tool calling support
 - **Anthropic Claude**: LLM for chat-based modeling assistance
 - **Agent Runtime**: Background execution system (SharedWorker/Worker)

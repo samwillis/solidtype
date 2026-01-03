@@ -417,14 +417,21 @@ export async function getDashboardTools(userId: string): Promise<ServerTool[]> {
       const sourceByBase = new Map(sourceDocs.map((d) => [d.baseDocumentId, d]));
       const targetByBase = new Map(targetDocs.map((d) => [d.baseDocumentId, d]));
 
-      const conflicts: { documentId: string; documentName: string; type: "modified-both" | "deleted-modified" | "modified-deleted" }[] = [];
+      const conflicts: {
+        documentId: string;
+        documentName: string;
+        type: "modified-both" | "deleted-modified" | "modified-deleted";
+      }[] = [];
 
       // Check for conflicts
       for (const [baseId, sourceDoc] of sourceByBase) {
         const targetDoc = targetByBase.get(baseId);
         if (targetDoc) {
           // Both branches have this document - check if both modified
-          if (sourceDoc.updatedAt > targetDoc.createdAt && targetDoc.updatedAt > sourceDoc.createdAt) {
+          if (
+            sourceDoc.updatedAt > targetDoc.createdAt &&
+            targetDoc.updatedAt > sourceDoc.createdAt
+          ) {
             conflicts.push({
               documentId: sourceDoc.id,
               documentName: sourceDoc.name,
@@ -481,52 +488,54 @@ export async function getDashboardTools(userId: string): Promise<ServerTool[]> {
 
   // Resolve Merge Conflict
   tools.push(
-    resolveMergeConflictDef.server(async ({ sourceBranchId: _sourceBranchId, targetBranchId, documentId, resolution }) => {
-      const sourceDoc = await db.query.documents.findFirst({
-        where: eq(documents.id, documentId),
-      });
-      if (!sourceDoc) throw new Error("Document not found");
+    resolveMergeConflictDef.server(
+      async ({ sourceBranchId: _sourceBranchId, targetBranchId, documentId, resolution }) => {
+        const sourceDoc = await db.query.documents.findFirst({
+          where: eq(documents.id, documentId),
+        });
+        if (!sourceDoc) throw new Error("Document not found");
 
-      const targetDoc = sourceDoc.baseDocumentId
-        ? await db.query.documents.findFirst({
-            where: and(
-              eq(documents.branchId, targetBranchId),
-              eq(documents.baseDocumentId, sourceDoc.baseDocumentId)
-            ),
-          })
-        : null;
+        const targetDoc = sourceDoc.baseDocumentId
+          ? await db.query.documents.findFirst({
+              where: and(
+                eq(documents.branchId, targetBranchId),
+                eq(documents.baseDocumentId, sourceDoc.baseDocumentId)
+              ),
+            })
+          : null;
 
-      switch (resolution) {
-        case "keep-source":
-          if (targetDoc) {
-            await db
-              .update(documents)
-              .set({
-                name: sourceDoc.name,
-                folderId: sourceDoc.folderId,
-                updatedAt: new Date(),
-              })
-              .where(eq(documents.id, targetDoc.id));
-          }
-          break;
-        case "keep-target":
-          // Nothing to do - target stays as is
-          break;
-        case "keep-both":
-          // Create a copy with a new name
-          await db.insert(documents).values({
-            ...sourceDoc,
-            id: crypto.randomUUID(),
-            baseDocumentId: crypto.randomUUID(),
-            branchId: targetBranchId,
-            name: `${sourceDoc.name} (merged)`,
-            durableStreamId: `project/${sourceDoc.projectId}/doc/${crypto.randomUUID()}/branch/${targetBranchId}`,
-          });
-          break;
+        switch (resolution) {
+          case "keep-source":
+            if (targetDoc) {
+              await db
+                .update(documents)
+                .set({
+                  name: sourceDoc.name,
+                  folderId: sourceDoc.folderId,
+                  updatedAt: new Date(),
+                })
+                .where(eq(documents.id, targetDoc.id));
+            }
+            break;
+          case "keep-target":
+            // Nothing to do - target stays as is
+            break;
+          case "keep-both":
+            // Create a copy with a new name
+            await db.insert(documents).values({
+              ...sourceDoc,
+              id: crypto.randomUUID(),
+              baseDocumentId: crypto.randomUUID(),
+              branchId: targetBranchId,
+              name: `${sourceDoc.name} (merged)`,
+              durableStreamId: `project/${sourceDoc.projectId}/doc/${crypto.randomUUID()}/branch/${targetBranchId}`,
+            });
+            break;
+        }
+
+        return { success: true, documentName: sourceDoc.name };
       }
-
-      return { success: true, documentName: sourceDoc.name };
-    })
+    )
   );
 
   // Get Branch Diff

@@ -266,8 +266,7 @@ export const deleteBranchDef = toolDefinition({
 
 export const mergeBranchDef = toolDefinition({
   name: "mergeBranch",
-  description:
-    "Merge a source branch into a target branch. Returns conflicts if any exist.",
+  description: "Merge a source branch into a target branch. Returns conflicts if any exist.",
   inputSchema: z.object({
     sourceBranchId: z.string(),
     targetBranchId: z.string(),

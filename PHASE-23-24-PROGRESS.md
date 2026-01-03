@@ -9,15 +9,18 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
 ### Phase 23: Core Chat Infrastructure
 
 #### ✅ Package Setup
+
 - **DONE**: TanStack AI packages installed (`@tanstack/ai`, `@tanstack/ai-client`, `@tanstack/ai-openai`)
 - **NOTE**: Removed `@tanstack/ai-react` per user feedback (chat happens in worker, not React hooks)
 
 #### ✅ Database & Schema
+
 - **DONE**: `ai_chat_sessions` PostgreSQL table schema created
 - **DONE**: Migration generated (`drizzle/0000_bizarre_alice.sql`)
 - **DONE**: Schema exported in `packages/app/src/db/schema/index.ts`
 
 #### ✅ Session Management
+
 - **DONE**: Session types and helpers (`packages/app/src/lib/ai/session.ts`)
 - **DONE**: Session CRUD server functions (`packages/app/src/lib/ai/session-functions.ts`)
   - ⚠️ **ISSUE**: TypeScript errors - `input` method doesn't exist, should check TanStack Start API
@@ -25,16 +28,19 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
   - ⚠️ **ISSUE**: TypeScript error - `body: data.buffer` type mismatch
 
 #### ✅ API Route
+
 - **DONE**: `/api/ai/chat` endpoint created (`packages/app/src/routes/api/ai/chat.ts`)
 - **DONE**: SSE streaming implementation
 - **DONE**: Authentication via better-auth
 - **DONE**: Tool call/result persistence
 
 #### ✅ Adapter Configuration
+
 - **DONE**: AI adapter configuration (`packages/app/src/lib/ai/adapter.ts`)
 - **DONE**: OpenAI integration with environment variable support
 
 #### ✅ Tool Approval System
+
 - **DONE**: Unified approval registry (`packages/app/src/lib/ai/approval.ts`)
 - **DONE**: User preferences storage (`packages/app/src/lib/ai/approval-preferences.ts`)
 - **DONE**: `useToolApprovalPrefs` hook
@@ -42,12 +48,14 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
 - **DONE**: Per-tool "always allow" functionality
 
 #### ✅ React Hooks
+
 - **DONE**: `useAuth` hook (`packages/app/src/hooks/useAuth.ts`)
 - **DONE**: `useAIChat` hook (`packages/app/src/hooks/useAIChat.ts`)
   - Simplified to use direct fetch (no TanStack AI React hooks)
   - ⚠️ **MINOR**: Unused imports (`getApprovalLevel`, `approvalPrefs`)
 
 #### ✅ UI Components
+
 - **DONE**: `AIPanel.tsx` wired to `useAIChat` hook
 - **DONE**: `context` prop added to `AIPanel` ("dashboard" | "editor")
 - **DONE**: `ToolApprovalPanel.tsx` component created
@@ -55,12 +63,14 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
 - **REMOVED**: `DashboardAIChat.tsx` FAB component (per user request - using existing panels)
 
 #### ✅ Prompts
+
 - **DONE**: Dashboard system prompt (`packages/app/src/lib/ai/prompts/dashboard.ts`)
 - **DONE**: Editor system prompt (`packages/app/src/lib/ai/prompts/editor.ts`)
 
 ### Phase 24: Dashboard Integration
 
 #### ✅ Dashboard Tools
+
 - **DONE**: All workspace tools (list, create, get)
 - **DONE**: All project tools (list, create, open, get)
 - **DONE**: All document tools (list, create, open, rename, move, delete)
@@ -71,11 +81,13 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
 - **DONE**: Tool implementations in `packages/app/src/lib/ai/tools/dashboard-impl.ts`
 
 #### ✅ Client Tools
+
 - **DONE**: Dashboard client tools (navigateToProject, navigateToDocument)
 - **DONE**: Editor client tools (panToEntity, selectEntity, enterSketchMode, etc.)
 - ⚠️ **ISSUE**: TypeScript errors in client tools - `.client()` signature mismatch
 
 #### ✅ Integration
+
 - **DONE**: Dashboard properties panel updated to use `AIPanel` with `context="dashboard"`
 - **DONE**: Editor properties panel updated to use `AIPanel` with `context="editor"`
 - **DONE**: Tool approval rules configured in approval registry
@@ -83,6 +95,7 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
 ## ❌ Missing/Incomplete Components
 
 ### Phase 23: Agent Runtime System
+
 - **NOT STARTED**: `IAgentRuntime` interface
 - **NOT STARTED**: `BrowserAgentRuntime` (SharedWorker implementation)
 - **NOT STARTED**: `agent-worker.ts`
@@ -94,15 +107,18 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
 **NOTE**: Per user feedback, most AI chat happens in worker, so Agent Runtime may be lower priority for now.
 
 ### Phase 23: Additional UI
+
 - **NOT STARTED**: `AISettingsMenu.tsx` component (YOLO mode toggle)
   - Tool approval preferences exist, but no UI to toggle them
 
 ### Phase 24: Additional Tools
+
 - **NOT STARTED**: `mergeBranch` tool implementation (definition exists, but no impl)
 - **NOT STARTED**: `resolveMergeConflict` tool (definition exists, but no impl)
 - **NOT STARTED**: `getBranchDiff` tool (definition exists, but no impl)
 
 ### Testing
+
 - **NOT STARTED**: All test suites
   - Session management tests
   - Hook state management tests
@@ -154,12 +170,14 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
 ## 📊 Completion Status
 
 ### Phase 23: AI Core Infrastructure
+
 - **Core Chat Infrastructure**: ~90% ✅
   - Missing: AISettingsMenu UI, some TypeScript fixes
 - **Agent Runtime System**: 0% ❌ (deferred per user feedback)
 - **Testing**: 0% ❌
 
 ### Phase 24: AI Dashboard Integration
+
 - **Dashboard Tools**: ~95% ✅
   - Missing: merge/resolve/diff branch tools
 - **Client Tools**: ~90% ✅
@@ -170,6 +188,7 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
 ## 🔧 Next Steps
 
 ### High Priority (Blocking)
+
 1. **Fix TypeScript Errors**
    - Check TanStack Start API for correct server function pattern
    - Fix client tools `.client()` signature
@@ -182,6 +201,7 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
    - Implement `getBranchDiff` tool
 
 ### Medium Priority
+
 3. **Add AISettingsMenu Component**
    - Toggle YOLO mode
    - Manage "always allow" list
@@ -192,6 +212,7 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
    - If worker-based, need to implement Agent Runtime system
 
 ### Low Priority
+
 5. **Add Tests**
    - Session management tests
    - Hook state management tests
@@ -204,6 +225,7 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
 ## 📝 Files Created/Modified
 
 ### New Files
+
 - `packages/app/src/lib/ai/adapter.ts`
 - `packages/app/src/lib/ai/session.ts`
 - `packages/app/src/lib/ai/session-functions.ts`
@@ -227,6 +249,7 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
 - `packages/app/src/db/schema/ai-chat-sessions.ts`
 
 ### Modified Files
+
 - `packages/app/src/db/schema/index.ts` (added ai-chat-sessions exports)
 - `packages/app/src/editor/components/AIPanel.tsx` (wired to useAIChat, added context prop)
 - `packages/app/src/components/DashboardPropertiesPanel.tsx` (added AIPanel with context)
@@ -234,6 +257,7 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
 - `packages/app/src/routes/dashboard.tsx` (removed DashboardAIChat import)
 
 ### Removed Files
+
 - `packages/app/src/components/DashboardAIChat.tsx` (removed per user request)
 - `packages/app/src/components/DashboardAIChat.css` (removed per user request)
 
@@ -244,6 +268,7 @@ Implementation of Phase 23 (AI Core Infrastructure) and Phase 24 (AI Dashboard I
 The core infrastructure is in place and functional, but has TypeScript compilation errors that need fixing before it can be used. The Agent Runtime system (worker-based architecture) was deferred based on user feedback, which aligns with the current server-side implementation.
 
 Key achievements:
+
 - ✅ Complete database schema and migrations
 - ✅ Full dashboard tool suite (except merge tools)
 - ✅ Session management system
@@ -251,6 +276,7 @@ Key achievements:
 - ✅ UI integration with existing panels
 
 Key blockers:
+
 - ⚠️ TypeScript errors preventing compilation
 - ⚠️ Missing merge/resolve/diff branch tools
 - ⚠️ No AISettingsMenu UI component

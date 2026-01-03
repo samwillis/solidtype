@@ -91,15 +91,7 @@ export function getAdapter(model: AIModel = "claude-sonnet") {
 
 ```typescript
 // packages/app/src/db/schema/ai-chat-sessions.ts
-import {
-  pgTable,
-  uuid,
-  text,
-  timestamp,
-  integer,
-  pgEnum,
-  index,
-} from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, pgEnum, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { user } from "./better-auth";
 import { documents } from "./documents";
@@ -108,9 +100,9 @@ import { projects } from "./projects";
 export const aiChatContextEnum = pgEnum("ai_chat_context", ["dashboard", "editor"]);
 
 export const aiChatStatusEnum = pgEnum("ai_chat_status", [
-  "active",    // Currently in use
-  "archived",  // User closed/archived
-  "error",     // Session ended with error
+  "active", // Currently in use
+  "archived", // User closed/archived
+  "error", // Session ended with error
 ]);
 
 export const aiChatSessions = pgTable(
@@ -186,7 +178,12 @@ export {
   aiChatContextEnum,
   aiChatStatusEnum,
 } from "./ai-chat-sessions";
-export type { AIChatSession, NewAIChatSession, AIChatContext, AIChatStatus } from "./ai-chat-sessions";
+export type {
+  AIChatSession,
+  NewAIChatSession,
+  AIChatContext,
+  AIChatStatus,
+} from "./ai-chat-sessions";
 ```
 
 ### Session Helper Types
@@ -351,9 +348,7 @@ export const updateChatSession = createServerFn({ method: "POST" })
     const [session] = await db
       .update(aiChatSessions)
       .set(updates)
-      .where(
-        and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, userId))
-      )
+      .where(and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, userId)))
       .returning();
 
     if (!session) {
@@ -372,9 +367,7 @@ export const archiveChatSession = createServerFn({ method: "POST" })
     const result = await db
       .update(aiChatSessions)
       .set({ status: "archived", updatedAt: new Date() })
-      .where(
-        and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, userId))
-      )
+      .where(and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, userId)))
       .returning();
 
     if (result.length === 0) {
@@ -391,10 +384,7 @@ export const getChatSession = createServerFn({ method: "GET" })
     const userId = await getAuthUserId();
 
     const session = await db.query.aiChatSessions.findFirst({
-      where: and(
-        eq(aiChatSessions.id, data.sessionId),
-        eq(aiChatSessions.userId, userId)
-      ),
+      where: and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, userId)),
     });
 
     if (!session) {
@@ -848,6 +838,7 @@ export { dashboardClientTools, editorClientTools } from "./client-tools";
 ### Tool Implementation Pattern
 
 Each phase defines:
+
 1. `*ToolDefs` - Zod schemas and tool definitions (shared)
 2. `get*Tools(context)` - Factory that creates server tool implementations
 
@@ -875,6 +866,7 @@ export async function getDashboardTools(userId: string): Promise<ServerTool[]> {
 ## 8. Agent Runtime Architecture
 
 Agents can run in multiple environments with a unified abstraction. This enables:
+
 - **Browser execution** via SharedWorker (with Worker fallback)
 - **Future remote execution** via Cloudflare Workers, Durable Objects, or edge functions
 - **Background modeling** without blocking the UI thread
@@ -924,10 +916,10 @@ import type { ChatMessage } from "../session";
  * Agent identity for presence system
  */
 export interface AgentIdentity {
-  id: string;           // Unique agent instance ID
-  userId: string;       // Synthetic user ID for awareness
-  name: string;         // Display name (e.g., "AI Assistant")
-  color: string;        // Cursor/avatar color
+  id: string; // Unique agent instance ID
+  userId: string; // Synthetic user ID for awareness
+  name: string; // Display name (e.g., "AI Assistant")
+  color: string; // Cursor/avatar color
   type: "browser" | "edge" | "durable-object";
 }
 
@@ -937,7 +929,7 @@ export interface AgentIdentity {
 export interface AgentState {
   status: "initializing" | "ready" | "busy" | "error" | "terminated";
   currentTask?: string;
-  progress?: number;    // 0-100 for long operations
+  progress?: number; // 0-100 for long operations
   error?: string;
 }
 
@@ -1038,10 +1030,10 @@ export class BrowserAgentRuntime implements IAgentRuntime {
     // Try SharedWorker first (allows sharing kernel across tabs)
     if (typeof SharedWorker !== "undefined") {
       try {
-        this.worker = new SharedWorker(
-          new URL("./agent-worker.ts", import.meta.url),
-          { type: "module", name: `ai-agent-${config.sessionId}` }
-        );
+        this.worker = new SharedWorker(new URL("./agent-worker.ts", import.meta.url), {
+          type: "module",
+          name: `ai-agent-${config.sessionId}`,
+        });
         this.port = this.worker.port;
         this.port.start();
         this.setupMessageHandler(this.port);
@@ -1053,10 +1045,10 @@ export class BrowserAgentRuntime implements IAgentRuntime {
 
     // Fallback to regular Worker
     if (!this.worker) {
-      this.worker = new Worker(
-        new URL("./agent-worker.ts", import.meta.url),
-        { type: "module", name: `ai-agent-${config.sessionId}` }
-      );
+      this.worker = new Worker(new URL("./agent-worker.ts", import.meta.url), {
+        type: "module",
+        name: `ai-agent-${config.sessionId}`,
+      });
       this.setupMessageHandler(this.worker);
     }
 
@@ -1386,12 +1378,7 @@ async function cleanup() {
 ```typescript
 // packages/app/src/lib/ai/runtime/agent-client.ts
 import { BrowserAgentRuntime } from "./browser-runtime";
-import type {
-  IAgentRuntime,
-  AgentIdentity,
-  AgentConfig,
-  AgentEvent,
-} from "./types";
+import type { IAgentRuntime, AgentIdentity, AgentConfig, AgentEvent } from "./types";
 
 /**
  * High-level client for managing agent instances
@@ -1531,10 +1518,7 @@ import type { AgentIdentity } from "./types";
 /**
  * Integrate agent into Yjs awareness for presence
  */
-export function registerAgentPresence(
-  awareness: Awareness,
-  agent: AgentIdentity
-): () => void {
+export function registerAgentPresence(awareness: Awareness, agent: AgentIdentity): () => void {
   // Create a local state entry for the agent
   // This will be synced to other clients via the awareness protocol
   const agentState = {
@@ -1708,7 +1692,14 @@ export function useAgent(options: UseAgentOptions) {
 // packages/app/src/lib/ai/runtime/remote-runtime.ts
 // Stub for future remote agent implementations
 
-import type { IAgentRuntime, AgentIdentity, AgentState, AgentConfig, AgentCommand, AgentEvent } from "./types";
+import type {
+  IAgentRuntime,
+  AgentIdentity,
+  AgentState,
+  AgentConfig,
+  AgentCommand,
+  AgentEvent,
+} from "./types";
 
 /**
  * Remote agent runtime - connects to edge worker or Durable Object
@@ -1727,14 +1718,19 @@ export class RemoteAgentRuntime implements IAgentRuntime {
     this._identity = { ...identity, type: runtimeType };
   }
 
-  get identity() { return this._identity; }
-  get state() { return this._state; }
+  get identity() {
+    return this._identity;
+  }
+  get state() {
+    return this._state;
+  }
 
   async initialize(config: AgentConfig): Promise<void> {
     // Connect to remote agent endpoint via WebSocket
-    const endpoint = this.runtimeType === "durable-object"
-      ? `/api/agent/do/${config.sessionId}`
-      : `/api/agent/edge/${config.sessionId}`;
+    const endpoint =
+      this.runtimeType === "durable-object"
+        ? `/api/agent/do/${config.sessionId}`
+        : `/api/agent/edge/${config.sessionId}`;
 
     this.ws = new WebSocket(`wss://${window.location.host}${endpoint}`);
 
@@ -1894,8 +1890,13 @@ export function AgentStatus({ identity, state, onSpawn, onTerminate }: AgentStat
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .agent-status-info {
@@ -1949,6 +1950,7 @@ export function AgentStatus({ identity, state, onSpawn, onTerminate }: AgentStat
 ## 9. Auth Context Hook
 
 The AI chat system gets the authenticated user from context, not props. This ensures:
+
 - No userId can be spoofed from client
 - Consistent auth handling across dashboard and editor
 
@@ -2003,10 +2005,7 @@ export const navigateToDocumentClient = toolDefinition({
   return { success: true };
 });
 
-export const dashboardClientTools = [
-  navigateToProjectClient,
-  navigateToDocumentClient,
-];
+export const dashboardClientTools = [navigateToProjectClient, navigateToDocumentClient];
 
 // ============ Editor Client Tools ============
 
@@ -2233,15 +2232,13 @@ export function useAIChat(options: UseAIChatOptions) {
 
   // Durable stream adapter - use noop adapter until session exists
   const adapter = useMemo(
-    () => activeSessionId
-      ? createDurableStreamAdapter(activeSessionId)
-      : createNoopAdapter(),
+    () => (activeSessionId ? createDurableStreamAdapter(activeSessionId) : createNoopAdapter()),
     [activeSessionId]
   );
 
   // Get client tools based on context
   const clientTools = useMemo(
-    () => options.context === "dashboard" ? dashboardClientTools : editorClientTools,
+    () => (options.context === "dashboard" ? dashboardClientTools : editorClientTools),
     [options.context]
   );
 
@@ -2353,7 +2350,15 @@ export function useAIChat(options: UseAIChatOptions) {
         refetchSessions();
       }
     },
-    [chat, options, activeSessionId, ensureSession, refetchSessions, isAuthenticated, sessionsLoaded]
+    [
+      chat,
+      options,
+      activeSessionId,
+      ensureSession,
+      refetchSessions,
+      isAuthenticated,
+      sessionsLoaded,
+    ]
   );
 
   // Start new chat
@@ -2633,6 +2638,7 @@ export function AIChat({ context, documentId, projectId, onClose }: AIChatProps)
 ## 13. Tool Approval Flow
 
 The approval system has three layers:
+
 1. **Default rules** - Built-in per-tool approval levels
 2. **User preferences** - Per-tool overrides stored in localStorage
 3. **YOLO mode** - Global override to auto-approve everything
@@ -2649,10 +2655,10 @@ import { z } from "zod";
 export const ToolApprovalPreferencesSchema = z.object({
   // YOLO mode - auto-approve all tools without confirmation
   yoloMode: z.boolean().default(false),
-  
+
   // Per-tool overrides: tools in this list skip confirmation
   alwaysAllow: z.array(z.string()).default([]),
-  
+
   // Tools that always require confirmation (overrides defaults)
   alwaysConfirm: z.array(z.string()).default([]),
 });
@@ -2781,7 +2787,7 @@ export type AIChatContext = "dashboard" | "editor";
 
 /**
  * Dashboard tool approval rules
- * 
+ *
  * Default: auto for everything except destructive operations
  * Only deletions require confirmation
  */
@@ -2804,7 +2810,7 @@ export const DASHBOARD_DEFAULT_LEVEL: ApprovalLevel = "auto";
 
 /**
  * Sketch tool approval rules
- * 
+ *
  * Default: auto for all sketch tools
  * Sketch operations are easily undoable, so no confirmation needed
  */
@@ -2819,7 +2825,7 @@ export const SKETCH_DEFAULT_LEVEL: ApprovalLevel = "auto";
 
 /**
  * 3D Modeling tool approval rules
- * 
+ *
  * Default: auto for all modeling tools
  * Modeling operations are undoable via Yjs, so no confirmation needed
  */
@@ -2834,7 +2840,7 @@ export const MODELING_DEFAULT_LEVEL: ApprovalLevel = "auto";
 
 /**
  * Get approval level for a tool in a given context.
- * 
+ *
  * Priority order:
  * 1. YOLO mode -> always "auto"
  * 2. User's "alwaysAllow" list -> "auto"
@@ -2906,7 +2912,6 @@ export function requiresUserAwareness(
   const level = getApprovalLevel(toolName, context, userPrefs);
   return level !== "auto";
 }
-
 ```
 
 ### Approval UI Component
@@ -3021,7 +3026,7 @@ export function AISettingsMenu() {
           <Menu.Popup className="ai-settings-menu">
             <Menu.Group>
               <Menu.GroupLabel className="ai-settings-label">Tool Approval</Menu.GroupLabel>
-              
+
               {/* YOLO Mode Toggle */}
               <Menu.Item
                 className={`ai-settings-item ${yoloMode ? "active" : ""}`}
@@ -3275,6 +3280,7 @@ The AI chat uses the **existing `AIPanel` component** (`packages/app/src/editor/
 ### Existing UI Structure
 
 The current `AIPanel.tsx` already has:
+
 - **Tab bar** with session tabs (active sessions as tabs)
 - **History dropdown** for closed/archived sessions
 - **Empty state** with AI assistant icon
@@ -3512,6 +3518,7 @@ export function DashboardAIChat() {
 ## Deliverables
 
 ### Core Chat Infrastructure
+
 - [ ] TanStack AI packages installed (`@tanstack/ai`, `@tanstack/ai-react`)
 - [ ] AI adapter configuration (`packages/app/src/lib/ai/adapter.ts`)
 - [ ] `ai_chat_sessions` PostgreSQL table + migration
@@ -3527,6 +3534,7 @@ export function DashboardAIChat() {
 - [ ] Per-tool "always allow" functionality
 
 ### UI Components
+
 - [ ] Wire existing `AIPanel.tsx` to `useAIChat` hook (keep existing UI exactly)
 - [ ] Add `context` prop to `AIPanel` ("dashboard" | "editor")
 - [ ] Add `ToolApprovalPanel.tsx` - inline in AIPanel for confirmations
@@ -3535,6 +3543,7 @@ export function DashboardAIChat() {
 - [ ] Existing `AIPanel.css` styles unchanged
 
 ### Agent Runtime System
+
 - [ ] `IAgentRuntime` interface defined
 - [ ] `BrowserAgentRuntime` using SharedWorker (Worker fallback)
 - [ ] `agent-worker.ts` with modeling kernel initialization
@@ -3544,6 +3553,7 @@ export function DashboardAIChat() {
 - [ ] `RemoteAgentRuntime` stub for future implementations
 
 ### Testing
+
 - [ ] Session management tests passing
 - [ ] Hook state management tests passing
 - [ ] Agent spawn/terminate tests passing

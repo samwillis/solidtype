@@ -164,7 +164,10 @@ if (typeof self !== "undefined" && "onconnect" in self) {
 
     // Send current state to new connection
     for (const session of sessions.values()) {
-      port.postMessage({ type: "session-ready", sessionId: session.sessionId } as AIChatWorkerEvent);
+      port.postMessage({
+        type: "session-ready",
+        sessionId: session.sessionId,
+      } as AIChatWorkerEvent);
       if (session.kernelInitialized) {
         port.postMessage({
           type: "kernel-initialized",

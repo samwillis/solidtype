@@ -45,7 +45,7 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
   const filteredSessions = options.context
     ? allSessions.filter((row) => row.context === options.context)
     : allSessions;
-  
+
   // Sort by updated_at descending
   const sortedSessions = [...filteredSessions].sort(
     (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
@@ -110,25 +110,31 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
     [options.context, sessions]
   );
 
-  const archiveSession = useCallback(async (sessionId: string) => {
-    const session = sortedSessions.find((s) => s.id === sessionId);
-    if (!session) return;
-    // Update via collection - mutation handler will call server function
-    await aiChatSessionsCollection.update(sessionId, (draft) => {
-      draft.status = "archived";
-      draft.updated_at = new Date().toISOString();
-    });
-  }, [sortedSessions]);
+  const archiveSession = useCallback(
+    async (sessionId: string) => {
+      const session = sortedSessions.find((s) => s.id === sessionId);
+      if (!session) return;
+      // Update via collection - mutation handler will call server function
+      await aiChatSessionsCollection.update(sessionId, (draft) => {
+        draft.status = "archived";
+        draft.updated_at = new Date().toISOString();
+      });
+    },
+    [sortedSessions]
+  );
 
-  const unarchiveSession = useCallback(async (sessionId: string) => {
-    const session = sortedSessions.find((s) => s.id === sessionId);
-    if (!session) return;
-    // Update via collection - mutation handler will call server function
-    await aiChatSessionsCollection.update(sessionId, (draft) => {
-      draft.status = "active";
-      draft.updated_at = new Date().toISOString();
-    });
-  }, [sortedSessions]);
+  const unarchiveSession = useCallback(
+    async (sessionId: string) => {
+      const session = sortedSessions.find((s) => s.id === sessionId);
+      if (!session) return;
+      // Update via collection - mutation handler will call server function
+      await aiChatSessionsCollection.update(sessionId, (draft) => {
+        draft.status = "active";
+        draft.updated_at = new Date().toISOString();
+      });
+    },
+    [sortedSessions]
+  );
 
   const deleteSession = useCallback(async (sessionId: string) => {
     // Delete via collection - mutation handler will call server function
@@ -149,7 +155,7 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
 
 /**
  * Main chat hook - simple fetch-based implementation
- * 
+ *
  * Session creation is LAZY - no session is created until the user sends their first message.
  * This prevents creating empty sessions just by opening the chat UI.
  */
@@ -227,7 +233,15 @@ export function useAIChat(options: UseAIChatOptions) {
     });
     setActiveSessionId(newSession.id);
     return newSession;
-  }, [sessions, sessionsLoaded, activeSessionId, options.documentId, options.projectId, options.context, createSession]);
+  }, [
+    sessions,
+    sessionsLoaded,
+    activeSessionId,
+    options.documentId,
+    options.projectId,
+    options.context,
+    createSession,
+  ]);
 
   // Initialize session in worker when it becomes active
   useEffect(() => {
@@ -390,9 +404,7 @@ export function useAIChat(options: UseAIChatOptions) {
                     }
                     setMessages((prev) =>
                       prev.map((m) =>
-                        m.id === assistantMessageId
-                          ? { ...m, content: assistantContent }
-                          : m
+                        m.id === assistantMessageId ? { ...m, content: assistantContent } : m
                       )
                     );
                   } else if (parsed.type === "done") {
@@ -485,20 +497,23 @@ export function useAIChat(options: UseAIChatOptions) {
   }, []);
 
   // Switch to existing session (unarchives if needed)
-  const switchToSession = useCallback(async (sessionId: string) => {
-    const session = sessions.find((s) => s.id === sessionId);
-    if (!session) return;
+  const switchToSession = useCallback(
+    async (sessionId: string) => {
+      const session = sessions.find((s) => s.id === sessionId);
+      if (!session) return;
 
-    // If session is archived, unarchive it first
-    if (session.status === "archived") {
-      await unarchiveSession(sessionId);
-    }
+      // If session is archived, unarchive it first
+      if (session.status === "archived") {
+        await unarchiveSession(sessionId);
+      }
 
-    setActiveSessionId(sessionId);
-    setError(null);
-    const history = await loadChatHistory(sessionId);
-    setMessages(history);
-  }, [sessions, unarchiveSession]);
+      setActiveSessionId(sessionId);
+      setError(null);
+      const history = await loadChatHistory(sessionId);
+      setMessages(history);
+    },
+    [sessions, unarchiveSession]
+  );
 
   // Archive session and switch away if it was active
   const handleArchiveSession = useCallback(
@@ -506,9 +521,7 @@ export function useAIChat(options: UseAIChatOptions) {
       await archiveSession(sessionId);
       // If we just archived the active session, switch to another or start new chat
       if (activeSessionId === sessionId) {
-        const remainingActive = sessions.find(
-          (s) => s.id !== sessionId && s.status === "active"
-        );
+        const remainingActive = sessions.find((s) => s.id !== sessionId && s.status === "active");
         if (remainingActive) {
           await switchToSession(remainingActive.id);
         } else {
@@ -525,9 +538,7 @@ export function useAIChat(options: UseAIChatOptions) {
       await deleteSession(sessionId);
       // If we just deleted the active session, switch to another or start new chat
       if (activeSessionId === sessionId) {
-        const remainingActive = sessions.find(
-          (s) => s.id !== sessionId && s.status === "active"
-        );
+        const remainingActive = sessions.find((s) => s.id !== sessionId && s.status === "active");
         if (remainingActive) {
           await switchToSession(remainingActive.id);
         } else {

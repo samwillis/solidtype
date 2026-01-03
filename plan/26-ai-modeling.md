@@ -102,16 +102,20 @@ export const getCurrentSelectionDef = toolDefinition({
   inputSchema: z.object({}),
   outputSchema: z.object({
     type: z.enum(["none", "feature", "face", "edge", "vertex"]),
-    items: z.array(z.object({
-      persistentRef: z.string(),
-      featureId: z.string(),
-      geometryInfo: z.object({
-        surfaceType: z.string().optional(),
-        curveType: z.string().optional(),
-        area: z.number().optional(),
-        length: z.number().optional(),
-      }).optional(),
-    })),
+    items: z.array(
+      z.object({
+        persistentRef: z.string(),
+        featureId: z.string(),
+        geometryInfo: z
+          .object({
+            surfaceType: z.string().optional(),
+            curveType: z.string().optional(),
+            area: z.number().optional(),
+            length: z.number().optional(),
+          })
+          .optional(),
+      })
+    ),
   }),
 });
 
@@ -123,17 +127,21 @@ export const getModelContextDef = toolDefinition({
     documentName: z.string(),
     units: z.string(),
     featureCount: z.number(),
-    features: z.array(z.object({
-      id: z.string(),
-      type: z.string(),
-      name: z.string().optional(),
-      status: z.enum(["ok", "error", "pending"]),
-    })),
-    errors: z.array(z.object({
-      featureId: z.string(),
-      code: z.string(),
-      message: z.string(),
-    })),
+    features: z.array(
+      z.object({
+        id: z.string(),
+        type: z.string(),
+        name: z.string().optional(),
+        status: z.enum(["ok", "error", "pending"]),
+      })
+    ),
+    errors: z.array(
+      z.object({
+        featureId: z.string(),
+        code: z.string(),
+        message: z.string(),
+      })
+    ),
   }),
 });
 
@@ -146,13 +154,15 @@ export const findFacesDef = toolDefinition({
     featureId: z.string().optional(),
     minArea: z.number().optional(),
   }),
-  outputSchema: z.array(z.object({
-    persistentRef: z.string(),
-    featureId: z.string(),
-    surfaceType: z.string(),
-    area: z.number(),
-    normal: z.tuple([z.number(), z.number(), z.number()]),
-  })),
+  outputSchema: z.array(
+    z.object({
+      persistentRef: z.string(),
+      featureId: z.string(),
+      surfaceType: z.string(),
+      area: z.number(),
+      normal: z.tuple([z.number(), z.number(), z.number()]),
+    })
+  ),
 });
 
 export const findEdgesDef = toolDefinition({
@@ -164,12 +174,14 @@ export const findEdgesDef = toolDefinition({
     featureId: z.string().optional(),
     convexity: z.enum(["convex", "concave", "any"]).optional(),
   }),
-  outputSchema: z.array(z.object({
-    persistentRef: z.string(),
-    curveType: z.string(),
-    length: z.number(),
-    convexity: z.enum(["convex", "concave", "unknown"]),
-  })),
+  outputSchema: z.array(
+    z.object({
+      persistentRef: z.string(),
+      curveType: z.string(),
+      length: z.number(),
+      convexity: z.enum(["convex", "concave", "unknown"]),
+    })
+  ),
 });
 
 export const measureDistanceDef = toolDefinition({
@@ -595,8 +607,8 @@ export async function applyChangesWithRecovery(
 
 **Default behavior:** All modeling tools auto-execute without confirmation.
 
-| Tool | Approval Level |
-|------|----------------|
+| Tool               | Approval Level   |
+| ------------------ | ---------------- |
 | All modeling tools | `auto` (default) |
 
 **Rationale:** All modeling operations are undoable via Yjs, so there's no need for confirmation dialogs. Users can always undo any AI-made changes with Ctrl+Z.
@@ -783,9 +795,7 @@ describe("Modeling AI Integration", () => {
   test("AI can create a bracket with holes", async () => {
     const session = createTestChatSession("editor");
 
-    await session.sendMessage(
-      "Create a 100x50x10mm bracket with two M6 holes 20mm from each end"
-    );
+    await session.sendMessage("Create a 100x50x10mm bracket with two M6 holes 20mm from each end");
 
     const doc = session.getDocument();
     expect(doc.features.filter((f) => f.type === "extrude").length).toBeGreaterThanOrEqual(3);

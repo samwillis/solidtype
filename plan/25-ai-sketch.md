@@ -624,21 +624,30 @@ export async function getSketchTools(documentId: string) {
           }
 
           // Create 4 corner points
-          const p1 = uuid(), p2 = uuid(), p3 = uuid(), p4 = uuid();
+          const p1 = uuid(),
+            p2 = uuid(),
+            p3 = uuid(),
+            p4 = uuid();
           sketchData.pointsById.set(p1, { id: p1, x: x1, y: y1 });
           sketchData.pointsById.set(p2, { id: p2, x: x2, y: y1 });
           sketchData.pointsById.set(p3, { id: p3, x: x2, y: y2 });
           sketchData.pointsById.set(p4, { id: p4, x: x1, y: y2 });
 
           // Create 4 lines
-          const l1 = uuid(), l2 = uuid(), l3 = uuid(), l4 = uuid();
+          const l1 = uuid(),
+            l2 = uuid(),
+            l3 = uuid(),
+            l4 = uuid();
           sketchData.entitiesById.set(l1, { id: l1, type: "line", start: p1, end: p2 });
           sketchData.entitiesById.set(l2, { id: l2, type: "line", start: p2, end: p3 });
           sketchData.entitiesById.set(l3, { id: l3, type: "line", start: p3, end: p4 });
           sketchData.entitiesById.set(l4, { id: l4, type: "line", start: p4, end: p1 });
 
           // Add horizontal/vertical constraints
-          const c1 = uuid(), c2 = uuid(), c3 = uuid(), c4 = uuid();
+          const c1 = uuid(),
+            c2 = uuid(),
+            c3 = uuid(),
+            c4 = uuid();
           sketchData.constraintsById.set(c1, { id: c1, type: "horizontal", points: [p1, p2] });
           sketchData.constraintsById.set(c2, { id: c2, type: "vertical", points: [p2, p3] });
           sketchData.constraintsById.set(c3, { id: c3, type: "horizontal", points: [p3, p4] });
@@ -742,8 +751,8 @@ export const createSymmetricProfileDef = toolDefinition({
 
 **Default behavior:** All sketch tools auto-execute without confirmation.
 
-| Tool | Approval Level |
-|------|----------------|
+| Tool             | Approval Level   |
+| ---------------- | ---------------- |
 | All sketch tools | `auto` (default) |
 
 **Rationale:** All sketch operations are undoable via Yjs, so there's no need for confirmation dialogs. Users can always undo any AI-made changes.
