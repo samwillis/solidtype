@@ -319,6 +319,7 @@ const Viewer: React.FC = () => {
     findNearbyPoint,
     setSketchMousePos,
     setPreviewLine,
+    editSketch,
     finishSketch,
     cancelSketch,
     selectedPoints,
@@ -618,6 +619,72 @@ const Viewer: React.FC = () => {
       broadcastCameraRef.current();
     }
   }, [sceneReady]);
+
+  // Broadcast camera state when view changes programmatically (e.g., entering sketch mode)
+  // This ensures followers see camera orientation changes from setView() calls
+  useEffect(() => {
+    if (sceneReady && cameraRef.current && viewerState.currentView !== null) {
+      // Small delay to ensure camera position has been updated
+      const timeoutId = setTimeout(() => {
+        broadcastCameraRef.current();
+      }, 50);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [sceneReady, viewerState.currentView]);
+
+  // Broadcast sketch state to awareness when entering/exiting sketch mode
+  // This allows followers to see which sketch we're editing
+  useEffect(() => {
+    if (!awareness) return;
+
+    if (sketchMode.active && sketchMode.sketchId && sketchMode.planeId) {
+      console.log("[SketchBroadcast] Broadcasting sketch state:", sketchMode.sketchId);
+      awareness.updateSketchCursor({
+        sketchId: sketchMode.sketchId,
+        cursorPosition: [0, 0],
+        activeToolId: sketchMode.activeTool,
+      });
+    } else {
+      console.log("[SketchBroadcast] Clearing sketch state");
+      awareness.clearSketchState();
+    }
+  }, [awareness, sketchMode.active, sketchMode.sketchId, sketchMode.planeId, sketchMode.activeTool]);
+
+  // Extract the followed user's sketch ID as a primitive for reliable effect dependencies
+  const followedUserSketchId = followedUser?.sketch?.sketchId ?? null;
+
+  // Follow user into sketch mode when they enter it
+  // This syncs the sketch editing state so followers see the same sketch
+  useEffect(() => {
+    // Skip if not following anyone
+    if (!followingUserId) {
+      return;
+    }
+
+    console.log("[SketchFollow] Effect check - followedSketchId:", followedUserSketchId, "ourActive:", sketchMode.active, "ourSketchId:", sketchMode.sketchId);
+
+    // If followed user is in sketch mode and we're not (or in a different sketch)
+    if (followedUserSketchId && (!sketchMode.active || sketchMode.sketchId !== followedUserSketchId)) {
+      // Look up the sketch to find its plane
+      console.log("[SketchFollow] Looking up sketch feature:", followedUserSketchId);
+      const sketchFeature = doc.featuresById.get(followedUserSketchId);
+      console.log("[SketchFollow] Found sketch feature:", sketchFeature);
+      if (sketchFeature) {
+        // The plane is stored as a SketchPlaneRef object with {kind, ref}
+        const planeData = sketchFeature.get("plane") as { kind: string; ref: string } | undefined;
+        console.log("[SketchFollow] planeData:", planeData);
+        if (planeData?.ref) {
+          // Enter sketch mode for this sketch
+          console.log("[SketchFollow] Calling editSketch:", followedUserSketchId, planeData.ref);
+          editSketch(followedUserSketchId, planeData.ref);
+        }
+      }
+    } else if (!followedUserSketchId && sketchMode.active) {
+      // Followed user exited sketch mode - we should exit too
+      console.log("[SketchFollow] Exiting sketch mode");
+      finishSketch();
+    }
+  }, [followingUserId, followedUserSketchId, sketchMode.active, sketchMode.sketchId, doc.featuresById, editSketch, finishSketch]);
 
   // Update camera projection
   const updateCamera = useCallback((projection: ProjectionMode) => {
