@@ -105,7 +105,7 @@ const DashboardPropertiesPanel: React.FC<DashboardPropertiesPanelProps> = ({
               <ThemeIcon />
             </Menu.Trigger>
             <Menu.Portal>
-              <Menu.Positioner sideOffset={8}>
+              <Menu.Positioner sideOffset={8} className="dashboard-menu-positioner">
                 <Menu.Popup className="properties-panel-header-dropdown">
                   <Menu.Group>
                     <Menu.GroupLabel className="properties-panel-header-dropdown-label">
@@ -164,7 +164,7 @@ const DashboardPropertiesPanel: React.FC<DashboardPropertiesPanelProps> = ({
               <LuChevronDown size={12} style={{ marginLeft: "4px" }} />
             </Menu.Trigger>
             <Menu.Portal>
-              <Menu.Positioner sideOffset={8}>
+              <Menu.Positioner sideOffset={8} className="dashboard-menu-positioner">
                 <Menu.Popup className="properties-panel-header-dropdown">
                   <Menu.Group>
                     <Menu.Item

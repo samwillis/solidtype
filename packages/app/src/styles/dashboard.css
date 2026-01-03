@@ -445,6 +445,7 @@
 
 /* Base UI positioners need z-index to appear above sticky headers */
 .dashboard-select-positioner,
+.dashboard-menu-positioner,
 .create-dialog-select-positioner,
 .context-menu-positioner {
   z-index: 1000 !important;

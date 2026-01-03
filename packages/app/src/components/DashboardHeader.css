@@ -64,7 +64,7 @@
 /* Props wrapper - reserves fixed space (230x46), panel is absolute inside */
 .dashboard-header__props-wrapper {
   position: relative;
-  width: 230px;
+  width: 250px;
   height: 46px;
 }
 

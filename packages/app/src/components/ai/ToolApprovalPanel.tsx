@@ -1,7 +1,8 @@
 /**
  * Tool Approval Panel Component
  *
- * Displays pending tool approval requests and allows user to approve/reject.
+ * Displays pending tool approval requests inline in the chat.
+ * Groups multiple requests into a single approval prompt.
  */
 
 import { addAlwaysAllow } from "../../lib/ai/approval-preferences";
@@ -11,66 +12,87 @@ interface ToolApprovalRequest {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
-  resolve: (approved: boolean) => void;
+  messageId: string; // The actual message ID to use for approval
 }
 
 interface ToolApprovalPanelProps {
   requests: ToolApprovalRequest[];
-  onApprove: (requestId: string) => void;
-  onReject: (requestId: string) => void;
+  onApprove: (messageId: string) => void;
+  onReject: (messageId: string) => void;
 }
 
 export function ToolApprovalPanel({ requests, onApprove, onReject }: ToolApprovalPanelProps) {
   if (requests.length === 0) return null;
 
-  const handleAlwaysAllow = (request: ToolApprovalRequest) => {
-    // Add to always-allow list and approve this request
-    addAlwaysAllow(request.name);
-    onApprove(request.id);
+  // Group requests by action name
+  const grouped = requests.reduce(
+    (acc, req) => {
+      const name = req.name;
+      if (!acc[name]) acc[name] = [];
+      acc[name].push(req);
+      return acc;
+    },
+    {} as Record<string, ToolApprovalRequest[]>
+  );
+
+  const actionNames = Object.keys(grouped);
+  const totalCount = requests.length;
+
+  const handleApproveAll = () => {
+    // Use messageId for the approval call
+    requests.forEach((req) => onApprove(req.messageId));
   };
+
+  const handleRejectAll = () => {
+    // Use messageId for the rejection call
+    requests.forEach((req) => onReject(req.messageId));
+  };
+
+  const handleAlwaysAllowAll = () => {
+    // Add all unique action names to always-allow
+    actionNames.forEach((name) => addAlwaysAllow(name));
+    handleApproveAll();
+  };
+
+  // Build summary text
+  let summaryText: string;
+  if (actionNames.length === 1) {
+    const name = formatToolName(actionNames[0]);
+    summaryText = totalCount === 1 ? `${name}?` : `${name} (${totalCount}×)?`;
+  } else {
+    summaryText = `${totalCount} actions?`;
+  }
 
   return (
     <div className="tool-approval-panel">
-      <div className="tool-approval-header">
-        <AlertIcon />
-        <span>AI wants to perform actions</span>
-      </div>
-
-      {requests.map((request) => (
-        <div key={request.id} className="tool-approval-item">
-          <div className="tool-approval-name">{formatToolName(request.name)}</div>
-          <div className="tool-approval-params">
-            <pre>{JSON.stringify(request.arguments, null, 2)}</pre>
-          </div>
-          <div className="tool-approval-actions">
-            <button
-              onClick={() => onReject(request.id)}
-              className="tool-approval-reject"
-              aria-label="Reject"
-            >
-              <XIcon />
-              Reject
-            </button>
-            <button
-              onClick={() => handleAlwaysAllow(request)}
-              className="tool-approval-always"
-              aria-label="Always Allow"
-              title="Approve and always allow this tool in the future"
-            >
-              <ShieldIcon />
-              Always
-            </button>
-            <button
-              onClick={() => onApprove(request.id)}
-              className="tool-approval-approve"
-              aria-label="Approve"
-            >
-              <CheckIcon />
-              Approve
-            </button>
-          </div>
+      <div className="tool-approval-item">
+        <span className="tool-approval-text">
+          Run <strong>{summaryText}</strong>
+        </span>
+        <div className="tool-approval-actions">
+          <button
+            onClick={handleRejectAll}
+            className="tool-approval-btn tool-approval-reject"
+            title="Reject all"
+          >
+            ✕
+          </button>
+          <button
+            onClick={handleAlwaysAllowAll}
+            className="tool-approval-btn tool-approval-always"
+            title="Always allow these actions"
+          >
+            Always
+          </button>
+          <button
+            onClick={handleApproveAll}
+            className="tool-approval-btn tool-approval-approve"
+            title="Approve all"
+          >
+            ✓ Yes
+          </button>
         </div>
-      ))}
+      </div>
     </div>
   );
 }
@@ -81,31 +103,3 @@ function formatToolName(name: string): string {
     .replace(/^./, (s) => s.toUpperCase())
     .trim();
 }
-
-// Icons
-const AlertIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-    <line x1="12" y1="9" x2="12" y2="13" />
-    <line x1="12" y1="17" x2="12.01" y2="17" />
-  </svg>
-);
-
-const XIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-
-const ShieldIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </svg>
-);

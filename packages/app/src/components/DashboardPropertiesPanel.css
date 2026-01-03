@@ -9,7 +9,7 @@
 /* Inline mode - within the container wrapper */
 .dashboard-properties-panel.properties-panel-inline {
   position: relative;
-  width: 230px;
+  width: 250px;
   max-height: 90vh;
   max-width: none;
   background: rgba(37, 37, 38, 0.85);
