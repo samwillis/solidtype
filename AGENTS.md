@@ -5,11 +5,17 @@ This document tells you how to work inside the SolidType repo.
 
 Before you write _any_ code, read:
 
-- [`OVERVIEW.md`](OVERVIEW.md) – **What** SolidType is and why it exists.
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) – **How** it is structured (packages, layers, data flow).
+- [`docs/OVERVIEW.md`](docs/OVERVIEW.md) – **What** SolidType is and why it exists.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) – **How** it is structured (packages, layers, data flow).
+- [`docs/STATUS.md`](docs/STATUS.md) – **Current implementation status** and what's next.
 - [`/plan/*`](plan/*) – The **phase-by-phase implementation plan** you must follow.
-- [`TOPOLOGICAL-NAMING.md`](TOPOLOGICAL-NAMING.md) – **Comprehensive plan** for persistent naming (FreeCAD-style algorithm, data structures, phased implementation).
-- [`IMPLEMENTATION-SEQUENCE.md`](IMPLEMENTATION-SEQUENCE.md) – **Ordering guide** for interleaving sketch tools and topological naming work.
+
+For specific subsystems, also read:
+
+- [`docs/DOCUMENT-MODEL.md`](docs/DOCUMENT-MODEL.md) – **Yjs document schema** specification.
+- [`docs/TOPOLOGICAL-NAMING.md`](docs/TOPOLOGICAL-NAMING.md) – **Persistent naming** design (FreeCAD-style algorithm).
+- [`docs/AI-INTEGRATION.md`](docs/AI-INTEGRATION.md) – **AI system architecture** (Durable Streams, tools, SharedWorker).
+- [`docs/CAD-UX-SPEC.md`](docs/CAD-UX-SPEC.md) – **UX specification** for sketch and feature tools.
 
 Treat those documents as the source of truth. If they conflict with existing code, the docs win and the code should be brought back into line.
 
@@ -341,7 +347,7 @@ If you need functionality that doesn't fit these guidelines, leave a TODO and im
 
 ## 8. Summary
 
-- Read `OVERVIEW.md`, `ARCHITECTURE.md`, and `/plan/*` first.
+- Read `docs/OVERVIEW.md`, `docs/ARCHITECTURE.md`, and `/plan/*` first.
 - Respect package boundaries and layer responsibilities.
 - Write small, well-typed, test-backed TypeScript.
 - Keep `@solidtype/core` clean, deterministic, and environment-neutral.

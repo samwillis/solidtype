@@ -55,7 +55,7 @@ This maintains the architectural boundary that isolates OCCT types to the kernel
 
 ### 0.3 Feature Identity: UUID vs Display Name
 
-> **📘 See also:** [CAD-UX-SPEC.md § 14.0](/CAD-UX-SPEC.md#140-feature-identity-id-vs-display-name) for UI guidelines on showing feature names.
+> **📘 See also:** [CAD-UX-SPEC.md § 14.0](CAD-UX-SPEC.md#140-feature-identity-id-vs-display-name) for UI guidelines on showing feature names.
 
 > **✅ Schema Update**: The pinned decision in `00-overview.md` has been updated to reflect that Feature IDs are UUIDs. The short format (`s1`, `e1`) was a display convenience now replaced by the `name` field.
 
@@ -1658,7 +1658,7 @@ class StringHasher {
 
 ## 9. Implementation Phases
 
-> **📘 See also:** [IMPLEMENTATION-SEQUENCE.md](/IMPLEMENTATION-SEQUENCE.md) for how to interleave this naming work with sketch tool improvements, and which UI features can proceed without naming.
+> **📘 Note:** Refer to the phase plan documents in `/plan/*` for implementation sequencing.
 
 ### Phase 1: Core Data Structures
 

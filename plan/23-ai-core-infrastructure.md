@@ -1,5 +1,14 @@
 # Phase 23: AI Core Infrastructure
 
+> **Status:** ✅ **COMPLETE**
+> 
+> This phase has been implemented using the Durable Streams architecture. See [AI-INTEGRATION.md](/AI-INTEGRATION.md) for the design documentation.
+> 
+> **Key changes from original plan:**
+> - Uses Durable Streams + Durable State for chat persistence (not direct SSE)
+> - SharedWorker coordinates runs across tabs
+> - Tool approvals integrated into Durable State schema
+
 ## Prerequisites
 
 - Phase 27: User System & Persistence (auth, workspaces, projects)

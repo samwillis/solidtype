@@ -589,7 +589,7 @@ The app is built with **React** and uses a layered architecture:
 
 ### 5.2 Document Model
 
-The document model uses **Yjs** for collaborative editing and undo/redo. The complete specification is in [`DOCUMENT-MODEL.md`](DOCUMENT-MODEL.md).
+The document model uses **Yjs** for collaborative editing and undo/redo. The complete specification is in [`DOCUMENT-MODEL.md`](DOCUMENT-MODEL.md) (in this directory).
 
 ```ts
 interface SolidTypeDoc {

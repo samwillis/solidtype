@@ -45,7 +45,7 @@ After extensive development of a custom TypeScript B-Rep kernel, we made the str
   - 2D sketch entities: points, lines, arcs.
   - Constraints: coincident, horizontal/vertical, parallel, perpendicular, equal length, fixed, distance/angle dimensions, tangency.
   - Attachments from sketch points to model edges (via persistent naming).
-  - Interactive solving (suitable for “drag a point and watch it move”).
+  - Interactive solving (suitable for "drag a point and watch it move").
 
 - Persistent naming:
   - Strong emphasis on naming that survives parametric edits and simple topology changes, inspired by the best available research (Kripac, OCAF, FreeCAD/realthunder, etc.). ([ScienceDirect][1])
@@ -55,7 +55,7 @@ After extensive development of a custom TypeScript B-Rep kernel, we made the str
   - First-class support for running in a **Web Worker** to avoid blocking the UI.
 
 - App:
-  - A **three.js**-based React app with full CAD UI as the first “consumer” of the kernel.
+  - A **three.js**-based React app with full CAD UI as the first "consumer" of the kernel.
   - Feature-based parametric modeling with visual mesh output.
   - Optional STL export.
 
@@ -112,7 +112,7 @@ SolidType uses **Float64 everywhere** for stored geometry, but with an explicit 
 
 - All comparisons go through helpers (e.g. `eqLength`, `isZero`, `eqAngle`) rather than raw `===` or arbitrary `1e-9`.
 
-This follows the mainstream practice in industrial kernels (Parasolid, ACIS, etc.), which rely on double precision plus carefully managed tolerances rather than full arbitrary-precision everywhere. A parallel in open CG libraries is CGAL’s idea of _exact predicates, inexact constructions_ kernels: **predicates are made robust, but constructions still use floats**. ([doc.cgal.org][2])
+This follows the mainstream practice in industrial kernels (Parasolid, ACIS, etc.), which rely on double precision plus carefully managed tolerances rather than full arbitrary-precision everywhere. A parallel in open CG libraries is CGAL's idea of _exact predicates, inexact constructions_ kernels: **predicates are made robust, but constructions still use floats**. ([doc.cgal.org][2])
 
 We deliberately isolate **geometric predicates** (orientation tests, point/plane classification, etc.) in a dedicated `num/predicates` module. This makes it possible to:
 
@@ -122,7 +122,7 @@ We deliberately isolate **geometric predicates** (orientation tests, point/plane
 References / inspiration:
 
 - CGAL kernel documentation on exact predicates / inexact constructions. ([doc.cgal.org][2])
-- Shewchuk’s “Adaptive Precision Floating-Point Arithmetic and Fast Robust Geometric Predicates”. ([people.eecs.berkeley.edu][3])
+- Shewchuk's "Adaptive Precision Floating-Point Arithmetic and Fast Robust Geometric Predicates". ([people.eecs.berkeley.edu][3])
 
 ### 4.2 Analytic geometry (v1)
 
@@ -165,13 +165,13 @@ We support:
 
 ## 5. Persistent Naming & Edit Robustness
 
-The overarching requirement is: **you can build a model, edit parameters, and your references don’t all explode**.
+The overarching requirement is: **you can build a model, edit parameters, and your references don't all explode**.
 
-SolidType’s naming design draws on several strands of prior work:
+SolidType's naming design draws on several strands of prior work:
 
-- **Kripac’s Topological ID System**, which ties entity identity to the _construction history_ (feature + local context), not just “Face27”. ([ScienceDirect][1])
-- **OpenCascade’s OCAF** (`TNaming_NamedShape`), which records “old → new” shape pairs across operations to track sub-shape evolution. ([dev.opencascade.org][4])
-- **FreeCAD’s topological naming problem and realthunder’s improvements**, which highlight the pitfalls of naïve “Face1/Edge2” naming and introduce graph-based, history-aware naming schemes. ([wiki.freecad.org][5])
+- **Kripac's Topological ID System**, which ties entity identity to the _construction history_ (feature + local context), not just "Face27". ([ScienceDirect][1])
+- **OpenCascade's OCAF** (`TNaming_NamedShape`), which records "old → new" shape pairs across operations to track sub-shape evolution. ([dev.opencascade.org][4])
+- **FreeCAD's topological naming problem and realthunder's improvements**, which highlight the pitfalls of naïve "Face1/Edge2" naming and introduce graph-based, history-aware naming schemes. ([wiki.freecad.org][5])
 - A broader **survey of persistent naming mechanisms** in CAD literature, which concludes that hybrid topology+geometry approaches dominate. ([ScienceDirect][6])
 
 ### 5.1 Layered identity model
@@ -181,7 +181,7 @@ SolidType distinguishes:
 - **Ephemeral IDs**: numeric handles (`FaceId`, `EdgeId`, …) valid within a single build.
 - **Persistent references**: `PersistentRef` objects with:
   - `originFeatureId` – which feature introduced the entity.
-  - `localSelector` – feature-specific path like “side face from loop 0, segment 2”.
+  - `localSelector` – feature-specific path like "side face from loop 0, segment 2".
   - Optional geometry/topology fingerprint (centroid, approximate area/length, normal, adjacency hints).
 
 External systems (constraints, dimensions, later fillets) never hold raw face indices; they always hold `PersistentRef`.
@@ -194,23 +194,23 @@ Each modeling step (extrude, revolve, boolean, etc.) produces an **evolution map
   - `old` (or `null` for births),
   - `news[]` (zero, one, many descendants).
 
-Over time, SolidType maintains a graph similar to OCAF’s “old/new shape” pairs. ([dev.opencascade.org][7])
+Over time, SolidType maintains a graph similar to OCAF's "old/new shape" pairs. ([dev.opencascade.org][7])
 When resolving a `PersistentRef`, we:
 
-1. Start from the originating feature’s subshape(s).
+1. Start from the originating feature's subshape(s).
 2. Walk forward along evolution mappings to the current model.
 3. Use fingerprints as tie-breakers in splits/merges; return:
    - A unique subshape if found,
-   - `"ambiguous"` or `"lost"` when identity can’t be recovered reliably.
+   - `"ambiguous"` or `"lost"` when identity can't be recovered reliably.
 
 ### 5.3 Feature-domain naming
 
 Where possible, SolidType keeps references in **feature space**:
 
-- “Cylindrical side face of Extrude#5 from profile edge #2” is much more stable than “Face19 of Body3”.
+- "Cylindrical side face of Extrude#5 from profile edge #2" is much more stable than "Face19 of Body3".
 - For sketches attached to edges, we resolve selections into feature-local selectors and only translate them to final BREP entities on demand.
 
-This architecture is intentionally **pluggable**: `NamingStrategy` is an interface, making it straightforward to experiment with alternative algorithms inspired by research papers or FreeCAD/realthunder’s approach.
+This architecture is intentionally **pluggable**: `NamingStrategy` is an interface, making it straightforward to experiment with alternative algorithms inspired by research papers or FreeCAD/realthunder's approach.
 
 ---
 
@@ -228,7 +228,7 @@ Each sketch:
   - A set of entities: lines and arcs referencing these points.
   - A set of constraints linking points and entities.
 
-- May attach some points to external model edges via `PersistentRef` (for “point on edge” / projection constraints).
+- May attach some points to external model edges via `PersistentRef` (for "point on edge" / projection constraints).
 
 ### 6.2 Constraint set (v1)
 
@@ -238,7 +238,7 @@ Supported constraints:
 - structural: `fixed` points.
 - dimensional: distances and angles between points/lines.
 
-This aims roughly at the class of constraints handled by commercial 2D DCM components (e.g. Siemens’ D-Cubed 2D DCM), widely used in professional CAD for parametric sketching. ([Siemens Digital Industries Software][8])
+This aims roughly at the class of constraints handled by commercial 2D DCM components (e.g. Siemens' D-Cubed 2D DCM), widely used in professional CAD for parametric sketching. ([Siemens Digital Industries Software][8])
 
 ### 6.3 Solver design
 
@@ -254,13 +254,13 @@ We treat the sketch as a **nonlinear system**:
 
   - Use the previous solution as the initial guess for **interactive edits**.
 
-The solver is designed to run in a **worker** for responsiveness, but architecturally it’s just a pure function `solveSketch(sketch, context) → updated positions`.
+The solver is designed to run in a **worker** for responsiveness, but architecturally it's just a pure function `solveSketch(sketch, context) → updated positions`.
 
 ---
 
 ## 7. Modeling Operations
 
-SolidType’s geometric operators build directly on `geom`, `topo`, `naming`, and (for sketch-driven features) `sketch`.
+SolidType's geometric operators build directly on `geom`, `topo`, `naming`, and (for sketch-driven features) `sketch`.
 
 ### 7.1 Sketch planes & profiles
 
@@ -362,23 +362,23 @@ Property-based testing is used **sparingly**: correctness is primarily driven by
 A non-exhaustive list of useful references you (or an LLM) can consult for concepts and design inspiration:
 
 - **Persistent naming & topological IDs**
-  - J. Kripac, _“A mechanism for persistently naming topological entities in history-based parametric solid models”_, Computer-Aided Design 29(2), 1997. ([ScienceDirect][1])
-  - S.H. Farjana, S. Han, _“Mechanisms of Persistent Identification of Topological Entities in CAD Systems: A Review”_, 2018. ([ScienceDirect][6])
+  - J. Kripac, _"A mechanism for persistently naming topological entities in history-based parametric solid models"_, Computer-Aided Design 29(2), 1997. ([ScienceDirect][1])
+  - S.H. Farjana, S. Han, _"Mechanisms of Persistent Identification of Topological Entities in CAD Systems: A Review"_, 2018. ([ScienceDirect][6])
   - OpenCascade OCAF and `TNaming_NamedShape` documentation (shape evolution graphs). ([dev.opencascade.org][4])
-  - FreeCAD documentation and realthunder’s wiki on the topological naming problem and his algorithm. ([wiki.freecad.org][5])
+  - FreeCAD documentation and realthunder's wiki on the topological naming problem and his algorithm. ([wiki.freecad.org][5])
 
 - **Numerical robustness & predicates**
   - CGAL kernel docs: exact predicates / inexact constructions. ([doc.cgal.org][2])
-  - J.R. Shewchuk, _“Adaptive Precision Floating-Point Arithmetic and Fast Robust Geometric Predicates.”_ ([people.eecs.berkeley.edu][3])
+  - J.R. Shewchuk, _"Adaptive Precision Floating-Point Arithmetic and Fast Robust Geometric Predicates."_ ([people.eecs.berkeley.edu][3])
 
 - **Constraint solving**
-  - Siemens D-Cubed 2D DCM – widely used commercial 2D sketch constraint solver (for understanding industrial expectations of a “serious” solver). ([Siemens Digital Industries Software][8])
+  - Siemens D-Cubed 2D DCM – widely used commercial 2D sketch constraint solver (for understanding industrial expectations of a "serious" solver). ([Siemens Digital Industries Software][8])
 
-These are not dependencies; they’re **reference points** SolidType can learn from and aim to match or improve upon.
+These are not dependencies; they're **reference points** SolidType can learn from and aim to match or improve upon.
 
 ---
 
-If you’d like, I can now turn this into an actual `overview.md` + a matching `architecture.md` skeleton with headings and TODOs that an LLM agent can fill out module by module.
+If you'd like, I can now turn this into an actual `overview.md` + a matching `architecture.md` skeleton with headings and TODOs that an LLM agent can fill out module by module.
 
 [1]: https://www.sciencedirect.com/science/article/pii/S0010448596000401?utm_source=chatgpt.com "A mechanism for persistently naming topological entities in ..."
 [2]: https://doc.cgal.org/latest/Kernel_23/classCGAL_1_1Exact__predicates__inexact__constructions__kernel.html?utm_source=chatgpt.com "Exact_predicates_inexact_constr..."
