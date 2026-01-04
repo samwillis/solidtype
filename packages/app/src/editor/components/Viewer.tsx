@@ -1,3 +1,22 @@
+/**
+ * Viewer - 3D CAD Viewport Component
+ *
+ * The main 3D rendering viewport for the CAD editor. Handles:
+ * - Three.js scene setup with post-processing (SSAO)
+ * - Camera controls (orbit, zoom, pan)
+ * - Mesh and edge rendering for solid bodies
+ * - Sketch visualization and editing
+ * - Face and edge selection with highlighting
+ * - Datum plane and origin rendering
+ * - Constraint annotations and dimension editing
+ * - Multi-user cursor awareness
+ *
+ * This is a large component that will be progressively refactored
+ * into smaller, more focused modules.
+ *
+ * @see ./viewer/viewer-utils.ts for extracted utility functions
+ */
+
 import React, { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";

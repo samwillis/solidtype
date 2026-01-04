@@ -35,9 +35,20 @@ import {
 } from "./Icons";
 import "./FloatingToolbar.css";
 
-type FloatingToolbarProps = Record<string, never>;
-
-const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
+/**
+ * FloatingToolbar - Main toolbar for the CAD editor
+ *
+ * Provides quick access to:
+ * - Sketch tools (line, rectangle, arc, circle)
+ * - Feature creation (extrude, revolve, boolean)
+ * - Constraint application
+ * - Undo/redo operations
+ * - Export functionality
+ *
+ * The toolbar adapts its available tools based on the current mode
+ * (normal view vs active sketch editing).
+ */
+const FloatingToolbar: React.FC = () => {
   const {
     mode,
     startSketch,
