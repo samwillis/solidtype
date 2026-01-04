@@ -15,8 +15,9 @@
 // Type declarations are in ../../../../types/opencascade.d.ts
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="../../../../types/opencascade.d.ts" />
-// OpenCascade.js returns a complex instance - use unknown with type guards
-type OpenCascadeInstance = unknown;
+// OpenCascade.js returns a complex instance with dynamically generated bindings
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type OpenCascadeInstance = any;
 
 let oc: OpenCascadeInstance | null = null;
 let initPromise: Promise<OpenCascadeInstance> | null = null;
@@ -97,7 +98,8 @@ export async function initOCCT(
       const OpenCascade = opencascadeModule.default;
 
       // Initialize with the WASM binary
-      const instance = await new OpenCascade({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const instance = await new (OpenCascade as any)({
         wasmBinary: wasmBuffer.buffer,
       });
 
