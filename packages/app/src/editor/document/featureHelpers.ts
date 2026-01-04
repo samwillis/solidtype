@@ -24,6 +24,9 @@ import type {
   DatumPlaneRole,
 } from "./schema";
 
+// Import sketch data functions for internal use (also re-exported below)
+import { getSketchData } from "./feature-helpers/sketch-data";
+
 // Re-export sketch data manipulation functions from modular implementation
 export {
   type NewSketchConstraint,
