@@ -3,10 +3,15 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { db } from "../db";
+import { db, pool } from "../db";
 import { projects, projectMembers, workspaceMembers, branches } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
-import { getCurrentTxid } from "./helpers";
+
+/** Get the current transaction ID from the database */
+async function getCurrentTxid(): Promise<number> {
+  const result = await pool.query("SELECT txid_current()");
+  return Number(result.rows[0]?.txid_current || 0);
+}
 
 // ============================================================================
 // Types

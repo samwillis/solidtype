@@ -5,8 +5,8 @@
  * This file maintains backward compatibility with existing imports.
  */
 
-// Helpers
-export { normalizeNullableUuid, getCurrentTxid } from "./helpers";
+// Helpers (pure functions safe for client use)
+export { normalizeNullableUuid } from "./helpers";
 
 // Workspace operations
 export {

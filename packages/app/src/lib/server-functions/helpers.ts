@@ -1,10 +1,9 @@
 /**
  * Server Functions - Shared Helpers
  *
- * Common utilities used across server function modules.
+ * Pure utility functions that can be used on both client and server.
+ * NOTE: Do NOT import server-only modules (db, pg, etc.) here!
  */
-
-import { pool } from "../db";
 
 /**
  * Normalize a nullable UUID field value.
@@ -21,13 +20,4 @@ export function normalizeNullableUuid(value: string | null | undefined): string 
     return trimmed === "" ? undefined : trimmed;
   }
   return undefined;
-}
-
-/**
- * Get the current transaction ID from the database.
- * Used for optimistic locking and sync operations.
- */
-export async function getCurrentTxid(): Promise<number> {
-  const result = await pool.query("SELECT txid_current()");
-  return Number(result.rows[0]?.txid_current || 0);
 }
