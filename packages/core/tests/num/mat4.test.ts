@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { identity4, zero4, mul4, transformPoint3, transformDirection3 } from "../../src/num/mat4.js";
+import {
+  identity4,
+  zero4,
+  mul4,
+  transformPoint3,
+  transformDirection3,
+} from "../../src/num/mat4.js";
 import { vec3 } from "../../src/num/vec3.js";
 
 describe(`mat4`, () => {

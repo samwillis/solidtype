@@ -6,7 +6,13 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { SketchModel } from "../../src/sketch/SketchModel.js";
 import { resetAllIds } from "../../src/sketch/idAllocator.js";
 import { XY_PLANE } from "../../src/model/planes.js";
-import { coincident, horizontalPoints, verticalPoints, distance, fixed } from "../../src/sketch/constraints.js";
+import {
+  coincident,
+  horizontalPoints,
+  verticalPoints,
+  distance,
+  fixed,
+} from "../../src/sketch/constraints.js";
 import {
   buildConstraintGraph,
   findConnectedComponents,

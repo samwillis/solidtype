@@ -4,7 +4,12 @@
 
 import { describe, it, expect } from "vitest";
 import type { Line2D, Arc2D } from "../../src/geom/curve2d.js";
-import { evalCurve2D, curveTangent2D, curveLength2D, closestPointOnCurve2D } from "../../src/geom/curve2d.js";
+import {
+  evalCurve2D,
+  curveTangent2D,
+  curveLength2D,
+  closestPointOnCurve2D,
+} from "../../src/geom/curve2d.js";
 import { vec2, length2 } from "../../src/num/vec2.js";
 import { createNumericContext } from "../../src/num/tolerance.js";
 

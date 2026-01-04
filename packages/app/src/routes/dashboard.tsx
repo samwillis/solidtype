@@ -32,7 +32,7 @@ function DashboardLayout() {
     const pathname = location.pathname;
 
     // Match project routes
-    const projectMatch = pathname.match(/\/dashboard\/projects\/([^\/]+)/);
+    const projectMatch = pathname.match(/\/dashboard\/projects\/([^/]+)/);
     if (projectMatch) {
       return `project-${projectMatch[1]}`;
     }
@@ -48,12 +48,12 @@ function DashboardLayout() {
 
   // Extract current project/branch from URL for context-aware dialogs
   const currentProjectId = useMemo(() => {
-    const match = location.pathname.match(/\/dashboard\/projects\/([^\/]+)/);
+    const match = location.pathname.match(/\/dashboard\/projects\/([^/]+)/);
     return match ? match[1] : undefined;
   }, [location.pathname]);
 
   const currentBranchId = useMemo(() => {
-    const match = location.pathname.match(/\/dashboard\/projects\/[^\/]+\/branches\/([^\/]+)/);
+    const match = location.pathname.match(/\/dashboard\/projects\/[^/]+\/branches\/([^/]+)/);
     return match ? match[1] : undefined;
   }, [location.pathname]);
 

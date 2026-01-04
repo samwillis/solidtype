@@ -4,7 +4,11 @@
 
 import { describe, it, expect } from "vitest";
 import type { Line2D, Arc2D } from "../../src/geom/curve2d.js";
-import { intersectLineLine2D, intersectLineArc2D, intersectArcArc2D } from "../../src/geom/intersect2d.js";
+import {
+  intersectLineLine2D,
+  intersectLineArc2D,
+  intersectArcArc2D,
+} from "../../src/geom/intersect2d.js";
 import { vec2 } from "../../src/num/vec2.js";
 import { createNumericContext } from "../../src/num/tolerance.js";
 

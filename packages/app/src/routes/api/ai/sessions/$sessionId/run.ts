@@ -18,7 +18,7 @@ import { createAndPreloadServerChatStreamDB, chatStateSchema } from "../../../..
 import { hydrateTranscript, toModelMessages } from "../../../../../lib/ai/state/hydrate";
 import { getApprovalLevel, type AIChatContext } from "../../../../../lib/ai/approval";
 import { db } from "../../../../../lib/db";
-import { aiChatSessions, projects, branches, workspaces } from "../../../../../db/schema";
+import { aiChatSessions, projects, branches } from "../../../../../db/schema";
 import { eq, and } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import type { DashboardContext } from "../../../../../lib/ai/prompts/dashboard";

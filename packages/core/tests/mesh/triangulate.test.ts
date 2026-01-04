@@ -5,7 +5,11 @@
 import { describe, it, expect } from "vitest";
 import type { Vec2 } from "../../src/num/vec2.js";
 import { vec2 } from "../../src/num/vec2.js";
-import { triangulatePolygon, isCounterClockwise, computeSignedArea } from "../../src/mesh/triangulate.js";
+import {
+  triangulatePolygon,
+  isCounterClockwise,
+  computeSignedArea,
+} from "../../src/mesh/triangulate.js";
 
 describe(`isCounterClockwise`, () => {
   it(`returns true for CCW triangle`, () => {

@@ -148,11 +148,8 @@ export const createProject = createServerFn({ method: "POST" })
 
 export const createProjectMutation = createServerFn({ method: "POST" })
   .inputValidator(
-    (d: {
-      workspaceId: string;
-      project: { name: string; description?: string };
-      userId: string;
-    }) => d
+    (d: { workspaceId: string; project: { name: string; description?: string }; userId: string }) =>
+      d
   )
   .handler(async ({ data }) => {
     const [created] = await db.transaction(async (tx) => {
@@ -190,9 +187,7 @@ export const createProjectMutation = createServerFn({ method: "POST" })
   });
 
 export const updateProjectMutation = createServerFn({ method: "POST" })
-  .inputValidator(
-    (d: { projectId: string; updates: { name?: string; description?: string } }) => d
-  )
+  .inputValidator((d: { projectId: string; updates: { name?: string; description?: string } }) => d)
   .handler(async ({ data }) => {
     const [updated] = await db
       .update(projects)

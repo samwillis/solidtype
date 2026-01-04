@@ -9,7 +9,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { buildDashboardSystemPrompt, type DashboardContext } from "../../src/lib/ai/prompts/dashboard";
+import {
+  buildDashboardSystemPrompt,
+  type DashboardContext,
+} from "../../src/lib/ai/prompts/dashboard";
 
 // Mark as integration test - skipped by default
 const isIntegrationTest = process.env.RUN_AI_INTEGRATION !== "true";

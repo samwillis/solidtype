@@ -9,7 +9,11 @@ import { createPlaneSurface } from "../../src/geom/surface.js";
 import { vec3 } from "../../src/num/vec3.js";
 import { vec2 } from "../../src/num/vec2.js";
 import type { Line2D } from "../../src/geom/curve2d.js";
-import { validateHalfEdgeSameParameter, hasPCurve, loopHasAllPCurves } from "../../src/topo/sameParameter.js";
+import {
+  validateHalfEdgeSameParameter,
+  hasPCurve,
+  loopHasAllPCurves,
+} from "../../src/topo/sameParameter.js";
 
 describe("SameParameter validation", () => {
   const ctx = createNumericContext();

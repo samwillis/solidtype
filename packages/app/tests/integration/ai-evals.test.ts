@@ -20,7 +20,10 @@ import { describe, it, expect, beforeAll } from "vitest";
 // Load .env file from app package root
 config({ path: resolve(__dirname, "../../.env") });
 import { chat } from "@tanstack/ai";
-import { buildDashboardSystemPrompt, type DashboardContext } from "../../src/lib/ai/prompts/dashboard";
+import {
+  buildDashboardSystemPrompt,
+  type DashboardContext,
+} from "../../src/lib/ai/prompts/dashboard";
 import {
   listProjectsDef,
   listBranchesDef,
