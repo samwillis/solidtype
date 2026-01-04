@@ -95,6 +95,18 @@ The `@solidtype/core` package now uses OpenCascade.js for all B-Rep operations:
 
 If you find yourself wanting to put core geometry or topology logic into `app`, stop and move it into `@solidtype/core`.
 
+### Local Development: HTTP/2 Proxy
+
+Vite's dev server only supports HTTP/1.1, which limits browsers to 6 simultaneous connections. This causes issues with Electric SQL sync and long-polling.
+
+**Always use Caddy as an HTTP/2 reverse proxy during development:**
+
+```bash
+caddy reverse-proxy --from localhost:3010 --to localhost:3000 --internal-certs
+```
+
+Access the app at `https://localhost:3010`. See [Electric SQL Troubleshooting](https://electric-sql.com/docs/guides/troubleshooting#solution-mdash-run-caddy) for details.
+
 ---
 
 ## 3. Preferred Libraries & Tooling
