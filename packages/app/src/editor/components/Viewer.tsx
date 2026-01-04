@@ -2924,7 +2924,8 @@ const Viewer: React.FC = () => {
     let isPotentialDrag = false;
     let isDragging = false;
     let currentDragId: string | null = null;
-    let currentTarget: HTMLElement | null = null;
+    // Track target element for potential future use (e.g., styling during drag)
+    let _currentTarget: HTMLElement | null = null;
     let startX = 0;
     let startY = 0;
     let initialOffsetX = 0;
@@ -2939,7 +2940,7 @@ const Viewer: React.FC = () => {
         if (constraintId) {
           isPotentialDrag = true;
           currentDragId = constraintId;
-          currentTarget = target;
+          _currentTarget = target;
           startX = e.clientX;
           startY = e.clientY;
           initialOffsetX = parseFloat(target.dataset.storedOffsetX ?? "0");
@@ -2994,7 +2995,7 @@ const Viewer: React.FC = () => {
       isPotentialDrag = false;
       isDragging = false;
       currentDragId = null;
-      currentTarget = null;
+      _currentTarget = null;
       setDraggingDimensionId(null);
       setDragCurrentOffset(null);
     };

@@ -244,7 +244,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
             {preselectedProjectId && (
               <form.Field
                 name="projectId"
-                children={(field) => (
+                children={(_field) => (
                   <div className="create-dialog-field">
                     <label className="create-dialog-label">Project</label>
                     <input
@@ -321,7 +321,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
             {preselectedBranchId && (
               <form.Field
                 name="branchId"
-                children={(field) => (
+                children={(_field) => (
                   <div className="create-dialog-field">
                     <label className="create-dialog-label">Branch</label>
                     <input
@@ -343,7 +343,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
             <form.Field
               name="parentId"
               validators={{
-                onChange: ({ value }) => {
+                onChange: () => {
                   // Parent folder is optional
                   return undefined;
                 },
