@@ -37,6 +37,8 @@ import {
 import { useSceneSetup } from "./hooks/useSceneSetup";
 import { useViewerControls } from "./hooks/useViewerControls";
 import { useDimensionEditing } from "./hooks/useDimensionEditing";
+import { useSketchTools } from "./hooks/useSketchTools";
+import { use3DSelection, type RaycastHit } from "./hooks/use3DSelection";
 
 // Renderers
 import { useMeshRenderer } from "./renderers/useMeshRenderer";
@@ -56,15 +58,39 @@ const Viewer: React.FC = () => {
   const { theme } = useTheme();
   const { registerRefs, cameraStateRef, state: viewerState } = useViewer();
   const { meshes, bodies, sketchPlaneTransforms, featureStatus } = useKernel();
-  const { selectedFeatureId, hoveredFeatureId, selectedFaces, selectedEdges, hover } =
-    useSelection();
+  const {
+    selectedFeatureId,
+    hoveredFeatureId,
+    selectedFaces,
+    selectedEdges,
+    hover,
+    selectFace,
+    selectEdge,
+    clearSelection,
+    setHover,
+  } = useSelection();
   const {
     mode: sketchMode,
     previewLine,
+    setPreviewLine,
+    setSketchMousePos,
     selectedPoints,
     selectedLines,
     selectedConstraints,
+    setSelectedPoints,
+    setSelectedLines,
+    setSelectedConstraints,
+    clearSelection: clearSketchSelection,
     toggleConstraintSelection,
+    addPoint,
+    addLine,
+    addArc,
+    addCircle,
+    addRectangle,
+    addAngledRectangle,
+    addConstraint,
+    updatePointPosition,
+    findNearbyPoint,
   } = useSketch();
   const { doc, features, awareness } = useDocument();
 
@@ -298,6 +324,170 @@ const Viewer: React.FC = () => {
     updateConstraintOffset,
   });
 
+  // Snap to grid helper
+  const snapToGrid = useCallback(
+    (x: number, y: number): { x: number; y: number } => {
+      if (!viewerState.snapToGrid) return { x, y };
+      const size = viewerState.gridSize;
+      return {
+        x: Math.round(x / size) * size,
+        y: Math.round(y / size) * size,
+      };
+    },
+    [viewerState.snapToGrid, viewerState.gridSize]
+  );
+
+  // Wrapper for addConstraint to match useSketchTools type
+  const addConstraintWrapper = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (constraint: { type: string; [key: string]: unknown }) => {
+      addConstraint(constraint as any);
+    },
+    [addConstraint]
+  );
+
+  // Sketch tools (handles canvas mouse events for drawing)
+  const {
+    previewShapes,
+    snapTarget: _snapTarget,
+    boxSelection: _boxSelection,
+  } = useSketchTools({
+    containerRef,
+    sketchMode,
+    screenToSketch,
+    snapToGrid,
+    getSketch,
+    findNearbyPoint,
+    addPoint,
+    addLine,
+    addArc,
+    addCircle,
+    addRectangle,
+    addAngledRectangle,
+    addConstraint: addConstraintWrapper,
+    updatePointPosition,
+    setSelectedPoints,
+    setSelectedLines,
+    setSelectedConstraints,
+    clearSketchSelection,
+    autoConstraints: viewerState.autoConstraints,
+    setSketchMousePos,
+    setPreviewLine,
+  });
+
+  // 3D face/edge raycast for selection
+  const raycast3D = useCallback(
+    (clientX: number, clientY: number): RaycastHit | null => {
+      const camera = cameraRef.current;
+      const container = containerRef.current;
+      const meshGroup = groupRefs.meshGroup.current;
+
+      if (!camera || !container || !meshGroup) return null;
+
+      const rect = container.getBoundingClientRect();
+      const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+
+      const intersects = raycaster.intersectObjects(meshGroup.children, true);
+      if (intersects.length === 0) return null;
+
+      const hit = intersects[0];
+      const mesh = hit.object as THREE.Mesh;
+
+      // Get body and feature info from mesh userData
+      const bodyId = mesh.userData?.bodyId as string | undefined;
+      const featureId = mesh.userData?.featureId as string | undefined;
+      const faceMap = mesh.userData?.faceMap as Uint32Array | undefined;
+
+      if (!bodyId || !featureId) return null;
+
+      // Convert triangle index to B-Rep face index using faceMap
+      const triangleIndex = hit.faceIndex ?? 0;
+      const faceIndex = faceMap ? faceMap[triangleIndex] : triangleIndex;
+
+      return {
+        bodyId,
+        faceIndex,
+        featureId,
+        point: hit.point,
+        normal: hit.face?.normal ?? null,
+      };
+    },
+    [cameraRef, containerRef, groupRefs.meshGroup]
+  );
+
+  // Get face ID from body and face index
+  // For now, just return the face index - proper named face mapping can be added later
+  const getFaceId = useCallback((_bodyId: string, faceIndex: number): number => {
+    return faceIndex;
+  }, []);
+
+  // Handle face selection (only when not in sketch mode)
+  const handleSelectFace = useCallback(
+    (selection: { bodyId: string; faceIndex: number; featureId: string }, multi: boolean) => {
+      if (sketchMode.active) return; // Don't handle 3D selection during sketch mode
+      selectFace(selection, multi);
+    },
+    [sketchMode.active, selectFace]
+  );
+
+  // Handle edge selection (only when not in sketch mode)
+  const handleSelectEdge = useCallback(
+    (selection: { bodyId: string; edgeIndex: number; featureId: string }, multi: boolean) => {
+      if (sketchMode.active) return; // Don't handle 3D selection during sketch mode
+      selectEdge(selection, multi);
+    },
+    [sketchMode.active, selectEdge]
+  );
+
+  // Handle clear selection
+  const handleClearSelection = useCallback(() => {
+    if (sketchMode.active) return;
+    clearSelection();
+  }, [sketchMode.active, clearSelection]);
+
+  // Handle hover
+  const handleHover = useCallback(
+    (
+      target: { type: "face" | "edge"; bodyId: string; index: number; featureId: string } | null
+    ) => {
+      if (sketchMode.active) {
+        setHover(null);
+        return;
+      }
+      if (target) {
+        setHover({
+          type: target.type,
+          bodyId: target.bodyId,
+          index: target.index,
+          featureId: target.featureId,
+        });
+      } else {
+        setHover(null);
+      }
+    },
+    [sketchMode.active, setHover]
+  );
+
+  // 3D selection (face/edge click and hover)
+  use3DSelection({
+    containerRef,
+    cameraRef: cameraRef as React.MutableRefObject<
+      THREE.PerspectiveCamera | THREE.OrthographicCamera | null
+    >,
+    edgeGroupRef: groupRefs.edgeGroup,
+    raycast: raycast3D,
+    getFaceId,
+    onSelectFace: handleSelectFace,
+    onSelectEdge: handleSelectEdge,
+    onClearSelection: handleClearSelection,
+    onHover: handleHover,
+    showEdges: viewerState.showEdges,
+  });
+
   // Register refs with context
   React.useEffect(() => {
     registerRefs({
@@ -353,6 +543,15 @@ const Viewer: React.FC = () => {
     needsRenderRef,
   });
 
+  // Merge previewLine from context with other preview shapes from useSketchTools
+  const mergedPreviewShapes = useMemo(
+    () => ({
+      ...previewShapes,
+      line: previewLine, // previewLine comes from context (set by useSketchTools via setPreviewLine)
+    }),
+    [previewShapes, previewLine]
+  );
+
   useSketchRenderer({
     sketchGroupRef: groupRefs.sketchGroup,
     rendererRef,
@@ -361,13 +560,7 @@ const Viewer: React.FC = () => {
     features,
     selectedFeatureId,
     hoveredFeatureId,
-    previewShapes: {
-      line: previewLine,
-      circle: null,
-      arc: null,
-      rect: null,
-      polygon: null,
-    },
+    previewShapes: mergedPreviewShapes,
     sketchPlaneTransforms,
     sceneReady,
     needsRenderRef,

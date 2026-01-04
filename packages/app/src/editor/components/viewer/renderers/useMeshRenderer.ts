@@ -127,6 +127,11 @@ export function useMeshRenderer(options: MeshRendererOptions): void {
 
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = bodyId;
+      mesh.userData = {
+        bodyId,
+        featureId: bodyId,
+        faceMap: meshData.faceMap,
+      };
       meshGroup.add(mesh);
 
       // Add CAD-style edge lines from B-Rep edges

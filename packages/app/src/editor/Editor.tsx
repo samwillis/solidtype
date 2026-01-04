@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import FloatingToolbar from "./components/FloatingToolbar";
+import { FloatingToolbar } from "./components/floating-toolbar";
 import FloatingFeatureTreePanel from "./components/FloatingFeatureTreePanel";
 import ViewCube from "./components/ViewCube";
 import Viewer from "./components/Viewer";

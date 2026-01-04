@@ -992,14 +992,36 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
       }
     };
 
+    // Handle Escape key to cancel current drawing chain
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        // Clear all temporary drawing state
+        setTempStartPoint(null);
+        setTempSecondPoint(null);
+        setChainLastEndpoint(null);
+        setArcStartPoint(null);
+        setArcEndPoint(null);
+        setArcCenterPoint(null);
+        setCircleCenterPoint(null);
+        setTangentSource(null);
+        setPreviewLine(null);
+        setPreviewCircle(null);
+        setPreviewArc(null);
+        setPreviewRect(null);
+        setPreviewPolygon(null);
+      }
+    };
+
     container.addEventListener("mousemove", handleMouseMove);
     container.addEventListener("mousedown", handleMouseDown);
     container.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       container.removeEventListener("mousemove", handleMouseMove);
       container.removeEventListener("mousedown", handleMouseDown);
       container.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [
     containerRef,
