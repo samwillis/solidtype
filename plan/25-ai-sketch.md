@@ -1,5 +1,9 @@
 # Phase 25: AI 2D Sketch Integration
 
+> **Status:** ⏳ **PLANNED**
+> 
+> This phase has not been started. The infrastructure from Phase 23 is in place and ready for sketch tool implementation.
+
 ## Prerequisites
 
 - Phase 23: AI Core Infrastructure
