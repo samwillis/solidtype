@@ -136,6 +136,22 @@ pnpm dev
 
 The app will be available at `http://localhost:3000`.
 
+### 6. HTTP/2 Proxy (Recommended)
+
+Vite's dev server only supports HTTP/1.1, which limits browsers to 6 simultaneous connections. This can cause issues with Electric SQL sync and long-polling when you have multiple shapes/streams open.
+
+**Solution:** Use [Caddy](https://caddyserver.com) as an HTTP/2 reverse proxy:
+
+```bash
+# Install Caddy: https://caddyserver.com/docs/install
+# Then run:
+caddy reverse-proxy --from localhost:3010 --to localhost:3000 --internal-certs
+```
+
+Now access the app at `https://localhost:3010` instead of `http://localhost:3000`.
+
+See [Electric SQL Troubleshooting](https://electric-sql.com/docs/guides/troubleshooting#solution-mdash-run-caddy) for more details on this issue.
+
 ## Development Workflow
 
 ### Project Structure
