@@ -3,15 +3,10 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { db, pool } from "../db";
+import { db } from "../db";
 import { workspaces, workspaceMembers } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
-
-/** Get the current transaction ID from the database */
-async function getCurrentTxid(): Promise<number> {
-  const result = await pool.query("SELECT txid_current()");
-  return Number(result.rows[0]?.txid_current || 0);
-}
+import { getCurrentTxid } from "./db-helpers";
 
 // ============================================================================
 // Types
@@ -110,7 +105,7 @@ export const createWorkspaceMutation = createServerFn({ method: "POST" })
     (d: { workspace: { name: string; slug: string; description?: string }; userId: string }) => d
   )
   .handler(async ({ data }) => {
-    const [created] = await db.transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       const [ws] = await tx
         .insert(workspaces)
         .values({
@@ -127,11 +122,9 @@ export const createWorkspaceMutation = createServerFn({ method: "POST" })
         role: "owner",
       });
 
-      return [ws];
+      const txid = await getCurrentTxid(tx);
+      return { data: ws, txid };
     });
-
-    const txid = await getCurrentTxid();
-    return { data: created, txid };
   });
 
 export const updateWorkspaceMutation = createServerFn({ method: "POST" })
@@ -139,21 +132,25 @@ export const updateWorkspaceMutation = createServerFn({ method: "POST" })
     (d: { workspaceId: string; updates: { name?: string; description?: string } }) => d
   )
   .handler(async ({ data }) => {
-    const [updated] = await db
-      .update(workspaces)
-      .set(data.updates)
-      .where(eq(workspaces.id, data.workspaceId))
-      .returning();
+    return await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(workspaces)
+        .set(data.updates)
+        .where(eq(workspaces.id, data.workspaceId))
+        .returning();
 
-    const txid = await getCurrentTxid();
-    return { data: updated, txid };
+      const txid = await getCurrentTxid(tx);
+      return { data: updated, txid };
+    });
   });
 
 export const deleteWorkspaceMutation = createServerFn({ method: "POST" })
   .inputValidator((d: { workspaceId: string }) => d)
   .handler(async ({ data }) => {
-    await db.delete(workspaces).where(eq(workspaces.id, data.workspaceId));
+    return await db.transaction(async (tx) => {
+      await tx.delete(workspaces).where(eq(workspaces.id, data.workspaceId));
 
-    const txid = await getCurrentTxid();
-    return { success: true, txid };
+      const txid = await getCurrentTxid(tx);
+      return { success: true, txid };
+    });
   });

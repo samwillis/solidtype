@@ -2,7 +2,6 @@
  * Server Functions - Main Entry Point
  *
  * Re-exports all server functions organized by domain.
- * This file maintains backward compatibility with existing imports.
  */
 
 // Helpers (pure functions safe for client use)
@@ -28,36 +27,52 @@ export {
   deleteProjectMutation,
 } from "./project";
 
-// Re-export remaining functions from the original file
-// TODO: These should be moved to their own domain modules
+// Document operations
 export {
   getDocument,
   updateDocument,
   deleteDocument,
-  createBranchMutation,
-  updateBranchMutation,
-  deleteBranchMutation,
   createDocumentMutation,
   updateDocumentMutation,
   deleteDocumentMutation,
+} from "./document";
+
+// Branch operations
+export {
+  getBranchesForProject,
+  createBranchMutation,
+  updateBranchMutation,
+  deleteBranchMutation,
+  createBranchWithContentMutation,
+  mergeBranchMutation,
+} from "./branch";
+
+// Folder operations
+export {
+  getFoldersForBranch,
   createFolderMutation,
   updateFolderMutation,
   deleteFolderMutation,
-  createBranchWithContentMutation,
-  getBranchesForProject,
-  getFoldersForBranch,
-  mergeBranchMutation,
+} from "./folder";
+
+// Member management
+export {
+  // Workspace members
   listWorkspaceMembersMutation,
   addWorkspaceMemberMutation,
   updateWorkspaceMemberRoleMutation,
   removeWorkspaceMemberMutation,
+  // Project members
   listProjectMembersMutation,
   addProjectMemberMutation,
   updateProjectMemberMutation,
   removeProjectMemberMutation,
-  // AI Chat sessions
+} from "./member";
+
+// AI Chat sessions
+export {
   createChatSessionMutation,
   updateChatSessionMutation,
   deleteChatSessionMutation,
   createChatSessionDirect,
-} from "../server-functions-legacy";
+} from "./ai-chat";
