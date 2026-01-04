@@ -4,6 +4,8 @@
  *
  * Also handles feature creation with accept/cancel buttons when in edit mode.
  * Uses Tanstack Form with Zod validation for feature editing.
+ *
+ * @see ./properties-panel/ for extracted sub-components
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -39,176 +41,16 @@ import { UserProfileDialog } from "../../components/dialogs/UserProfileDialog";
 import { useSession } from "../../lib/auth-client";
 import "./PropertiesPanel.css";
 
-// ============================================================================
-// Input Components
-// ============================================================================
-
-interface NumberInputProps {
-  value: number;
-  onChange: (value: number) => void;
-  min?: number;
-  max?: number;
-  step?: number;
-  unit?: string;
-  disabled?: boolean;
-}
-
-function NumberInput({ value, onChange, min, max, step: _step, unit, disabled }: NumberInputProps) {
-  const [localValue, setLocalValue] = useState(String(value));
-
-  useEffect(() => {
-    setLocalValue(String(value));
-  }, [value]);
-
-  const handleBlur = () => {
-    const parsed = parseFloat(localValue);
-    if (!isNaN(parsed)) {
-      const clamped = Math.max(min ?? -Infinity, Math.min(max ?? Infinity, parsed));
-      onChange(clamped);
-    } else {
-      setLocalValue(String(value));
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleBlur();
-    }
-  };
-
-  return (
-    <div className="number-input">
-      <input
-        type="text"
-        value={localValue}
-        onChange={(e) => setLocalValue(e.target.value)}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        disabled={disabled}
-      />
-      {unit && <span className="unit">{unit}</span>}
-    </div>
-  );
-}
-
-interface TextInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  disabled?: boolean;
-}
-
-function TextInput({ value, onChange, placeholder, disabled }: TextInputProps) {
-  const [localValue, setLocalValue] = useState(value);
-
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
-  const handleBlur = () => {
-    if (localValue !== value) {
-      onChange(localValue);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleBlur();
-    }
-  };
-
-  return (
-    <input
-      type="text"
-      className="text-input"
-      value={localValue}
-      onChange={(e) => setLocalValue(e.target.value)}
-      onBlur={handleBlur}
-      onKeyDown={handleKeyDown}
-      placeholder={placeholder}
-      disabled={disabled}
-    />
-  );
-}
-
-interface SelectInputProps<T extends string> {
-  value: T;
-  onChange: (value: T) => void;
-  options: Array<{ value: T; label: string }>;
-  disabled?: boolean;
-}
-
-function SelectInput<T extends string>({
-  value,
-  onChange,
-  options,
-  disabled,
-}: SelectInputProps<T>) {
-  return (
-    <select
-      className="select-input"
-      value={value}
-      onChange={(e) => onChange(e.target.value as T)}
-      disabled={disabled}
-    >
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-interface CheckboxInputProps {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label?: string;
-  disabled?: boolean;
-}
-
-function CheckboxInput({ checked, onChange, label, disabled }: CheckboxInputProps) {
-  return (
-    <label className="checkbox-input">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        disabled={disabled}
-      />
-      {label && <span>{label}</span>}
-    </label>
-  );
-}
-
-interface ColorInputProps {
-  value: string | undefined;
-  onChange: (value: string | undefined) => void;
-  defaultColor: string;
-  disabled?: boolean;
-}
-
-function ColorInput({ value, onChange, defaultColor, disabled }: ColorInputProps) {
-  const currentColor = value || defaultColor;
-  const isDefault = !value;
-
-  return (
-    <div className="color-input">
-      <input
-        type="color"
-        value={currentColor}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-      />
-      <span className="color-value">{currentColor}</span>
-      {!isDefault && (
-        <button className="reset-color" onClick={() => onChange(undefined)} disabled={disabled}>
-          Reset
-        </button>
-      )}
-    </div>
-  );
-}
+// Import reusable input components
+import {
+  NumberInput,
+  TextInput,
+  SelectInput,
+  CheckboxInput,
+  ColorInput,
+  PropertyRow,
+  PropertyGroup,
+} from "./properties-panel";
 
 // ============================================================================
 // Face Selector (Phase 14: toFace extent)
@@ -285,34 +127,6 @@ function getDefaultPlaneColorHex(planeId: string): string {
     default:
       return "#888888";
   }
-}
-
-// ============================================================================
-// Property Row
-// ============================================================================
-
-interface PropertyRowProps {
-  label: string;
-  children: React.ReactNode;
-}
-
-function PropertyRow({ label, children }: PropertyRowProps) {
-  return (
-    <div className="property-row">
-      <span className="property-label">{label}</span>
-      <div className="property-value">{children}</div>
-    </div>
-  );
-}
-
-interface PropertyGroupProps {
-  title: string;
-  children: React.ReactNode;
-}
-
-function PropertyGroup({ children }: PropertyGroupProps) {
-  // Don't render group title - make it more like Figma
-  return <div className="property-group">{children}</div>;
 }
 
 // ============================================================================
