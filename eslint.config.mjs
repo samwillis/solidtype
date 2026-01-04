@@ -19,6 +19,9 @@ export default [
       "**/routeTree.gen.ts",
       "**/coverage/**",
       "**/.vite/**",
+      "**/bench/**", // Benchmark files don't need strict linting
+      "**/vendor/**", // Vendored third-party code
+      "**/tests/**", // Test files have their own rules below
     ],
   },
 
@@ -47,7 +50,14 @@ export default [
   },
   // Allow `as any` and non-null assertions in test files
   {
-    files: ["**/*.test.ts", "**/*.test.tsx", "**/__tests__/**/*.ts", "**/__tests__/**/*.tsx"],
+    files: [
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "**/__tests__/**/*.ts",
+      "**/__tests__/**/*.tsx",
+      "**/tests/**/*.ts",
+      "**/tests/**/*.tsx",
+    ],
     rules: {
       "@typescript-eslint/no-explicit-any": "off", // Allow `any` and `as any` in tests
       "@typescript-eslint/no-non-null-assertion": "off", // Allow non-null assertions (`!`) in tests

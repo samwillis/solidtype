@@ -30,7 +30,6 @@ import type {
   SketchArc,
   SketchCircle,
   SketchEntity,
-  SketchConstraint,
   PlaneFeature,
   OriginFeature,
   SketchFeature,
@@ -321,7 +320,7 @@ const Viewer: React.FC = () => {
     setPreviewLine,
     editSketch,
     finishSketch,
-    cancelSketch,
+    cancelSketch: _cancelSketch,
     selectedPoints,
     selectedLines,
     selectedConstraints,
@@ -337,7 +336,7 @@ const Viewer: React.FC = () => {
     updatePointPosition,
     getSketchPoints,
   } = useSketch();
-  const { doc, features, units, awareness } = useDocument();
+  const { doc, features, units: _units, awareness } = useDocument();
 
   // Sketch editing state
   const [tempStartPoint, setTempStartPoint] = useState<{
@@ -1269,7 +1268,7 @@ const Viewer: React.FC = () => {
   );
 
   // Delete constraint
-  const deleteConstraint = useCallback(
+  const _deleteConstraint = useCallback(
     (constraintId: string) => {
       if (!sketchMode.sketchId) return;
       const sketchEl = findFeature(doc.featuresById, sketchMode.sketchId);
@@ -3135,7 +3134,7 @@ const Viewer: React.FC = () => {
     let isPotentialDrag = false;
     let isDragging = false;
     let currentDragId: string | null = null;
-    let currentTarget: HTMLElement | null = null;
+    let _currentTarget: HTMLElement | null = null;
     let startX = 0;
     let startY = 0;
     let initialOffsetX = 0;
@@ -3286,7 +3285,7 @@ const Viewer: React.FC = () => {
   }, [editingDimensionId]);
 
   // Reset camera to face the sketch plane normal
-  const resetToSketchNormal = useCallback(() => {
+  const _resetToSketchNormal = useCallback(() => {
     const camera = cameraRef.current;
     if (!camera || !sketchMode.sketchId) return;
 

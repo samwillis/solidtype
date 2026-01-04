@@ -207,7 +207,7 @@ export function computeAndSetPCurve(
  */
 export function computeFacePCurves(
   model: TopoModel,
-  loops: readonly import(`../topo/handles.js`).LoopId[],
+  loops: readonly import("../topo/handles.js").LoopId[],
   surfaceIndex: SurfaceIndex
 ): void {
   for (const loopId of loops) {

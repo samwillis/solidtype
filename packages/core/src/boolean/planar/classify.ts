@@ -558,7 +558,7 @@ function pointInFace(
       if (
         isPointOnSegment2D([u2d, v2d], a, b, {
           tol: { length: ctx.tol.length, angle: ctx.tol.angle },
-        } as any)
+        } as { tol: { length: number; angle: number } })
       ) {
         inside = true;
         break;

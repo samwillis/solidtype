@@ -192,7 +192,7 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
             tools = await getDashboardTools(authSession.user.id);
 
             // Fetch full context for dashboard prompt
-            let dashboardContext: Partial<DashboardContext> = {};
+            const dashboardContext: Partial<DashboardContext> = {};
 
             if (chatSession.projectId) {
               // Fetch project with workspace

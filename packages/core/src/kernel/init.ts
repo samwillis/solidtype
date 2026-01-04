@@ -15,7 +15,8 @@
 // Type declarations are in ../../../../types/opencascade.d.ts
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="../../../../types/opencascade.d.ts" />
-type OpenCascadeInstance = any;
+// OpenCascade.js returns a complex instance - use unknown with type guards
+type OpenCascadeInstance = unknown;
 
 let oc: OpenCascadeInstance | null = null;
 let initPromise: Promise<OpenCascadeInstance> | null = null;
@@ -59,8 +60,8 @@ export async function initOCCT(
   initPromise = (async () => {
     // Check if we're in a browser/worker environment
     const isBrowser =
-      typeof (globalThis as any).window !== "undefined" ||
-      typeof (globalThis as any).self !== "undefined";
+      typeof (globalThis as Record<string, unknown>).window !== "undefined" ||
+      typeof (globalThis as Record<string, unknown>).self !== "undefined";
 
     if (isBrowser) {
       // In browser, the app should have called setOC() before this

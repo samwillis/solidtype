@@ -28,7 +28,6 @@ import {
   UndoIcon,
   RedoIcon,
   ExportIcon,
-  AIIcon,
   NormalViewIcon,
   CheckIcon,
   CloseIcon,
@@ -36,7 +35,7 @@ import {
 } from "./Icons";
 import "./FloatingToolbar.css";
 
-interface FloatingToolbarProps {}
+type FloatingToolbarProps = Record<string, never>;
 
 const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
   const {
@@ -142,7 +141,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = () => {
     }
   }, [canExport, exportStep, isExportingStep]);
 
-  const handleExportJson = useCallback(async () => {
+  const _handleExportJson = useCallback(async () => {
     if (!canExport || isExportingJson) return;
     setIsExportingJson(true);
     try {

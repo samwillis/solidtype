@@ -357,7 +357,7 @@ export function getFacePlane(shape: Shape, faceIndex: number): FacePlaneData | n
         const surfaceHandle = surface.get();
 
         // Get surface type
-        const geomPlane = surfaceHandle as { Location?: () => unknown };
+        const _geomPlane = surfaceHandle as { Location?: () => unknown };
 
         // Try to get plane parameters using the Geom_Surface interface
         // Get a point and normal at UV = (0, 0) - this works for any surface type

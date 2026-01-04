@@ -310,7 +310,7 @@ interface PropertyGroupProps {
   children: React.ReactNode;
 }
 
-function PropertyGroup({ title, children }: PropertyGroupProps) {
+function PropertyGroup({ children }: PropertyGroupProps) {
   // Don't render group title - make it more like Figma
   return <div className="property-group">{children}</div>;
 }
