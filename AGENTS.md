@@ -251,15 +251,52 @@ pnpm --filter @solidtype/app lint
 
 SolidType is TDD-oriented:
 
-- For every new module or non-trivial function, add **Vitest unit tests** in the same package.
+- For every new module or non-trivial function, add **Vitest unit tests** in the `tests/` directory.
 - Do not add public API without at least basic tests.
 - When you fix a bug, add a test that would fail without the fix.
 
-Guidelines:
+### Test Directory Structure
+
+Tests are organized in a `tests/` directory alongside `src/` in each package:
+
+```
+packages/core/
+├── src/           # Source code
+└── tests/         # Test files (mirrors src structure)
+    ├── api/
+    ├── model/
+    ├── sketch/
+    ├── fixtures/  # Shared test utilities
+    └── ...
+
+packages/app/
+├── src/           # Source code
+└── tests/
+    ├── unit/      # Unit tests
+    ├── integration/ # Integration tests
+    └── fixtures/  # Test utilities
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pnpm test
+
+# Run tests with coverage
+pnpm test:coverage
+
+# Run tests for a specific package
+pnpm --filter @solidtype/core test
+pnpm --filter @solidtype/app test
+```
+
+### Guidelines
 
 - Keep tests **fast** and **deterministic**.
 - Prefer **clear, example-based tests** over heavy randomised tests, unless instructed otherwise in `PLAN.md`.
 - Use the namespacing laid out in `ARCHITECTURE.md` (`num`, `geom`, `topo`, `model`, `sketch`, `naming`, `mesh`, `api`).
+- Import from source using relative paths: `import { ... } from "../../src/module/file.js"`.
 
 ---
 

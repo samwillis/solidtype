@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "test": "pnpm -r test",
+    "test:coverage": "pnpm -r test:coverage",
     "lint": "pnpm -r lint",
     "lint:fix": "pnpm -r lint:fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
