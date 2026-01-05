@@ -1,24 +1,36 @@
 /**
  * Server Functions - AI Chat Session Operations
+ *
+ * All functions use session-based authentication.
+ * No userId is accepted from client inputs.
+ *
+ * NOTE: Server-only modules (db, authz, repos) are imported dynamically
+ * inside handlers to avoid bundling them for the client.
  */
 
-import { createServerFn } from "@tanstack/react-start";
-import { db } from "../db";
-import { aiChatSessions } from "../../db/schema";
-import { eq, and } from "drizzle-orm";
-import { requireAuth } from "../auth-middleware";
+import { createAuthedServerFn } from "../server-fn-wrapper";
+import {
+  createChatSessionSchema,
+  createChatSessionDirectSchema,
+  updateChatSessionSchema,
+  deleteChatSessionSchema,
+} from "../../validators/ai-chat";
 import { normalizeNullableUuid } from "./helpers";
-import { getCurrentTxid } from "./db-helpers";
 
 // ============================================================================
 // Mutation Functions
 // ============================================================================
 
-export const createChatSessionMutation = createServerFn({ method: "POST" })
-  .inputValidator((d: { session: any }) => d)
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+/**
+ * Create a chat session via Electric collection
+ */
+export const createChatSessionMutation = createAuthedServerFn({
+  method: "POST",
+  validator: createChatSessionSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { aiChatSessions } = await import("../../db/schema");
+    const { getCurrentTxid } = await import("./db-helpers");
 
     return await db.transaction(async (tx) => {
       // Use client-provided ID for optimistic updates, or generate a new one
@@ -29,7 +41,7 @@ export const createChatSessionMutation = createServerFn({ method: "POST" })
         .insert(aiChatSessions)
         .values({
           id: sessionId,
-          userId: session.user.id, // Override with session user ID for security
+          userId: session.user.id, // Use session user ID, not client input
           context: data.session.context,
           documentId: normalizeNullableUuid(data.session.document_id),
           projectId: normalizeNullableUuid(data.session.project_id),
@@ -41,22 +53,24 @@ export const createChatSessionMutation = createServerFn({ method: "POST" })
       const txid = await getCurrentTxid(tx);
       return { data: created, txid };
     });
-  });
+  },
+});
 
-export const updateChatSessionMutation = createServerFn({ method: "POST" })
-  .inputValidator((d: { sessionId: string; updates: any }) => d)
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+/**
+ * Update a chat session (requires ownership)
+ */
+export const updateChatSessionMutation = createAuthedServerFn({
+  method: "POST",
+  validator: updateChatSessionSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { aiChatSessions } = await import("../../db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getCurrentTxid } = await import("./db-helpers");
+    const { requireChatSessionOwner } = await import("../authz");
 
     // Ensure user owns the session
-    const existing = await db.query.aiChatSessions.findFirst({
-      where: and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, session.user.id)),
-    });
-
-    if (!existing) {
-      throw new Error("Session not found or access denied");
-    }
+    await requireChatSessionOwner(session, data.sessionId);
 
     return await db.transaction(async (tx) => {
       const [updated] = await tx
@@ -71,22 +85,24 @@ export const updateChatSessionMutation = createServerFn({ method: "POST" })
       const txid = await getCurrentTxid(tx);
       return { data: updated, txid };
     });
-  });
+  },
+});
 
-export const deleteChatSessionMutation = createServerFn({ method: "POST" })
-  .inputValidator((d: { sessionId: string }) => d)
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+/**
+ * Delete a chat session (requires ownership)
+ */
+export const deleteChatSessionMutation = createAuthedServerFn({
+  method: "POST",
+  validator: deleteChatSessionSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { aiChatSessions } = await import("../../db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getCurrentTxid } = await import("./db-helpers");
+    const { requireChatSessionOwner } = await import("../authz");
 
     // Ensure user owns the session
-    const existing = await db.query.aiChatSessions.findFirst({
-      where: and(eq(aiChatSessions.id, data.sessionId), eq(aiChatSessions.userId, session.user.id)),
-    });
-
-    if (!existing) {
-      throw new Error("Session not found or access denied");
-    }
+    await requireChatSessionOwner(session, data.sessionId);
 
     return await db.transaction(async (tx) => {
       await tx.delete(aiChatSessions).where(eq(aiChatSessions.id, data.sessionId));
@@ -94,25 +110,20 @@ export const deleteChatSessionMutation = createServerFn({ method: "POST" })
       const txid = await getCurrentTxid(tx);
       return { data: { id: data.sessionId }, txid };
     });
-  });
+  },
+});
 
 /**
  * Create a new AI chat session directly (not through Electric collection).
  * This is used when starting a new chat to ensure the session exists on the server
  * before trying to use the stream endpoint.
  */
-export const createChatSessionDirect = createServerFn({ method: "POST" })
-  .inputValidator(
-    (d: {
-      context: "dashboard" | "editor";
-      documentId?: string | null;
-      projectId?: string | null;
-      title?: string;
-    }) => d
-  )
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+export const createChatSessionDirect = createAuthedServerFn({
+  method: "POST",
+  validator: createChatSessionDirectSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { aiChatSessions } = await import("../../db/schema");
 
     const sessionId = crypto.randomUUID();
     const durableStreamId = `ai-chat/${sessionId}`;
@@ -144,4 +155,5 @@ export const createChatSessionDirect = createServerFn({ method: "POST" })
       createdAt: created.createdAt.toISOString(),
       updatedAt: created.updatedAt.toISOString(),
     };
-  });
+  },
+});

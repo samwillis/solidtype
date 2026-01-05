@@ -1,23 +1,41 @@
 /**
  * Server Functions - Branch Operations
+ *
+ * All functions use session-based authentication.
+ * No userId is accepted from client inputs.
+ *
+ * NOTE: Server-only modules (db, authz, repos) are imported dynamically
+ * inside handlers to avoid bundling them for the client.
  */
 
-import { createServerFn } from "@tanstack/react-start";
-import { db } from "../db";
-import { branches, folders, documents } from "../../db/schema";
-import { eq, and, desc } from "drizzle-orm";
-import { requireAuth } from "../auth-middleware";
-import { getCurrentTxid } from "./db-helpers";
+import { createAuthedServerFn } from "../server-fn-wrapper";
+import {
+  getBranchesSchema,
+  createBranchSchema,
+  createBranchWithContentSchema,
+  updateBranchSchema,
+  deleteBranchSchema,
+  mergeBranchSchema,
+} from "../../validators/branch";
 
 // ============================================================================
 // Query Functions
 // ============================================================================
 
-export const getBranchesForProject = createServerFn({ method: "POST" })
-  .inputValidator((d: { projectId: string }) => d)
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    await requireAuth(request); // Verify authentication
+/**
+ * Get all branches for a project (requires project access)
+ */
+export const getBranchesForProject = createAuthedServerFn({
+  method: "POST",
+  validator: getBranchesSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { branches } = await import("../../db/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    const { requireProjectAccess } = await import("../authz");
+
+    // Verify project access
+    await requireProjectAccess(session, data.projectId);
 
     const projectBranches = await db
       .select()
@@ -26,26 +44,69 @@ export const getBranchesForProject = createServerFn({ method: "POST" })
       .orderBy(desc(branches.isMain), desc(branches.createdAt));
 
     return { data: projectBranches };
-  });
+  },
+});
 
 // ============================================================================
 // Mutation Functions
 // ============================================================================
 
-export const createBranchMutation = createServerFn({ method: "POST" })
-  .inputValidator((d: { projectId: string; branch: any }) => d)
-  .handler(async ({ data }) => {
+/**
+ * Create a new branch (requires project edit access)
+ */
+export const createBranchMutation = createAuthedServerFn({
+  method: "POST",
+  validator: createBranchSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { branches } = await import("../../db/schema");
+    const { getCurrentTxid } = await import("./db-helpers");
+    const { requireProjectAccess } = await import("../authz");
+
+    // Verify project access for edit
+    const { project, canEdit } = await requireProjectAccess(session, data.projectId);
+
+    // Check canEdit
+    if (!canEdit) {
+      throw new Error("Read-only access to this project");
+    }
+
     return await db.transaction(async (tx) => {
-      const [created] = await tx.insert(branches).values(data.branch).returning();
+      const [created] = await tx
+        .insert(branches)
+        .values({
+          projectId: project.id,
+          name: data.branch.name,
+          description: data.branch.description,
+          parentBranchId: data.branch.parentBranchId,
+          isMain: data.branch.isMain ?? false,
+          createdBy: session.user.id,
+          ownerId: session.user.id,
+        })
+        .returning();
 
       const txid = await getCurrentTxid(tx);
       return { data: created, txid };
     });
-  });
+  },
+});
 
-export const updateBranchMutation = createServerFn({ method: "POST" })
-  .inputValidator((d: { branchId: string; updates: any }) => d)
-  .handler(async ({ data }) => {
+/**
+ * Update a branch (requires branch edit access)
+ */
+export const updateBranchMutation = createAuthedServerFn({
+  method: "POST",
+  validator: updateBranchSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { branches } = await import("../../db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getCurrentTxid } = await import("./db-helpers");
+    const { requireBranchAccess } = await import("../authz");
+
+    // Verify branch access for edit
+    await requireBranchAccess(session, data.branchId, "edit");
+
     return await db.transaction(async (tx) => {
       const [updated] = await tx
         .update(branches)
@@ -56,45 +117,58 @@ export const updateBranchMutation = createServerFn({ method: "POST" })
       const txid = await getCurrentTxid(tx);
       return { data: updated, txid };
     });
-  });
+  },
+});
 
-export const deleteBranchMutation = createServerFn({ method: "POST" })
-  .inputValidator((d: { branchId: string }) => d)
-  .handler(async ({ data }) => {
+/**
+ * Delete a branch (requires branch edit access, cannot delete main)
+ */
+export const deleteBranchMutation = createAuthedServerFn({
+  method: "POST",
+  validator: deleteBranchSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { branches } = await import("../../db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getCurrentTxid } = await import("./db-helpers");
+    const { requireBranchAccess } = await import("../authz");
+
+    // Verify branch access for edit
+    const { branch } = await requireBranchAccess(session, data.branchId, "edit");
+
+    if (branch.isMain) {
+      throw new Error("Cannot delete main branch");
+    }
+
     return await db.transaction(async (tx) => {
-      // Check if branch is main - cannot delete main branch
-      const branch = await tx.query.branches.findFirst({
-        where: eq(branches.id, data.branchId),
-      });
-
-      if (!branch) {
-        throw new Error("Branch not found");
-      }
-
-      if (branch.isMain) {
-        throw new Error("Cannot delete main branch");
-      }
-
       await tx.delete(branches).where(eq(branches.id, data.branchId));
 
       const txid = await getCurrentTxid(tx);
       return { data: { id: data.branchId }, txid };
     });
-  });
+  },
+});
 
 /**
  * Create a new branch with copied content from parent branch.
  * This copies all folders and documents from the parent branch.
  * Documents keep the same baseDocumentId for tracking across branches.
  */
-export const createBranchWithContentMutation = createServerFn({ method: "POST" })
-  .inputValidator(
-    (d: { projectId: string; parentBranchId: string; name: string; description: string | null }) =>
-      d
-  )
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+export const createBranchWithContentMutation = createAuthedServerFn({
+  method: "POST",
+  validator: createBranchWithContentSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { branches, folders, documents } = await import("../../db/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const { getCurrentTxid } = await import("./db-helpers");
+    const { requireProjectAccess, requireBranchAccess } = await import("../authz");
+
+    // Verify project access for edit
+    await requireProjectAccess(session, data.projectId);
+
+    // Also verify parent branch access
+    await requireBranchAccess(session, data.parentBranchId, "view");
 
     // Create branch and copy content in a transaction
     return await db.transaction(async (tx) => {
@@ -142,8 +216,7 @@ export const createBranchWithContentMutation = createServerFn({ method: "POST" }
         folderIdMapping.set(folder.id, newFolder.id);
       }
 
-      // Copy child folders (simple approach - may need multiple passes for deep hierarchies)
-      // For now, we'll do a simple single-pass approach
+      // Copy child folders
       for (const folder of childFolders) {
         const newParentId = folder.parentId ? folderIdMapping.get(folder.parentId) : null;
         const [newFolder] = await tx
@@ -169,7 +242,7 @@ export const createBranchWithContentMutation = createServerFn({ method: "POST" }
       // Copy documents with the same baseDocumentId
       for (const doc of parentDocuments) {
         const newFolderId = doc.folderId ? folderIdMapping.get(doc.folderId) : null;
-        const baseDocId = doc.baseDocumentId || doc.id; // Use existing baseDocumentId or the document's own ID
+        const baseDocId = doc.baseDocumentId || doc.id;
 
         await tx.insert(documents).values({
           projectId: data.projectId,
@@ -178,8 +251,7 @@ export const createBranchWithContentMutation = createServerFn({ method: "POST" }
           folderId: newFolderId,
           name: doc.name,
           type: doc.type,
-          // Note: durableStreamId will be null - Yjs stream forking is not yet implemented
-          durableStreamId: null,
+          durableStreamId: null, // Yjs stream forking not yet implemented
           featureCount: doc.featureCount,
           sortOrder: doc.sortOrder,
           createdBy: session.user.id,
@@ -189,7 +261,8 @@ export const createBranchWithContentMutation = createServerFn({ method: "POST" }
       const txid = await getCurrentTxid(tx);
       return { data: { branch: newBranch }, txid };
     });
-  });
+  },
+});
 
 // ============================================================================
 // Yjs Stream Helpers
@@ -299,13 +372,21 @@ async function mergeYjsStreams(sourceStreamId: string, targetStreamId: string) {
  * Merge a branch into another branch
  * Uses Yjs CRDT merge with "edit wins" strategy
  */
-export const mergeBranchMutation = createServerFn({ method: "POST" })
-  .inputValidator((d: { sourceBranchId: string; targetBranchId: string }) => d)
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+export const mergeBranchMutation = createAuthedServerFn({
+  method: "POST",
+  validator: mergeBranchSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { branches, documents } = await import("../../db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getCurrentTxid } = await import("./db-helpers");
+    const { requireBranchAccess } = await import("../authz");
 
     const { sourceBranchId, targetBranchId } = data;
+
+    // Verify access to both branches
+    await requireBranchAccess(session, sourceBranchId, "view");
+    await requireBranchAccess(session, targetBranchId, "edit");
 
     // Get source branch
     const sourceBranch = await db.query.branches.findFirst({
@@ -346,7 +427,7 @@ export const mergeBranchMutation = createServerFn({ method: "POST" })
           projectId: sourceDoc.projectId,
           branchId: targetBranchId,
           baseDocumentId: baseDocId,
-          folderId: null, // TODO: Map folder IDs
+          folderId: null,
           name: sourceDoc.name,
           type: sourceDoc.type,
           durableStreamId: newDurableStreamId,
@@ -387,7 +468,7 @@ export const mergeBranchMutation = createServerFn({ method: "POST" })
       }
     }
 
-    // Mark source branch as merged - wrap in transaction for txid
+    // Mark source branch as merged
     return await db.transaction(async (tx) => {
       await tx
         .update(branches)
@@ -401,4 +482,5 @@ export const mergeBranchMutation = createServerFn({ method: "POST" })
       const txid = await getCurrentTxid(tx);
       return { data: { branch: sourceBranch, results }, txid };
     });
-  });
+  },
+});

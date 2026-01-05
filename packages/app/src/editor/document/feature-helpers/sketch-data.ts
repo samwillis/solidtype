@@ -14,12 +14,7 @@ import {
   getConstraintsById,
   sketchDataMapToObject,
 } from "../yjs";
-import type {
-  SketchData,
-  SketchPoint,
-  SketchEntity,
-  SketchConstraint,
-} from "../schema";
+import type { SketchData, SketchPoint, SketchEntity, SketchConstraint } from "../schema";
 
 // Type for constraint creation (no id yet)
 type WithoutId<T> = T extends { id: string } ? Omit<T, "id"> : never;

@@ -8,10 +8,10 @@ SolidType's AI integration provides chat-based modeling assistance with durable,
 
 The AI system enables users to interact with SolidType through natural language in two contexts:
 
-| Context | Location | Capabilities |
-|---------|----------|--------------|
+| Context       | Location            | Capabilities                                        |
+| ------------- | ------------------- | --------------------------------------------------- |
 | **Dashboard** | Floating chat panel | Workspace, project, document, and branch management |
-| **Editor** | Right panel | Sketch creation, 3D modeling, feature editing |
+| **Editor**    | Right panel         | Sketch creation, 3D modeling, feature editing       |
 
 ### Design Principles
 
@@ -67,13 +67,13 @@ The AI system enables users to interact with SolidType through natural language 
 
 ### Component Roles
 
-| Component | Responsibility |
-|-----------|---------------|
-| **Postgres/Electric** | Session metadata (`ai_chat_sessions` table) |
-| **Durable Streams** | Chat transcript storage (messages, chunks, runs) |
+| Component                | Responsibility                                             |
+| ------------------------ | ---------------------------------------------------------- |
+| **Postgres/Electric**    | Session metadata (`ai_chat_sessions` table)                |
+| **Durable Streams**      | Chat transcript storage (messages, chunks, runs)           |
 | **Server /run endpoint** | Runs `@tanstack/ai` chat(), writes events to Durable State |
-| **Client UI** | Renders transcript via Durable State live queries |
-| **SharedWorker** | Coordinates runs across tabs, hosts local tool execution |
+| **Client UI**            | Renders transcript via Durable State live queries          |
+| **SharedWorker**         | Coordinates runs across tabs, hosts local tool execution   |
 
 ---
 
@@ -83,43 +83,43 @@ Chat transcripts are stored in Durable Streams using three collections:
 
 ### 3.1 Messages
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | `string` (uuid) | Primary key |
-| `runId` | `string` (uuid) | Links to the run this message belongs to |
-| `role` | `"system" \| "user" \| "assistant" \| "tool_call" \| "tool_result" \| "error"` | Message type |
-| `status` | `"streaming" \| "complete" \| "pending" \| "running" \| "error"` | Lifecycle state |
-| `content` | `string?` | Present for user/system/error; derived from chunks for assistant |
-| `parentMessageId` | `string?` | tool_call/tool_result point to assistant message |
-| `toolName` | `string?` | For tool_call messages |
-| `toolArgs` | `unknown?` | For tool_call messages |
-| `toolCallId` | `string?` | Correlation ID for tool_call ↔ tool_result |
-| `toolResult` | `unknown?` | For tool_result messages |
-| `requiresApproval` | `boolean?` | For tool_call: does this need user approval? |
-| `createdAt` | `string` (ISO) | |
-| `updatedAt` | `string?` (ISO) | |
+| Field              | Type                                                                           | Notes                                                            |
+| ------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `id`               | `string` (uuid)                                                                | Primary key                                                      |
+| `runId`            | `string` (uuid)                                                                | Links to the run this message belongs to                         |
+| `role`             | `"system" \| "user" \| "assistant" \| "tool_call" \| "tool_result" \| "error"` | Message type                                                     |
+| `status`           | `"streaming" \| "complete" \| "pending" \| "running" \| "error"`               | Lifecycle state                                                  |
+| `content`          | `string?`                                                                      | Present for user/system/error; derived from chunks for assistant |
+| `parentMessageId`  | `string?`                                                                      | tool_call/tool_result point to assistant message                 |
+| `toolName`         | `string?`                                                                      | For tool_call messages                                           |
+| `toolArgs`         | `unknown?`                                                                     | For tool_call messages                                           |
+| `toolCallId`       | `string?`                                                                      | Correlation ID for tool_call ↔ tool_result                       |
+| `toolResult`       | `unknown?`                                                                     | For tool_result messages                                         |
+| `requiresApproval` | `boolean?`                                                                     | For tool_call: does this need user approval?                     |
+| `createdAt`        | `string` (ISO)                                                                 |                                                                  |
+| `updatedAt`        | `string?` (ISO)                                                                |                                                                  |
 
 ### 3.2 Chunks (Insert-Only)
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | `string` | `${messageId}:${seq}` — deterministic for idempotent retries |
-| `messageId` | `string` (uuid) | Links to assistant message |
-| `seq` | `number` | Monotonic sequence within message |
-| `delta` | `string` | The text fragment |
-| `createdAt` | `string` (ISO) | |
+| Field       | Type            | Notes                                                        |
+| ----------- | --------------- | ------------------------------------------------------------ |
+| `id`        | `string`        | `${messageId}:${seq}` — deterministic for idempotent retries |
+| `messageId` | `string` (uuid) | Links to assistant message                                   |
+| `seq`       | `number`        | Monotonic sequence within message                            |
+| `delta`     | `string`        | The text fragment                                            |
+| `createdAt` | `string` (ISO)  |                                                              |
 
 ### 3.3 Runs
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | `string` (uuid) | Primary key |
-| `status` | `"running" \| "complete" \| "error"` | Run lifecycle |
-| `userMessageId` | `string` (uuid) | The user message that started this run |
-| `assistantMessageId` | `string` (uuid) | The assistant message being generated |
-| `startedAt` | `string` (ISO) | |
-| `endedAt` | `string?` (ISO) | |
-| `error` | `string?` | Error message if status is error |
+| Field                | Type                                 | Notes                                  |
+| -------------------- | ------------------------------------ | -------------------------------------- |
+| `id`                 | `string` (uuid)                      | Primary key                            |
+| `status`             | `"running" \| "complete" \| "error"` | Run lifecycle                          |
+| `userMessageId`      | `string` (uuid)                      | The user message that started this run |
+| `assistantMessageId` | `string` (uuid)                      | The assistant message being generated  |
+| `startedAt`          | `string` (ISO)                       |                                        |
+| `endedAt`            | `string?` (ISO)                      |                                        |
+| `error`              | `string?`                            | Error message if status is error       |
 
 **Key design principle:** Each Durable Stream corresponds to exactly one chat session. The stream URL encodes the session identity (`/api/ai/sessions/${sessionId}/stream`), so `sessionId` is not stored on individual records.
 
@@ -129,11 +129,11 @@ Chat transcripts are stored in Durable Streams using three collections:
 
 ### 4.1 Tool Categories
 
-| Category | Context | Execution Location |
-|----------|---------|-------------------|
-| **Dashboard Tools** | Dashboard | Server |
-| **Sketch Tools** | Editor (sketch mode) | Server + Yjs |
-| **Modeling Tools** | Editor (3D mode) | Server + Yjs |
+| Category            | Context              | Execution Location |
+| ------------------- | -------------------- | ------------------ |
+| **Dashboard Tools** | Dashboard            | Server             |
+| **Sketch Tools**    | Editor (sketch mode) | Server + Yjs       |
+| **Modeling Tools**  | Editor (3D mode)     | Server + Yjs       |
 
 ### 4.2 Dashboard Tools
 
@@ -167,13 +167,14 @@ Feature creation and modification:
 
 ### 4.5 Tool Approval
 
-| Tool Category | Default Approval |
-|--------------|------------------|
-| Read operations | `auto` |
+| Tool Category            | Default Approval          |
+| ------------------------ | ------------------------- |
+| Read operations          | `auto`                    |
 | Create/modify operations | `auto` (undoable via Yjs) |
-| Delete operations | `confirm` (destructive) |
+| Delete operations        | `confirm` (destructive)   |
 
 Users can override via:
+
 - **YOLO mode** – auto-approve everything including deletions
 - **Per-tool "always allow"** – bypass confirmation for specific tools
 
@@ -189,14 +190,14 @@ The SharedWorker provides:
 
 ### Worker Commands
 
-| Command | Purpose |
-|---------|---------|
-| `init-session` | Initialize session with documentId/projectId |
-| `terminate-session` | Clean up session resources |
-| `start-run` | Begin a new chat run |
-| `run-complete` | Mark run as finished |
-| `execute-local-tool` | Execute a CAD tool locally |
-| `ping` | Health check |
+| Command              | Purpose                                      |
+| -------------------- | -------------------------------------------- |
+| `init-session`       | Initialize session with documentId/projectId |
+| `terminate-session`  | Clean up session resources                   |
+| `start-run`          | Begin a new chat run                         |
+| `run-complete`       | Mark run as finished                         |
+| `execute-local-tool` | Execute a CAD tool locally                   |
+| `ping`               | Health check                                 |
 
 ### Idle Shutdown
 
@@ -216,17 +217,17 @@ The worker shuts down after 3 minutes of inactivity (no connected tabs) to free 
 
 ### Session Metadata (Postgres via Electric)
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | `uuid` | Primary key |
-| `userId` | `uuid` | Owner |
-| `context` | `"dashboard" \| "editor"` | Context type |
-| `documentId` | `uuid?` | For editor context |
-| `projectId` | `uuid?` | For scoped context |
-| `title` | `string?` | Auto-generated from first message |
-| `durableStreamId` | `string?` | Stream ID for Durable Streams |
-| `messageCount` | `number` | For display |
-| `lastMessageAt` | `timestamp` | For sorting |
+| Field             | Type                      | Notes                             |
+| ----------------- | ------------------------- | --------------------------------- |
+| `id`              | `uuid`                    | Primary key                       |
+| `userId`          | `uuid`                    | Owner                             |
+| `context`         | `"dashboard" \| "editor"` | Context type                      |
+| `documentId`      | `uuid?`                   | For editor context                |
+| `projectId`       | `uuid?`                   | For scoped context                |
+| `title`           | `string?`                 | Auto-generated from first message |
+| `durableStreamId` | `string?`                 | Stream ID for Durable Streams     |
+| `messageCount`    | `number`                  | For display                       |
+| `lastMessageAt`   | `timestamp`               | For sorting                       |
 
 ---
 

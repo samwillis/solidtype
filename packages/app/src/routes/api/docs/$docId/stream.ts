@@ -10,136 +10,120 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
-import { requireAuth } from "../../../../lib/auth-middleware";
-import { verifyDocumentAccess } from "../../../../lib/permissions";
 import { proxyToDurableStream } from "../../../../lib/durable-stream-proxy";
+import { handleOptions, withCors } from "../../../../lib/http/cors";
+import { toResponse } from "../../../../lib/http/respond";
+import { getSessionOrThrow, requireDocumentAccess } from "../../../../lib/authz";
 import { db } from "../../../../lib/db";
 import { documents } from "../../../../db/schema";
 import { eq } from "drizzle-orm";
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  "Access-Control-Expose-Headers":
-    "Stream-Next-Offset, Stream-Cursor, Stream-Up-To-Date, ETag, Content-Type",
-};
+/**
+ * Get or create stream ID for a document
+ */
+async function getOrCreateStreamId(docId: string): Promise<string | null> {
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, docId),
+    columns: { durableStreamId: true, projectId: true, branchId: true },
+  });
+
+  if (!doc) return null;
+
+  if (doc.durableStreamId) {
+    return doc.durableStreamId;
+  }
+
+  // Create stream ID if not exists
+  const streamId = `project/${doc.projectId}/doc/${docId}/branch/${doc.branchId}`;
+  await db.update(documents).set({ durableStreamId: streamId }).where(eq(documents.id, docId));
+
+  return streamId;
+}
 
 export const Route = createFileRoute("/api/docs/$docId/stream")({
   server: {
     handlers: {
-      OPTIONS: async () => {
-        return new Response(null, {
-          status: 204,
-          headers: CORS_HEADERS,
-        });
-      },
+      OPTIONS: async () => handleOptions(),
 
       GET: async ({ request, params }) => {
-        // Authenticate user
-        const session = await requireAuth(request);
-        const { docId } = params;
+        try {
+          const session = await getSessionOrThrow(request);
+          const { docId } = params;
 
-        // Verify document access
-        const access = await verifyDocumentAccess(session.user.id, docId);
-        if (!access) {
-          return new Response("Forbidden", { status: 403 });
+          // Verify document access
+          await requireDocumentAccess(session, docId, "view");
+
+          const streamId = await getOrCreateStreamId(docId);
+          if (!streamId) {
+            return withCors(
+              new Response(JSON.stringify({ error: "Document not found" }), {
+                status: 404,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+
+          const response = await proxyToDurableStream(request, streamId, {
+            defaultContentType: "application/octet-stream",
+          });
+          return withCors(response);
+        } catch (err) {
+          return withCors(toResponse(err));
         }
-
-        // Get the document's durable stream ID
-        const doc = await db.query.documents.findFirst({
-          where: eq(documents.id, docId),
-          columns: { durableStreamId: true },
-        });
-
-        if (!doc || !doc.durableStreamId) {
-          // If no stream exists yet, create one automatically
-          const streamId = `project/default/doc/${docId}/branch/default`;
-
-          // Update the document with the new stream ID
-          await db
-            .update(documents)
-            .set({ durableStreamId: streamId })
-            .where(eq(documents.id, docId));
-
-          return proxyToDurableStream(request, streamId);
-        }
-
-        return proxyToDurableStream(request, doc.durableStreamId);
       },
 
       POST: async ({ request, params }) => {
-        // Authenticate user
-        const session = await requireAuth(request);
-        const { docId } = params;
+        try {
+          const session = await getSessionOrThrow(request);
+          const { docId } = params;
 
-        // Verify document access with write permission
-        const access = await verifyDocumentAccess(session.user.id, docId);
-        if (!access) {
-          return new Response("Forbidden", { status: 403 });
+          // Verify document access with write permission
+          await requireDocumentAccess(session, docId, "edit");
+
+          const streamId = await getOrCreateStreamId(docId);
+          if (!streamId) {
+            return withCors(
+              new Response(JSON.stringify({ error: "Document not found" }), {
+                status: 404,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+
+          const response = await proxyToDurableStream(request, streamId, {
+            defaultContentType: "application/octet-stream",
+          });
+          return withCors(response);
+        } catch (err) {
+          return withCors(toResponse(err));
         }
-
-        if (!access.canEdit) {
-          return new Response("Read-only access", { status: 403 });
-        }
-
-        // Get the document's durable stream ID
-        const doc = await db.query.documents.findFirst({
-          where: eq(documents.id, docId),
-          columns: { durableStreamId: true },
-        });
-
-        if (!doc || !doc.durableStreamId) {
-          // If no stream exists yet, create one automatically
-          const streamId = `project/default/doc/${docId}/branch/default`;
-
-          // Update the document with the new stream ID
-          await db
-            .update(documents)
-            .set({ durableStreamId: streamId })
-            .where(eq(documents.id, docId));
-
-          return proxyToDurableStream(request, streamId);
-        }
-
-        return proxyToDurableStream(request, doc.durableStreamId);
       },
 
       PUT: async ({ request, params }) => {
-        // Authenticate user
-        const session = await requireAuth(request);
-        const { docId } = params;
+        try {
+          const session = await getSessionOrThrow(request);
+          const { docId } = params;
 
-        // Verify document access with write permission
-        const access = await verifyDocumentAccess(session.user.id, docId);
-        if (!access) {
-          return new Response("Forbidden", { status: 403 });
+          // Verify document access with write permission
+          await requireDocumentAccess(session, docId, "edit");
+
+          const streamId = await getOrCreateStreamId(docId);
+          if (!streamId) {
+            return withCors(
+              new Response(JSON.stringify({ error: "Document not found" }), {
+                status: 404,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+
+          const response = await proxyToDurableStream(request, streamId, {
+            defaultContentType: "application/octet-stream",
+          });
+          return withCors(response);
+        } catch (err) {
+          return withCors(toResponse(err));
         }
-
-        if (!access.canEdit) {
-          return new Response("Read-only access", { status: 403 });
-        }
-
-        // Get the document's durable stream ID
-        const doc = await db.query.documents.findFirst({
-          where: eq(documents.id, docId),
-          columns: { durableStreamId: true },
-        });
-
-        if (!doc || !doc.durableStreamId) {
-          // If no stream exists yet, create one automatically
-          const streamId = `project/default/doc/${docId}/branch/default`;
-
-          // Update the document with the new stream ID
-          await db
-            .update(documents)
-            .set({ durableStreamId: streamId })
-            .where(eq(documents.id, docId));
-
-          return proxyToDurableStream(request, streamId);
-        }
-
-        return proxyToDurableStream(request, doc.durableStreamId);
       },
     },
   },

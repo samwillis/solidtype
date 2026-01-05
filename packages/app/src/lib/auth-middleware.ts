@@ -3,16 +3,10 @@
  */
 
 import { auth } from "./auth";
+import { AuthenticationError } from "./http/errors";
 
-/**
- * Authentication error that can be caught and converted to a Response
- */
-export class AuthenticationError extends Error {
-  constructor() {
-    super("Unauthorized");
-    this.name = "AuthenticationError";
-  }
-}
+// Re-export for backwards compatibility
+export { AuthenticationError };
 
 /**
  * Require authentication for a request

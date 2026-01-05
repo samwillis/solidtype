@@ -13,6 +13,7 @@
     "test:ai-evals": "RUN_AI_EVALS=true vitest run ai-evals",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "check:no-userid": "bash scripts/check-no-userid-inputs.sh",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "db:generate": "drizzle-kit generate",

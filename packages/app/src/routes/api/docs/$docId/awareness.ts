@@ -10,101 +10,84 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
-import { requireAuth } from "../../../../lib/auth-middleware";
-import { verifyDocumentAccess } from "../../../../lib/permissions";
 import { proxyToDurableStream } from "../../../../lib/durable-stream-proxy";
+import { handleOptions, withCors } from "../../../../lib/http/cors";
+import { toResponse } from "../../../../lib/http/respond";
+import { getSessionOrThrow, requireDocumentAccess } from "../../../../lib/authz";
 import { db } from "../../../../lib/db";
 import { documents } from "../../../../db/schema";
 import { eq } from "drizzle-orm";
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  "Access-Control-Expose-Headers":
-    "Stream-Next-Offset, Stream-Cursor, Stream-Up-To-Date, ETag, Content-Type",
-};
+/**
+ * Get awareness stream ID for a document
+ */
+async function getAwarenessStreamId(docId: string): Promise<string> {
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, docId),
+    columns: { durableStreamId: true },
+  });
+
+  const baseStreamId = doc?.durableStreamId || `project/default/doc/${docId}/branch/default`;
+  return `${baseStreamId}/awareness`;
+}
 
 export const Route = createFileRoute("/api/docs/$docId/awareness")({
   server: {
     handlers: {
-      OPTIONS: async () => {
-        return new Response(null, {
-          status: 204,
-          headers: CORS_HEADERS,
-        });
-      },
+      OPTIONS: async () => handleOptions(),
 
       GET: async ({ request, params }) => {
-        // Authenticate user
-        const session = await requireAuth(request);
-        const { docId } = params;
+        try {
+          const session = await getSessionOrThrow(request);
+          const { docId } = params;
 
-        // Verify document access - awareness readable by anyone with access
-        const access = await verifyDocumentAccess(session.user.id, docId);
-        if (!access) {
-          return new Response("Forbidden", { status: 403 });
+          // Verify document access - awareness readable by anyone with access
+          await requireDocumentAccess(session, docId, "view");
+
+          const awarenessStreamId = await getAwarenessStreamId(docId);
+          const response = await proxyToDurableStream(request, awarenessStreamId, {
+            defaultContentType: "application/json",
+          });
+          return withCors(response);
+        } catch (err) {
+          return withCors(toResponse(err));
         }
-
-        // Get the document's durable stream ID and derive awareness stream
-        const doc = await db.query.documents.findFirst({
-          where: eq(documents.id, docId),
-          columns: { durableStreamId: true },
-        });
-
-        // Use the document's stream ID or create a default one
-        const baseStreamId = doc?.durableStreamId || `project/default/doc/${docId}/branch/default`;
-        const awarenessStreamId = `${baseStreamId}/awareness`;
-
-        return proxyToDurableStream(request, awarenessStreamId);
       },
 
       POST: async ({ request, params }) => {
-        // Authenticate user
-        const session = await requireAuth(request);
-        const { docId } = params;
+        try {
+          const session = await getSessionOrThrow(request);
+          const { docId } = params;
 
-        // Verify document access - awareness writable by anyone with access
-        const access = await verifyDocumentAccess(session.user.id, docId);
-        if (!access) {
-          return new Response("Forbidden", { status: 403 });
+          // Verify document access - awareness writable by anyone with access
+          await requireDocumentAccess(session, docId, "view");
+
+          const awarenessStreamId = await getAwarenessStreamId(docId);
+          const response = await proxyToDurableStream(request, awarenessStreamId, {
+            defaultContentType: "application/json",
+          });
+          return withCors(response);
+        } catch (err) {
+          return withCors(toResponse(err));
         }
-
-        // Get the document's durable stream ID and derive awareness stream
-        const doc = await db.query.documents.findFirst({
-          where: eq(documents.id, docId),
-          columns: { durableStreamId: true },
-        });
-
-        // Use the document's stream ID or create a default one
-        const baseStreamId = doc?.durableStreamId || `project/default/doc/${docId}/branch/default`;
-        const awarenessStreamId = `${baseStreamId}/awareness`;
-
-        return proxyToDurableStream(request, awarenessStreamId);
       },
 
       PUT: async ({ request, params }) => {
-        // Authenticate user
-        const session = await requireAuth(request);
-        const { docId } = params;
+        try {
+          const session = await getSessionOrThrow(request);
+          const { docId } = params;
 
-        // Verify document access
-        const access = await verifyDocumentAccess(session.user.id, docId);
-        if (!access) {
-          return new Response("Forbidden", { status: 403 });
+          // Verify document access
+          await requireDocumentAccess(session, docId, "view");
+
+          const awarenessStreamId = await getAwarenessStreamId(docId);
+          const response = await proxyToDurableStream(request, awarenessStreamId, {
+            defaultContentType: "application/json",
+          });
+          return withCors(response);
+        } catch (err) {
+          return withCors(toResponse(err));
         }
-
-        // Get the document's durable stream ID and derive awareness stream
-        const doc = await db.query.documents.findFirst({
-          where: eq(documents.id, docId),
-          columns: { durableStreamId: true },
-        });
-
-        // Use the document's stream ID or create a default one
-        const baseStreamId = doc?.durableStreamId || `project/default/doc/${docId}/branch/default`;
-        const awarenessStreamId = `${baseStreamId}/awareness`;
-
-        return proxyToDurableStream(request, awarenessStreamId);
       },
     },
   },

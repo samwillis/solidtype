@@ -1,7 +1,13 @@
 /**
- * Durable Streams proxy utilities
+ * Durable Streams Proxy Utilities
  *
- * Proxies Durable Stream requests with proper authorization.
+ * A "dumb transport" layer that proxies requests to Durable Streams.
+ *
+ * IMPORTANT: This module does NOT handle authentication or authorization.
+ * Callers MUST authenticate and authorize before calling proxyToDurableStream().
+ *
+ * CORS headers are NOT added by this module. Callers should use lib/http/cors
+ * to add CORS headers to responses if needed.
  */
 
 const DURABLE_STREAMS_URL = process.env.DURABLE_STREAMS_URL || "http://localhost:3200";
@@ -22,38 +28,64 @@ const FORWARDED_HEADERS = [
 ];
 
 /**
- * CORS headers to allow cross-origin access
+ * Options for proxy behavior
  */
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  "Access-Control-Expose-Headers":
-    "Stream-Next-Offset, Stream-Cursor, Stream-Up-To-Date, ETag, Content-Type",
-};
+export interface ProxyOptions {
+  /**
+   * Default content-type to use if upstream doesn't provide one.
+   * If not specified, uses the upstream content-type or falls back to application/octet-stream.
+   */
+  defaultContentType?: string;
+
+  /**
+   * Whether to auto-create the stream on 404 GET requests.
+   * Defaults to true for backwards compatibility.
+   */
+  autoCreate?: boolean;
+}
 
 /**
  * Build response headers from a Durable Streams response
  */
-function buildResponseHeaders(response: Response): HeadersInit {
-  const headers: Record<string, string> = { ...CORS_HEADERS };
+function buildResponseHeaders(response: Response, options: ProxyOptions = {}): HeadersInit {
+  const headers: Record<string, string> = {};
+
   for (const headerName of FORWARDED_HEADERS) {
     const value = response.headers.get(headerName);
     if (value) {
       headers[headerName] = value;
     }
   }
-  // Always use application/json for AI chat streams
-  headers["content-type"] = "application/json";
+
+  // Only set content-type if not already set from upstream
+  if (!headers["content-type"]) {
+    headers["content-type"] = options.defaultContentType || "application/octet-stream";
+  }
+
   return headers;
 }
 
 /**
  * Proxy a request to Durable Streams
+ *
+ * @param request - The incoming request (for query params and body)
+ * @param streamPath - The stream path (e.g., "ai-chat/session-id")
+ * @param options - Optional proxy configuration
+ *
+ * @example
+ * ```ts
+ * // In a route handler:
+ * const session = await getSessionOrThrow(request);
+ * await requireChatSessionOwner(session, sessionId);
+ * return proxyToDurableStream(request, `ai-chat/${sessionId}`, {
+ *   defaultContentType: "application/json",
+ * });
+ * ```
  */
 export async function proxyToDurableStream(
   request: Request,
-  streamPath: string
+  streamPath: string,
+  options: ProxyOptions = {}
 ): Promise<Response> {
   const url = new URL(request.url);
 
@@ -63,6 +95,8 @@ export async function proxyToDurableStream(
   for (const [key, value] of url.searchParams) {
     durableUrl.searchParams.set(key, value);
   }
+
+  const autoCreate = options.autoCreate ?? true;
 
   try {
     // Determine if request has a body (POST and PUT can have bodies)
@@ -81,13 +115,12 @@ export async function proxyToDurableStream(
 
     // Handle 404 for GET requests - stream doesn't exist yet
     // Create the stream with PUT, then retry the GET
-    if (response.status === 404 && request.method === "GET") {
+    if (response.status === 404 && request.method === "GET" && autoCreate) {
       // Create the stream with PUT (this is the Durable Streams protocol)
-      // Use application/json for AI chat streams (required for @durable-streams/state)
       const createResponse = await fetch(durableUrl.toString().split("?")[0], {
         method: "PUT",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": options.defaultContentType || "application/json",
         },
       });
 
@@ -95,19 +128,19 @@ export async function proxyToDurableStream(
         // Retry the original GET request now that the stream exists
         const retryResponse = await fetch(durableUrl.toString(), {
           method: "GET",
-          headers: { Accept: "application/json" },
+          headers: { Accept: options.defaultContentType || "application/json" },
         });
 
         return new Response(retryResponse.body, {
           status: retryResponse.status,
-          headers: buildResponseHeaders(retryResponse),
+          headers: buildResponseHeaders(retryResponse, options),
         });
       }
     }
 
     return new Response(response.body, {
       status: response.status,
-      headers: buildResponseHeaders(response),
+      headers: buildResponseHeaders(response, options),
     });
   } catch (error) {
     console.error("Durable Stream proxy error:", error);

@@ -2,14 +2,23 @@
  * Server Functions - Member Management
  *
  * Workspace and project member operations.
+ * All functions use session-based authentication.
+ *
+ * NOTE: Server-only modules (db, authz, repos) are imported dynamically
+ * inside handlers to avoid bundling them for the client.
  */
 
-import { createServerFn } from "@tanstack/react-start";
-import { db } from "../db";
-import { workspaceMembers, projectMembers } from "../../db/schema";
-import { user } from "../../db/schema/better-auth";
-import { eq, and, asc } from "drizzle-orm";
-import { requireAuth } from "../auth-middleware";
+import { createAuthedServerFn } from "../server-fn-wrapper";
+import {
+  listWorkspaceMembersSchema,
+  addWorkspaceMemberSchema,
+  updateWorkspaceMemberRoleSchema,
+  removeWorkspaceMemberSchema,
+  listProjectMembersSchema,
+  addProjectMemberSchema,
+  updateProjectMemberSchema,
+  removeProjectMemberSchema,
+} from "../../validators/member";
 
 // ============================================================================
 // Workspace Member Management
@@ -18,23 +27,18 @@ import { requireAuth } from "../auth-middleware";
 /**
  * List all members of a workspace
  */
-export const listWorkspaceMembersMutation = createServerFn({ method: "POST" })
-  .inputValidator((data: { workspaceId: string }) => data)
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+export const listWorkspaceMembersMutation = createAuthedServerFn({
+  method: "POST",
+  validator: listWorkspaceMembersSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { workspaceMembers } = await import("../../db/schema");
+    const { user } = await import("../../db/schema/better-auth");
+    const { eq, asc } = await import("drizzle-orm");
+    const { requireWorkspaceMember } = await import("../authz");
 
     // Verify user has access to this workspace
-    const membership = await db.query.workspaceMembers.findFirst({
-      where: and(
-        eq(workspaceMembers.workspaceId, data.workspaceId),
-        eq(workspaceMembers.userId, session.user.id)
-      ),
-    });
-
-    if (!membership) {
-      throw new Error("Not a member of this workspace");
-    }
+    await requireWorkspaceMember(session, data.workspaceId);
 
     // Get all members with user details
     const members = await db
@@ -52,28 +56,25 @@ export const listWorkspaceMembersMutation = createServerFn({ method: "POST" })
       .orderBy(asc(workspaceMembers.joinedAt));
 
     return { members };
-  });
+  },
+});
 
 /**
  * Add a member to a workspace by email
  */
-export const addWorkspaceMemberMutation = createServerFn({ method: "POST" })
-  .inputValidator((data: { workspaceId: string; email: string; role: "admin" | "member" }) => data)
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+export const addWorkspaceMemberMutation = createAuthedServerFn({
+  method: "POST",
+  validator: addWorkspaceMemberSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { workspaceMembers } = await import("../../db/schema");
+    const { user } = await import("../../db/schema/better-auth");
+    const { eq, and } = await import("drizzle-orm");
+    const { requireWorkspaceRole } = await import("../authz");
+    const { NotFoundError, ConflictError } = await import("../http/errors");
 
     // Verify user is admin or owner
-    const membership = await db.query.workspaceMembers.findFirst({
-      where: and(
-        eq(workspaceMembers.workspaceId, data.workspaceId),
-        eq(workspaceMembers.userId, session.user.id)
-      ),
-    });
-
-    if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
-      throw new Error("Only owners and admins can add members");
-    }
+    await requireWorkspaceRole(session, data.workspaceId, ["owner", "admin"]);
 
     // Find user by email
     const targetUser = await db.query.user.findFirst({
@@ -81,7 +82,7 @@ export const addWorkspaceMemberMutation = createServerFn({ method: "POST" })
     });
 
     if (!targetUser) {
-      throw new Error("No user found with that email address");
+      throw new NotFoundError("No user found with that email address");
     }
 
     // Check if already a member
@@ -93,7 +94,7 @@ export const addWorkspaceMemberMutation = createServerFn({ method: "POST" })
     });
 
     if (existingMembership) {
-      throw new Error("User is already a member of this workspace");
+      throw new ConflictError("User is already a member of this workspace");
     }
 
     // Add member
@@ -113,28 +114,24 @@ export const addWorkspaceMemberMutation = createServerFn({ method: "POST" })
         joinedAt: new Date(),
       },
     };
-  });
+  },
+});
 
 /**
  * Update a workspace member's role
  */
-export const updateWorkspaceMemberRoleMutation = createServerFn({ method: "POST" })
-  .inputValidator((data: { workspaceId: string; userId: string; role: "admin" | "member" }) => data)
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+export const updateWorkspaceMemberRoleMutation = createAuthedServerFn({
+  method: "POST",
+  validator: updateWorkspaceMemberRoleSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { workspaceMembers } = await import("../../db/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const { requireWorkspaceRole } = await import("../authz");
+    const { NotFoundError, ForbiddenError } = await import("../http/errors");
 
     // Verify user is admin or owner
-    const membership = await db.query.workspaceMembers.findFirst({
-      where: and(
-        eq(workspaceMembers.workspaceId, data.workspaceId),
-        eq(workspaceMembers.userId, session.user.id)
-      ),
-    });
-
-    if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
-      throw new Error("Only owners and admins can update member roles");
-    }
+    await requireWorkspaceRole(session, data.workspaceId, ["owner", "admin"]);
 
     // Can't change owner role
     const targetMembership = await db.query.workspaceMembers.findFirst({
@@ -145,11 +142,11 @@ export const updateWorkspaceMemberRoleMutation = createServerFn({ method: "POST"
     });
 
     if (!targetMembership) {
-      throw new Error("Member not found");
+      throw new NotFoundError("Member not found");
     }
 
     if (targetMembership.role === "owner") {
-      throw new Error("Cannot change owner role");
+      throw new ForbiddenError("Cannot change owner role");
     }
 
     // Update role
@@ -164,28 +161,24 @@ export const updateWorkspaceMemberRoleMutation = createServerFn({ method: "POST"
       );
 
     return { success: true };
-  });
+  },
+});
 
 /**
  * Remove a member from a workspace
  */
-export const removeWorkspaceMemberMutation = createServerFn({ method: "POST" })
-  .inputValidator((data: { workspaceId: string; userId: string }) => data)
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+export const removeWorkspaceMemberMutation = createAuthedServerFn({
+  method: "POST",
+  validator: removeWorkspaceMemberSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { workspaceMembers } = await import("../../db/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const { requireWorkspaceRole } = await import("../authz");
+    const { NotFoundError, ForbiddenError } = await import("../http/errors");
 
     // Verify user is admin or owner
-    const membership = await db.query.workspaceMembers.findFirst({
-      where: and(
-        eq(workspaceMembers.workspaceId, data.workspaceId),
-        eq(workspaceMembers.userId, session.user.id)
-      ),
-    });
-
-    if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
-      throw new Error("Only owners and admins can remove members");
-    }
+    await requireWorkspaceRole(session, data.workspaceId, ["owner", "admin"]);
 
     // Can't remove the owner
     const targetMembership = await db.query.workspaceMembers.findFirst({
@@ -196,11 +189,11 @@ export const removeWorkspaceMemberMutation = createServerFn({ method: "POST" })
     });
 
     if (!targetMembership) {
-      throw new Error("Member not found");
+      throw new NotFoundError("Member not found");
     }
 
     if (targetMembership.role === "owner") {
-      throw new Error("Cannot remove workspace owner");
+      throw new ForbiddenError("Cannot remove workspace owner");
     }
 
     // Remove member
@@ -214,7 +207,8 @@ export const removeWorkspaceMemberMutation = createServerFn({ method: "POST" })
       );
 
     return { success: true };
-  });
+  },
+});
 
 // ============================================================================
 // Project Member Management
@@ -223,23 +217,18 @@ export const removeWorkspaceMemberMutation = createServerFn({ method: "POST" })
 /**
  * List all members of a project
  */
-export const listProjectMembersMutation = createServerFn({ method: "POST" })
-  .inputValidator((data: { projectId: string }) => data)
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+export const listProjectMembersMutation = createAuthedServerFn({
+  method: "POST",
+  validator: listProjectMembersSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { projectMembers } = await import("../../db/schema");
+    const { user } = await import("../../db/schema/better-auth");
+    const { eq, asc } = await import("drizzle-orm");
+    const { requireProjectAccess } = await import("../authz");
 
     // Verify user has access to this project
-    const membership = await db.query.projectMembers.findFirst({
-      where: and(
-        eq(projectMembers.projectId, data.projectId),
-        eq(projectMembers.userId, session.user.id)
-      ),
-    });
-
-    if (!membership) {
-      throw new Error("Not a member of this project");
-    }
+    await requireProjectAccess(session, data.projectId);
 
     // Get all members with user details
     const members = await db
@@ -258,35 +247,25 @@ export const listProjectMembersMutation = createServerFn({ method: "POST" })
       .orderBy(asc(projectMembers.joinedAt));
 
     return { members };
-  });
+  },
+});
 
 /**
  * Add a member to a project by email
  */
-export const addProjectMemberMutation = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: {
-      projectId: string;
-      email: string;
-      role: "admin" | "member" | "guest";
-      canEdit: boolean;
-    }) => data
-  )
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+export const addProjectMemberMutation = createAuthedServerFn({
+  method: "POST",
+  validator: addProjectMemberSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { projectMembers } = await import("../../db/schema");
+    const { user } = await import("../../db/schema/better-auth");
+    const { eq, and } = await import("drizzle-orm");
+    const { requireProjectRole } = await import("../authz");
+    const { NotFoundError, ConflictError } = await import("../http/errors");
 
     // Verify user is admin or owner
-    const membership = await db.query.projectMembers.findFirst({
-      where: and(
-        eq(projectMembers.projectId, data.projectId),
-        eq(projectMembers.userId, session.user.id)
-      ),
-    });
-
-    if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
-      throw new Error("Only owners and admins can add members");
-    }
+    await requireProjectRole(session, data.projectId, ["owner", "admin"]);
 
     // Find user by email
     const targetUser = await db.query.user.findFirst({
@@ -294,7 +273,7 @@ export const addProjectMemberMutation = createServerFn({ method: "POST" })
     });
 
     if (!targetUser) {
-      throw new Error("No user found with that email address");
+      throw new NotFoundError("No user found with that email address");
     }
 
     // Check if already a member
@@ -306,7 +285,7 @@ export const addProjectMemberMutation = createServerFn({ method: "POST" })
     });
 
     if (existingMembership) {
-      throw new Error("User is already a member of this project");
+      throw new ConflictError("User is already a member of this project");
     }
 
     // Add member
@@ -328,35 +307,24 @@ export const addProjectMemberMutation = createServerFn({ method: "POST" })
         joinedAt: new Date(),
       },
     };
-  });
+  },
+});
 
 /**
  * Update a project member's role or permissions
  */
-export const updateProjectMemberMutation = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: {
-      projectId: string;
-      userId: string;
-      role?: "admin" | "member" | "guest";
-      canEdit?: boolean;
-    }) => data
-  )
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+export const updateProjectMemberMutation = createAuthedServerFn({
+  method: "POST",
+  validator: updateProjectMemberSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { projectMembers } = await import("../../db/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const { requireProjectRole } = await import("../authz");
+    const { NotFoundError, ForbiddenError } = await import("../http/errors");
 
     // Verify user is admin or owner
-    const membership = await db.query.projectMembers.findFirst({
-      where: and(
-        eq(projectMembers.projectId, data.projectId),
-        eq(projectMembers.userId, session.user.id)
-      ),
-    });
-
-    if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
-      throw new Error("Only owners and admins can update member permissions");
-    }
+    await requireProjectRole(session, data.projectId, ["owner", "admin"]);
 
     // Can't change owner
     const targetMembership = await db.query.projectMembers.findFirst({
@@ -367,11 +335,11 @@ export const updateProjectMemberMutation = createServerFn({ method: "POST" })
     });
 
     if (!targetMembership) {
-      throw new Error("Member not found");
+      throw new NotFoundError("Member not found");
     }
 
     if (targetMembership.role === "owner") {
-      throw new Error("Cannot modify owner permissions");
+      throw new ForbiddenError("Cannot modify owner permissions");
     }
 
     // Build update object
@@ -391,28 +359,24 @@ export const updateProjectMemberMutation = createServerFn({ method: "POST" })
       );
 
     return { success: true };
-  });
+  },
+});
 
 /**
  * Remove a member from a project
  */
-export const removeProjectMemberMutation = createServerFn({ method: "POST" })
-  .inputValidator((data: { projectId: string; userId: string }) => data)
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+export const removeProjectMemberMutation = createAuthedServerFn({
+  method: "POST",
+  validator: removeProjectMemberSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { projectMembers } = await import("../../db/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const { requireProjectRole } = await import("../authz");
+    const { NotFoundError, ForbiddenError } = await import("../http/errors");
 
     // Verify user is admin or owner
-    const membership = await db.query.projectMembers.findFirst({
-      where: and(
-        eq(projectMembers.projectId, data.projectId),
-        eq(projectMembers.userId, session.user.id)
-      ),
-    });
-
-    if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
-      throw new Error("Only owners and admins can remove members");
-    }
+    await requireProjectRole(session, data.projectId, ["owner", "admin"]);
 
     // Can't remove the owner
     const targetMembership = await db.query.projectMembers.findFirst({
@@ -423,11 +387,11 @@ export const removeProjectMemberMutation = createServerFn({ method: "POST" })
     });
 
     if (!targetMembership) {
-      throw new Error("Member not found");
+      throw new NotFoundError("Member not found");
     }
 
     if (targetMembership.role === "owner") {
-      throw new Error("Cannot remove project owner");
+      throw new ForbiddenError("Cannot remove project owner");
     }
 
     // Remove member
@@ -438,4 +402,5 @@ export const removeProjectMemberMutation = createServerFn({ method: "POST" })
       );
 
     return { success: true };
-  });
+  },
+});

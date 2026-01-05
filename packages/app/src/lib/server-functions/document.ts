@@ -1,107 +1,60 @@
 /**
  * Server Functions - Document Operations
+ *
+ * All functions use session-based authentication.
+ * No userId is accepted from client inputs.
+ *
+ * NOTE: Server-only modules (db, authz, repos) are imported dynamically
+ * inside handlers to avoid bundling them for the client.
  */
 
-import { createServerFn } from "@tanstack/react-start";
-import { db } from "../db";
-import { documents, branches, projectMembers } from "../../db/schema";
-import { eq, and } from "drizzle-orm";
-import { requireAuth } from "../auth-middleware";
+import { createAuthedServerFn } from "../server-fn-wrapper";
+import {
+  getDocumentSchema,
+  updateDocumentSchema,
+  deleteDocumentSchema,
+  createDocumentSchema,
+  updateDocumentMutationSchema,
+  deleteDocumentMutationSchema,
+} from "../../validators/document";
 import { normalizeNullableUuid } from "./helpers";
-import { getCurrentTxid } from "./db-helpers";
-
-// ============================================================================
-// Types
-// ============================================================================
-
-interface GetDocumentInput {
-  docId: string;
-  userId: string;
-}
-
-interface UpdateDocumentInput {
-  docId: string;
-  name?: string;
-  folderId?: string | null;
-  userId: string;
-}
-
-interface DeleteDocumentInput {
-  docId: string;
-  userId: string;
-}
 
 // ============================================================================
 // Query Functions
 // ============================================================================
 
-export const getDocument = createServerFn({ method: "GET" })
-  .inputValidator((d: GetDocumentInput) => d)
-  .handler(async ({ data }) => {
-    const doc = await db.query.documents.findFirst({
-      where: eq(documents.id, data.docId),
-    });
+/**
+ * Get a single document (requires access)
+ */
+export const getDocument = createAuthedServerFn({
+  method: "GET",
+  validator: getDocumentSchema,
+  handler: async ({ session, data }) => {
+    const { requireDocumentAccess } = await import("../authz");
 
-    if (!doc) {
-      throw new Error("Not found");
-    }
-
-    // Check project access via the document's branch and project
-    const branch = await db.query.branches.findFirst({
-      where: eq(branches.id, doc.branchId),
-    });
-
-    if (!branch) {
-      throw new Error("Not found");
-    }
-
-    const projectMember = await db.query.projectMembers.findFirst({
-      where: and(
-        eq(projectMembers.projectId, branch.projectId),
-        eq(projectMembers.userId, data.userId)
-      ),
-    });
-
-    if (!projectMember) {
-      throw new Error("Forbidden");
-    }
-
-    return { document: doc, access: { canEdit: projectMember.canEdit } };
-  });
+    const { doc, canEdit } = await requireDocumentAccess(session, data.docId, "view");
+    return { document: doc, access: { canEdit } };
+  },
+});
 
 // ============================================================================
 // Mutation Functions
 // ============================================================================
 
-export const updateDocument = createServerFn({ method: "POST" })
-  .inputValidator((d: UpdateDocumentInput) => d)
-  .handler(async ({ data }) => {
-    const doc = await db.query.documents.findFirst({
-      where: eq(documents.id, data.docId),
-    });
+/**
+ * Update a document (requires edit access)
+ */
+export const updateDocument = createAuthedServerFn({
+  method: "POST",
+  validator: updateDocumentSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { documents } = await import("../../db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { requireDocumentAccess } = await import("../authz");
 
-    if (!doc) {
-      throw new Error("Not found");
-    }
-
-    const branch = await db.query.branches.findFirst({
-      where: eq(branches.id, doc.branchId),
-    });
-
-    if (!branch) {
-      throw new Error("Not found");
-    }
-
-    const projectMember = await db.query.projectMembers.findFirst({
-      where: and(
-        eq(projectMembers.projectId, branch.projectId),
-        eq(projectMembers.userId, data.userId)
-      ),
-    });
-
-    if (!projectMember || !projectMember.canEdit) {
-      throw new Error("Forbidden");
-    }
+    // Require edit access
+    await requireDocumentAccess(session, data.docId, "edit");
 
     const [updated] = await db
       .update(documents)
@@ -109,91 +62,82 @@ export const updateDocument = createServerFn({ method: "POST" })
         ...(data.name && { name: data.name }),
         ...(data.folderId !== undefined && { folderId: data.folderId }),
         updatedAt: new Date(),
-        lastEditedBy: data.userId,
+        lastEditedBy: session.user.id,
       })
       .where(eq(documents.id, data.docId))
       .returning();
 
     return updated;
-  });
+  },
+});
 
-export const deleteDocument = createServerFn({ method: "POST" })
-  .inputValidator((d: DeleteDocumentInput) => d)
-  .handler(async ({ data }) => {
-    const doc = await db.query.documents.findFirst({
-      where: eq(documents.id, data.docId),
-    });
+/**
+ * Soft delete a document (requires edit access)
+ */
+export const deleteDocument = createAuthedServerFn({
+  method: "POST",
+  validator: deleteDocumentSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { documents } = await import("../../db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { requireDocumentAccess } = await import("../authz");
 
-    if (!doc) {
-      throw new Error("Not found");
-    }
-
-    const branch = await db.query.branches.findFirst({
-      where: eq(branches.id, doc.branchId),
-    });
-
-    if (!branch) {
-      throw new Error("Not found");
-    }
-
-    const projectMember = await db.query.projectMembers.findFirst({
-      where: and(
-        eq(projectMembers.projectId, branch.projectId),
-        eq(projectMembers.userId, data.userId)
-      ),
-    });
-
-    if (!projectMember || !projectMember.canEdit) {
-      throw new Error("Forbidden");
-    }
+    // Require edit access
+    await requireDocumentAccess(session, data.docId, "edit");
 
     await db
       .update(documents)
       .set({
         isDeleted: true,
         deletedAt: new Date(),
-        deletedBy: data.userId,
+        deletedBy: session.user.id,
       })
       .where(eq(documents.id, data.docId));
 
     return { success: true };
-  });
+  },
+});
 
 // ============================================================================
 // Electric Collection Mutation Functions
 // These return { data, txid } for Electric reconciliation
 // ============================================================================
 
-export const createDocumentMutation = createServerFn({ method: "POST" })
-  .inputValidator((d: { document: any }) => d)
-  // @ts-expect-error - request is provided at runtime by TanStack Start
-  .handler(async ({ data, request }) => {
-    const session = await requireAuth(request);
+/**
+ * Create a document (requires branch edit access)
+ */
+export const createDocumentMutation = createAuthedServerFn({
+  method: "POST",
+  validator: createDocumentSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { documents } = await import("../../db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getCurrentTxid } = await import("./db-helpers");
+    const { requireBranchAccess } = await import("../authz");
+
+    // Verify branch access for edit
+    await requireBranchAccess(session, data.document.branchId, "edit");
 
     return await db.transaction(async (tx) => {
-      // Normalize nullable fields: convert empty strings to undefined so Drizzle omits them
-      // This allows the database to use NULL defaults for nullable columns
-      const normalizedDocument: any = {
+      // Normalize nullable fields
+      const normalizedDocument = {
         projectId: data.document.projectId,
         branchId: data.document.branchId,
         name: data.document.name,
         type: data.document.type,
         featureCount: data.document.featureCount ?? 0,
         sortOrder: data.document.sortOrder ?? 0,
-        createdBy: session.user.id, // Override with session user ID for security
+        createdBy: session.user.id,
+        folderId: normalizeNullableUuid(data.document.folderId) ?? null,
       };
 
-      // Only include folderId if it's a valid UUID (not empty/null/undefined)
-      const folderId = normalizeNullableUuid(data.document.folderId);
-      if (folderId !== undefined) {
-        normalizedDocument.folderId = folderId;
-      }
-
-      // Insert document (durableStreamId and baseDocumentId will be set after creation)
+      // Insert document
       const [created] = await tx.insert(documents).values(normalizedDocument).returning();
 
-      // Set baseDocumentId = id for new documents (as per schema comment)
-      // Generate durableStreamId: "project/{projectId}/doc/{documentId}/branch/{branchId}"
+      // Set baseDocumentId = id for new documents
+      // Generate durableStreamId
       const durableStreamId = `project/${created.projectId}/doc/${created.id}/branch/${created.branchId}`;
       const [updated] = await tx
         .update(documents)
@@ -207,36 +151,70 @@ export const createDocumentMutation = createServerFn({ method: "POST" })
       const txid = await getCurrentTxid(tx);
       return { data: updated, txid };
     });
-  });
+  },
+});
 
-export const updateDocumentMutation = createServerFn({ method: "POST" })
-  .inputValidator((d: { documentId: string; updates: any }) => d)
-  .handler(async ({ data }) => {
+/**
+ * Update a document with txid (requires edit access)
+ */
+export const updateDocumentMutation = createAuthedServerFn({
+  method: "POST",
+  validator: updateDocumentMutationSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { documents } = await import("../../db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getCurrentTxid } = await import("./db-helpers");
+    const { requireDocumentAccess } = await import("../authz");
+
+    // Require edit access
+    await requireDocumentAccess(session, data.documentId, "edit");
+
     return await db.transaction(async (tx) => {
       const [updated] = await tx
         .update(documents)
-        .set(data.updates)
+        .set({
+          ...data.updates,
+          updatedAt: new Date(),
+          lastEditedBy: session.user.id,
+        })
         .where(eq(documents.id, data.documentId))
         .returning();
 
       const txid = await getCurrentTxid(tx);
       return { data: updated, txid };
     });
-  });
+  },
+});
 
-export const deleteDocumentMutation = createServerFn({ method: "POST" })
-  .inputValidator((d: { documentId: string }) => d)
-  .handler(async ({ data }) => {
+/**
+ * Soft delete a document with txid (requires edit access)
+ */
+export const deleteDocumentMutation = createAuthedServerFn({
+  method: "POST",
+  validator: deleteDocumentMutationSchema,
+  handler: async ({ session, data }) => {
+    const { db } = await import("../db");
+    const { documents } = await import("../../db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { getCurrentTxid } = await import("./db-helpers");
+    const { requireDocumentAccess } = await import("../authz");
+
+    // Require edit access
+    await requireDocumentAccess(session, data.documentId, "edit");
+
     return await db.transaction(async (tx) => {
       await tx
         .update(documents)
         .set({
           isDeleted: true,
           deletedAt: new Date(),
+          deletedBy: session.user.id,
         })
         .where(eq(documents.id, data.documentId));
 
       const txid = await getCurrentTxid(tx);
       return { data: { id: data.documentId }, txid };
     });
-  });
+  },
+});
