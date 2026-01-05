@@ -6,15 +6,22 @@
  */
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLiveQuery, createCollection, liveQueryCollectionOptions } from "@tanstack/react-db";
-import { LuChevronDown, LuLayoutGrid, LuList, LuFileText } from "react-icons/lu";
+import { LuChevronDown, LuLayoutGrid, LuList, LuTable } from "react-icons/lu";
 import { workspacesCollection, projectsCollection } from "../../lib/electric-collections";
 import DashboardPropertiesPanel from "../../components/DashboardPropertiesPanel";
 import { Select } from "@base-ui/react/select";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { Toggle } from "@base-ui/react/toggle";
 import { formatTimeAgo } from "../../lib/utils/format";
+import {
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
+import { DashboardTableView } from "../../components/dashboard/DashboardTableView";
+import { DashboardGridView } from "../../components/dashboard/DashboardGridView";
+import { DashboardListView } from "../../components/dashboard/DashboardListView";
 import "../../styles/dashboard.css";
 
 export const Route = createFileRoute("/dashboard/")({
@@ -25,7 +32,43 @@ export const Route = createFileRoute("/dashboard/")({
 function DashboardIndexPage() {
   const navigate = useNavigate();
   const [sortBy, setSortBy] = useState("last-modified");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list" | "table">("grid");
+  
+  // Sync table sorting with sortBy state
+  const [sorting, setSorting] = useState<SortingState>(() => {
+    if (sortBy === "name") {
+      return [{ id: "name", desc: false }];
+    } else if (sortBy === "created") {
+      return [{ id: "updatedAt", desc: true }];
+    } else {
+      return [{ id: "updatedAt", desc: true }];
+    }
+  });
+
+  // Sync sortBy when sorting changes (from table header clicks)
+  useEffect(() => {
+    if (sorting.length > 0 && viewMode === "table") {
+      const sort = sorting[0];
+      if (sort.id === "name") {
+        setSortBy("name");
+      } else if (sort.id === "updatedAt") {
+        setSortBy("last-modified");
+      }
+    }
+  }, [sorting, viewMode]);
+
+  // Sync sorting when sortBy changes (from dropdown)
+  useEffect(() => {
+    if (viewMode === "table") {
+      if (sortBy === "name") {
+        setSorting([{ id: "name", desc: false }]);
+      } else if (sortBy === "created") {
+        setSorting([{ id: "updatedAt", desc: true }]);
+      } else {
+        setSorting([{ id: "updatedAt", desc: true }]);
+      }
+    }
+  }, [sortBy, viewMode]);
 
   // Query workspaces
   const { data: workspaces, isLoading: workspacesLoading } = useLiveQuery(() => {
@@ -38,6 +81,7 @@ function DashboardIndexPage() {
       })
     );
   });
+
 
   // Query projects with dynamic sorting
   const { data: allProjects, isLoading: projectsLoading } = useLiveQuery(() => {
@@ -64,6 +108,64 @@ function DashboardIndexPage() {
 
   // Get all projects for display
   const displayedProjects = allProjects || [];
+
+  // Define table columns
+  type ProjectRow = {
+    id: string;
+    name: string;
+    workspace: string;
+    description: string | null;
+    updatedAt: string;
+    project: (typeof displayedProjects)[0];
+  };
+
+  const columns: ColumnDef<ProjectRow>[] = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      enableSorting: true,
+      cell: (info) => (
+        <div
+          className="dashboard-table-cell-name"
+          onClick={() => navigate({ to: `/dashboard/projects/${info.row.original.project.id}` })}
+        >
+          {info.getValue() as string}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "workspace",
+      header: "Workspace",
+      enableSorting: false,
+      cell: (info) => <span className="dashboard-table-cell-type">{info.getValue() as string}</span>,
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+      enableSorting: false,
+      cell: (info) => (info.getValue() as string | null) || <span style={{ color: "var(--color-text-tertiary)" }}>—</span>,
+    },
+    {
+      accessorKey: "updatedAt",
+      header: "Last Modified",
+      enableSorting: true,
+      cell: (info) => <span className="dashboard-table-cell-time">{formatTimeAgo(info.getValue() as string)}</span>,
+    },
+  ];
+
+  // Prepare table data
+  const tableData: ProjectRow[] = displayedProjects.map((project) => {
+    const workspace = workspaces?.find((w) => w.id === project.workspace_id);
+    return {
+      id: project.id,
+      name: project.name,
+      workspace: workspace?.name || "Unknown",
+      description: project.description,
+      updatedAt: project.updated_at instanceof Date ? project.updated_at.toISOString() : project.updated_at,
+      project,
+    };
+  });
+
 
   return (
     <main className="dashboard-main">
@@ -108,7 +210,7 @@ function DashboardIndexPage() {
               value={[viewMode]}
               onValueChange={(groupValue) => {
                 if (groupValue && groupValue.length > 0) {
-                  setViewMode(groupValue[0] as "grid" | "list");
+                  setViewMode(groupValue[0] as "grid" | "list" | "table");
                 }
               }}
               className="dashboard-view-toggle"
@@ -119,6 +221,9 @@ function DashboardIndexPage() {
               </Toggle>
               <Toggle value="list" className="dashboard-view-toggle-btn" aria-label="List view">
                 <LuList size={16} />
+              </Toggle>
+              <Toggle value="table" className="dashboard-view-toggle-btn" aria-label="Table view">
+                <LuTable size={16} />
               </Toggle>
             </ToggleGroup>
           </div>
@@ -137,71 +242,40 @@ function DashboardIndexPage() {
             <p className="dashboard-empty-title">No projects yet</p>
             <p className="dashboard-empty-hint">Create your first project to get started</p>
           </div>
-        ) : (
-          <div className={`dashboard-${viewMode === "grid" ? "grid" : "list"}`}>
-            {displayedProjects.map((project) => {
+        ) : viewMode === "table" ? (
+          <DashboardTableView
+            data={tableData}
+            columns={columns}
+            sorting={sorting}
+            onSortingChange={setSorting}
+          />
+        ) : viewMode === "list" ? (
+          <DashboardListView
+            items={displayedProjects.map((project) => {
               const workspace = workspaces?.find((w) => w.id === project.workspace_id);
-
-              if (viewMode === "list") {
-                return (
-                  <div
-                    key={project.id}
-                    className="dashboard-list-item"
-                    onClick={() => navigate({ to: `/dashboard/projects/${project.id}` })}
-                  >
-                    <div className="dashboard-list-item-icon">
-                      <LuFileText size={20} />
-                    </div>
-                    <div className="dashboard-list-item-content">
-                      <div className="dashboard-list-item-name">{project.name}</div>
-                      {workspace && (
-                        <div className="dashboard-list-item-path">{workspace.name}</div>
-                      )}
-                    </div>
-                    <div className="dashboard-list-item-meta">
-                      <span className="dashboard-list-item-time">
-                        {formatTimeAgo(project.updated_at)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  key={project.id}
-                  className="dashboard-card"
-                  onClick={() => navigate({ to: `/dashboard/projects/${project.id}` })}
-                  style={{ cursor: "pointer" }}
-                >
-                  <div className="dashboard-card-thumbnail">
-                    {/* Placeholder thumbnail - could show project preview */}
-                    <div className="dashboard-card-thumbnail-placeholder">
-                      <LuFileText size={48} />
-                    </div>
-                  </div>
-                  <div className="dashboard-card-content">
-                    <div className="dashboard-card-header">
-                      <h3 className="dashboard-card-title">{project.name}</h3>
-                    </div>
-                    {workspace && (
-                      <div className="dashboard-card-workspace-row">
-                        <span className="dashboard-card-workspace">{workspace.name}</span>
-                      </div>
-                    )}
-                    {project.description && (
-                      <p className="dashboard-card-description">{project.description}</p>
-                    )}
-                    <div className="dashboard-card-meta">
-                      <span className="dashboard-card-time">
-                        Updated {formatTimeAgo(project.updated_at)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
+              return {
+                id: project.id,
+                name: project.name,
+                path: workspace?.name,
+                updatedAt: project.updated_at,
+                onClick: () => navigate({ to: `/dashboard/projects/${project.id}` }),
+              };
             })}
-          </div>
+          />
+        ) : (
+          <DashboardGridView
+            items={displayedProjects.map((project) => {
+              const workspace = workspaces?.find((w) => w.id === project.workspace_id);
+              return {
+                id: project.id,
+                name: project.name,
+                description: project.description,
+                workspace: workspace?.name,
+                updatedAt: project.updated_at,
+                onClick: () => navigate({ to: `/dashboard/projects/${project.id}` }),
+              };
+            })}
+          />
         )}
       </div>
 

@@ -5,9 +5,9 @@
  */
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLiveQuery, createCollection, liveQueryCollectionOptions, eq } from "@tanstack/react-db";
-import { LuChevronDown, LuLayoutGrid, LuList, LuFileText } from "react-icons/lu";
+import { LuChevronDown, LuLayoutGrid, LuList, LuTable } from "react-icons/lu";
 import {
   documentsCollection,
   projectsCollection,
@@ -18,6 +18,13 @@ import { Select } from "@base-ui/react/select";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { Toggle } from "@base-ui/react/toggle";
 import { formatTimeAgo } from "../../lib/utils/format";
+import {
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
+import { DashboardTableView } from "../../components/dashboard/DashboardTableView";
+import { DashboardGridView } from "../../components/dashboard/DashboardGridView";
+import { DashboardListView } from "../../components/dashboard/DashboardListView";
 import "../../styles/dashboard.css";
 
 export const Route = createFileRoute("/dashboard/recent")({
@@ -73,7 +80,43 @@ function RecentFilesPage() {
   } = Route.useLoaderData();
 
   const [sortBy, setSortBy] = useState("last-modified");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [viewMode, setViewMode] = useState<"grid" | "list" | "table">("list");
+  
+  // Sync table sorting with sortBy state
+  const [sorting, setSorting] = useState<SortingState>(() => {
+    if (sortBy === "name") {
+      return [{ id: "name", desc: false }];
+    } else if (sortBy === "created") {
+      return [{ id: "updatedAt", desc: true }];
+    } else {
+      return [{ id: "updatedAt", desc: true }];
+    }
+  });
+
+  // Sync sortBy when sorting changes (from table header clicks)
+  useEffect(() => {
+    if (sorting.length > 0 && viewMode === "table") {
+      const sort = sorting[0];
+      if (sort.id === "name") {
+        setSortBy("name");
+      } else if (sort.id === "updatedAt") {
+        setSortBy("last-modified");
+      }
+    }
+  }, [sorting, viewMode]);
+
+  // Sync sorting when sortBy changes (from dropdown)
+  useEffect(() => {
+    if (viewMode === "table") {
+      if (sortBy === "name") {
+        setSorting([{ id: "name", desc: false }]);
+      } else if (sortBy === "created") {
+        setSorting([{ id: "updatedAt", desc: true }]);
+      } else {
+        setSorting([{ id: "updatedAt", desc: true }]);
+      }
+    }
+  }, [sortBy, viewMode]);
 
   // Query documents, projects, and branches
   const { data: documents, isLoading: documentsLoading } = useLiveQuery(
@@ -121,6 +164,61 @@ function RecentFilesPage() {
     });
   };
 
+  // Define table columns
+  type DocumentRow = {
+    id: string;
+    name: string;
+    project: string;
+    branch: string;
+    updatedAt: string;
+    document: (typeof sortedDocuments)[0];
+  };
+
+  const columns: ColumnDef<DocumentRow>[] = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      enableSorting: true,
+      cell: (info) => (
+        <div
+          className="dashboard-table-cell-name"
+          onClick={() => handleDocumentClick(info.row.original.document)}
+        >
+          {info.getValue() as string}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "project",
+      header: "Project",
+      enableSorting: false,
+      cell: (info) => <span className="dashboard-table-cell-type">{info.getValue() as string}</span>,
+    },
+    {
+      accessorKey: "branch",
+      header: "Branch",
+      enableSorting: false,
+      cell: (info) => <span className="dashboard-table-cell-type">{info.getValue() as string}</span>,
+    },
+    {
+      accessorKey: "updatedAt",
+      header: "Last Modified",
+      enableSorting: true,
+      cell: (info) => <span className="dashboard-table-cell-time">{formatTimeAgo(info.getValue() as string)}</span>,
+    },
+  ];
+
+  // Prepare table data
+  const tableData: DocumentRow[] = sortedDocuments.map((doc) => ({
+    id: doc.id,
+    name: doc.name,
+    project: getProjectName(doc.project_id),
+    branch: getBranchName(doc.branch_id),
+    updatedAt: doc.updated_at instanceof Date ? doc.updated_at.toISOString() : doc.updated_at,
+    document: doc,
+  }));
+
+
   return (
     <main className="dashboard-main">
       {/* Header */}
@@ -164,7 +262,7 @@ function RecentFilesPage() {
               value={[viewMode]}
               onValueChange={(groupValue) => {
                 if (groupValue && groupValue.length > 0) {
-                  setViewMode(groupValue[0] as "grid" | "list");
+                  setViewMode(groupValue[0] as "grid" | "list" | "table");
                 }
               }}
               className="dashboard-view-toggle"
@@ -175,6 +273,9 @@ function RecentFilesPage() {
               </Toggle>
               <Toggle value="list" className="dashboard-view-toggle-btn" aria-label="List view">
                 <LuList size={16} />
+              </Toggle>
+              <Toggle value="table" className="dashboard-view-toggle-btn" aria-label="Table view">
+                <LuTable size={16} />
               </Toggle>
             </ToggleGroup>
           </div>
@@ -193,59 +294,33 @@ function RecentFilesPage() {
             <p className="dashboard-empty-title">No recent files</p>
             <p className="dashboard-empty-hint">Files you edit will appear here</p>
           </div>
+        ) : viewMode === "table" ? (
+          <DashboardTableView
+            data={tableData}
+            columns={columns}
+            sorting={sorting}
+            onSortingChange={setSorting}
+          />
         ) : viewMode === "list" ? (
-          <div className="dashboard-list">
-            {sortedDocuments.map((doc) => (
-              <div
-                key={doc.id}
-                className="dashboard-list-item"
-                onClick={() => handleDocumentClick(doc)}
-              >
-                <div className="dashboard-list-item-icon">
-                  <LuFileText size={20} />
-                </div>
-                <div className="dashboard-list-item-content">
-                  <span className="dashboard-list-item-name">{doc.name}</span>
-                  <span className="dashboard-list-item-path">
-                    {getProjectName(doc.project_id)} / {getBranchName(doc.branch_id)}
-                  </span>
-                </div>
-                <div className="dashboard-list-item-meta">
-                  <span className="dashboard-list-item-time">{formatTimeAgo(doc.updated_at)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+          <DashboardListView
+            items={sortedDocuments.map((doc) => ({
+              id: doc.id,
+              name: doc.name,
+              path: `${getProjectName(doc.project_id)} / ${getBranchName(doc.branch_id)}`,
+              updatedAt: doc.updated_at,
+              onClick: () => handleDocumentClick(doc),
+            }))}
+          />
         ) : (
-          <div className="dashboard-grid">
-            {sortedDocuments.map((doc) => (
-              <div
-                key={doc.id}
-                className="dashboard-card"
-                onClick={() => handleDocumentClick(doc)}
-                style={{ cursor: "pointer" }}
-              >
-                <div className="dashboard-card-thumbnail">
-                  <div className="dashboard-card-thumbnail-placeholder">
-                    <LuFileText size={48} />
-                  </div>
-                </div>
-                <div className="dashboard-card-content">
-                  <div className="dashboard-card-header">
-                    <h3 className="dashboard-card-title">{doc.name}</h3>
-                    <span className="dashboard-card-workspace">
-                      {getProjectName(doc.project_id)}
-                    </span>
-                  </div>
-                  <div className="dashboard-card-meta">
-                    <span className="dashboard-card-time">
-                      {getBranchName(doc.branch_id)} · {formatTimeAgo(doc.updated_at)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <DashboardGridView
+            items={sortedDocuments.map((doc) => ({
+              id: doc.id,
+              name: doc.name,
+              workspace: getProjectName(doc.project_id),
+              meta: `${getBranchName(doc.branch_id)} · ${formatTimeAgo(doc.updated_at)}`,
+              onClick: () => handleDocumentClick(doc),
+            }))}
+          />
         )}
       </div>
 

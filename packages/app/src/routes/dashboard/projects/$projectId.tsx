@@ -6,8 +6,8 @@
  * Child routes (like /branches/$branchId) are rendered via <Outlet />.
  */
 
-import { createFileRoute, useNavigate, Outlet, useMatch } from "@tanstack/react-router";
-import { useState, useMemo, useEffect } from "react";
+import { createFileRoute, useNavigate, Outlet, useRouterState } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useLiveQuery, createCollection, liveQueryCollectionOptions, eq } from "@tanstack/react-db";
 import { LuChevronDown } from "react-icons/lu";
 import { projectsCollection, branchesCollection } from "../../../lib/electric-collections";
@@ -18,7 +18,7 @@ import "../../../styles/dashboard.css";
 export const Route = createFileRoute("/dashboard/projects/$projectId")({
   ssr: false,
   loader: async ({ params }) => {
-    // Create filtered collections for this project
+    // Create and preload the branches collection for this project
     const projectBranchesCollection = createCollection(
       liveQueryCollectionOptions({
         query: (q) =>
@@ -29,9 +29,7 @@ export const Route = createFileRoute("/dashboard/projects/$projectId")({
             .orderBy(({ branches: b }) => b.created_at, "desc"),
       })
     );
-
     await projectBranchesCollection.preload();
-
     return { projectBranchesCollection };
   },
   component: ProjectLayout,
@@ -41,57 +39,31 @@ function ProjectLayout() {
   const navigate = useNavigate();
   const { projectId } = Route.useParams();
   const { projectBranchesCollection } = Route.useLoaderData();
+  const router = useRouterState();
 
-  // Check if we're on a child route (branch route)
-  // If we are, render the child via Outlet and skip the redirect logic
-  const branchMatch = useMatch({
-    from: "/dashboard/projects/$projectId/branches/$branchId",
-    shouldThrow: false,
-  });
-  const hasChildRoute = !!branchMatch;
+  // Check if we're on a branch route
+  const currentPath = router.location.pathname;
+  const isOnBranchRoute = currentPath.includes(`/projects/${projectId}/branches/`);
+  const isOnProjectRoute = currentPath === `/dashboard/projects/${projectId}`;
 
-  // Track if we've waited long enough for sync
-  const [hasWaitedForSync, setHasWaitedForSync] = useState(false);
-  // Track if we've already initiated a redirect
-  const [isRedirecting, setIsRedirecting] = useState(false);
-
-  // Load project and branches
-  const { data: projects, isLoading: projectsLoading } = useLiveQuery(() => projectsCollection as any);
-  const { data: branches, isLoading: branchesLoading } = useLiveQuery(
-    () => projectBranchesCollection
+  // Load data
+  const { data: projects, isLoading: projectsLoading } = useLiveQuery((q) =>
+    q.from({ projects: projectsCollection }).orderBy(({ projects: p }) => p.updated_at, "desc")
   );
-  const project = useMemo(() => projects?.find((p) => p.id === projectId), [projects, projectId]);
-  const mainBranch = useMemo(() => branches?.find((b) => b.is_main), [branches]);
+  const { data: branches, isLoading: branchesLoading } = useLiveQuery(projectBranchesCollection);
 
-  // Give Electric some time to sync new branches before showing "not found"
-  /* eslint-disable react-hooks/set-state-in-effect -- track sync timing and redirect state */
+  const project = projects?.find((p) => p.id === projectId);
+  const mainBranch = branches?.find((b) => b.is_main);
+
+  // Redirect to main branch when on project route
   useEffect(() => {
-    if (!hasChildRoute && !mainBranch && !branchesLoading && branches?.length === 0) {
-      // Wait a bit for Electric sync before showing error
-      const timer = setTimeout(() => {
-        setHasWaitedForSync(true);
-      }, 3000); // Wait 3 seconds for sync
-
-      return () => clearTimeout(timer);
-    } else if (mainBranch) {
-      // Reset if main branch appears
-      setHasWaitedForSync(false);
-    }
-    return undefined;
-  }, [hasChildRoute, mainBranch, branchesLoading, branches]);
-
-  // Redirect to main branch route when main branch is available (only if not already on a child route)
-  useEffect(() => {
-    if (!hasChildRoute && mainBranch && !isRedirecting) {
-      setIsRedirecting(true);
-      // Use replace to avoid back-button issues
+    if (isOnProjectRoute && mainBranch && !branchesLoading && !projectsLoading) {
       navigate({ to: `/dashboard/projects/${projectId}/branches/${mainBranch.id}`, replace: true });
     }
-  }, [hasChildRoute, mainBranch, projectId, navigate, isRedirecting]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  }, [isOnProjectRoute, mainBranch, branchesLoading, projectsLoading, projectId, navigate]);
 
   // If we're on a child route (branch), render the child
-  if (hasChildRoute) {
+  if (isOnBranchRoute) {
     return <Outlet />;
   }
 
@@ -119,24 +91,12 @@ function ProjectLayout() {
   }
 
   // Show loading while redirecting to main branch
-  if (mainBranch || isRedirecting) {
+  if (isOnProjectRoute && mainBranch && !branchesLoading && !projectsLoading) {
     return (
       <main className="dashboard-main">
         <div className="dashboard-loading-inline">
           <div className="spinner" />
           <p>Opening branch...</p>
-        </div>
-      </main>
-    );
-  }
-
-  // Show loading while waiting for Electric sync (before showing "not found")
-  if (!hasWaitedForSync) {
-    return (
-      <main className="dashboard-main">
-        <div className="dashboard-loading-inline">
-          <div className="spinner" />
-          <p>Loading branches...</p>
         </div>
       </main>
     );

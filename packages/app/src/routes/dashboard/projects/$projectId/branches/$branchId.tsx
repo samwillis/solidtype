@@ -32,6 +32,7 @@ import {
   LuTrash2,
   LuMove,
   LuGitMerge,
+  LuTable,
 } from "react-icons/lu";
 import {
   projectsCollection,
@@ -54,6 +55,12 @@ import { MoveDialog } from "../../../../../components/dialogs/MoveDialog";
 import { DeleteConfirmDialog } from "../../../../../components/dialogs/DeleteConfirmDialog";
 import { MergeBranchDialog } from "../../../../../components/dialogs/MergeBranchDialog";
 import { formatTimeAgo } from "../../../../../lib/utils/format";
+import {
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
+import { DashboardTableView } from "../../../../../components/dashboard/DashboardTableView";
+import { DashboardListView } from "../../../../../components/dashboard/DashboardListView";
 import "../../../../../styles/dashboard.css";
 
 
@@ -91,7 +98,44 @@ function BranchView() {
   // Filter/sort state
   const [fileFilter, setFileFilter] = useState("all");
   const [sortBy, setSortBy] = useState("last-modified");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list" | "table">("grid");
+  
+  // Sync table sorting with sortBy state
+  const [sorting, setSorting] = useState<SortingState>(() => {
+    // Initialize sorting based on sortBy
+    if (sortBy === "name") {
+      return [{ id: "name", desc: false }];
+    } else if (sortBy === "created") {
+      return [{ id: "updatedAt", desc: true }]; // created maps to updatedAt desc
+    } else {
+      return [{ id: "updatedAt", desc: true }]; // last-modified maps to updatedAt desc
+    }
+  });
+
+  // Sync sortBy when sorting changes (from table header clicks)
+  useEffect(() => {
+    if (sorting.length > 0 && viewMode === "table") {
+      const sort = sorting[0];
+      if (sort.id === "name") {
+        setSortBy("name");
+      } else if (sort.id === "updatedAt") {
+        setSortBy("last-modified");
+      }
+    }
+  }, [sorting, viewMode]);
+
+  // Sync sorting when sortBy changes (from dropdown)
+  useEffect(() => {
+    if (viewMode === "table") {
+      if (sortBy === "name") {
+        setSorting([{ id: "name", desc: false }]);
+      } else if (sortBy === "created") {
+        setSorting([{ id: "updatedAt", desc: true }]);
+      } else {
+        setSorting([{ id: "updatedAt", desc: true }]);
+      }
+    }
+  }, [sortBy, viewMode]);
 
   // Dialog state
   const [showBranchVisualization, setShowBranchVisualization] = useState(false);
@@ -267,6 +311,87 @@ function BranchView() {
     setCurrentFolderId(folderId);
   };
 
+  // Define table columns for combined folders and documents
+  type FileRow = {
+    id: string;
+    name: string;
+    type: "folder" | "document";
+    updatedAt: string;
+    folder?: (typeof filteredFolders)[0];
+    document?: (typeof filteredDocuments)[0];
+  };
+
+  const columns: ColumnDef<FileRow>[] = [
+    {
+      accessorKey: "name",
+      header: "Name",
+      enableSorting: true,
+      cell: (info) => {
+        const row = info.row.original;
+        const icon = row.type === "folder" ? <LuFolder size={16} /> : <LuFileText size={16} />;
+        const onClick = () => {
+          if (row.type === "folder" && row.folder) {
+            handleFolderClick(row.folder.id);
+          } else if (row.type === "document" && row.document) {
+            navigate({ to: "/editor", search: { documentId: row.document.id } });
+          }
+        };
+        return (
+          <div
+            className="dashboard-table-cell-name"
+            onClick={onClick}
+          >
+            {icon}
+            <span>{info.getValue() as string}</span>
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "type",
+      header: "Type",
+      enableSorting: false,
+      cell: (info) => {
+        const type = info.getValue() as string;
+        return <span className="dashboard-table-cell-type">{type.charAt(0).toUpperCase() + type.slice(1)}</span>;
+      },
+    },
+    {
+      accessorKey: "updatedAt",
+      header: "Last Modified",
+      enableSorting: true,
+      cell: (info) => <span className="dashboard-table-cell-time">{formatTimeAgo(info.getValue() as string)}</span>,
+    },
+  ];
+
+  // Prepare combined table data
+  const tableData: FileRow[] = useMemo(() => {
+    const rows: FileRow[] = [];
+    
+    filteredFolders.forEach((folder) => {
+      rows.push({
+        id: folder.id,
+        name: folder.name,
+        type: "folder",
+        updatedAt: folder.updated_at instanceof Date ? folder.updated_at.toISOString() : folder.updated_at,
+        folder,
+      });
+    });
+    
+    filteredDocuments.forEach((document) => {
+      rows.push({
+        id: document.id,
+        name: document.name,
+        type: "document",
+        updatedAt: document.updated_at instanceof Date ? document.updated_at.toISOString() : document.updated_at,
+        document,
+      });
+    });
+    
+    return rows;
+  }, [filteredFolders, filteredDocuments]);
+
+
   // Show loading state while data is being fetched
   if (isLoading) {
     return (
@@ -415,7 +540,7 @@ function BranchView() {
           value={[viewMode]}
           onValueChange={(groupValue) => {
             if (groupValue && groupValue.length > 0) {
-              setViewMode(groupValue[0] as "grid" | "list");
+              setViewMode(groupValue[0] as "grid" | "list" | "table");
             }
           }}
           className="dashboard-view-toggle"
@@ -426,6 +551,9 @@ function BranchView() {
           </Toggle>
           <Toggle value="list" className="dashboard-view-toggle-btn" aria-label="List view">
             <LuList size={16} />
+          </Toggle>
+          <Toggle value="table" className="dashboard-view-toggle-btn" aria-label="Table view">
+            <LuTable size={16} />
           </Toggle>
         </ToggleGroup>
       </div>
@@ -475,8 +603,34 @@ function BranchView() {
               </p>
               <p className="dashboard-empty-hint">Create a folder or document to get started</p>
             </div>
+          ) : viewMode === "table" ? (
+            <DashboardTableView
+              data={tableData}
+              columns={columns}
+              sorting={sorting}
+              onSortingChange={setSorting}
+            />
+          ) : viewMode === "list" ? (
+            <DashboardListView
+              items={[
+                ...filteredFolders.map((folder) => ({
+                  id: folder.id,
+                  name: folder.name,
+                  path: "Folder",
+                  icon: <LuFolder size={20} />,
+                  onClick: () => handleFolderClick(folder.id),
+                })),
+                ...filteredDocuments.map((document) => ({
+                  id: document.id,
+                  name: document.name,
+                  path: `Updated ${formatTimeAgo(document.updated_at)}`,
+                  icon: <LuFileText size={20} />,
+                  onClick: () => navigate({ to: "/editor", search: { documentId: document.id } }),
+                })),
+              ]}
+            />
           ) : (
-            <div className={`dashboard-${viewMode === "grid" ? "grid" : "list"}`}>
+            <div className="dashboard-grid">
               {/* Folders */}
               {filteredFolders.map((folder) => (
                 <div key={folder.id} className="dashboard-item-card">

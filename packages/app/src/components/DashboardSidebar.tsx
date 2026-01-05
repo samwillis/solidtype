@@ -67,6 +67,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     return allProjectsCollection;
   });
 
+
   // Group projects by workspace
   const projectsByWorkspace = React.useMemo(() => {
     if (!allProjects || !workspaces) return {};
@@ -131,6 +132,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
                       activeSection={activeSection}
                       onProjectClick={(projectId) => {
                         onSectionChange(`project-${projectId}`);
+                        // Always navigate to project route - it will redirect to main branch when ready
                         navigate({ to: `/dashboard/projects/${projectId}` });
                       }}
                       onCreateProject={() => {
