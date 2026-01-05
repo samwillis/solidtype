@@ -5,6 +5,8 @@
  * This file should only be imported in browser/worker context.
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- OpenCascade WASM bindings use dynamic types */
+
 // Static imports - Vite processes these correctly
 // The package has opencascade.wasm.js and opencascade.wasm.wasm (not .full)
 import opencascade from "opencascade.js/dist/opencascade.wasm.js";

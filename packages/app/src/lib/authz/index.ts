@@ -85,7 +85,7 @@ export type WorkspaceMembership = Awaited<ReturnType<typeof workspacesRepo.getMe
 export async function requireWorkspaceMember(
   session: Session,
   workspaceId: string
-): Promise<WorkspaceMembership> {
+): Promise<NonNullable<WorkspaceMembership>> {
   const membership = await workspacesRepo.getMembership(workspaceId, session.user.id);
 
   if (!membership) {

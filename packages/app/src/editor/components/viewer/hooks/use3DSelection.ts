@@ -84,6 +84,8 @@ export function use3DSelection(options: Selection3DOptions): void {
   } = options;
 
   // Use refs for callbacks to avoid effect re-runs
+  // This is an intentional pattern to sync refs with latest callbacks without triggering effect dependencies
+  /* eslint-disable react-hooks/refs */
   const raycastRef = useRef(raycast);
   raycastRef.current = raycast;
   const getFaceIdRef = useRef(getFaceId);
@@ -102,6 +104,7 @@ export function use3DSelection(options: Selection3DOptions): void {
   onCursor2DBroadcastRef.current = onCursor2DBroadcast;
   const showEdgesRef = useRef(showEdges);
   showEdgesRef.current = showEdges;
+  /* eslint-enable react-hooks/refs */
 
   // Perform edge raycast
   const performEdgeRaycast = useCallback(

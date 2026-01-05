@@ -218,9 +218,7 @@ export const documentsCollection = createCollection(
       const newDoc = transaction.mutations[0].modified;
       // Build document object with only the fields the server expects
       const folderId =
-        newDoc.folder_id &&
-        typeof newDoc.folder_id === "string" &&
-        newDoc.folder_id.trim() !== ""
+        newDoc.folder_id && typeof newDoc.folder_id === "string" && newDoc.folder_id.trim() !== ""
           ? newDoc.folder_id
           : undefined;
 

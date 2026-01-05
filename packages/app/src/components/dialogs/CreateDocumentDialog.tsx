@@ -84,14 +84,21 @@ export const CreateDocumentDialog: React.FC<CreateDocumentDialogProps> = ({
       setIsSubmitting(true);
       try {
         // Build document object, only including folderId if it's a valid non-empty value
-        const documentData: any = {
+        const documentData: {
+          projectId: string;
+          branchId: string;
+          name: string;
+          type: "part" | "assembly" | "drawing" | "sketch" | "file" | "notes";
+          featureCount: number;
+          sortOrder: number;
+          folderId?: string;
+        } = {
           projectId: value.projectId,
           branchId: value.branchId,
           name: value.name,
           type: value.type,
           featureCount: 0,
           sortOrder: 0,
-          createdBy: session.user.id,
         };
 
         // Only include folderId if it's a valid non-empty string

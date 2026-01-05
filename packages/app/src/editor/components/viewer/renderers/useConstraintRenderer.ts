@@ -81,11 +81,13 @@ export function useConstraintRenderer(options: ConstraintRendererOptions): void 
     needsRenderRef,
   } = options;
 
-  // Refs for callbacks
+  // Refs for callbacks - sync with latest values
+  /* eslint-disable react-hooks/refs -- intentional pattern to sync ref with latest callback */
   const toggleConstraintSelectionRef = useRef(toggleConstraintSelection);
   toggleConstraintSelectionRef.current = toggleConstraintSelection;
   const onDimensionDoubleClickRef = useRef(onDimensionDoubleClick);
   onDimensionDoubleClickRef.current = onDimensionDoubleClick;
+  /* eslint-enable react-hooks/refs */
 
   useEffect(() => {
     const labelsGroup = constraintLabelsGroupRef.current;

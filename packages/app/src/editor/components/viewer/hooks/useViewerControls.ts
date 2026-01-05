@@ -61,7 +61,9 @@ export function useViewerControls(options: ViewerControlsOptions): {
   } = options;
 
   const animationFrameRef = useRef<number | null>(null);
+  // Sync ref with latest callback
   const onCameraChangeRef = useRef(onCameraChange);
+  // eslint-disable-next-line react-hooks/refs -- intentional pattern to sync ref with latest callback
   onCameraChangeRef.current = onCameraChange;
 
   // Update camera projection

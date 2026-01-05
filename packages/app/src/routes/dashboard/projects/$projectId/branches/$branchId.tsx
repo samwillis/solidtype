@@ -171,9 +171,11 @@ function BranchView() {
   );
 
   // Reset current folder when branch changes
+  /* eslint-disable react-hooks/set-state-in-effect -- reset state on route change */
   useEffect(() => {
     setCurrentFolderId(null);
   }, [branchId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Load folders for current branch with filtering and sorting
   const { data: branchFolders, isLoading: foldersLoading } = useLiveQuery(() => {

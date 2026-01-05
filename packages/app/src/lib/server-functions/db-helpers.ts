@@ -20,10 +20,12 @@ import type { PgTransaction } from "drizzle-orm/pg-core";
  * @param tx - Optional Drizzle transaction. If provided, uses the transaction connection.
  *             If not provided, uses the pool directly.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- drizzle transaction types are complex
 export async function getCurrentTxid(tx?: PgTransaction<any, any, any>): Promise<number> {
   if (tx) {
     // Use the transaction's connection to get the txid within the same transaction
     const result = await tx.execute(sql`SELECT txid_current()`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic SQL result
     return Number((result as any)[0]?.txid_current || 0);
   } else {
     // Fallback for non-transactional operations

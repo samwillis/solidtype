@@ -64,6 +64,7 @@ function ProjectLayout() {
   const mainBranch = useMemo(() => branches?.find((b) => b.is_main), [branches]);
 
   // Give Electric some time to sync new branches before showing "not found"
+  /* eslint-disable react-hooks/set-state-in-effect -- track sync timing and redirect state */
   useEffect(() => {
     if (!hasChildRoute && !mainBranch && !branchesLoading && branches?.length === 0) {
       // Wait a bit for Electric sync before showing error
@@ -86,6 +87,7 @@ function ProjectLayout() {
       navigate({ to: `/dashboard/projects/${projectId}/branches/${mainBranch.id}`, replace: true });
     }
   }, [hasChildRoute, mainBranch, projectId, navigate, isRedirecting]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // If we're on a child route (branch), render the child
   if (hasChildRoute) {

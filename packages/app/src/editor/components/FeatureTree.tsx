@@ -379,9 +379,11 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   }, [isEditing]);
 
   // Reset edit value when node name changes
+  /* eslint-disable react-hooks/set-state-in-effect -- sync state with prop */
   useEffect(() => {
     setEditValue(node.name);
   }, [node.name]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleRenameSubmit = useCallback(() => {
     if (editValue.trim() && editValue !== node.name) {

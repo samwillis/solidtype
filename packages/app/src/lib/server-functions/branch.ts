@@ -377,9 +377,15 @@ export const mergeBranchMutation = createServerFn({ method: "POST" })
     }
 
     // Get all documents from both branches
-    const sourceDocs = await db.select().from(documents).where(eq(documents.branchId, sourceBranchId));
+    const sourceDocs = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.branchId, sourceBranchId));
 
-    const targetDocs = await db.select().from(documents).where(eq(documents.branchId, targetBranchId));
+    const targetDocs = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.branchId, targetBranchId));
 
     const sourceDocsMap = new Map(sourceDocs.map((d) => [d.baseDocumentId || d.id, d]));
     const targetDocsMap = new Map(targetDocs.map((d) => [d.baseDocumentId || d.id, d]));

@@ -7,6 +7,7 @@
  * Updated to use the new OCCT-based SolidSession API.
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- OpenCascade WASM bindings use dynamic types */
 /// <reference lib="webworker" />
 
 import * as Y from "yjs";

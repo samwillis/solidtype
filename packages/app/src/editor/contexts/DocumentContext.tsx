@@ -252,6 +252,7 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
 
   // Create awareness wrapper for cloud documents (needs session for user info)
   // This wraps the awareness from the document sync provider - NOT a separate connection
+  /* eslint-disable react-hooks/set-state-in-effect -- sync awareness state with provider */
   useEffect(() => {
     if (!isCloudDocument || !documentId || !session?.user || !syncRef.current) {
       setAwareness(null);
@@ -283,6 +284,7 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
       setAwareness(null);
     };
   }, [isCloudDocument, documentId, session?.user, syncStatus]); // Use syncStatus to re-run when connected
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Create undo manager - track featuresById, featureOrder, and state
   // Only created once doc is available

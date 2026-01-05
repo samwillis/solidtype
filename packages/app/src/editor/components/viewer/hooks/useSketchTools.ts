@@ -199,6 +199,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
   const DRAG_THRESHOLD = 5;
 
   // Clear tool state when mode/tool changes
+  /* eslint-disable react-hooks/set-state-in-effect -- reset state on mode change */
   useEffect(() => {
     setTempStartPoint(null);
     setTempSecondPoint(null);
@@ -214,8 +215,10 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     setPreviewPolygon(null);
     setBoxSelection(null);
   }, [sketchMode.active, sketchMode.sketchId, sketchMode.activeTool]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Update preview shapes based on current state
+  /* eslint-disable react-hooks/set-state-in-effect -- clear previews on mode/position change */
   useEffect(() => {
     if (!sketchMode.active || !sketchPos) {
       setPreviewLine(null);
@@ -373,6 +376,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     tangentSource,
     setPreviewLine,
   ]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Mouse handlers effect
   useEffect(() => {

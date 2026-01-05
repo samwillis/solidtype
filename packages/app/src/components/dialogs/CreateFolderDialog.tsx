@@ -19,6 +19,8 @@ import {
 import { useLiveQuery } from "@tanstack/react-db";
 import { projectsCollection, branchesCollection } from "../../lib/electric-collections";
 import { z } from "zod";
+import type { BranchOutput } from "../../schemas/entities/branch";
+import type { FolderOutput } from "../../schemas/entities/folder";
 import "./CreateDialog.css";
 
 const folderFormSchema = z.object({
@@ -47,8 +49,8 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
 }) => {
   const { data: session } = useSession();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [availableBranches, setAvailableBranches] = useState<any[]>([]);
-  const [availableFolders, setAvailableFolders] = useState<any[]>([]);
+  const [availableBranches, setAvailableBranches] = useState<BranchOutput[]>([]);
+  const [availableFolders, setAvailableFolders] = useState<FolderOutput[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [loadingFolders, setLoadingFolders] = useState(false);
 

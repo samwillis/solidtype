@@ -13,11 +13,7 @@ import { eq } from "drizzle-orm";
 import { authMiddleware } from "../server-fn-middleware";
 import { db } from "../db";
 import { projects, projectMembers, branches } from "../../db/schema";
-import {
-  requireWorkspaceMember,
-  requireProjectAccess,
-  requireProjectRole,
-} from "../authz";
+import { requireWorkspaceMember, requireProjectAccess, requireProjectRole } from "../authz";
 import * as projectsRepo from "../../repos/projects";
 import { getCurrentTxid } from "./db-helpers";
 import {

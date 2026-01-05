@@ -273,6 +273,7 @@ const Viewer: React.FC = () => {
         return;
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- dynamic import to avoid circular dependency
       const { setSketchData } = require("../../document/featureHelpers");
       doc.ydoc.transact(() => {
         setSketchData(sketchEl, data);
@@ -298,6 +299,7 @@ const Viewer: React.FC = () => {
         return;
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- dynamic import to avoid circular dependency
       const { setSketchData } = require("../../document/featureHelpers");
       doc.ydoc.transact(() => {
         setSketchData(sketchEl, data);
@@ -339,8 +341,8 @@ const Viewer: React.FC = () => {
 
   // Wrapper for addConstraint to match useSketchTools type
   const addConstraintWrapper = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (constraint: { type: string; [key: string]: unknown }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- type bridge between generic and specific constraint types
       addConstraint(constraint as any);
     },
     [addConstraint]
@@ -502,6 +504,7 @@ const Viewer: React.FC = () => {
   }, [registerRefs, requestRender, updateCamera, screenToSketch, cameraRef, sceneRef, targetRef]);
 
   // Toggle edge visibility
+  /* eslint-disable react-hooks/immutability -- modifying Three.js object is intentional */
   React.useEffect(() => {
     const edgeGroup = groupRefs.edgeGroup.current;
     if (edgeGroup) {
@@ -509,6 +512,7 @@ const Viewer: React.FC = () => {
       needsRenderRef.current = true;
     }
   }, [viewerState.showEdges, groupRefs.edgeGroup, needsRenderRef]);
+  /* eslint-enable react-hooks/immutability */
 
   // Renderers
   useMeshRenderer({

@@ -91,10 +91,12 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     };
 
     window.addEventListener("storage", handleStorageChange);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom event type
     window.addEventListener("solidtype-theme-change" as any, handleThemeChange);
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom event type
       window.removeEventListener("solidtype-theme-change" as any, handleThemeChange);
     };
   }, []);

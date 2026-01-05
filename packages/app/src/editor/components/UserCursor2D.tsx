@@ -17,6 +17,7 @@ interface UserCursor2DProps {
 }
 
 export function UserCursor2D({ followedUser, containerRef }: UserCursor2DProps) {
+  /* eslint-disable react-hooks/refs -- reading container dimensions is safe during render */
   const cursorStyle = useMemo(() => {
     if (!followedUser?.cursor2D?.visible || !containerRef.current) {
       return null;
@@ -32,6 +33,7 @@ export function UserCursor2D({ followedUser, containerRef }: UserCursor2DProps) 
       "--cursor-color": followedUser.user.color,
     } as React.CSSProperties;
   }, [followedUser, containerRef]);
+  /* eslint-enable react-hooks/refs */
 
   // Don't render if no cursor data or if 3D cursor is visible
   if (!cursorStyle || followedUser?.cursor3D?.visible) {

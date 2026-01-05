@@ -330,7 +330,9 @@ export const updateProjectMemberMutation = createServerFn({ method: "POST" })
     await db
       .update(projectMembers)
       .set(updates)
-      .where(and(eq(projectMembers.projectId, data.projectId), eq(projectMembers.userId, data.userId)));
+      .where(
+        and(eq(projectMembers.projectId, data.projectId), eq(projectMembers.userId, data.userId))
+      );
 
     return { success: true };
   });
@@ -366,7 +368,9 @@ export const removeProjectMemberMutation = createServerFn({ method: "POST" })
     // Remove member
     await db
       .delete(projectMembers)
-      .where(and(eq(projectMembers.projectId, data.projectId), eq(projectMembers.userId, data.userId)));
+      .where(
+        and(eq(projectMembers.projectId, data.projectId), eq(projectMembers.userId, data.userId))
+      );
 
     return { success: true };
   });

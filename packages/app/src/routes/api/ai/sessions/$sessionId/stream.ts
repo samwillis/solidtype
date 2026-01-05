@@ -11,9 +11,9 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { proxyToDurableStream } from "../../../../../lib/durable-stream-proxy";
-import { CORS_HEADERS, handleOptions, withCors } from "../../../../../lib/http/cors";
+import { handleOptions, withCors } from "../../../../../lib/http/cors";
 import { getSessionOrThrow, requireChatSessionOwner } from "../../../../../lib/authz";
-import { toResponse, AuthenticationError } from "../../../../../lib/http/respond";
+import { toResponse } from "../../../../../lib/http/respond";
 import { db } from "../../../../../lib/db";
 import { aiChatSessions } from "../../../../../db/schema";
 import { eq } from "drizzle-orm";

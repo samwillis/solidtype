@@ -59,6 +59,7 @@ async function createPersonalWorkspace(userId: string, userName?: string | null)
             })
             .returning();
           break; // Success
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- checking Postgres error properties
         } catch (error: any) {
           // If unique constraint violation, try with a suffix
           if (error?.code === "23505" && error?.constraint?.includes("slug")) {

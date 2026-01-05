@@ -21,6 +21,7 @@ export function useFollowing({ awareness, onCameraChange }: UseFollowingOptions)
   const ignoreCameraChangeRef = useRef(false);
 
   // Update connected users list and track local following state
+  /* eslint-disable react-hooks/set-state-in-effect -- sync state with awareness provider */
   useEffect(() => {
     if (!awareness) {
       setConnectedUsers([]);
@@ -65,6 +66,7 @@ export function useFollowing({ awareness, onCameraChange }: UseFollowingOptions)
     const unsubscribe = awareness.onFollowersChange(updateFollowers);
     return unsubscribe;
   }, [awareness]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Follow a user - broadcasts to awareness
   const followUser = useCallback(
