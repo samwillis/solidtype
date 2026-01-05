@@ -13,6 +13,7 @@ import remarkBreaks from "remark-breaks";
 import { useAIChat } from "../../hooks/useAIChat";
 import { ToolApprovalPanel } from "../../components/ai/ToolApprovalPanel";
 import AISettingsMenu from "../../components/ai/AISettingsMenu";
+import { formatTimeAgo } from "../../lib/utils/format";
 import "./AIPanel.css";
 import { AIIcon } from "./Icons";
 
@@ -248,7 +249,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ context = "editor", documentId, proje
                             {session.title || "Untitled"}
                           </span>
                           <span className="ai-panel-history-date">
-                            {new Date(session.createdAt).toLocaleDateString()}
+                            {formatTimeAgo(session.createdAt)}
                           </span>
                         </button>
                         <button
@@ -280,7 +281,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ context = "editor", documentId, proje
                           {session.title || "Untitled"}
                         </span>
                         <span className="ai-panel-history-date">
-                          {new Date(session.createdAt).toLocaleDateString()}
+                          {formatTimeAgo(session.createdAt)}
                         </span>
                       </button>
                       <button

@@ -14,6 +14,7 @@ import { useSession } from "../../lib/auth-client";
 import { useLiveQuery, eq, createCollection, liveQueryCollectionOptions } from "@tanstack/react-db";
 import { branchesCollection } from "../../lib/electric-collections";
 import { mergeBranchMutation } from "../../lib/server-functions";
+import { formatTimeAgo } from "../../lib/utils/format";
 import { z } from "zod";
 import "./CreateDialog.css";
 
@@ -176,8 +177,7 @@ export const MergeBranchDialog: React.FC<MergeBranchDialogProps> = ({
                   borderRadius: "4px",
                 }}
               >
-                This branch was already merged on{" "}
-                {new Date(sourceBranch.merged_at!).toLocaleDateString()}.
+                This branch was already merged {formatTimeAgo(sourceBranch.merged_at!)}.
               </div>
             )}
           </Dialog.Description>
