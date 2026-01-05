@@ -2,6 +2,7 @@
  * Project Validators
  *
  * Zod schemas for project-related inputs.
+ * Derives validation rules from entity schemas where applicable.
  */
 
 import { z } from "zod";
@@ -11,7 +12,7 @@ import { z } from "zod";
 // ============================================================================
 
 export const projectIdSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.uuid(),
 });
 
 // ============================================================================
@@ -19,11 +20,11 @@ export const projectIdSchema = z.object({
 // ============================================================================
 
 export const getProjectsSchema = z.object({
-  workspaceId: z.string().uuid(),
+  workspaceId: z.uuid(),
 });
 
 export const getProjectSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.uuid(),
 });
 
 // ============================================================================
@@ -31,13 +32,13 @@ export const getProjectSchema = z.object({
 // ============================================================================
 
 export const createProjectSchema = z.object({
-  workspaceId: z.string().uuid(),
+  workspaceId: z.uuid(),
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   description: z.string().max(500, "Description too long").optional(),
 });
 
 export const updateProjectSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.uuid(),
   updates: z.object({
     name: z.string().min(1).max(100).optional(),
     description: z.string().max(500).optional(),
@@ -45,7 +46,7 @@ export const updateProjectSchema = z.object({
 });
 
 export const deleteProjectSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.uuid(),
 });
 
 // ============================================================================

@@ -21,10 +21,10 @@ import { projectsCollection, branchesCollection } from "../../lib/electric-colle
 import { z } from "zod";
 import "./CreateDialog.css";
 
-const folderSchema = z.object({
-  projectId: z.string().uuid("Project is required"),
-  branchId: z.string().uuid("Branch is required"),
-  parentId: z.string().uuid().nullable().optional(),
+const folderFormSchema = z.object({
+  projectId: z.uuid("Project is required"),
+  branchId: z.uuid("Branch is required"),
+  parentId: z.uuid().nullable().optional(),
   name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
 });
 
@@ -81,7 +81,6 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
               parentId: value.parentId || null,
               name: value.name,
               sortOrder: 0,
-              createdBy: session.user.id,
             },
           },
         });
@@ -192,7 +191,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
                 name="projectId"
                 validators={{
                   onChange: ({ value }) => {
-                    const result = folderSchema.shape.projectId.safeParse(value);
+                    const result = folderFormSchema.shape.projectId.safeParse(value);
                     return result.success ? undefined : result.error.issues[0]?.message;
                   },
                 }}
@@ -267,7 +266,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
                     if (!form.state.values.projectId) {
                       return "Select a project first";
                     }
-                    const result = folderSchema.shape.branchId.safeParse(value);
+                    const result = folderFormSchema.shape.branchId.safeParse(value);
                     return result.success ? undefined : result.error.issues[0]?.message;
                   },
                 }}
@@ -400,7 +399,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
               name="name"
               validators={{
                 onChange: ({ value }) => {
-                  const result = folderSchema.shape.name.safeParse(value);
+                  const result = folderFormSchema.shape.name.safeParse(value);
                   return result.success ? undefined : result.error.issues[0]?.message;
                 },
               }}

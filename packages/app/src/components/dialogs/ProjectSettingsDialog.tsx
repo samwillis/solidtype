@@ -119,8 +119,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             projectId,
             updates: {
               name: value.name,
-              description: value.description || null,
-              updatedAt: new Date(),
+              description: value.description || undefined,
             },
           },
         });

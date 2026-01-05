@@ -11,23 +11,23 @@ import { z } from "zod";
 // ============================================================================
 
 export const listWorkspaceMembersSchema = z.object({
-  workspaceId: z.string().uuid(),
+  workspaceId: z.uuid(),
 });
 
 export const addWorkspaceMemberSchema = z.object({
-  workspaceId: z.string().uuid(),
+  workspaceId: z.uuid(),
   email: z.string().email("Invalid email address"),
   role: z.enum(["admin", "member"]),
 });
 
 export const updateWorkspaceMemberRoleSchema = z.object({
-  workspaceId: z.string().uuid(),
+  workspaceId: z.uuid(),
   userId: z.string().min(1, "User ID is required"),
   role: z.enum(["admin", "member"]),
 });
 
 export const removeWorkspaceMemberSchema = z.object({
-  workspaceId: z.string().uuid(),
+  workspaceId: z.uuid(),
   userId: z.string().min(1, "User ID is required"),
 });
 
@@ -36,25 +36,25 @@ export const removeWorkspaceMemberSchema = z.object({
 // ============================================================================
 
 export const listProjectMembersSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.uuid(),
 });
 
 export const addProjectMemberSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.uuid(),
   email: z.string().email("Invalid email address"),
   role: z.enum(["admin", "member", "guest"]),
   canEdit: z.boolean(),
 });
 
 export const updateProjectMemberSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.uuid(),
   userId: z.string().min(1, "User ID is required"),
   role: z.enum(["admin", "member", "guest"]).optional(),
   canEdit: z.boolean().optional(),
 });
 
 export const removeProjectMemberSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.uuid(),
   userId: z.string().min(1, "User ID is required"),
 });
 

@@ -12,12 +12,17 @@
  * The auth proxy ensures users only sync data they have access to.
  * Components query collections using useLiveQuery with WHERE clauses.
  *
+ * Schema Architecture:
+ * - Entity schemas are defined in schemas/entities/ with transforms
+ * - Input types accept string dates (from API/Electric)
+ * - Output types have Date objects (after Electric parser + Zod transform)
+ * - Electric parser converts timestamptz strings to Date objects at sync level
+ *
  * See: https://electric-sql.com/AGENTS.md
  */
 
 import { createCollection } from "@tanstack/react-db";
 import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-import { z } from "zod";
 import {
   createBranchMutation,
   updateBranchMutation,
@@ -39,101 +44,55 @@ import {
   deleteChatSessionMutation,
 } from "./server-functions";
 
-// ============================================================================
-// Schemas (Zod for validation + type inference)
-// ============================================================================
+// Import centralized entity schemas
+import {
+  workspaceSchema,
+  projectSchema,
+  branchSchema,
+  documentSchema,
+  folderSchema,
+  aiChatSessionSchema,
+} from "../schemas";
 
-export const branchSchema = z.object({
-  id: z.string().uuid(),
-  project_id: z.string().uuid(),
-  name: z.string(),
-  description: z.string().nullable(),
-  is_main: z.boolean(),
-  parent_branch_id: z.string().uuid().nullable(),
-  forked_at: z.string().datetime().nullable(),
-  created_by: z.string(), // text ID from better-auth
-  owner_id: z.string(), // text ID from better-auth
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
-  merged_at: z.string().datetime().nullable(),
-  merged_by: z.string().nullable(),
-});
-
-export const documentSchema = z.object({
-  id: z.string().uuid(),
-  base_document_id: z.string().uuid().nullable(), // For branching: tracks sibling documents across branches
-  project_id: z.string().uuid(),
-  branch_id: z.string().uuid(),
-  name: z.string(),
-  type: z.enum(["part", "assembly", "drawing", "sketch", "file", "notes"]), // document_type enum
-  folder_id: z.string().uuid().nullable(),
-  sort_order: z.number(),
-  feature_count: z.number().nullable(), // Feature count for quick display
-  durable_stream_id: z.string().nullable(),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
-  created_by: z.string(), // text ID from better-auth
-  last_edited_by: z.string().nullable(),
-  is_deleted: z.boolean(),
-  deleted_at: z.string().datetime().nullable(),
-  deleted_by: z.string().nullable(),
-});
-
-export const folderSchema = z.object({
-  id: z.string().uuid(),
-  branch_id: z.string().uuid(),
-  name: z.string(),
-  parent_id: z.string().uuid().nullable(),
-  sort_order: z.number(),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
-});
-
-export const workspaceSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  slug: z.string(),
-  description: z.string().nullable(),
-  created_by: z.string(), // text ID from better-auth
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
-});
-
-export const projectSchema = z.object({
-  id: z.string().uuid(),
-  workspace_id: z.string().uuid(),
-  name: z.string(),
-  description: z.string().nullable(),
-  created_by: z.string(), // text ID from better-auth
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
-});
-
-export const aiChatSessionSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string(), // text ID from better-auth
-  context: z.enum(["dashboard", "editor"]),
-  document_id: z.string().uuid().nullable(),
-  project_id: z.string().uuid().nullable(),
-  status: z.enum(["active", "archived", "error"]),
-  title: z.string().nullable(),
-  message_count: z.number(),
-  last_message_at: z.string().nullable(), // Relaxed from .datetime() - PG format may vary
-  durable_stream_id: z.string().nullable(),
-  created_at: z.string(), // Relaxed from .datetime() - PG format may vary
-  updated_at: z.string(), // Relaxed from .datetime() - PG format may vary
-});
-
-// Type exports
-export type Branch = z.infer<typeof branchSchema>;
-export type Document = z.infer<typeof documentSchema>;
-export type Folder = z.infer<typeof folderSchema>;
-export type Workspace = z.infer<typeof workspaceSchema>;
-export type Project = z.infer<typeof projectSchema>;
-export type AIChatSession = z.infer<typeof aiChatSessionSchema>;
+// Re-export types for backwards compatibility
+export type {
+  Workspace,
+  WorkspaceInput,
+  WorkspaceOutput,
+  Project,
+  ProjectInput,
+  ProjectOutput,
+  Branch,
+  BranchInput,
+  BranchOutput,
+  Document,
+  DocumentInput,
+  DocumentOutput,
+  DocumentType,
+  Folder,
+  FolderInput,
+  FolderOutput,
+  AIChatSession,
+  AIChatSessionInput,
+  AIChatSessionOutput,
+  AIChatContext,
+  AIChatStatus,
+} from "../schemas";
 
 // ============================================================================
-// Singleton Collections (one per table)
+// Electric Parser Configuration
+// ============================================================================
+
+/**
+ * Custom parser for Electric shape streams.
+ * Converts PostgreSQL timestamp strings to JavaScript Date objects.
+ */
+const electricParser = {
+  timestamptz: (date: string) => new Date(date),
+};
+
+// ============================================================================
+// Helper Functions
 // ============================================================================
 
 // Get API base URL for client-side requests
@@ -143,6 +102,10 @@ const getApiBase = () => {
   }
   return "http://localhost:3000";
 };
+
+// ============================================================================
+// Singleton Collections (one per table)
+// ============================================================================
 
 /**
  * Workspaces collection
@@ -155,19 +118,29 @@ export const workspacesCollection = createCollection(
     getKey: (row) => row.id,
     shapeOptions: {
       url: `${getApiBase()}/api/shapes/workspaces`,
-      parser: {
-        timestamptz: (date: string) => date,
-      },
+      parser: electricParser,
     },
     onInsert: async ({ transaction }) => {
       const newWorkspace = transaction.mutations[0].modified;
-      const { txid } = await createWorkspaceMutation({ data: { workspace: newWorkspace } });
+      const { txid } = await createWorkspaceMutation({
+        data: {
+          name: newWorkspace.name,
+          slug: newWorkspace.slug,
+          description: newWorkspace.description ?? undefined,
+        },
+      });
       return { txid };
     },
     onUpdate: async ({ transaction }) => {
       const updated = transaction.mutations[0].modified;
       const { txid } = await updateWorkspaceMutation({
-        data: { workspaceId: updated.id, updates: updated },
+        data: {
+          workspaceId: updated.id,
+          updates: {
+            name: updated.name,
+            description: updated.description ?? undefined,
+          },
+        },
       });
       return { txid };
     },
@@ -190,21 +163,33 @@ export const branchesCollection = createCollection(
     getKey: (row) => row.id,
     shapeOptions: {
       url: `${getApiBase()}/api/shapes/branches`,
-      parser: {
-        timestamptz: (date: string) => date,
-      },
+      parser: electricParser,
     },
     onInsert: async ({ transaction }) => {
       const newBranch = transaction.mutations[0].modified;
       const { txid } = await createBranchMutation({
-        data: { projectId: newBranch.project_id, branch: newBranch },
+        data: {
+          projectId: newBranch.project_id,
+          branch: {
+            name: newBranch.name,
+            description: newBranch.description,
+            parentBranchId: newBranch.parent_branch_id ?? undefined,
+            isMain: newBranch.is_main,
+          },
+        },
       });
       return { txid };
     },
     onUpdate: async ({ transaction }) => {
       const updated = transaction.mutations[0].modified;
       const { txid } = await updateBranchMutation({
-        data: { branchId: updated.id, updates: updated },
+        data: {
+          branchId: updated.id,
+          updates: {
+            name: updated.name,
+            description: updated.description,
+          },
+        },
       });
       return { txid };
     },
@@ -227,41 +212,45 @@ export const documentsCollection = createCollection(
     getKey: (row) => row.id,
     shapeOptions: {
       url: `${getApiBase()}/api/shapes/documents`,
-      parser: {
-        timestamptz: (date: string) => date,
-      },
+      parser: electricParser,
     },
     onInsert: async ({ transaction }) => {
       const newDoc = transaction.mutations[0].modified;
-      // Normalize empty strings to undefined for nullable fields
-      // The mutation handler also normalizes, but we do it here for defense in depth
-      const normalizedDoc: any = {
-        ...newDoc,
-      };
+      // Build document object with only the fields the server expects
+      const folderId =
+        newDoc.folder_id &&
+        typeof newDoc.folder_id === "string" &&
+        newDoc.folder_id.trim() !== ""
+          ? newDoc.folder_id
+          : undefined;
 
-      // Remove folder_id if it's empty/null/undefined
-      if (
-        !newDoc.folder_id ||
-        (typeof newDoc.folder_id === "string" && newDoc.folder_id.trim() === "")
-      ) {
-        delete normalizedDoc.folder_id;
-      }
-
-      // Remove durable_stream_id if it's empty/null/undefined (will be set after creation)
-      if (
-        !newDoc.durable_stream_id ||
-        (typeof newDoc.durable_stream_id === "string" && newDoc.durable_stream_id.trim() === "")
-      ) {
-        delete normalizedDoc.durable_stream_id;
-      }
-
-      const { txid } = await createDocumentMutation({ data: { document: normalizedDoc } });
+      const { txid } = await createDocumentMutation({
+        data: {
+          document: {
+            projectId: newDoc.project_id,
+            branchId: newDoc.branch_id,
+            name: newDoc.name,
+            type: newDoc.type,
+            folderId: folderId ?? null,
+            featureCount: newDoc.feature_count ?? undefined,
+            sortOrder: newDoc.sort_order ?? undefined,
+          },
+        },
+      });
       return { txid };
     },
     onUpdate: async ({ transaction }) => {
       const updated = transaction.mutations[0].modified;
       const { txid } = await updateDocumentMutation({
-        data: { documentId: updated.id, updates: updated },
+        data: {
+          documentId: updated.id,
+          updates: {
+            name: updated.name,
+            folderId: updated.folder_id,
+            featureCount: updated.feature_count ?? undefined,
+            sortOrder: updated.sort_order ?? undefined,
+          },
+        },
       });
       return { txid };
     },
@@ -284,19 +273,29 @@ export const projectsCollection = createCollection(
     getKey: (row) => row.id,
     shapeOptions: {
       url: `${getApiBase()}/api/shapes/projects`,
-      parser: {
-        timestamptz: (date: string) => date,
-      },
+      parser: electricParser,
     },
     onInsert: async ({ transaction }) => {
       const newProject = transaction.mutations[0].modified;
-      const { txid } = await createProjectMutation({ data: { project: newProject } });
+      const { txid } = await createProjectMutation({
+        data: {
+          workspaceId: newProject.workspace_id,
+          name: newProject.name,
+          description: newProject.description ?? undefined,
+        },
+      });
       return { txid };
     },
     onUpdate: async ({ transaction }) => {
       const updated = transaction.mutations[0].modified;
       const { txid } = await updateProjectMutation({
-        data: { projectId: updated.id, updates: updated },
+        data: {
+          projectId: updated.id,
+          updates: {
+            name: updated.name,
+            description: updated.description ?? undefined,
+          },
+        },
       });
       return { txid };
     },
@@ -319,19 +318,34 @@ export const foldersCollection = createCollection(
     getKey: (row) => row.id,
     shapeOptions: {
       url: `${getApiBase()}/api/shapes/folders`,
-      parser: {
-        timestamptz: (date: string) => date,
-      },
+      parser: electricParser,
     },
     onInsert: async ({ transaction }) => {
       const newFolder = transaction.mutations[0].modified;
-      const { txid } = await createFolderMutation({ data: { folder: newFolder } });
+      const { txid } = await createFolderMutation({
+        data: {
+          folder: {
+            projectId: newFolder.project_id,
+            branchId: newFolder.branch_id,
+            name: newFolder.name,
+            parentId: newFolder.parent_id,
+            sortOrder: newFolder.sort_order ?? undefined,
+          },
+        },
+      });
       return { txid };
     },
     onUpdate: async ({ transaction }) => {
       const updated = transaction.mutations[0].modified;
       const { txid } = await updateFolderMutation({
-        data: { folderId: updated.id, updates: updated },
+        data: {
+          folderId: updated.id,
+          updates: {
+            name: updated.name,
+            parentId: updated.parent_id,
+            sortOrder: updated.sort_order ?? undefined,
+          },
+        },
       });
       return { txid };
     },
@@ -354,19 +368,33 @@ export const aiChatSessionsCollection = createCollection(
     getKey: (row) => row.id,
     shapeOptions: {
       url: `${getApiBase()}/api/shapes/ai-chat-sessions`,
-      parser: {
-        timestamptz: (date: string) => date,
-      },
+      parser: electricParser,
     },
     onInsert: async ({ transaction }) => {
       const newSession = transaction.mutations[0].modified;
-      const { txid } = await createChatSessionMutation({ data: { session: newSession } });
+      const { txid } = await createChatSessionMutation({
+        data: {
+          session: {
+            id: newSession.id ?? undefined,
+            context: newSession.context,
+            document_id: newSession.document_id,
+            project_id: newSession.project_id,
+            title: newSession.title ?? undefined,
+          },
+        },
+      });
       return { txid };
     },
     onUpdate: async ({ transaction }) => {
       const updated = transaction.mutations[0].modified;
       const { txid } = await updateChatSessionMutation({
-        data: { sessionId: updated.id, updates: updated },
+        data: {
+          sessionId: updated.id,
+          updates: {
+            title: updated.title ?? undefined,
+            status: updated.status,
+          },
+        },
       });
       return { txid };
     },

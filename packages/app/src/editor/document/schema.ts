@@ -13,7 +13,7 @@ import { z } from "zod/v4";
 // Shared Primitives
 // ============================================================================
 
-export const UUID = z.string().uuid();
+export const UUID = z.uuid();
 export const Vec3 = z.tuple([z.number(), z.number(), z.number()]);
 export const Units = z.enum(["mm", "cm", "m", "in", "ft"]);
 

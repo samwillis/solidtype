@@ -28,9 +28,9 @@ import {
 // ============================================================================
 
 const getFoldersSchema = z.object({
-  projectId: z.string().uuid(),
-  branchId: z.string().uuid(),
-  parentId: z.string().uuid().nullable().optional(),
+  projectId: z.uuid(),
+  branchId: z.uuid(),
+  parentId: z.uuid().nullable().optional(),
 });
 
 // ============================================================================

@@ -17,14 +17,16 @@ import {
   projectsCollection,
   branchesCollection,
   foldersCollection,
+  type Branch,
+  type Folder,
 } from "../../lib/electric-collections";
 import { z } from "zod";
 import "./CreateDialog.css";
 
-const documentSchema = z.object({
-  projectId: z.string().uuid("Project is required"),
-  branchId: z.string().uuid("Branch is required"),
-  folderId: z.string().uuid().nullable().optional(),
+const documentFormSchema = z.object({
+  projectId: z.uuid("Project is required"),
+  branchId: z.uuid("Branch is required"),
+  folderId: z.uuid().nullable().optional(),
   name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
   type: z.enum(["part", "assembly", "drawing", "sketch", "file", "notes"]),
 });
@@ -57,10 +59,8 @@ export const CreateDocumentDialog: React.FC<CreateDocumentDialogProps> = ({
 }) => {
   const { data: session } = useSession();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [availableBranches, setAvailableBranches] = useState<Array<{ id: string; name: string }>>(
-    []
-  );
-  const [availableFolders, setAvailableFolders] = useState<Array<{ id: string; name: string }>>([]);
+  const [availableBranches, setAvailableBranches] = useState<Branch[]>([]);
+  const [availableFolders, setAvailableFolders] = useState<Folder[]>([]);
 
   // Get available projects, branches, folders from collections
   const { data: projects } = useLiveQuery(() => projectsCollection);
@@ -223,7 +223,7 @@ export const CreateDocumentDialog: React.FC<CreateDocumentDialogProps> = ({
                 name="projectId"
                 validators={{
                   onChange: ({ value }) => {
-                    const result = documentSchema.shape.projectId.safeParse(value);
+                    const result = documentFormSchema.shape.projectId.safeParse(value);
                     return result.success ? undefined : result.error.issues[0]?.message;
                   },
                 }}
@@ -304,7 +304,7 @@ export const CreateDocumentDialog: React.FC<CreateDocumentDialogProps> = ({
                     if (!form.state.values.projectId) {
                       return "Select a project first";
                     }
-                    const result = documentSchema.shape.branchId.safeParse(value);
+                    const result = documentFormSchema.shape.branchId.safeParse(value);
                     return result.success ? undefined : result.error.issues[0]?.message;
                   },
                 }}
@@ -494,7 +494,7 @@ export const CreateDocumentDialog: React.FC<CreateDocumentDialogProps> = ({
               name="name"
               validators={{
                 onChange: ({ value }) => {
-                  const result = documentSchema.shape.name.safeParse(value);
+                  const result = documentFormSchema.shape.name.safeParse(value);
                   return result.success ? undefined : result.error.issues[0]?.message;
                 },
               }}

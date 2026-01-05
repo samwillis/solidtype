@@ -107,8 +107,7 @@ export const WorkspaceSettingsDialog: React.FC<WorkspaceSettingsDialogProps> = (
             workspaceId,
             updates: {
               name: value.name,
-              description: value.description || null,
-              updatedAt: new Date(),
+              description: value.description || undefined,
             },
           },
         });

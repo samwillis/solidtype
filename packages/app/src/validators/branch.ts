@@ -2,6 +2,7 @@
  * Branch Validators
  *
  * Zod schemas for branch-related inputs.
+ * Derives validation rules from entity schemas where applicable.
  */
 
 import { z } from "zod";
@@ -11,7 +12,7 @@ import { z } from "zod";
 // ============================================================================
 
 export const branchIdSchema = z.object({
-  branchId: z.string().uuid(),
+  branchId: z.uuid(),
 });
 
 // ============================================================================
@@ -19,7 +20,7 @@ export const branchIdSchema = z.object({
 // ============================================================================
 
 export const getBranchesSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.uuid(),
 });
 
 // ============================================================================
@@ -27,24 +28,24 @@ export const getBranchesSchema = z.object({
 // ============================================================================
 
 export const createBranchSchema = z.object({
-  projectId: z.string().uuid(),
+  projectId: z.uuid(),
   branch: z.object({
     name: z.string().min(1, "Name is required").max(100, "Name too long"),
     description: z.string().max(500).nullable().optional(),
-    parentBranchId: z.string().uuid().optional(),
+    parentBranchId: z.uuid().optional(),
     isMain: z.boolean().optional(),
   }),
 });
 
 export const createBranchWithContentSchema = z.object({
-  projectId: z.string().uuid(),
-  parentBranchId: z.string().uuid(),
+  projectId: z.uuid(),
+  parentBranchId: z.uuid(),
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   description: z.string().max(500).nullable(),
 });
 
 export const updateBranchSchema = z.object({
-  branchId: z.string().uuid(),
+  branchId: z.uuid(),
   updates: z.object({
     name: z.string().min(1).max(100).optional(),
     description: z.string().max(500).nullable().optional(),
@@ -52,12 +53,12 @@ export const updateBranchSchema = z.object({
 });
 
 export const deleteBranchSchema = z.object({
-  branchId: z.string().uuid(),
+  branchId: z.uuid(),
 });
 
 export const mergeBranchSchema = z.object({
-  sourceBranchId: z.string().uuid(),
-  targetBranchId: z.string().uuid(),
+  sourceBranchId: z.uuid(),
+  targetBranchId: z.uuid(),
 });
 
 // ============================================================================

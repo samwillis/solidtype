@@ -2,6 +2,7 @@
  * Workspace Validators
  *
  * Zod schemas for workspace-related inputs.
+ * Derives validation rules from entity schemas where applicable.
  */
 
 import { z } from "zod";
@@ -11,7 +12,7 @@ import { z } from "zod";
 // ============================================================================
 
 export const workspaceIdSchema = z.object({
-  workspaceId: z.string().uuid(),
+  workspaceId: z.uuid(),
 });
 
 // ============================================================================
@@ -22,7 +23,7 @@ export const workspaceIdSchema = z.object({
 export const getWorkspacesSchema = z.object({});
 
 export const getWorkspaceSchema = z.object({
-  workspaceId: z.string().uuid(),
+  workspaceId: z.uuid(),
 });
 
 // ============================================================================
@@ -40,7 +41,7 @@ export const createWorkspaceSchema = z.object({
 });
 
 export const updateWorkspaceSchema = z.object({
-  workspaceId: z.string().uuid(),
+  workspaceId: z.uuid(),
   updates: z.object({
     name: z.string().min(1).max(100).optional(),
     description: z.string().max(500).optional(),
@@ -48,7 +49,7 @@ export const updateWorkspaceSchema = z.object({
 });
 
 export const deleteWorkspaceSchema = z.object({
-  workspaceId: z.string().uuid(),
+  workspaceId: z.uuid(),
 });
 
 // ============================================================================

@@ -58,12 +58,9 @@ export const CreateWorkspaceDialog: React.FC<CreateWorkspaceDialogProps> = ({
 
         await createWorkspaceMutation({
           data: {
-            workspace: {
-              name: value.name,
-              slug,
-              description: value.description || null,
-              createdBy: session.user.id,
-            },
+            name: value.name,
+            slug,
+            description: value.description || undefined,
           },
         });
 

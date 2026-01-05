@@ -16,8 +16,8 @@ import { workspacesCollection } from "../../lib/electric-collections";
 import { z } from "zod";
 import "./CreateDialog.css";
 
-const projectSchema = z.object({
-  workspaceId: z.string().uuid("Workspace is required"),
+const projectFormSchema = z.object({
+  workspaceId: z.uuid("Workspace is required"),
   name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
   description: z.string().max(500, "Description must be less than 500 characters").optional(),
 });
@@ -57,12 +57,9 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
       try {
         await createProjectMutation({
           data: {
-            project: {
-              workspaceId: value.workspaceId,
-              name: value.name,
-              description: value.description || null,
-              createdBy: session.user.id,
-            },
+            workspaceId: value.workspaceId,
+            name: value.name,
+            description: value.description || undefined,
           },
         });
 
@@ -101,7 +98,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
                 name="workspaceId"
                 validators={{
                   onChange: ({ value }) => {
-                    const result = projectSchema.shape.workspaceId.safeParse(value);
+                    const result = projectFormSchema.shape.workspaceId.safeParse(value);
                     return result.success ? undefined : result.error.issues[0]?.message;
                   },
                 }}
@@ -178,7 +175,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
               name="name"
               validators={{
                 onChange: ({ value }) => {
-                  const result = projectSchema.shape.name.safeParse(value);
+                  const result = projectFormSchema.shape.name.safeParse(value);
                   return result.success ? undefined : result.error.issues[0]?.message;
                 },
               }}
@@ -209,7 +206,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
               validators={{
                 onChange: ({ value }) => {
                   if (!value) return undefined;
-                  const result = projectSchema.shape.description.safeParse(value);
+                  const result = projectFormSchema.shape.description.safeParse(value);
                   return result.success ? undefined : result.error.issues[0]?.message;
                 },
               }}

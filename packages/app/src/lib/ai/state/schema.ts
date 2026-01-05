@@ -9,6 +9,9 @@
  * - Chunks are insert-only — never update, just append
  * - Messages have lifecycle status — `streaming` → `complete` or `error`
  * - Runs track exchange boundaries — one run = user message + assistant response + tool calls
+ *
+ * Note: Unlike Electric SQL collections, Durable Streams use JSON serialization,
+ * so we keep dates as ISO strings rather than Date objects.
  */
 
 import { createStateSchema } from "@durable-streams/state";
@@ -44,46 +47,52 @@ export const runStatusSchema = z.enum(["running", "complete", "error"]);
 
 /**
  * Message record schema
+ *
+ * Uses string dates for JSON serialization compatibility with Durable Streams.
  */
 export const messageSchema = z.object({
-  id: z.string().uuid(),
-  runId: z.string().uuid(),
+  id: z.uuid(),
+  runId: z.uuid(),
   role: messageRoleSchema,
   status: messageStatusSchema,
   content: z.string().optional(),
-  parentMessageId: z.string().uuid().optional(),
+  parentMessageId: z.uuid().optional(),
   toolName: z.string().optional(),
   toolArgs: z.unknown().optional(),
   toolCallId: z.string().optional(),
   toolResult: z.unknown().optional(),
   requiresApproval: z.boolean().optional(),
-  createdAt: z.string(),
-  updatedAt: z.string().optional(),
+  createdAt: z.string(), // ISO date string
+  updatedAt: z.string().optional(), // ISO date string
 });
 
 /**
  * Chunk record schema (insert-only)
  * ID format: ${messageId}:${seq} for deterministic idempotent retries
+ *
+ * Uses string dates for JSON serialization compatibility.
  */
 export const chunkSchema = z.object({
   id: z.string(), // ${messageId}:${seq}
-  messageId: z.string().uuid(),
+  messageId: z.uuid(),
   seq: z.number(),
   delta: z.string(),
-  createdAt: z.string(),
+  createdAt: z.string(), // ISO date string
 });
 
 /**
  * Run record schema
  * Tracks a complete exchange: user message + assistant response + tool calls
+ *
+ * Uses string dates for JSON serialization compatibility.
  */
 export const runSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   status: runStatusSchema,
-  userMessageId: z.string().uuid(),
-  assistantMessageId: z.string().uuid(),
-  startedAt: z.string(),
-  endedAt: z.string().optional(),
+  userMessageId: z.uuid(),
+  assistantMessageId: z.uuid(),
+  startedAt: z.string(), // ISO date string
+  endedAt: z.string().optional(), // ISO date string
   error: z.string().optional(),
 });
 
@@ -108,7 +117,10 @@ export const chatStateSchema = createStateSchema({
   },
 });
 
+// ============================================================================
 // Type exports
+// ============================================================================
+
 export type Message = z.infer<typeof messageSchema>;
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 export type MessageStatus = z.infer<typeof messageStatusSchema>;

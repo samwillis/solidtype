@@ -2,6 +2,7 @@
  * Folder Validators
  *
  * Zod schemas for folder-related inputs.
+ * Derives validation rules from entity schemas where applicable.
  */
 
 import { z } from "zod";
@@ -11,7 +12,7 @@ import { z } from "zod";
 // ============================================================================
 
 export const folderIdSchema = z.object({
-  folderId: z.string().uuid(),
+  folderId: z.uuid(),
 });
 
 // ============================================================================
@@ -20,25 +21,25 @@ export const folderIdSchema = z.object({
 
 export const createFolderSchema = z.object({
   folder: z.object({
-    projectId: z.string().uuid(),
-    branchId: z.string().uuid(),
+    projectId: z.uuid(),
+    branchId: z.uuid(),
     name: z.string().min(1, "Name is required").max(100, "Name too long"),
-    parentId: z.string().uuid().nullable().optional(),
+    parentId: z.uuid().nullable().optional(),
     sortOrder: z.number().int().optional(),
   }),
 });
 
 export const updateFolderSchema = z.object({
-  folderId: z.string().uuid(),
+  folderId: z.uuid(),
   updates: z.object({
     name: z.string().min(1).max(100).optional(),
-    parentId: z.string().uuid().nullable().optional(),
+    parentId: z.uuid().nullable().optional(),
     sortOrder: z.number().int().optional(),
   }),
 });
 
 export const deleteFolderSchema = z.object({
-  folderId: z.string().uuid(),
+  folderId: z.uuid(),
 });
 
 // ============================================================================

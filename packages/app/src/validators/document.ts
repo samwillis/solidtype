@@ -2,16 +2,18 @@
  * Document Validators
  *
  * Zod schemas for document-related inputs.
+ * Uses document type enum from entity schema.
  */
 
 import { z } from "zod";
+import { documentTypeEnum } from "../schemas/entities/document";
 
 // ============================================================================
 // Common Schemas
 // ============================================================================
 
 export const documentIdSchema = z.object({
-  docId: z.string().uuid(),
+  docId: z.uuid(),
 });
 
 // ============================================================================
@@ -19,7 +21,7 @@ export const documentIdSchema = z.object({
 // ============================================================================
 
 export const getDocumentSchema = z.object({
-  docId: z.string().uuid(),
+  docId: z.uuid(),
 });
 
 // ============================================================================
@@ -28,38 +30,38 @@ export const getDocumentSchema = z.object({
 
 export const createDocumentSchema = z.object({
   document: z.object({
-    projectId: z.string().uuid(),
-    branchId: z.string().uuid(),
+    projectId: z.uuid(),
+    branchId: z.uuid(),
     name: z.string().min(1, "Name is required").max(100, "Name too long"),
-    type: z.string().default("model"),
-    folderId: z.string().uuid().nullable().optional(),
+    type: documentTypeEnum.default("part"),
+    folderId: z.uuid().nullable().optional(),
     featureCount: z.number().int().min(0).optional(),
     sortOrder: z.number().int().optional(),
   }),
 });
 
 export const updateDocumentSchema = z.object({
-  docId: z.string().uuid(),
+  docId: z.uuid(),
   name: z.string().min(1).max(100).optional(),
-  folderId: z.string().uuid().nullable().optional(),
+  folderId: z.uuid().nullable().optional(),
 });
 
 export const updateDocumentMutationSchema = z.object({
-  documentId: z.string().uuid(),
+  documentId: z.uuid(),
   updates: z.object({
     name: z.string().min(1).max(100).optional(),
-    folderId: z.string().uuid().nullable().optional(),
+    folderId: z.uuid().nullable().optional(),
     featureCount: z.number().int().min(0).optional(),
     sortOrder: z.number().int().optional(),
   }),
 });
 
 export const deleteDocumentSchema = z.object({
-  docId: z.string().uuid(),
+  docId: z.uuid(),
 });
 
 export const deleteDocumentMutationSchema = z.object({
-  documentId: z.string().uuid(),
+  documentId: z.uuid(),
 });
 
 // ============================================================================

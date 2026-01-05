@@ -9,11 +9,11 @@ import { z } from "zod";
 
 // Zod schemas for runtime validation
 export const ChatSessionSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   userId: z.string(),
   context: z.enum(["dashboard", "editor"]),
-  documentId: z.string().uuid().nullable(),
-  projectId: z.string().uuid().nullable(),
+  documentId: z.uuid().nullable(),
+  projectId: z.uuid().nullable(),
   status: z.enum(["active", "archived", "error"]),
   title: z.string().nullable(),
   messageCount: z.number(),

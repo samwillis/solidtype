@@ -10,7 +10,12 @@ import { useNavigate, Link } from "@tanstack/react-router";
 import { Menu } from "@base-ui/react/menu";
 import { useLiveQuery, createCollection, liveQueryCollectionOptions } from "@tanstack/react-db";
 import { LuLayoutGrid, LuClock, LuEllipsis, LuSettings } from "react-icons/lu";
-import { workspacesCollection, projectsCollection } from "../lib/electric-collections";
+import {
+  workspacesCollection,
+  projectsCollection,
+  type Workspace,
+  type Project,
+} from "../lib/electric-collections";
 import { CreateProjectDialog } from "./dialogs/CreateProjectDialog";
 import { WorkspaceSettingsDialog } from "./dialogs/WorkspaceSettingsDialog";
 import "../styles/dashboard.css";
@@ -154,34 +159,20 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           setSelectedWorkspaceForCreate(undefined);
         }}
       />
-      <WorkspaceSettingsDialog
-        open={showWorkspaceSettings}
-        onOpenChange={setShowWorkspaceSettings}
-        workspaceId={selectedWorkspaceForCreate}
-      />
+      {selectedWorkspaceForCreate && (
+        <WorkspaceSettingsDialog
+          open={showWorkspaceSettings}
+          onOpenChange={setShowWorkspaceSettings}
+          workspaceId={selectedWorkspaceForCreate}
+        />
+      )}
     </>
   );
 };
 
 interface WorkspaceSectionProps {
-  workspace: {
-    id: string;
-    name: string;
-    slug: string;
-    description: string | null;
-    created_by: string;
-    created_at: string;
-    updated_at: string;
-  };
-  projects: Array<{
-    id: string;
-    name: string;
-    workspace_id: string;
-    description: string | null;
-    created_by: string;
-    created_at: string;
-    updated_at: string;
-  }>;
+  workspace: Workspace;
+  projects: Project[];
   activeSection: string;
   onProjectClick: (projectId: string) => void;
   onCreateProject: () => void;
