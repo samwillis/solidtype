@@ -335,7 +335,36 @@ The first consumer is `@solidtype/app`:
 
 ---
 
-## 9. Testing Philosophy
+## 9. AI Integration
+
+SolidType includes a comprehensive AI system for chat-based modeling assistance. See [AI-INTEGRATION.md](AI-INTEGRATION.md) for full details.
+
+### 9.1 Capabilities
+
+| Context       | Location            | Capabilities                                        |
+| ------------- | ------------------- | --------------------------------------------------- |
+| **Dashboard** | Floating chat panel | Workspace, project, document, and branch management |
+| **Editor**    | Right panel         | Sketch creation, 3D modeling, feature editing       |
+
+### 9.2 Architecture Highlights
+
+- **Durable Sessions** – Chat transcripts persist via Durable Streams, surviving page refreshes.
+- **Per-Session Workers** – Each AI session gets its own SharedWorker with an isolated OCCT kernel, enabling multiple agents to work simultaneously without conflicts.
+- **Tool Execution** – CAD operations run off the main thread in session-specific workers.
+- **Undoable** – All model changes are undoable via Yjs undo manager.
+
+### 9.3 Multi-Agent Safety
+
+The per-session SharedWorker architecture ensures:
+
+- Two AI agents can work on different documents simultaneously.
+- Each agent has complete isolation (separate OCCT kernel instances).
+- Multi-tab coordination still works for the same session.
+- Workers self-terminate after 3 minutes of inactivity to free resources.
+
+---
+
+## 10. Testing Philosophy
 
 SolidType is built with **TDD as default**:
 
@@ -357,7 +386,7 @@ Property-based testing is used **sparingly**: correctness is primarily driven by
 
 ---
 
-## 10. Inspirations & References (for further reading)
+## 11. Inspirations & References (for further reading)
 
 A non-exhaustive list of useful references you (or an LLM) can consult for concepts and design inspiration:
 

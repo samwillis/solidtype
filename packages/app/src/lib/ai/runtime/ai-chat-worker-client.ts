@@ -12,24 +12,38 @@ export class AIChatWorkerClient {
   private port: MessagePort | null = null;
   private eventHandlers = new Set<(event: AIChatWorkerEvent) => void>();
   private connected = false;
+  private sessionId: string | null = null;
 
   /**
-   * Initialize connection to worker
+   * Initialize connection to worker for a specific session.
+   * Each session gets its own SharedWorker instance with an isolated OCCT kernel.
+   * This prevents conflicts when multiple agents work on CAD models simultaneously.
+   *
+   * @param sessionId - The chat session UUID. Workers are named by session ID,
+   *                    so multiple tabs with the same session share one worker,
+   *                    but different sessions get completely isolated workers.
    */
-  async connect(): Promise<void> {
+  async connect(sessionId: string): Promise<void> {
+    // If already connected to a different session, disconnect first
+    if (this.connected && this.sessionId !== sessionId) {
+      this.disconnect();
+    }
+
     if (this.connected) return;
 
+    this.sessionId = sessionId;
+
     try {
-      // Try SharedWorker first
+      // Try SharedWorker first - named by session ID for isolation
       if (typeof SharedWorker !== "undefined") {
         this.worker = new SharedWorker(new URL("./ai-chat-worker.ts", import.meta.url), {
           type: "module",
-          name: "ai-chat-worker",
+          name: `ai-chat-worker-${sessionId}`,
         });
         this.port = this.worker.port;
         this.port.start();
       } else {
-        // Fallback to regular Worker
+        // Fallback to regular Worker (no multi-tab coordination, but still works)
         this.worker = new Worker(new URL("./ai-chat-worker.ts", import.meta.url), {
           type: "module",
         });
@@ -79,13 +93,14 @@ export class AIChatWorkerClient {
   }
 
   /**
-   * Initialize a session in the worker
+   * Initialize a session in the worker.
+   * This connects to a session-specific SharedWorker and initializes the session state.
    */
   async initSession(
     sessionId: string,
     options?: { documentId?: string; projectId?: string }
   ): Promise<void> {
-    await this.connect();
+    await this.connect(sessionId);
     this.sendCommand({
       type: "init-session",
       sessionId,
@@ -105,7 +120,7 @@ export class AIChatWorkerClient {
     sessionId: string,
     content: string
   ): Promise<{ runId: string; userMessageId: string; assistantMessageId: string }> {
-    await this.connect();
+    await this.connect(sessionId);
     this.sendCommand({ type: "start-run", sessionId, content });
 
     // Wait for response
@@ -151,9 +166,17 @@ export class AIChatWorkerClient {
 
   /**
    * Execute a local tool (CAD operations in worker kernel)
+   *
+   * @param sessionId - The chat session UUID (determines which worker to use)
+   * @param toolName - The tool to execute
+   * @param args - Tool arguments
    */
-  async executeLocalTool(toolName: string, args: Record<string, unknown>): Promise<unknown> {
-    await this.connect();
+  async executeLocalTool(
+    sessionId: string,
+    toolName: string,
+    args: Record<string, unknown>
+  ): Promise<unknown> {
+    await this.connect(sessionId);
     this.sendCommand({
       type: "execute-local-tool",
       toolName,
@@ -210,25 +233,60 @@ export class AIChatWorkerClient {
     if (this.port) {
       this.port.close();
     }
-    if (this.worker && "terminate" in this.worker) {
+    // Note: Don't terminate SharedWorkers - other tabs may still be using them
+    // They will self-terminate after idle timeout (3 minutes)
+    if (this.worker && !("port" in this.worker) && "terminate" in this.worker) {
+      // Only terminate DedicatedWorkers (fallback mode)
       this.worker.terminate();
     }
     this.worker = null;
     this.port = null;
     this.connected = false;
+    this.sessionId = null;
     this.eventHandlers.clear();
+  }
+
+  /**
+   * Get the currently connected session ID
+   */
+  getSessionId(): string | null {
+    return this.sessionId;
   }
 }
 
-// Singleton instance
-let workerClientInstance: AIChatWorkerClient | null = null;
+// Map of clients by session ID for proper isolation
+const workerClients = new Map<string, AIChatWorkerClient>();
 
 /**
- * Get the global worker client instance
+ * Get a worker client for a specific session.
+ *
+ * Each session gets its own client connected to a session-specific SharedWorker.
+ * This ensures complete isolation between AI agents working on different documents.
+ *
+ * @param sessionId - The chat session UUID
  */
-export function getAIChatWorkerClient(): AIChatWorkerClient {
-  if (!workerClientInstance) {
-    workerClientInstance = new AIChatWorkerClient();
+export function getAIChatWorkerClient(sessionId?: string): AIChatWorkerClient {
+  // If no sessionId provided, return a new unconnected client
+  // (caller must call connect(sessionId) before using it)
+  if (!sessionId) {
+    return new AIChatWorkerClient();
   }
-  return workerClientInstance;
+
+  let client = workerClients.get(sessionId);
+  if (!client) {
+    client = new AIChatWorkerClient();
+    workerClients.set(sessionId, client);
+  }
+  return client;
+}
+
+/**
+ * Clean up a client for a session (call when session is terminated)
+ */
+export function disposeAIChatWorkerClient(sessionId: string): void {
+  const client = workerClients.get(sessionId);
+  if (client) {
+    client.disconnect();
+    workerClients.delete(sessionId);
+  }
 }

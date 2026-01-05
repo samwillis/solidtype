@@ -41,7 +41,10 @@ interface CamelCaseSession {
   createdAt: string;
   updatedAt: string;
 }
-import { getAIChatWorkerClient } from "../lib/ai/runtime/ai-chat-worker-client";
+import {
+  getAIChatWorkerClient,
+  disposeAIChatWorkerClient,
+} from "../lib/ai/runtime/ai-chat-worker-client";
 
 interface UseAIChatOptions {
   context: "dashboard" | "editor";
@@ -419,10 +422,11 @@ export function useAIChat(options: UseAIChatOptions) {
   }, [activeSessionId]);
 
   // Initialize session in worker when it becomes active
+  // Each session gets its own SharedWorker for complete isolation
   useEffect(() => {
     if (!activeSessionId) return;
 
-    const workerClient = getAIChatWorkerClient();
+    const workerClient = getAIChatWorkerClient(activeSessionId);
     const session = sessions.find((s) => s.id === activeSessionId);
     if (session) {
       workerClient
@@ -441,6 +445,8 @@ export function useAIChat(options: UseAIChatOptions) {
       workerClient.terminateSession(activeSessionId).catch(() => {
         // Ignore cleanup errors
       });
+      // Note: Don't dispose the client here - the SharedWorker will self-terminate
+      // after idle timeout, and other tabs may still be using it
     };
   }, [activeSessionId, sessions]);
 
@@ -511,8 +517,8 @@ export function useAIChat(options: UseAIChatOptions) {
   const prevActiveRun = useRef<Run | undefined>();
   useEffect(() => {
     if (prevActiveRun.current && !activeRun && activeSessionId) {
-      // Run just completed
-      const workerClient = getAIChatWorkerClient();
+      // Run just completed - notify the session-specific worker
+      const workerClient = getAIChatWorkerClient(activeSessionId);
       workerClient.notifyRunComplete(activeSessionId);
     }
     prevActiveRun.current = activeRun;

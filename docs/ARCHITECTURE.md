@@ -784,6 +784,29 @@ type WorkerResponse =
 - Document changes trigger automatic rebuild
 - Meshes and body info are sent back to main thread for rendering
 
+### 5.9 AI Chat Workers
+
+The AI system uses **per-session SharedWorkers** for multi-agent safety. See [AI-INTEGRATION.md](AI-INTEGRATION.md) for full details.
+
+```
+┌─────────────────────────────────┐     ┌─────────────────────────────────┐
+│  SharedWorker (Session A)       │     │  SharedWorker (Session B)       │
+│  "ai-chat-worker-session-A"     │     │  "ai-chat-worker-session-B"     │
+│  ┌───────────────────────────┐  │     │  ┌───────────────────────────┐  │
+│  │ OCCT Kernel (isolated)    │  │     │  │ OCCT Kernel (isolated)    │  │
+│  └───────────────────────────┘  │     │  └───────────────────────────┘  │
+└─────────────────────────────────┘     └─────────────────────────────────┘
+```
+
+**Key design decisions:**
+
+- **Named workers by session ID** – `new SharedWorker(..., { name: \`ai-chat-worker-\${sessionId}\` })`
+- **Complete isolation** – Each AI agent has its own OCCT kernel instance
+- **Multi-tab coordination** – Same session across tabs shares one worker
+- **Automatic cleanup** – Workers self-terminate after 3 minutes of inactivity
+
+This architecture enables multiple AI agents to work on different CAD documents simultaneously without conflicts or blocking.
+
 ---
 
 ## 6. Testing & Quality
@@ -835,7 +858,10 @@ The architecture is designed to support future work without major rewrites:
 - **High-level API**:
   - A JSX-style composition layer on top of `@solidtype/core` for declarative models.
 
-- **AI Integration**:
-  - AI-assisted modeling via chat interface and tool calling.
+- **AI Integration** (see [AI-INTEGRATION.md](AI-INTEGRATION.md)):
+  - Dashboard tools for workspace/project/document management ✓
+  - Per-session SharedWorkers with isolated OCCT kernels ✓
+  - Sketch tools for geometry creation (planned)
+  - Modeling tools for feature creation (planned)
 
 SolidType's core constraint is: **keep the internal data-oriented modules clean, explicit, and well-tested**, so the OO API and future research can safely build on them.

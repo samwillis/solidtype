@@ -17,8 +17,9 @@ The AI system enables users to interact with SolidType through natural language 
 
 1. **Durable & Resumable** – Chat sessions persist across page refreshes and reconnections
 2. **Multi-Tab Safe** – Run coordination prevents duplicate LLM calls across browser tabs
-3. **Local Tool Execution** – CAD operations run in a SharedWorker for off-main-thread execution
-4. **Undoable** – All model changes are undoable via Yjs undo manager
+3. **Session Isolation** – Each session gets its own SharedWorker with isolated OCCT kernel
+4. **Local Tool Execution** – CAD operations run off the main thread in the session's worker
+5. **Undoable** – All model changes are undoable via Yjs undo manager
 
 ---
 
@@ -67,13 +68,13 @@ The AI system enables users to interact with SolidType through natural language 
 
 ### Component Roles
 
-| Component                | Responsibility                                             |
-| ------------------------ | ---------------------------------------------------------- |
-| **Postgres/Electric**    | Session metadata (`ai_chat_sessions` table)                |
-| **Durable Streams**      | Chat transcript storage (messages, chunks, runs)           |
-| **Server /run endpoint** | Runs `@tanstack/ai` chat(), writes events to Durable State |
-| **Client UI**            | Renders transcript via Durable State live queries          |
-| **SharedWorker**         | Coordinates runs across tabs, hosts local tool execution   |
+| Component                   | Responsibility                                                              |
+| --------------------------- | --------------------------------------------------------------------------- |
+| **Postgres/Electric**       | Session metadata (`ai_chat_sessions` table)                                 |
+| **Durable Streams**         | Chat transcript storage (messages, chunks, runs)                            |
+| **Server /run endpoint**    | Runs `@tanstack/ai` chat(), writes events to Durable State                  |
+| **Client UI**               | Renders transcript via Durable State live queries                           |
+| **Per-Session SharedWorker** | Isolated OCCT kernel per session, run coordination, local tool execution   |
 
 ---
 
@@ -180,13 +181,38 @@ Users can override via:
 
 ---
 
-## 5. SharedWorker
+## 5. Per-Session SharedWorkers
 
-The SharedWorker provides:
+Each AI chat session gets its own **named SharedWorker** with an isolated OCCT kernel. This architecture ensures:
 
-1. **Run Coordination** – Prevents duplicate LLM calls across browser tabs
-2. **Local Tool Execution** – CAD kernel operations run off the main thread
-3. **Session Management** – Tracks active sessions and their state
+1. **Complete Isolation** – Multiple AI agents can work on different documents simultaneously without conflicts
+2. **Multi-Tab Coordination** – Same session across browser tabs shares one worker (SharedWorker behavior)
+3. **No Blocking** – Two agents running CAD operations on different documents don't interfere
+4. **Automatic Cleanup** – Workers self-terminate after 3 minutes of inactivity
+
+### Architecture
+
+```
+┌────────────────────────────────┐  ┌────────────────────────────────┐
+│  SharedWorker                  │  │  SharedWorker                  │
+│  "ai-chat-worker-session-A"    │  │  "ai-chat-worker-session-B"    │
+│  ┌────────────────────────┐    │  │  ┌────────────────────────┐    │
+│  │ OCCT Kernel (A only)   │    │  │  │ OCCT Kernel (B only)   │    │
+│  └────────────────────────┘    │  │  └────────────────────────┘    │
+│  Session state, run tracking   │  │  Session state, run tracking   │
+└────────────────────────────────┘  └────────────────────────────────┘
+         ↑         ↑                         ↑         ↑
+     Tab 1     Tab 2                     Tab 3     Tab 4
+   (same session A)                    (same session B)
+```
+
+Workers are named by session ID: `ai-chat-worker-${sessionId}`. This means:
+- Multiple tabs viewing the same chat session connect to the **same** worker
+- Different chat sessions get **completely isolated** workers with their own OCCT kernels
+
+### Memory Considerations
+
+Each worker loads its own OCCT WASM instance (~50-100MB). The idle timeout mitigates memory usage by cleaning up unused workers after 3 minutes.
 
 ### Worker Commands
 
@@ -199,9 +225,21 @@ The SharedWorker provides:
 | `execute-local-tool` | Execute a CAD tool locally                   |
 | `ping`               | Health check                                 |
 
-### Idle Shutdown
+### Client API
 
-The worker shuts down after 3 minutes of inactivity (no connected tabs) to free resources.
+```typescript
+// Get a client for a specific session
+const client = getAIChatWorkerClient(sessionId);
+
+// Initialize session (connects to session-specific worker)
+await client.initSession(sessionId, { documentId, projectId });
+
+// Execute a local CAD tool
+const result = await client.executeLocalTool(sessionId, "addLine", args);
+
+// Clean up when session is terminated
+disposeAIChatWorkerClient(sessionId);
+```
 
 ---
 
