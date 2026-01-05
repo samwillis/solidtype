@@ -1,14 +1,15 @@
 /**
  * Server Functions - Branch Operations
  *
- * All functions use session-based authentication.
+ * All functions use session-based authentication via middleware.
  * No userId is accepted from client inputs.
  *
  * NOTE: Server-only modules (db, authz, repos) are imported dynamically
  * inside handlers to avoid bundling them for the client.
  */
 
-import { createAuthedServerFn } from "../server-fn-wrapper";
+import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "../server-fn-middleware";
 import {
   getBranchesSchema,
   createBranchSchema,
@@ -25,10 +26,11 @@ import {
 /**
  * Get all branches for a project (requires project access)
  */
-export const getBranchesForProject = createAuthedServerFn({
-  method: "POST",
-  validator: getBranchesSchema,
-  handler: async ({ session, data }) => {
+export const getBranchesForProject = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(getBranchesSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { branches } = await import("../../db/schema");
     const { eq, desc } = await import("drizzle-orm");
@@ -44,8 +46,7 @@ export const getBranchesForProject = createAuthedServerFn({
       .orderBy(desc(branches.isMain), desc(branches.createdAt));
 
     return { data: projectBranches };
-  },
-});
+  });
 
 // ============================================================================
 // Mutation Functions
@@ -54,10 +55,11 @@ export const getBranchesForProject = createAuthedServerFn({
 /**
  * Create a new branch (requires project edit access)
  */
-export const createBranchMutation = createAuthedServerFn({
-  method: "POST",
-  validator: createBranchSchema,
-  handler: async ({ session, data }) => {
+export const createBranchMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(createBranchSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { branches } = await import("../../db/schema");
     const { getCurrentTxid } = await import("./db-helpers");
@@ -88,16 +90,16 @@ export const createBranchMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: created, txid };
     });
-  },
-});
+  });
 
 /**
  * Update a branch (requires branch edit access)
  */
-export const updateBranchMutation = createAuthedServerFn({
-  method: "POST",
-  validator: updateBranchSchema,
-  handler: async ({ session, data }) => {
+export const updateBranchMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(updateBranchSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { branches } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -117,16 +119,16 @@ export const updateBranchMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: updated, txid };
     });
-  },
-});
+  });
 
 /**
  * Delete a branch (requires branch edit access, cannot delete main)
  */
-export const deleteBranchMutation = createAuthedServerFn({
-  method: "POST",
-  validator: deleteBranchSchema,
-  handler: async ({ session, data }) => {
+export const deleteBranchMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(deleteBranchSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { branches } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -146,18 +148,18 @@ export const deleteBranchMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: { id: data.branchId }, txid };
     });
-  },
-});
+  });
 
 /**
  * Create a new branch with copied content from parent branch.
  * This copies all folders and documents from the parent branch.
  * Documents keep the same baseDocumentId for tracking across branches.
  */
-export const createBranchWithContentMutation = createAuthedServerFn({
-  method: "POST",
-  validator: createBranchWithContentSchema,
-  handler: async ({ session, data }) => {
+export const createBranchWithContentMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(createBranchWithContentSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { branches, folders, documents } = await import("../../db/schema");
     const { eq, and } = await import("drizzle-orm");
@@ -261,8 +263,7 @@ export const createBranchWithContentMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: { branch: newBranch }, txid };
     });
-  },
-});
+  });
 
 // ============================================================================
 // Yjs Stream Helpers
@@ -372,10 +373,11 @@ async function mergeYjsStreams(sourceStreamId: string, targetStreamId: string) {
  * Merge a branch into another branch
  * Uses Yjs CRDT merge with "edit wins" strategy
  */
-export const mergeBranchMutation = createAuthedServerFn({
-  method: "POST",
-  validator: mergeBranchSchema,
-  handler: async ({ session, data }) => {
+export const mergeBranchMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(mergeBranchSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { branches, documents } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -482,5 +484,4 @@ export const mergeBranchMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: { branch: sourceBranch, results }, txid };
     });
-  },
-});
+  });

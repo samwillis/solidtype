@@ -1,14 +1,15 @@
 /**
  * Server Functions - Project Operations
  *
- * All functions use session-based authentication.
+ * All functions use session-based authentication via middleware.
  * No userId is accepted from client inputs.
  *
  * NOTE: Server-only modules (db, authz, repos) are imported dynamically
  * inside handlers to avoid bundling them for the client.
  */
 
-import { createAuthedServerFn } from "../server-fn-wrapper";
+import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "../server-fn-middleware";
 import {
   getProjectsSchema,
   getProjectSchema,
@@ -24,10 +25,11 @@ import {
 /**
  * Get all projects in a workspace (requires workspace membership)
  */
-export const getProjects = createAuthedServerFn({
-  method: "GET",
-  validator: getProjectsSchema,
-  handler: async ({ session, data }) => {
+export const getProjects = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .inputValidator(getProjectsSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { requireWorkspaceMember } = await import("../authz");
     const projectsRepo = await import("../../repos/projects");
 
@@ -35,16 +37,16 @@ export const getProjects = createAuthedServerFn({
     await requireWorkspaceMember(session, data.workspaceId);
 
     return projectsRepo.listForWorkspace(data.workspaceId, session.user.id);
-  },
-});
+  });
 
 /**
  * Get a single project (requires project access)
  */
-export const getProject = createAuthedServerFn({
-  method: "GET",
-  validator: getProjectSchema,
-  handler: async ({ session, data }) => {
+export const getProject = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .inputValidator(getProjectSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { projects } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -62,8 +64,7 @@ export const getProject = createAuthedServerFn({
       project: projectWithBranches || project,
       access: { canEdit, role },
     };
-  },
-});
+  });
 
 // ============================================================================
 // Mutation Functions
@@ -72,10 +73,11 @@ export const getProject = createAuthedServerFn({
 /**
  * Create a new project (requires workspace membership)
  */
-export const createProject = createAuthedServerFn({
-  method: "POST",
-  validator: createProjectSchema,
-  handler: async ({ session, data }) => {
+export const createProject = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(createProjectSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { projects, projectMembers, branches } = await import("../../db/schema");
     const { requireWorkspaceMember } = await import("../authz");
@@ -114,16 +116,16 @@ export const createProject = createAuthedServerFn({
     });
 
     return project;
-  },
-});
+  });
 
 /**
  * Create project with txid for Electric reconciliation
  */
-export const createProjectMutation = createAuthedServerFn({
-  method: "POST",
-  validator: createProjectSchema,
-  handler: async ({ session, data }) => {
+export const createProjectMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(createProjectSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { projects, projectMembers, branches } = await import("../../db/schema");
     const { getCurrentTxid } = await import("./db-helpers");
@@ -162,16 +164,16 @@ export const createProjectMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: proj, txid };
     });
-  },
-});
+  });
 
 /**
  * Update a project (requires owner or admin role)
  */
-export const updateProjectMutation = createAuthedServerFn({
-  method: "POST",
-  validator: updateProjectSchema,
-  handler: async ({ session, data }) => {
+export const updateProjectMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(updateProjectSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { projects } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -191,16 +193,16 @@ export const updateProjectMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: updated, txid };
     });
-  },
-});
+  });
 
 /**
  * Delete a project (requires owner role only)
  */
-export const deleteProjectMutation = createAuthedServerFn({
-  method: "POST",
-  validator: deleteProjectSchema,
-  handler: async ({ session, data }) => {
+export const deleteProjectMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(deleteProjectSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { projects } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -216,5 +218,4 @@ export const deleteProjectMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { success: true, txid };
     });
-  },
-});
+  });

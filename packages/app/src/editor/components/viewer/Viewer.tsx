@@ -350,7 +350,7 @@ const Viewer: React.FC = () => {
   const {
     previewShapes,
     snapTarget: _snapTarget,
-    boxSelection: _boxSelection,
+    boxSelection,
   } = useSketchTools({
     containerRef,
     sketchMode,
@@ -605,6 +605,17 @@ const Viewer: React.FC = () => {
     return "default";
   }, [sketchMode.active, sketchMode.activeTool]);
 
+  // Selection box dimensions (screen coordinates)
+  const selectionBoxStyle = useMemo(() => {
+    if (!boxSelection) return null;
+    const { start, current } = boxSelection;
+    const left = Math.min(start.x, current.x);
+    const top = Math.min(start.y, current.y);
+    const width = Math.abs(current.x - start.x);
+    const height = Math.abs(current.y - start.y);
+    return { left, top, width, height };
+  }, [boxSelection]);
+
   return (
     <div ref={containerRef} className="viewer-container" style={{ cursor: viewerCursor }}>
       {/* Collaborative 3D cursors */}
@@ -615,6 +626,19 @@ const Viewer: React.FC = () => {
       />
       {/* 2D cursor overlay for followed user */}
       <UserCursor2D followedUser={followedUser} containerRef={containerRef} />
+
+      {/* Selection box overlay for sketch mode drag selection */}
+      {boxSelection && selectionBoxStyle && (
+        <div
+          className={`selection-box-overlay mode-${boxSelection.mode}`}
+          style={{
+            left: selectionBoxStyle.left,
+            top: selectionBoxStyle.top,
+            width: selectionBoxStyle.width,
+            height: selectionBoxStyle.height,
+          }}
+        />
+      )}
 
       {/* Inline dimension edit */}
       {dimensionEditingState.id && dimensionEditingState.position && (

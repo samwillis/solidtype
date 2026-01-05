@@ -1,14 +1,15 @@
 /**
  * Server Functions - Document Operations
  *
- * All functions use session-based authentication.
+ * All functions use session-based authentication via middleware.
  * No userId is accepted from client inputs.
  *
  * NOTE: Server-only modules (db, authz, repos) are imported dynamically
  * inside handlers to avoid bundling them for the client.
  */
 
-import { createAuthedServerFn } from "../server-fn-wrapper";
+import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "../server-fn-middleware";
 import {
   getDocumentSchema,
   updateDocumentSchema,
@@ -26,16 +27,16 @@ import { normalizeNullableUuid } from "./helpers";
 /**
  * Get a single document (requires access)
  */
-export const getDocument = createAuthedServerFn({
-  method: "GET",
-  validator: getDocumentSchema,
-  handler: async ({ session, data }) => {
+export const getDocument = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .inputValidator(getDocumentSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { requireDocumentAccess } = await import("../authz");
 
     const { doc, canEdit } = await requireDocumentAccess(session, data.docId, "view");
     return { document: doc, access: { canEdit } };
-  },
-});
+  });
 
 // ============================================================================
 // Mutation Functions
@@ -44,10 +45,11 @@ export const getDocument = createAuthedServerFn({
 /**
  * Update a document (requires edit access)
  */
-export const updateDocument = createAuthedServerFn({
-  method: "POST",
-  validator: updateDocumentSchema,
-  handler: async ({ session, data }) => {
+export const updateDocument = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(updateDocumentSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { documents } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -68,16 +70,16 @@ export const updateDocument = createAuthedServerFn({
       .returning();
 
     return updated;
-  },
-});
+  });
 
 /**
  * Soft delete a document (requires edit access)
  */
-export const deleteDocument = createAuthedServerFn({
-  method: "POST",
-  validator: deleteDocumentSchema,
-  handler: async ({ session, data }) => {
+export const deleteDocument = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(deleteDocumentSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { documents } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -96,8 +98,7 @@ export const deleteDocument = createAuthedServerFn({
       .where(eq(documents.id, data.docId));
 
     return { success: true };
-  },
-});
+  });
 
 // ============================================================================
 // Electric Collection Mutation Functions
@@ -107,10 +108,11 @@ export const deleteDocument = createAuthedServerFn({
 /**
  * Create a document (requires branch edit access)
  */
-export const createDocumentMutation = createAuthedServerFn({
-  method: "POST",
-  validator: createDocumentSchema,
-  handler: async ({ session, data }) => {
+export const createDocumentMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(createDocumentSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { documents } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -151,16 +153,16 @@ export const createDocumentMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: updated, txid };
     });
-  },
-});
+  });
 
 /**
  * Update a document with txid (requires edit access)
  */
-export const updateDocumentMutation = createAuthedServerFn({
-  method: "POST",
-  validator: updateDocumentMutationSchema,
-  handler: async ({ session, data }) => {
+export const updateDocumentMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(updateDocumentMutationSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { documents } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -184,16 +186,16 @@ export const updateDocumentMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: updated, txid };
     });
-  },
-});
+  });
 
 /**
  * Soft delete a document with txid (requires edit access)
  */
-export const deleteDocumentMutation = createAuthedServerFn({
-  method: "POST",
-  validator: deleteDocumentMutationSchema,
-  handler: async ({ session, data }) => {
+export const deleteDocumentMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(deleteDocumentMutationSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { documents } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -216,5 +218,4 @@ export const deleteDocumentMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: { id: data.documentId }, txid };
     });
-  },
-});
+  });

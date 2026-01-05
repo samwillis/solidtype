@@ -38,8 +38,7 @@ export interface CorsOptions {
 export function corsHeaders(options: CorsOptions = {}): Record<string, string> {
   const headers: Record<string, string> = {
     "Access-Control-Allow-Origin": options.allowOrigin ?? "*",
-    "Access-Control-Allow-Methods":
-      options.allowMethods ?? "GET, POST, PUT, DELETE, HEAD, OPTIONS",
+    "Access-Control-Allow-Methods": options.allowMethods ?? "GET, POST, PUT, DELETE, HEAD, OPTIONS",
     "Access-Control-Allow-Headers": options.allowHeaders ?? "Content-Type, Authorization",
   };
 

@@ -1,5 +1,11 @@
 /**
  * Database connection and Drizzle ORM setup
+ *
+ * This module is server-only. It uses top-level imports because it's only
+ * ever imported by server code (server functions, API routes, auth handlers).
+ *
+ * Server functions dynamically import this module inside their handlers,
+ * which prevents pg from being bundled in client code.
  */
 
 import { drizzle } from "drizzle-orm/node-postgres";

@@ -26,3 +26,26 @@
 .dimension-inline-input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* Selection box overlay for sketch mode drag selection */
+.selection-box-overlay {
+  position: absolute;
+  pointer-events: none;
+  z-index: 100;
+  border-width: 1px;
+  box-sizing: border-box;
+}
+
+/* Window selection (left-to-right): solid border, blue tint */
+.selection-box-overlay.mode-window {
+  background-color: rgba(65, 145, 255, 0.15);
+  border-style: solid;
+  border-color: rgba(65, 145, 255, 0.9);
+}
+
+/* Crossing selection (right-to-left): dashed border, green tint */
+.selection-box-overlay.mode-crossing {
+  background-color: rgba(80, 200, 120, 0.15);
+  border-style: dashed;
+  border-color: rgba(80, 200, 120, 0.9);
+}

@@ -1,15 +1,16 @@
 /**
  * Server Functions - Folder Operations
  *
- * All functions use session-based authentication.
+ * All functions use session-based authentication via middleware.
  * No userId is accepted from client inputs.
  *
  * NOTE: Server-only modules (db, authz, repos) are imported dynamically
  * inside handlers to avoid bundling them for the client.
  */
 
+import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { createAuthedServerFn } from "../server-fn-wrapper";
+import { authMiddleware } from "../server-fn-middleware";
 import {
   createFolderSchema,
   updateFolderSchema,
@@ -33,10 +34,12 @@ const getFoldersSchema = z.object({
 /**
  * Get folders for a branch (requires branch access)
  */
-export const getFoldersForBranch = createAuthedServerFn({
-  method: "POST",
-  validator: getFoldersSchema,
-  handler: async ({ session, data }) => {
+export const getFoldersForBranch = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(getFoldersSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
+
     const { db } = await import("../db");
     const { folders } = await import("../../db/schema");
     const { eq, and, asc } = await import("drizzle-orm");
@@ -63,8 +66,7 @@ export const getFoldersForBranch = createAuthedServerFn({
       .orderBy(asc(folders.sortOrder), asc(folders.name));
 
     return { data: branchFolders };
-  },
-});
+  });
 
 // ============================================================================
 // Mutation Functions
@@ -73,10 +75,12 @@ export const getFoldersForBranch = createAuthedServerFn({
 /**
  * Create a folder (requires branch edit access)
  */
-export const createFolderMutation = createAuthedServerFn({
-  method: "POST",
-  validator: createFolderSchema,
-  handler: async ({ session, data }) => {
+export const createFolderMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(createFolderSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
+
     const { db } = await import("../db");
     const { folders } = await import("../../db/schema");
     const { getCurrentTxid } = await import("./db-helpers");
@@ -101,16 +105,17 @@ export const createFolderMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: created, txid };
     });
-  },
-});
+  });
 
 /**
  * Update a folder (requires branch edit access)
  */
-export const updateFolderMutation = createAuthedServerFn({
-  method: "POST",
-  validator: updateFolderSchema,
-  handler: async ({ session, data }) => {
+export const updateFolderMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(updateFolderSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
+
     const { db } = await import("../db");
     const { folders } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -140,16 +145,17 @@ export const updateFolderMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: updated, txid };
     });
-  },
-});
+  });
 
 /**
  * Delete a folder (requires branch edit access)
  */
-export const deleteFolderMutation = createAuthedServerFn({
-  method: "POST",
-  validator: deleteFolderSchema,
-  handler: async ({ session, data }) => {
+export const deleteFolderMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(deleteFolderSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
+
     const { db } = await import("../db");
     const { folders } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -175,5 +181,4 @@ export const deleteFolderMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: { id: data.folderId }, txid };
     });
-  },
-});
+  });

@@ -1,14 +1,15 @@
 /**
  * Server Functions - AI Chat Session Operations
  *
- * All functions use session-based authentication.
+ * All functions use session-based authentication via middleware.
  * No userId is accepted from client inputs.
  *
  * NOTE: Server-only modules (db, authz, repos) are imported dynamically
  * inside handlers to avoid bundling them for the client.
  */
 
-import { createAuthedServerFn } from "../server-fn-wrapper";
+import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "../server-fn-middleware";
 import {
   createChatSessionSchema,
   createChatSessionDirectSchema,
@@ -24,10 +25,12 @@ import { normalizeNullableUuid } from "./helpers";
 /**
  * Create a chat session via Electric collection
  */
-export const createChatSessionMutation = createAuthedServerFn({
-  method: "POST",
-  validator: createChatSessionSchema,
-  handler: async ({ session, data }) => {
+export const createChatSessionMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(createChatSessionSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
+
     const { db } = await import("../db");
     const { aiChatSessions } = await import("../../db/schema");
     const { getCurrentTxid } = await import("./db-helpers");
@@ -53,16 +56,17 @@ export const createChatSessionMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: created, txid };
     });
-  },
-});
+  });
 
 /**
  * Update a chat session (requires ownership)
  */
-export const updateChatSessionMutation = createAuthedServerFn({
-  method: "POST",
-  validator: updateChatSessionSchema,
-  handler: async ({ session, data }) => {
+export const updateChatSessionMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(updateChatSessionSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
+
     const { db } = await import("../db");
     const { aiChatSessions } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -85,16 +89,17 @@ export const updateChatSessionMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: updated, txid };
     });
-  },
-});
+  });
 
 /**
  * Delete a chat session (requires ownership)
  */
-export const deleteChatSessionMutation = createAuthedServerFn({
-  method: "POST",
-  validator: deleteChatSessionSchema,
-  handler: async ({ session, data }) => {
+export const deleteChatSessionMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(deleteChatSessionSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
+
     const { db } = await import("../db");
     const { aiChatSessions } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -110,18 +115,19 @@ export const deleteChatSessionMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: { id: data.sessionId }, txid };
     });
-  },
-});
+  });
 
 /**
  * Create a new AI chat session directly (not through Electric collection).
  * This is used when starting a new chat to ensure the session exists on the server
  * before trying to use the stream endpoint.
  */
-export const createChatSessionDirect = createAuthedServerFn({
-  method: "POST",
-  validator: createChatSessionDirectSchema,
-  handler: async ({ session, data }) => {
+export const createChatSessionDirect = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(createChatSessionDirectSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
+
     const { db } = await import("../db");
     const { aiChatSessions } = await import("../../db/schema");
 
@@ -155,5 +161,4 @@ export const createChatSessionDirect = createAuthedServerFn({
       createdAt: created.createdAt.toISOString(),
       updatedAt: created.updatedAt.toISOString(),
     };
-  },
-});
+  });

@@ -115,7 +115,9 @@ describe("Authorization Module", () => {
 
       const session = createMockSession();
 
-      await expect(requireWorkspaceMember(session, "workspace-123")).rejects.toThrow(ForbiddenError);
+      await expect(requireWorkspaceMember(session, "workspace-123")).rejects.toThrow(
+        ForbiddenError
+      );
     });
 
     it("returns membership when user is a member", async () => {

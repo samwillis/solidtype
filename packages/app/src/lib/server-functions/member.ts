@@ -2,13 +2,14 @@
  * Server Functions - Member Management
  *
  * Workspace and project member operations.
- * All functions use session-based authentication.
+ * All functions use session-based authentication via middleware.
  *
  * NOTE: Server-only modules (db, authz, repos) are imported dynamically
  * inside handlers to avoid bundling them for the client.
  */
 
-import { createAuthedServerFn } from "../server-fn-wrapper";
+import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "../server-fn-middleware";
 import {
   listWorkspaceMembersSchema,
   addWorkspaceMemberSchema,
@@ -27,10 +28,11 @@ import {
 /**
  * List all members of a workspace
  */
-export const listWorkspaceMembersMutation = createAuthedServerFn({
-  method: "POST",
-  validator: listWorkspaceMembersSchema,
-  handler: async ({ session, data }) => {
+export const listWorkspaceMembersMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(listWorkspaceMembersSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { workspaceMembers } = await import("../../db/schema");
     const { user } = await import("../../db/schema/better-auth");
@@ -56,16 +58,16 @@ export const listWorkspaceMembersMutation = createAuthedServerFn({
       .orderBy(asc(workspaceMembers.joinedAt));
 
     return { members };
-  },
-});
+  });
 
 /**
  * Add a member to a workspace by email
  */
-export const addWorkspaceMemberMutation = createAuthedServerFn({
-  method: "POST",
-  validator: addWorkspaceMemberSchema,
-  handler: async ({ session, data }) => {
+export const addWorkspaceMemberMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(addWorkspaceMemberSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { workspaceMembers } = await import("../../db/schema");
     const { user } = await import("../../db/schema/better-auth");
@@ -114,16 +116,16 @@ export const addWorkspaceMemberMutation = createAuthedServerFn({
         joinedAt: new Date(),
       },
     };
-  },
-});
+  });
 
 /**
  * Update a workspace member's role
  */
-export const updateWorkspaceMemberRoleMutation = createAuthedServerFn({
-  method: "POST",
-  validator: updateWorkspaceMemberRoleSchema,
-  handler: async ({ session, data }) => {
+export const updateWorkspaceMemberRoleMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(updateWorkspaceMemberRoleSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { workspaceMembers } = await import("../../db/schema");
     const { eq, and } = await import("drizzle-orm");
@@ -161,16 +163,16 @@ export const updateWorkspaceMemberRoleMutation = createAuthedServerFn({
       );
 
     return { success: true };
-  },
-});
+  });
 
 /**
  * Remove a member from a workspace
  */
-export const removeWorkspaceMemberMutation = createAuthedServerFn({
-  method: "POST",
-  validator: removeWorkspaceMemberSchema,
-  handler: async ({ session, data }) => {
+export const removeWorkspaceMemberMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(removeWorkspaceMemberSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { workspaceMembers } = await import("../../db/schema");
     const { eq, and } = await import("drizzle-orm");
@@ -207,8 +209,7 @@ export const removeWorkspaceMemberMutation = createAuthedServerFn({
       );
 
     return { success: true };
-  },
-});
+  });
 
 // ============================================================================
 // Project Member Management
@@ -217,10 +218,11 @@ export const removeWorkspaceMemberMutation = createAuthedServerFn({
 /**
  * List all members of a project
  */
-export const listProjectMembersMutation = createAuthedServerFn({
-  method: "POST",
-  validator: listProjectMembersSchema,
-  handler: async ({ session, data }) => {
+export const listProjectMembersMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(listProjectMembersSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { projectMembers } = await import("../../db/schema");
     const { user } = await import("../../db/schema/better-auth");
@@ -247,16 +249,16 @@ export const listProjectMembersMutation = createAuthedServerFn({
       .orderBy(asc(projectMembers.joinedAt));
 
     return { members };
-  },
-});
+  });
 
 /**
  * Add a member to a project by email
  */
-export const addProjectMemberMutation = createAuthedServerFn({
-  method: "POST",
-  validator: addProjectMemberSchema,
-  handler: async ({ session, data }) => {
+export const addProjectMemberMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(addProjectMemberSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { projectMembers } = await import("../../db/schema");
     const { user } = await import("../../db/schema/better-auth");
@@ -307,16 +309,16 @@ export const addProjectMemberMutation = createAuthedServerFn({
         joinedAt: new Date(),
       },
     };
-  },
-});
+  });
 
 /**
  * Update a project member's role or permissions
  */
-export const updateProjectMemberMutation = createAuthedServerFn({
-  method: "POST",
-  validator: updateProjectMemberSchema,
-  handler: async ({ session, data }) => {
+export const updateProjectMemberMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(updateProjectMemberSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { projectMembers } = await import("../../db/schema");
     const { eq, and } = await import("drizzle-orm");
@@ -359,16 +361,16 @@ export const updateProjectMemberMutation = createAuthedServerFn({
       );
 
     return { success: true };
-  },
-});
+  });
 
 /**
  * Remove a member from a project
  */
-export const removeProjectMemberMutation = createAuthedServerFn({
-  method: "POST",
-  validator: removeProjectMemberSchema,
-  handler: async ({ session, data }) => {
+export const removeProjectMemberMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(removeProjectMemberSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { projectMembers } = await import("../../db/schema");
     const { eq, and } = await import("drizzle-orm");
@@ -402,5 +404,4 @@ export const removeProjectMemberMutation = createAuthedServerFn({
       );
 
     return { success: true };
-  },
-});
+  });

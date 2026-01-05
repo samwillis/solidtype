@@ -9,17 +9,60 @@
  * const session = await getSessionOrThrow(request);
  * const membership = await requireWorkspaceMember(session, workspaceId);
  * ```
+ *
+ * NOTE: This module uses dynamic imports for server-only dependencies (auth, repos)
+ * to prevent them from being bundled in client code. The authz module is dynamically
+ * imported by server function handlers, and these lazy imports ensure the full
+ * dependency chain stays server-only.
  */
 
-import { auth } from "../auth";
 import { AuthenticationError, ForbiddenError, NotFoundError } from "../http/errors";
-import * as workspacesRepo from "../../repos/workspaces";
-import * as projectsRepo from "../../repos/projects";
-import * as documentsRepo from "../../repos/documents";
-import * as aiChatRepo from "../../repos/ai-chat";
 
 // Re-export for convenience
 export { AuthenticationError, ForbiddenError, NotFoundError };
+
+// Lazy-loaded modules - imported on first use
+let _auth: typeof import("../auth").auth | null = null;
+let _workspacesRepo: typeof import("../../repos/workspaces") | null = null;
+let _projectsRepo: typeof import("../../repos/projects") | null = null;
+let _documentsRepo: typeof import("../../repos/documents") | null = null;
+let _aiChatRepo: typeof import("../../repos/ai-chat") | null = null;
+
+async function getAuth() {
+  if (!_auth) {
+    const mod = await import("../auth");
+    _auth = mod.auth;
+  }
+  return _auth;
+}
+
+async function getWorkspacesRepo() {
+  if (!_workspacesRepo) {
+    _workspacesRepo = await import("../../repos/workspaces");
+  }
+  return _workspacesRepo;
+}
+
+async function getProjectsRepo() {
+  if (!_projectsRepo) {
+    _projectsRepo = await import("../../repos/projects");
+  }
+  return _projectsRepo;
+}
+
+async function getDocumentsRepo() {
+  if (!_documentsRepo) {
+    _documentsRepo = await import("../../repos/documents");
+  }
+  return _documentsRepo;
+}
+
+async function getAiChatRepo() {
+  if (!_aiChatRepo) {
+    _aiChatRepo = await import("../../repos/ai-chat");
+  }
+  return _aiChatRepo;
+}
 
 /**
  * Session type from better-auth
@@ -49,6 +92,7 @@ export type ProjectRole = "owner" | "admin" | "member" | "guest";
  * Get session from request, throwing if not authenticated
  */
 export async function getSessionOrThrow(request: Request): Promise<Session> {
+  const auth = await getAuth();
   const session = await auth.api.getSession({
     headers: request.headers,
   });
@@ -65,6 +109,7 @@ export async function getSessionOrThrow(request: Request): Promise<Session> {
  * Returns null if not authenticated
  */
 export async function getSession(request: Request): Promise<Session | null> {
+  const auth = await getAuth();
   const session = await auth.api.getSession({
     headers: request.headers,
   });
@@ -83,7 +128,8 @@ export async function getSession(request: Request): Promise<Session | null> {
 export async function requireWorkspaceMember(
   session: Session,
   workspaceId: string
-): Promise<workspacesRepo.WorkspaceMembership> {
+): Promise<WorkspaceMembership> {
+  const workspacesRepo = await getWorkspacesRepo();
   const membership = await workspacesRepo.getMembership(workspaceId, session.user.id);
 
   if (!membership) {
@@ -101,7 +147,7 @@ export async function requireWorkspaceRole(
   session: Session,
   workspaceId: string,
   roles: WorkspaceRole[]
-): Promise<workspacesRepo.WorkspaceMembership> {
+): Promise<WorkspaceMembership> {
   const membership = await requireWorkspaceMember(session, workspaceId);
 
   if (!roles.includes(membership.role)) {
@@ -110,6 +156,20 @@ export async function requireWorkspaceRole(
 
   return membership;
 }
+
+// Re-export types that were previously imported from repos
+export type WorkspaceMembership = Awaited<
+  ReturnType<Awaited<ReturnType<typeof getWorkspacesRepo>>["getMembership"]>
+>;
+export type ProjectWithWorkspace = NonNullable<
+  Awaited<ReturnType<Awaited<ReturnType<typeof getProjectsRepo>>["findById"]>>
+>;
+export type DocumentWithBranch = NonNullable<
+  Awaited<ReturnType<Awaited<ReturnType<typeof getDocumentsRepo>>["findWithBranch"]>>
+>;
+export type ChatSession = NonNullable<
+  Awaited<ReturnType<Awaited<ReturnType<typeof getAiChatRepo>>["findByIdAndUser"]>>
+>;
 
 // ============================================================================
 // Project Authorization
@@ -122,7 +182,8 @@ export async function requireWorkspaceRole(
 export async function requireProjectAccess(
   session: Session,
   projectId: string
-): Promise<{ project: projectsRepo.ProjectWithWorkspace; canEdit: boolean; role: string }> {
+): Promise<{ project: ProjectWithWorkspace; canEdit: boolean; role: string }> {
+  const projectsRepo = await getProjectsRepo();
   const project = await projectsRepo.findById(projectId);
   if (!project) {
     throw new NotFoundError("Project not found");
@@ -142,7 +203,7 @@ export async function requireProjectAccess(
 export async function requireProjectEdit(
   session: Session,
   projectId: string
-): Promise<{ project: projectsRepo.ProjectWithWorkspace; role: string }> {
+): Promise<{ project: ProjectWithWorkspace; role: string }> {
   const { project, canEdit, role } = await requireProjectAccess(session, projectId);
 
   if (!canEdit) {
@@ -160,7 +221,7 @@ export async function requireProjectRole(
   session: Session,
   projectId: string,
   roles: ProjectRole[]
-): Promise<{ project: projectsRepo.ProjectWithWorkspace }> {
+): Promise<{ project: ProjectWithWorkspace }> {
   const { project, role } = await requireProjectAccess(session, projectId);
 
   if (!roles.includes(role as ProjectRole)) {
@@ -175,7 +236,7 @@ export async function requireProjectRole(
 // ============================================================================
 
 export interface DocumentAccessResult {
-  doc: documentsRepo.DocumentWithBranch;
+  doc: DocumentWithBranch;
   canEdit: boolean;
 }
 
@@ -188,6 +249,9 @@ export async function requireDocumentAccess(
   docId: string,
   mode: "view" | "edit" = "view"
 ): Promise<DocumentAccessResult> {
+  const documentsRepo = await getDocumentsRepo();
+  const projectsRepo = await getProjectsRepo();
+
   const doc = await documentsRepo.findWithBranch(docId);
   if (!doc) {
     throw new NotFoundError("Document not found");
@@ -216,7 +280,8 @@ export async function requireDocumentAccess(
 export async function requireChatSessionOwner(
   session: Session,
   sessionId: string
-): Promise<aiChatRepo.ChatSession> {
+): Promise<ChatSession> {
+  const aiChatRepo = await getAiChatRepo();
   const chatSession = await aiChatRepo.findByIdAndUser(sessionId, session.user.id);
 
   if (!chatSession) {
@@ -230,6 +295,11 @@ export async function requireChatSessionOwner(
 // Branch Authorization
 // ============================================================================
 
+// Branch type
+export type Branch = NonNullable<
+  Awaited<ReturnType<Awaited<ReturnType<typeof getDocumentsRepo>>["getBranch"]>>
+>;
+
 /**
  * Require user to have access to a branch's project
  */
@@ -237,7 +307,10 @@ export async function requireBranchAccess(
   session: Session,
   branchId: string,
   mode: "view" | "edit" = "view"
-): Promise<{ branch: NonNullable<Awaited<ReturnType<typeof documentsRepo.getBranch>>> }> {
+): Promise<{ branch: Branch }> {
+  const documentsRepo = await getDocumentsRepo();
+  const projectsRepo = await getProjectsRepo();
+
   const branch = await documentsRepo.getBranch(branchId);
   if (!branch) {
     throw new NotFoundError("Branch not found");

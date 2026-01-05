@@ -1,14 +1,15 @@
 /**
  * Server Functions - Workspace Operations
  *
- * All functions use session-based authentication.
+ * All functions use session-based authentication via middleware.
  * No userId is accepted from client inputs.
  *
  * NOTE: Server-only modules (db, authz, repos) are imported dynamically
  * inside handlers to avoid bundling them for the client.
  */
 
-import { createAuthedServerFn } from "../server-fn-wrapper";
+import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "../server-fn-middleware";
 import {
   getWorkspacesSchema,
   getWorkspaceSchema,
@@ -24,22 +25,23 @@ import {
 /**
  * Get all workspaces for the authenticated user
  */
-export const getWorkspaces = createAuthedServerFn({
-  method: "GET",
-  validator: getWorkspacesSchema,
-  handler: async ({ session }) => {
+export const getWorkspaces = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .inputValidator(getWorkspacesSchema)
+  .handler(async ({ context }) => {
+    const { session } = context;
     const workspacesRepo = await import("../../repos/workspaces");
     return workspacesRepo.listForUser(session.user.id);
-  },
-});
+  });
 
 /**
  * Get a single workspace (requires membership)
  */
-export const getWorkspace = createAuthedServerFn({
-  method: "GET",
-  validator: getWorkspaceSchema,
-  handler: async ({ session, data }) => {
+export const getWorkspace = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .inputValidator(getWorkspaceSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { requireWorkspaceMember } = await import("../authz");
     const workspacesRepo = await import("../../repos/workspaces");
 
@@ -51,8 +53,7 @@ export const getWorkspace = createAuthedServerFn({
     }
 
     return { workspace, role: membership.role };
-  },
-});
+  });
 
 // ============================================================================
 // Mutation Functions
@@ -61,10 +62,11 @@ export const getWorkspace = createAuthedServerFn({
 /**
  * Create a new workspace (any authenticated user can create)
  */
-export const createWorkspace = createAuthedServerFn({
-  method: "POST",
-  validator: createWorkspaceSchema,
-  handler: async ({ session, data }) => {
+export const createWorkspace = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(createWorkspaceSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { workspaces, workspaceMembers } = await import("../../db/schema");
 
@@ -89,16 +91,16 @@ export const createWorkspace = createAuthedServerFn({
     });
 
     return workspace;
-  },
-});
+  });
 
 /**
  * Create workspace with txid for Electric reconciliation
  */
-export const createWorkspaceMutation = createAuthedServerFn({
-  method: "POST",
-  validator: createWorkspaceSchema,
-  handler: async ({ session, data }) => {
+export const createWorkspaceMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(createWorkspaceSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { workspaces, workspaceMembers } = await import("../../db/schema");
     const { getCurrentTxid } = await import("./db-helpers");
@@ -123,16 +125,16 @@ export const createWorkspaceMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: ws, txid };
     });
-  },
-});
+  });
 
 /**
  * Update a workspace (requires owner or admin role)
  */
-export const updateWorkspaceMutation = createAuthedServerFn({
-  method: "POST",
-  validator: updateWorkspaceSchema,
-  handler: async ({ session, data }) => {
+export const updateWorkspaceMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(updateWorkspaceSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { workspaces } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -152,16 +154,16 @@ export const updateWorkspaceMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { data: updated, txid };
     });
-  },
-});
+  });
 
 /**
  * Delete a workspace (requires owner role only)
  */
-export const deleteWorkspaceMutation = createAuthedServerFn({
-  method: "POST",
-  validator: deleteWorkspaceSchema,
-  handler: async ({ session, data }) => {
+export const deleteWorkspaceMutation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(deleteWorkspaceSchema)
+  .handler(async ({ context, data }) => {
+    const { session } = context;
     const { db } = await import("../db");
     const { workspaces } = await import("../../db/schema");
     const { eq } = await import("drizzle-orm");
@@ -177,5 +179,4 @@ export const deleteWorkspaceMutation = createAuthedServerFn({
       const txid = await getCurrentTxid(tx);
       return { success: true, txid };
     });
-  },
-});
+  });
