@@ -376,6 +376,10 @@ function Home() {
               <a href="https://threejs.org" target="_blank" rel="noopener noreferrer">
                 Three.js
               </a>
+              ,{" "}
+              <a href="https://better-auth.com" target="_blank" rel="noopener noreferrer">
+                Better Auth
+              </a>
               , and{" "}
               <a href="https://ocjs.org" target="_blank" rel="noopener noreferrer">
                 OpenCascade.js

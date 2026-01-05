@@ -589,6 +589,10 @@ See [`plan/23-ai-core-infrastructure.md`](./plan/23-ai-core-infrastructure.md) f
 
 - **Three.js**: 3D graphics library for WebGL-based visualization
 
+**Authentication:**
+
+- **Better Auth**: Type-safe authentication library with Drizzle adapter
+
 **AI Integration:**
 
 - **TanStack AI**: Unified AI interface with tool calling support
