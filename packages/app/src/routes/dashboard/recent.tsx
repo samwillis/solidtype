@@ -18,10 +18,7 @@ import { Select } from "@base-ui/react/select";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { Toggle } from "@base-ui/react/toggle";
 import { formatTimeAgo } from "../../lib/utils/format";
-import {
-  type ColumnDef,
-  type SortingState,
-} from "@tanstack/react-table";
+import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { DashboardTableView } from "../../components/dashboard/DashboardTableView";
 import { DashboardGridView } from "../../components/dashboard/DashboardGridView";
 import { DashboardListView } from "../../components/dashboard/DashboardListView";
@@ -81,7 +78,7 @@ function RecentFilesPage() {
 
   const [sortBy, setSortBy] = useState("last-modified");
   const [viewMode, setViewMode] = useState<"grid" | "list" | "table">("list");
-  
+
   // Sync table sorting with sortBy state
   const [sorting, setSorting] = useState<SortingState>(() => {
     if (sortBy === "name") {
@@ -192,19 +189,27 @@ function RecentFilesPage() {
       accessorKey: "project",
       header: "Project",
       enableSorting: false,
-      cell: (info) => <span className="dashboard-table-cell-type">{info.getValue() as string}</span>,
+      cell: (info) => (
+        <span className="dashboard-table-cell-type">{info.getValue() as string}</span>
+      ),
     },
     {
       accessorKey: "branch",
       header: "Branch",
       enableSorting: false,
-      cell: (info) => <span className="dashboard-table-cell-type">{info.getValue() as string}</span>,
+      cell: (info) => (
+        <span className="dashboard-table-cell-type">{info.getValue() as string}</span>
+      ),
     },
     {
       accessorKey: "updatedAt",
       header: "Last Modified",
       enableSorting: true,
-      cell: (info) => <span className="dashboard-table-cell-time">{formatTimeAgo(info.getValue() as string)}</span>,
+      cell: (info) => (
+        <span className="dashboard-table-cell-time">
+          {formatTimeAgo(info.getValue() as string)}
+        </span>
+      ),
     },
   ];
 
@@ -217,7 +222,6 @@ function RecentFilesPage() {
     updatedAt: doc.updated_at instanceof Date ? doc.updated_at.toISOString() : doc.updated_at,
     document: doc,
   }));
-
 
   return (
     <main className="dashboard-main">
@@ -329,4 +333,3 @@ function RecentFilesPage() {
     </main>
   );
 }
-

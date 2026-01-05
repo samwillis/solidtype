@@ -36,7 +36,7 @@ import { ExtrudeEditForm, RevolveEditForm } from "./properties-panel/edit-forms"
 // ============================================================================
 
 const PropertiesPanel: React.FC = () => {
-  const { doc, getFeatureById } = useDocument();
+  const { doc, getFeatureById, isLoading } = useDocument();
   const { selectedFeatureId, selectedFaces } = useSelection();
   const { editMode, updateFormData, acceptEdit, cancelEdit, isEditing } = useFeatureEdit();
   const [showAIChat, setShowAIChat] = useState(false);
@@ -75,7 +75,7 @@ const PropertiesPanel: React.FC = () => {
 
   const handleUpdate = useCallback(
     (updates: Record<string, string | number | boolean>) => {
-      if (!effectiveFeature || !doc) return;
+      if (!effectiveFeature || !doc || isLoading) return;
 
       // Update the feature in Yjs
       const featureMap = doc.featuresById.get(effectiveFeature.id);
@@ -87,7 +87,7 @@ const PropertiesPanel: React.FC = () => {
         });
       }
     },
-    [effectiveFeature, doc]
+    [effectiveFeature, doc, isLoading]
   );
 
   // If in edit mode, show the feature creation form

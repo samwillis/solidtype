@@ -17,7 +17,7 @@ import "./Editor.css";
 // Inner component that uses the document context
 const EditorContent: React.FC = () => {
   const [_aiPanelVisible, _setAiPanelVisible] = useState(false);
-  const { undo, redo, canUndo, canRedo, awareness, isCloudDocument } = useDocument();
+  const { undo, redo, canUndo, canRedo, awareness, isCloudDocument, isLoading } = useDocument();
 
   // Following hook for user presence
   const { connectedUsers, followers, followingUserId, followUser, stopFollowing } = useFollowing({
@@ -53,7 +53,18 @@ const EditorContent: React.FC = () => {
         {/* Center - Viewer with floating overlays */}
         <main className="app-center">
           <div className="app-viewer">
-            <Viewer />
+            {/* Loading overlay - shown while document is loading */}
+            {isLoading && (
+              <div className="editor-loading-overlay">
+                <div className="editor-loading-content">
+                  <div className="editor-loading-spinner" />
+                  <div className="editor-loading-text">Loading document...</div>
+                </div>
+              </div>
+            )}
+
+            {/* Only render Viewer when document is ready */}
+            {!isLoading && <Viewer />}
 
             {/* Floating Feature Tree Panel (top left) */}
             <FloatingFeatureTreePanel />
@@ -78,7 +89,7 @@ const EditorContent: React.FC = () => {
             <FloatingToolbar />
 
             {/* Status Overlay (bottom left) */}
-            <StatusOverlay />
+            {!isLoading && <StatusOverlay />}
 
             {/* View Cube (bottom right) */}
             <ViewCube />

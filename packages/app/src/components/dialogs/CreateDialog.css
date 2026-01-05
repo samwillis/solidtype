@@ -246,14 +246,25 @@
   transition: background 0.1s ease;
 }
 
-.create-dialog-select-option:hover,
-.create-dialog-select-option[data-highlighted] {
+.create-dialog-select-option:hover:not([data-disabled]),
+.create-dialog-select-option[data-highlighted]:not([data-disabled]) {
   background: rgba(255, 255, 255, 0.1);
 }
 
-[data-theme="light"] .create-dialog-select-option:hover,
-[data-theme="light"] .create-dialog-select-option[data-highlighted] {
+[data-theme="light"] .create-dialog-select-option:hover:not([data-disabled]),
+[data-theme="light"] .create-dialog-select-option[data-highlighted]:not([data-disabled]) {
   background: rgba(0, 0, 0, 0.1);
+}
+
+.create-dialog-select-option[data-disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: var(--color-text-secondary, rgba(255, 255, 255, 0.5));
+  font-style: italic;
+}
+
+[data-theme="light"] .create-dialog-select-option[data-disabled] {
+  color: var(--color-text-secondary, rgba(0, 0, 0, 0.4));
 }
 
 /* Native select element */

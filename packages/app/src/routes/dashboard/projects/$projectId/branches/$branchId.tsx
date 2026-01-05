@@ -55,14 +55,10 @@ import { MoveDialog } from "../../../../../components/dialogs/MoveDialog";
 import { DeleteConfirmDialog } from "../../../../../components/dialogs/DeleteConfirmDialog";
 import { MergeBranchDialog } from "../../../../../components/dialogs/MergeBranchDialog";
 import { formatTimeAgo } from "../../../../../lib/utils/format";
-import {
-  type ColumnDef,
-  type SortingState,
-} from "@tanstack/react-table";
+import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { DashboardTableView } from "../../../../../components/dashboard/DashboardTableView";
 import { DashboardListView } from "../../../../../components/dashboard/DashboardListView";
 import "../../../../../styles/dashboard.css";
-
 
 export const Route = createFileRoute("/dashboard/projects/$projectId/branches/$branchId")({
   ssr: false,
@@ -99,7 +95,7 @@ function BranchView() {
   const [fileFilter, setFileFilter] = useState("all");
   const [sortBy, setSortBy] = useState("last-modified");
   const [viewMode, setViewMode] = useState<"grid" | "list" | "table">("grid");
-  
+
   // Sync table sorting with sortBy state
   const [sorting, setSorting] = useState<SortingState>(() => {
     // Initialize sorting based on sortBy
@@ -189,7 +185,9 @@ function BranchView() {
   };
 
   // Load project and branches
-  const { data: projects, isLoading: projectsLoading } = useLiveQuery(() => projectsCollection as any);
+  const { data: projects, isLoading: projectsLoading } = useLiveQuery(
+    () => projectsCollection as any
+  );
   const { data: branches, isLoading: branchesLoading } = useLiveQuery(
     () => projectBranchesCollection
   );
@@ -337,10 +335,7 @@ function BranchView() {
           }
         };
         return (
-          <div
-            className="dashboard-table-cell-name"
-            onClick={onClick}
-          >
+          <div className="dashboard-table-cell-name" onClick={onClick}>
             {icon}
             <span>{info.getValue() as string}</span>
           </div>
@@ -353,44 +348,55 @@ function BranchView() {
       enableSorting: false,
       cell: (info) => {
         const type = info.getValue() as string;
-        return <span className="dashboard-table-cell-type">{type.charAt(0).toUpperCase() + type.slice(1)}</span>;
+        return (
+          <span className="dashboard-table-cell-type">
+            {type.charAt(0).toUpperCase() + type.slice(1)}
+          </span>
+        );
       },
     },
     {
       accessorKey: "updatedAt",
       header: "Last Modified",
       enableSorting: true,
-      cell: (info) => <span className="dashboard-table-cell-time">{formatTimeAgo(info.getValue() as string)}</span>,
+      cell: (info) => (
+        <span className="dashboard-table-cell-time">
+          {formatTimeAgo(info.getValue() as string)}
+        </span>
+      ),
     },
   ];
 
   // Prepare combined table data
   const tableData: FileRow[] = useMemo(() => {
     const rows: FileRow[] = [];
-    
+
     filteredFolders.forEach((folder) => {
       rows.push({
         id: folder.id,
         name: folder.name,
         type: "folder",
-        updatedAt: folder.updated_at instanceof Date ? folder.updated_at.toISOString() : folder.updated_at,
+        updatedAt:
+          folder.updated_at instanceof Date ? folder.updated_at.toISOString() : folder.updated_at,
         folder,
       });
     });
-    
+
     filteredDocuments.forEach((document) => {
       rows.push({
         id: document.id,
         name: document.name,
         type: "document",
-        updatedAt: document.updated_at instanceof Date ? document.updated_at.toISOString() : document.updated_at,
+        updatedAt:
+          document.updated_at instanceof Date
+            ? document.updated_at.toISOString()
+            : document.updated_at,
         document,
       });
     });
-    
+
     return rows;
   }, [filteredFolders, filteredDocuments]);
-
 
   // Show loading state while data is being fetched
   if (isLoading) {

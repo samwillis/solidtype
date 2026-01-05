@@ -15,10 +15,7 @@ import { Select } from "@base-ui/react/select";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { Toggle } from "@base-ui/react/toggle";
 import { formatTimeAgo } from "../../lib/utils/format";
-import {
-  type ColumnDef,
-  type SortingState,
-} from "@tanstack/react-table";
+import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { DashboardTableView } from "../../components/dashboard/DashboardTableView";
 import { DashboardGridView } from "../../components/dashboard/DashboardGridView";
 import { DashboardListView } from "../../components/dashboard/DashboardListView";
@@ -33,7 +30,7 @@ function DashboardIndexPage() {
   const navigate = useNavigate();
   const [sortBy, setSortBy] = useState("last-modified");
   const [viewMode, setViewMode] = useState<"grid" | "list" | "table">("grid");
-  
+
   // Sync table sorting with sortBy state
   const [sorting, setSorting] = useState<SortingState>(() => {
     if (sortBy === "name") {
@@ -81,7 +78,6 @@ function DashboardIndexPage() {
       })
     );
   });
-
 
   // Query projects with dynamic sorting
   const { data: allProjects, isLoading: projectsLoading } = useLiveQuery(() => {
@@ -137,19 +133,28 @@ function DashboardIndexPage() {
       accessorKey: "workspace",
       header: "Workspace",
       enableSorting: false,
-      cell: (info) => <span className="dashboard-table-cell-type">{info.getValue() as string}</span>,
+      cell: (info) => (
+        <span className="dashboard-table-cell-type">{info.getValue() as string}</span>
+      ),
     },
     {
       accessorKey: "description",
       header: "Description",
       enableSorting: false,
-      cell: (info) => (info.getValue() as string | null) || <span style={{ color: "var(--color-text-tertiary)" }}>—</span>,
+      cell: (info) =>
+        (info.getValue() as string | null) || (
+          <span style={{ color: "var(--color-text-tertiary)" }}>—</span>
+        ),
     },
     {
       accessorKey: "updatedAt",
       header: "Last Modified",
       enableSorting: true,
-      cell: (info) => <span className="dashboard-table-cell-time">{formatTimeAgo(info.getValue() as string)}</span>,
+      cell: (info) => (
+        <span className="dashboard-table-cell-time">
+          {formatTimeAgo(info.getValue() as string)}
+        </span>
+      ),
     },
   ];
 
@@ -161,11 +166,11 @@ function DashboardIndexPage() {
       name: project.name,
       workspace: workspace?.name || "Unknown",
       description: project.description,
-      updatedAt: project.updated_at instanceof Date ? project.updated_at.toISOString() : project.updated_at,
+      updatedAt:
+        project.updated_at instanceof Date ? project.updated_at.toISOString() : project.updated_at,
       project,
     };
   });
-
 
   return (
     <main className="dashboard-main">
@@ -284,4 +289,3 @@ function DashboardIndexPage() {
     </main>
   );
 }
-

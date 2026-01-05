@@ -537,7 +537,12 @@ function interpretSketch(
     // Circle: center + radius (no edge point needed)
     // In the kernel, we represent this as a full arc (360°) by creating a point on the circle
     // and using it as both start and end of the arc.
-    if (entity.type === "circle" && entity.center && "radius" in entity && (entity as { radius: number }).radius > 0) {
+    if (
+      entity.type === "circle" &&
+      entity.center &&
+      "radius" in entity &&
+      (entity as { radius: number }).radius > 0
+    ) {
       const centerId = pointIdMap.get(entity.center);
       if (centerId !== undefined) {
         // Get center point position

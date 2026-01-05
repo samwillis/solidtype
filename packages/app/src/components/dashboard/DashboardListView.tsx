@@ -27,18 +27,14 @@ export function DashboardListView({ items }: DashboardListViewProps) {
     <div className="dashboard-list">
       {items.map((item) => (
         <div key={item.id} className="dashboard-list-item" onClick={item.onClick}>
-          <div className="dashboard-list-item-icon">
-            {item.icon || <LuFileText size={20} />}
-          </div>
+          <div className="dashboard-list-item-icon">{item.icon || <LuFileText size={20} />}</div>
           <div className="dashboard-list-item-content">
             <div className="dashboard-list-item-name">{item.name}</div>
             {item.path && <div className="dashboard-list-item-path">{item.path}</div>}
           </div>
           {item.updatedAt && (
             <div className="dashboard-list-item-meta">
-              <span className="dashboard-list-item-time">
-                {formatTimeAgo(item.updatedAt)}
-              </span>
+              <span className="dashboard-list-item-time">{formatTimeAgo(item.updatedAt)}</span>
             </div>
           )}
         </div>

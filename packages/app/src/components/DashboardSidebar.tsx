@@ -67,7 +67,6 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
     return allProjectsCollection;
   });
 
-
   // Group projects by workspace
   const projectsByWorkspace = React.useMemo(() => {
     if (!allProjects || !workspaces) return {};

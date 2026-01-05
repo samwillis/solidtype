@@ -30,6 +30,46 @@
   overflow: hidden;
 }
 
+/* Loading overlay - shown while document is loading */
+.editor-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-viewer-bg, #1a1a1a);
+  z-index: 50;
+}
+
+.editor-loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+}
+
+.editor-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: editor-spin 1s linear infinite;
+}
+
+.editor-loading-text {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+@keyframes editor-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Shared panel header style */
 .panel-header {
   padding: 8px 12px;

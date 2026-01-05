@@ -47,11 +47,14 @@ export type DocumentUnits = "mm" | "cm" | "m" | "in" | "ft";
 export type SyncStatus = "disconnected" | "connecting" | "connected" | "synced" | "error";
 
 interface DocumentContextValue {
-  doc: SolidTypeDoc;
+  /** The document - null while loading */
+  doc: SolidTypeDoc | null;
+  /** Whether the document is still loading */
+  isLoading: boolean;
   features: Feature[];
   rebuildGate: string | null;
   setRebuildGate: (featureId: string | null) => void;
-  undoManager: Y.UndoManager;
+  undoManager: Y.UndoManager | null;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -484,46 +487,16 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
     [doc]
   );
 
-  // If cloud document is still loading (doc is null), show loading spinner
-  // Don't render children to prevent crashes from accessing doc properties
-  if (!doc) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "100%",
-          height: "100%",
-          backgroundColor: "var(--bg-primary, #1a1a1a)",
-          color: "var(--text-secondary, #888)",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              border: "3px solid currentColor",
-              borderTopColor: "transparent",
-              borderRadius: "50%",
-              animation: "spin 1s linear infinite",
-              margin: "0 auto 12px",
-            }}
-          />
-          <div>Loading document...</div>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
-      </div>
-    );
-  }
+  // Determine if we're still loading
+  const isLoading = !doc;
 
   const value: DocumentContextValue = {
     doc,
+    isLoading,
     features,
     rebuildGate,
     setRebuildGate,
-    undoManager: undoManager!,
+    undoManager: undoManager ?? null,
     undo,
     redo,
     canUndo,

@@ -48,9 +48,7 @@ export function DashboardGridView({ items }: DashboardGridViewProps) {
                 <span className="dashboard-card-workspace">{item.workspace}</span>
               </div>
             )}
-            {item.description && (
-              <p className="dashboard-card-description">{item.description}</p>
-            )}
+            {item.description && <p className="dashboard-card-description">{item.description}</p>}
             {item.meta && (
               <div className="dashboard-card-meta">
                 <span className="dashboard-card-time">{item.meta}</span>
@@ -58,9 +56,7 @@ export function DashboardGridView({ items }: DashboardGridViewProps) {
             )}
             {item.updatedAt && (
               <div className="dashboard-card-meta">
-                <span className="dashboard-card-time">
-                  Updated {formatTimeAgo(item.updatedAt)}
-                </span>
+                <span className="dashboard-card-time">Updated {formatTimeAgo(item.updatedAt)}</span>
               </div>
             )}
           </div>

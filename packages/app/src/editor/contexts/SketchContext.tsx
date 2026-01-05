@@ -348,9 +348,9 @@ export function SketchProvider({ children }: SketchProviderProps) {
   }, []);
 
   const getSketchElement = useCallback((): Y.Map<unknown> | null => {
-    if (!mode.sketchId) return null;
+    if (!mode.sketchId || !doc) return null;
     return doc.featuresById.get(mode.sketchId) ?? null;
-  }, [doc.featuresById, mode.sketchId]);
+  }, [doc, mode.sketchId]);
 
   const addPoint = useCallback(
     (x: number, y: number): string | null => {

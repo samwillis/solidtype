@@ -32,12 +32,12 @@ const documentFormSchema = z.object({
 });
 
 const documentTypes = [
-  { value: "part", label: "Part" },
-  { value: "assembly", label: "Assembly" },
-  { value: "drawing", label: "Drawing" },
-  { value: "sketch", label: "Sketch" },
-  { value: "file", label: "File" },
-  { value: "notes", label: "Notes" },
+  { value: "part", label: "Part", disabled: false },
+  { value: "assembly", label: "Assembly (coming soon)", disabled: true },
+  { value: "drawing", label: "Drawing (coming soon)", disabled: true },
+  { value: "sketch", label: "Sketch (coming soon)", disabled: true },
+  { value: "file", label: "File (coming soon)", disabled: true },
+  { value: "notes", label: "Notes (coming soon)", disabled: true },
 ] as const;
 
 interface CreateDocumentDialogProps {
@@ -485,6 +485,7 @@ export const CreateDocumentDialog: React.FC<CreateDocumentDialogProps> = ({
                               key={type.value}
                               value={type.value}
                               className="create-dialog-select-option"
+                              disabled={type.disabled}
                             >
                               {type.label}
                             </Select.Item>
