@@ -64,7 +64,7 @@ export const WorkspaceSettingsDialog: React.FC<WorkspaceSettingsDialogProps> = (
   const [memberActionLoading, setMemberActionLoading] = useState<string | null>(null);
 
   // Load workspace data
-  const { data: allWorkspaces } = useLiveQuery(() => workspacesCollection);
+  const { data: allWorkspaces } = useLiveQuery(() => workspacesCollection as any);
   const workspace = allWorkspaces?.find((w) => w.id === workspaceId);
 
   // Current user's role in this workspace

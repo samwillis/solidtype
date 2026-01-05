@@ -63,9 +63,9 @@ export const CreateDocumentDialog: React.FC<CreateDocumentDialogProps> = ({
   const [availableFolders, setAvailableFolders] = useState<Folder[]>([]);
 
   // Get available projects, branches, folders from collections
-  const { data: projects } = useLiveQuery(() => projectsCollection);
-  const { data: allBranches } = useLiveQuery(() => branchesCollection);
-  const { data: allFolders } = useLiveQuery(() => foldersCollection);
+  const { data: projects } = useLiveQuery(() => projectsCollection as any);
+  const { data: allBranches } = useLiveQuery(() => branchesCollection as any);
+  const { data: allFolders } = useLiveQuery(() => foldersCollection as any);
 
   const form = useForm({
     defaultValues: {
@@ -137,7 +137,7 @@ export const CreateDocumentDialog: React.FC<CreateDocumentDialogProps> = ({
     const projectId = form.state.values.projectId;
     if (projectId && allBranches) {
       const filtered = allBranches.filter((b) => b.project_id === projectId);
-      setAvailableBranches(filtered);
+      setAvailableBranches(filtered as Branch[]);
     } else if (!projectId) {
       setAvailableBranches([]);
     }
@@ -147,7 +147,7 @@ export const CreateDocumentDialog: React.FC<CreateDocumentDialogProps> = ({
   useEffect(() => {
     if (preselectedProjectId && allBranches) {
       const filtered = allBranches.filter((b) => b.project_id === preselectedProjectId);
-      setAvailableBranches(filtered);
+      setAvailableBranches(filtered as Branch[]);
     }
   }, [preselectedProjectId, allBranches]);
 
@@ -182,7 +182,7 @@ export const CreateDocumentDialog: React.FC<CreateDocumentDialogProps> = ({
       const filtered = allFolders.filter(
         (f) => f.project_id === projectId && f.branch_id === branchId
       );
-      setAvailableFolders(filtered);
+      setAvailableFolders(filtered as Folder[]);
     } else {
       setAvailableFolders([]);
     }

@@ -56,7 +56,7 @@ function ProjectLayout() {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   // Load project and branches
-  const { data: projects, isLoading: projectsLoading } = useLiveQuery(() => projectsCollection);
+  const { data: projects, isLoading: projectsLoading } = useLiveQuery(() => projectsCollection as any);
   const { data: branches, isLoading: branchesLoading } = useLiveQuery(
     () => projectBranchesCollection
   );
@@ -77,6 +77,7 @@ function ProjectLayout() {
       // Reset if main branch appears
       setHasWaitedForSync(false);
     }
+    return undefined;
   }, [hasChildRoute, mainBranch, branchesLoading, branches]);
 
   // Redirect to main branch route when main branch is available (only if not already on a child route)

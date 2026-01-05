@@ -30,7 +30,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ variant = "icon", clas
 
   if (variant === "button") {
     return (
-      <Menu.Root disableScrollLock>
+      <Menu.Root>
         <Menu.Trigger className={`home-theme-button ${className}`} aria-label="Theme Options">
           <ThemeIcon mode={themeMode} />
           <span>Theme</span>
@@ -72,7 +72,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ variant = "icon", clas
   }
 
   return (
-    <Menu.Root disableScrollLock>
+    <Menu.Root>
       <Menu.Trigger className={`home-theme-icon ${className}`} aria-label="Theme Options">
         <ThemeIcon mode={themeMode} />
       </Menu.Trigger>

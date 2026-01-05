@@ -7,21 +7,8 @@
 
 import React, { useMemo } from "react";
 import { useLiveQuery } from "@tanstack/react-db";
-import { branchesCollection } from "../lib/electric-collections";
+import { branchesCollection, type Branch } from "../lib/electric-collections";
 import "./BranchVisualization.css";
-
-// Import Branch type from schema - using inline type for now
-
-interface Branch {
-  id: string;
-  name: string;
-  is_main: boolean;
-  parent_branch_id: string | null;
-  created_at: string;
-  created_by: string;
-  merged_at: string | null;
-  merged_by: string | null;
-}
 
 interface BranchVisualizationProps {
   projectId: string;
@@ -34,7 +21,7 @@ export const BranchVisualization: React.FC<BranchVisualizationProps> = ({
   selectedBranchId,
   onBranchSelect,
 }) => {
-  const { data: allBranches } = useLiveQuery(() => branchesCollection);
+  const { data: allBranches } = useLiveQuery(() => branchesCollection as any);
 
   // Filter branches for this project
   const branches = useMemo(() => {
@@ -55,8 +42,8 @@ export const BranchVisualization: React.FC<BranchVisualizationProps> = ({
     branches.forEach((branch) => {
       branchMap.set(branch.id, {
         ...branch,
-        children: [],
-      });
+        children: [] as Branch[],
+      } as Branch & { children: Branch[] });
     });
 
     // Build parent-child relationships
@@ -64,7 +51,7 @@ export const BranchVisualization: React.FC<BranchVisualizationProps> = ({
       if (branch.parent_branch_id && branchMap.has(branch.parent_branch_id)) {
         const parent = branchMap.get(branch.parent_branch_id)!;
         const child = branchMap.get(branch.id)!;
-        parent.children.push(child);
+        parent.children.push(child as Branch);
       }
     });
 
@@ -84,14 +71,14 @@ export const BranchVisualization: React.FC<BranchVisualizationProps> = ({
     branches.forEach((branch) => {
       map.set(branch.id, {
         ...branch,
-        children: [],
-      });
+        children: [] as Branch[],
+      } as Branch & { children: Branch[] });
     });
     branches.forEach((branch) => {
       if (branch.parent_branch_id && map.has(branch.parent_branch_id)) {
         const parent = map.get(branch.parent_branch_id)!;
         const child = map.get(branch.id)!;
-        parent.children.push(child);
+        parent.children.push(child as Branch);
       }
     });
     // Sort children by creation date

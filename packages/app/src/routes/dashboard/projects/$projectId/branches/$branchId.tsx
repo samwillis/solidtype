@@ -56,8 +56,8 @@ import { MergeBranchDialog } from "../../../../../components/dialogs/MergeBranch
 import "../../../../../styles/dashboard.css";
 
 // Format time ago helper
-function formatTimeAgo(dateString: string): string {
-  const date = new Date(dateString);
+function formatTimeAgo(dateInput: string | Date): string {
+  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -160,7 +160,7 @@ function BranchView() {
   };
 
   // Load project and branches
-  const { data: projects, isLoading: projectsLoading } = useLiveQuery(() => projectsCollection);
+  const { data: projects, isLoading: projectsLoading } = useLiveQuery(() => projectsCollection as any);
   const { data: branches, isLoading: branchesLoading } = useLiveQuery(
     () => projectBranchesCollection
   );

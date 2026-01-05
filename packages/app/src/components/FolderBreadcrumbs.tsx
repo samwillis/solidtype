@@ -22,7 +22,7 @@ export const FolderBreadcrumbs: React.FC<FolderBreadcrumbsProps> = ({
   currentFolderId,
   onNavigate,
 }) => {
-  const { data: allFolders } = useLiveQuery(() => foldersCollection);
+  const { data: allFolders } = useLiveQuery(() => foldersCollection as any);
 
   // Build breadcrumb path from current folder to root
   const breadcrumbPath = useMemo(() => {
@@ -35,7 +35,7 @@ export const FolderBreadcrumbs: React.FC<FolderBreadcrumbsProps> = ({
     while (folderId) {
       const folder = allFolders.find((f) => f.id === folderId && f.branch_id === branchId);
       if (folder) {
-        path.unshift(folder);
+        path.unshift(folder as Folder);
         folderId = folder.parent_id;
       } else {
         break;

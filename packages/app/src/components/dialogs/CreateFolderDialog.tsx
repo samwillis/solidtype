@@ -17,7 +17,12 @@ import {
   getFoldersForBranch,
 } from "../../lib/server-functions";
 import { useLiveQuery } from "@tanstack/react-db";
-import { projectsCollection, branchesCollection } from "../../lib/electric-collections";
+import {
+  projectsCollection,
+  branchesCollection,
+  type Branch,
+  type Folder,
+} from "../../lib/electric-collections";
 import { z } from "zod";
 import type { BranchOutput } from "../../schemas/entities/branch";
 import type { FolderOutput } from "../../schemas/entities/folder";
@@ -55,10 +60,10 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
   const [loadingFolders, setLoadingFolders] = useState(false);
 
   // Get available projects
-  const { data: projects } = useLiveQuery(() => projectsCollection);
+  const { data: projects } = useLiveQuery(() => projectsCollection as any);
 
   // Get all branches (will filter by project in form)
-  const { data: allBranches } = useLiveQuery(() => branchesCollection);
+  const { data: allBranches } = useLiveQuery(() => branchesCollection as any);
 
   const form = useForm({
     defaultValues: {
@@ -107,7 +112,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
     setLoadingBranches(true);
     getBranchesForProject({ data: { projectId } })
       .then((result) => {
-        setAvailableBranches(result.data || []);
+        setAvailableBranches((result.data || []) as unknown as Branch[]);
       })
       .catch((error) => {
         console.error("Failed to load branches:", error);
@@ -123,7 +128,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
     const projectId = form.state.values.projectId;
     if (projectId && allBranches) {
       const filtered = allBranches.filter((b) => b.project_id === projectId);
-      setAvailableBranches(filtered);
+      setAvailableBranches(filtered as Branch[]);
     } else if (!projectId) {
       setAvailableBranches([]);
     }
@@ -133,7 +138,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
   useEffect(() => {
     if (preselectedProjectId && allBranches) {
       const filtered = allBranches.filter((b) => b.project_id === preselectedProjectId);
-      setAvailableBranches(filtered);
+      setAvailableBranches(filtered as Branch[]);
     }
   }, [preselectedProjectId, allBranches]);
 
@@ -149,7 +154,7 @@ export const CreateFolderDialog: React.FC<CreateFolderDialogProps> = ({
     setLoadingFolders(true);
     getFoldersForBranch({ data: { projectId, branchId } })
       .then((result) => {
-        setAvailableFolders(result.data || []);
+        setAvailableFolders((result.data || []) as unknown as Folder[]);
       })
       .catch((error) => {
         console.error("Failed to load folders:", error);

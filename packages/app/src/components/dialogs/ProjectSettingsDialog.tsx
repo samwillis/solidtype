@@ -75,7 +75,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const [memberActionLoading, setMemberActionLoading] = useState<string | null>(null);
 
   // Load project data
-  const { data: allProjects } = useLiveQuery(() => projectsCollection);
+  const { data: allProjects } = useLiveQuery(() => projectsCollection as any);
   const project = allProjects?.find((p) => p.id === projectId);
 
   const currentUserId = session?.user?.id;

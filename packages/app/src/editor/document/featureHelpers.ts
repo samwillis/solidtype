@@ -586,9 +586,9 @@ export function parseFeature(featureMap: Y.Map<unknown>): Feature | null {
       };
 
       if (role) {
-        return { ...base, role } as DatumPlaneFeature;
+        return { ...base, role } as unknown as DatumPlaneFeature;
       }
-      return base as PlaneFeature;
+      return base as unknown as PlaneFeature;
     }
 
     case "axis": {
@@ -608,7 +608,7 @@ export function parseFeature(featureMap: Y.Map<unknown>): Feature | null {
         displayOffset: featureMap.get("displayOffset") as number | undefined,
         color: featureMap.get("color") as string | undefined,
         visible: featureMap.get("visible") as boolean | undefined,
-      } as AxisFeature;
+      } as unknown as AxisFeature;
     }
 
     case "sketch": {

@@ -39,7 +39,7 @@ export const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get available workspaces
-  const { data: workspaces } = useLiveQuery(workspacesCollection);
+  const { data: workspaces } = useLiveQuery(workspacesCollection as any);
 
   const form = useForm({
     defaultValues: {

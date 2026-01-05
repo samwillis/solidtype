@@ -70,7 +70,7 @@ export async function findWithBranch(docId: string): Promise<DocumentWithBranch 
     name: doc.name,
     type: doc.type,
     durableStreamId: doc.durableStreamId,
-    featureCount: doc.featureCount,
+    featureCount: doc.featureCount ?? 0,
     sortOrder: doc.sortOrder,
     isDeleted: doc.isDeleted,
     createdBy: doc.createdBy,

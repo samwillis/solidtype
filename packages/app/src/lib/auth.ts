@@ -139,6 +139,7 @@ async function createFirstProject(workspaceId: string, userId: string) {
     // Log error but don't fail user creation
     console.error("Failed to create first project:", error);
     // Don't throw - this is optional and shouldn't block user signup
+    return undefined;
   }
 }
 

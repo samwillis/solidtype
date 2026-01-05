@@ -73,7 +73,7 @@ interface ToolApprovalRequest {
  */
 export function useAIChatSessions(options: { context?: "dashboard" | "editor" }) {
   // Query sessions from TanStack DB collection (synced via Electric)
-  const sessionsQuery = useLiveQuery(() => aiChatSessionsCollection);
+  const sessionsQuery = useLiveQuery(() => aiChatSessionsCollection as any);
 
   // Filter and transform collection rows (snake_case from DB → camelCase for app)
   const allSessions = sessionsQuery.data || [];
