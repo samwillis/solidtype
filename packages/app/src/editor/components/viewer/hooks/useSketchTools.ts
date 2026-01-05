@@ -212,6 +212,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     setPreviewArc(null);
     setPreviewRect(null);
     setPreviewPolygon(null);
+    setBoxSelection(null);
   }, [sketchMode.active, sketchMode.sketchId, sketchMode.activeTool]);
 
   // Update preview shapes based on current state
