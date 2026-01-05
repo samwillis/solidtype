@@ -4,12 +4,17 @@
  * All functions use session-based authentication via middleware.
  * No userId is accepted from client inputs.
  *
- * NOTE: Server-only modules (db, authz, repos) are imported dynamically
- * inside handlers to avoid bundling them for the client.
+ * TanStack Start automatically code-splits server function handlers
+ * so top-level imports of server-only modules are safe here.
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { eq, desc, and } from "drizzle-orm";
 import { authMiddleware } from "../server-fn-middleware";
+import { db } from "../db";
+import { branches, folders, documents } from "../../db/schema";
+import { requireProjectAccess, requireBranchAccess } from "../authz";
+import { getCurrentTxid } from "./db-helpers";
 import {
   getBranchesSchema,
   createBranchSchema,
@@ -31,10 +36,6 @@ export const getBranchesForProject = createServerFn({ method: "POST" })
   .inputValidator(getBranchesSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { branches } = await import("../../db/schema");
-    const { eq, desc } = await import("drizzle-orm");
-    const { requireProjectAccess } = await import("../authz");
 
     // Verify project access
     await requireProjectAccess(session, data.projectId);
@@ -60,10 +61,6 @@ export const createBranchMutation = createServerFn({ method: "POST" })
   .inputValidator(createBranchSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { branches } = await import("../../db/schema");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireProjectAccess } = await import("../authz");
 
     // Verify project access for edit
     const { project, canEdit } = await requireProjectAccess(session, data.projectId);
@@ -100,11 +97,6 @@ export const updateBranchMutation = createServerFn({ method: "POST" })
   .inputValidator(updateBranchSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { branches } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireBranchAccess } = await import("../authz");
 
     // Verify branch access for edit
     await requireBranchAccess(session, data.branchId, "edit");
@@ -129,11 +121,6 @@ export const deleteBranchMutation = createServerFn({ method: "POST" })
   .inputValidator(deleteBranchSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { branches } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireBranchAccess } = await import("../authz");
 
     // Verify branch access for edit
     const { branch } = await requireBranchAccess(session, data.branchId, "edit");
@@ -160,11 +147,6 @@ export const createBranchWithContentMutation = createServerFn({ method: "POST" }
   .inputValidator(createBranchWithContentSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { branches, folders, documents } = await import("../../db/schema");
-    const { eq, and } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireProjectAccess, requireBranchAccess } = await import("../authz");
 
     // Verify project access for edit
     await requireProjectAccess(session, data.projectId);
@@ -378,11 +360,6 @@ export const mergeBranchMutation = createServerFn({ method: "POST" })
   .inputValidator(mergeBranchSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { branches, documents } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireBranchAccess } = await import("../authz");
 
     const { sourceBranchId, targetBranchId } = data;
 
@@ -400,15 +377,9 @@ export const mergeBranchMutation = createServerFn({ method: "POST" })
     }
 
     // Get all documents from both branches
-    const sourceDocs = await db
-      .select()
-      .from(documents)
-      .where(eq(documents.branchId, sourceBranchId));
+    const sourceDocs = await db.select().from(documents).where(eq(documents.branchId, sourceBranchId));
 
-    const targetDocs = await db
-      .select()
-      .from(documents)
-      .where(eq(documents.branchId, targetBranchId));
+    const targetDocs = await db.select().from(documents).where(eq(documents.branchId, targetBranchId));
 
     const sourceDocsMap = new Map(sourceDocs.map((d) => [d.baseDocumentId || d.id, d]));
     const targetDocsMap = new Map(targetDocs.map((d) => [d.baseDocumentId || d.id, d]));

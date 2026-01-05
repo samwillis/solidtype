@@ -20,6 +20,8 @@
  */
 
 import { createMiddleware } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { auth } from "./auth";
 
 /**
  * Session type matching better-auth's session structure
@@ -45,10 +47,6 @@ export interface Session {
  * Adds `session` to the context for downstream handlers.
  */
 export const authMiddleware = createMiddleware().server(async ({ next }) => {
-  // Dynamic imports to prevent bundling server-only code
-  const { getRequest } = await import("@tanstack/react-start/server");
-  const { auth } = await import("./auth");
-
   const request = getRequest();
   const session = await auth.api.getSession({
     headers: request.headers,
@@ -72,10 +70,6 @@ export const authMiddleware = createMiddleware().server(async ({ next }) => {
  * Adds `session` (or null) to the context for downstream handlers.
  */
 export const optionalAuthMiddleware = createMiddleware().server(async ({ next }) => {
-  // Dynamic imports to prevent bundling server-only code
-  const { getRequest } = await import("@tanstack/react-start/server");
-  const { auth } = await import("./auth");
-
   const request = getRequest();
   let session: Session | null = null;
 

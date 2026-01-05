@@ -4,12 +4,22 @@
  * All functions use session-based authentication via middleware.
  * No userId is accepted from client inputs.
  *
- * NOTE: Server-only modules (db, authz, repos) are imported dynamically
- * inside handlers to avoid bundling them for the client.
+ * TanStack Start automatically code-splits server function handlers
+ * so top-level imports of server-only modules are safe here.
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { eq } from "drizzle-orm";
 import { authMiddleware } from "../server-fn-middleware";
+import { db } from "../db";
+import { projects, projectMembers, branches } from "../../db/schema";
+import {
+  requireWorkspaceMember,
+  requireProjectAccess,
+  requireProjectRole,
+} from "../authz";
+import * as projectsRepo from "../../repos/projects";
+import { getCurrentTxid } from "./db-helpers";
 import {
   getProjectsSchema,
   getProjectSchema,
@@ -30,8 +40,6 @@ export const getProjects = createServerFn({ method: "GET" })
   .inputValidator(getProjectsSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { requireWorkspaceMember } = await import("../authz");
-    const projectsRepo = await import("../../repos/projects");
 
     // Verify workspace membership
     await requireWorkspaceMember(session, data.workspaceId);
@@ -47,10 +55,6 @@ export const getProject = createServerFn({ method: "GET" })
   .inputValidator(getProjectSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { projects } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { requireProjectAccess } = await import("../authz");
 
     const { project, canEdit, role } = await requireProjectAccess(session, data.projectId);
 
@@ -78,9 +82,6 @@ export const createProject = createServerFn({ method: "POST" })
   .inputValidator(createProjectSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { projects, projectMembers, branches } = await import("../../db/schema");
-    const { requireWorkspaceMember } = await import("../authz");
 
     // Verify workspace membership
     await requireWorkspaceMember(session, data.workspaceId);
@@ -126,10 +127,6 @@ export const createProjectMutation = createServerFn({ method: "POST" })
   .inputValidator(createProjectSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { projects, projectMembers, branches } = await import("../../db/schema");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireWorkspaceMember } = await import("../authz");
 
     // Verify workspace membership
     await requireWorkspaceMember(session, data.workspaceId);
@@ -174,11 +171,6 @@ export const updateProjectMutation = createServerFn({ method: "POST" })
   .inputValidator(updateProjectSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { projects } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireProjectRole } = await import("../authz");
 
     // Require owner or admin role
     await requireProjectRole(session, data.projectId, ["owner", "admin"]);
@@ -203,11 +195,6 @@ export const deleteProjectMutation = createServerFn({ method: "POST" })
   .inputValidator(deleteProjectSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { projects } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireProjectRole } = await import("../authz");
 
     // Only owners can delete projects
     await requireProjectRole(session, data.projectId, ["owner"]);

@@ -4,12 +4,23 @@
  * Workspace and project member operations.
  * All functions use session-based authentication via middleware.
  *
- * NOTE: Server-only modules (db, authz, repos) are imported dynamically
- * inside handlers to avoid bundling them for the client.
+ * TanStack Start automatically code-splits server function handlers
+ * so top-level imports of server-only modules are safe here.
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { eq, and, asc } from "drizzle-orm";
 import { authMiddleware } from "../server-fn-middleware";
+import { db } from "../db";
+import { workspaceMembers, projectMembers } from "../../db/schema";
+import { user } from "../../db/schema/better-auth";
+import {
+  requireWorkspaceMember,
+  requireWorkspaceRole,
+  requireProjectAccess,
+  requireProjectRole,
+} from "../authz";
+import { NotFoundError, ForbiddenError, ConflictError } from "../http/errors";
 import {
   listWorkspaceMembersSchema,
   addWorkspaceMemberSchema,
@@ -33,11 +44,6 @@ export const listWorkspaceMembersMutation = createServerFn({ method: "POST" })
   .inputValidator(listWorkspaceMembersSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { workspaceMembers } = await import("../../db/schema");
-    const { user } = await import("../../db/schema/better-auth");
-    const { eq, asc } = await import("drizzle-orm");
-    const { requireWorkspaceMember } = await import("../authz");
 
     // Verify user has access to this workspace
     await requireWorkspaceMember(session, data.workspaceId);
@@ -68,12 +74,6 @@ export const addWorkspaceMemberMutation = createServerFn({ method: "POST" })
   .inputValidator(addWorkspaceMemberSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { workspaceMembers } = await import("../../db/schema");
-    const { user } = await import("../../db/schema/better-auth");
-    const { eq, and } = await import("drizzle-orm");
-    const { requireWorkspaceRole } = await import("../authz");
-    const { NotFoundError, ConflictError } = await import("../http/errors");
 
     // Verify user is admin or owner
     await requireWorkspaceRole(session, data.workspaceId, ["owner", "admin"]);
@@ -126,11 +126,6 @@ export const updateWorkspaceMemberRoleMutation = createServerFn({ method: "POST"
   .inputValidator(updateWorkspaceMemberRoleSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { workspaceMembers } = await import("../../db/schema");
-    const { eq, and } = await import("drizzle-orm");
-    const { requireWorkspaceRole } = await import("../authz");
-    const { NotFoundError, ForbiddenError } = await import("../http/errors");
 
     // Verify user is admin or owner
     await requireWorkspaceRole(session, data.workspaceId, ["owner", "admin"]);
@@ -173,11 +168,6 @@ export const removeWorkspaceMemberMutation = createServerFn({ method: "POST" })
   .inputValidator(removeWorkspaceMemberSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { workspaceMembers } = await import("../../db/schema");
-    const { eq, and } = await import("drizzle-orm");
-    const { requireWorkspaceRole } = await import("../authz");
-    const { NotFoundError, ForbiddenError } = await import("../http/errors");
 
     // Verify user is admin or owner
     await requireWorkspaceRole(session, data.workspaceId, ["owner", "admin"]);
@@ -223,11 +213,6 @@ export const listProjectMembersMutation = createServerFn({ method: "POST" })
   .inputValidator(listProjectMembersSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { projectMembers } = await import("../../db/schema");
-    const { user } = await import("../../db/schema/better-auth");
-    const { eq, asc } = await import("drizzle-orm");
-    const { requireProjectAccess } = await import("../authz");
 
     // Verify user has access to this project
     await requireProjectAccess(session, data.projectId);
@@ -259,12 +244,6 @@ export const addProjectMemberMutation = createServerFn({ method: "POST" })
   .inputValidator(addProjectMemberSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { projectMembers } = await import("../../db/schema");
-    const { user } = await import("../../db/schema/better-auth");
-    const { eq, and } = await import("drizzle-orm");
-    const { requireProjectRole } = await import("../authz");
-    const { NotFoundError, ConflictError } = await import("../http/errors");
 
     // Verify user is admin or owner
     await requireProjectRole(session, data.projectId, ["owner", "admin"]);
@@ -319,11 +298,6 @@ export const updateProjectMemberMutation = createServerFn({ method: "POST" })
   .inputValidator(updateProjectMemberSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { projectMembers } = await import("../../db/schema");
-    const { eq, and } = await import("drizzle-orm");
-    const { requireProjectRole } = await import("../authz");
-    const { NotFoundError, ForbiddenError } = await import("../http/errors");
 
     // Verify user is admin or owner
     await requireProjectRole(session, data.projectId, ["owner", "admin"]);
@@ -356,9 +330,7 @@ export const updateProjectMemberMutation = createServerFn({ method: "POST" })
     await db
       .update(projectMembers)
       .set(updates)
-      .where(
-        and(eq(projectMembers.projectId, data.projectId), eq(projectMembers.userId, data.userId))
-      );
+      .where(and(eq(projectMembers.projectId, data.projectId), eq(projectMembers.userId, data.userId)));
 
     return { success: true };
   });
@@ -371,11 +343,6 @@ export const removeProjectMemberMutation = createServerFn({ method: "POST" })
   .inputValidator(removeProjectMemberSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { projectMembers } = await import("../../db/schema");
-    const { eq, and } = await import("drizzle-orm");
-    const { requireProjectRole } = await import("../authz");
-    const { NotFoundError, ForbiddenError } = await import("../http/errors");
 
     // Verify user is admin or owner
     await requireProjectRole(session, data.projectId, ["owner", "admin"]);
@@ -399,9 +366,7 @@ export const removeProjectMemberMutation = createServerFn({ method: "POST" })
     // Remove member
     await db
       .delete(projectMembers)
-      .where(
-        and(eq(projectMembers.projectId, data.projectId), eq(projectMembers.userId, data.userId))
-      );
+      .where(and(eq(projectMembers.projectId, data.projectId), eq(projectMembers.userId, data.userId)));
 
     return { success: true };
   });

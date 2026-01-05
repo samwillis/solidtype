@@ -4,12 +4,18 @@
  * All functions use session-based authentication via middleware.
  * No userId is accepted from client inputs.
  *
- * NOTE: Server-only modules (db, authz, repos) are imported dynamically
- * inside handlers to avoid bundling them for the client.
+ * TanStack Start automatically code-splits server function handlers
+ * so top-level imports of server-only modules are safe here.
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { eq } from "drizzle-orm";
 import { authMiddleware } from "../server-fn-middleware";
+import { db } from "../db";
+import { documents } from "../../db/schema";
+import { requireDocumentAccess, requireBranchAccess } from "../authz";
+import { getCurrentTxid } from "./db-helpers";
+import { normalizeNullableUuid } from "./helpers";
 import {
   getDocumentSchema,
   updateDocumentSchema,
@@ -18,7 +24,6 @@ import {
   updateDocumentMutationSchema,
   deleteDocumentMutationSchema,
 } from "../../validators/document";
-import { normalizeNullableUuid } from "./helpers";
 
 // ============================================================================
 // Query Functions
@@ -32,7 +37,6 @@ export const getDocument = createServerFn({ method: "GET" })
   .inputValidator(getDocumentSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { requireDocumentAccess } = await import("../authz");
 
     const { doc, canEdit } = await requireDocumentAccess(session, data.docId, "view");
     return { document: doc, access: { canEdit } };
@@ -50,10 +54,6 @@ export const updateDocument = createServerFn({ method: "POST" })
   .inputValidator(updateDocumentSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { documents } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { requireDocumentAccess } = await import("../authz");
 
     // Require edit access
     await requireDocumentAccess(session, data.docId, "edit");
@@ -80,10 +80,6 @@ export const deleteDocument = createServerFn({ method: "POST" })
   .inputValidator(deleteDocumentSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { documents } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { requireDocumentAccess } = await import("../authz");
 
     // Require edit access
     await requireDocumentAccess(session, data.docId, "edit");
@@ -113,11 +109,6 @@ export const createDocumentMutation = createServerFn({ method: "POST" })
   .inputValidator(createDocumentSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { documents } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireBranchAccess } = await import("../authz");
 
     // Verify branch access for edit
     await requireBranchAccess(session, data.document.branchId, "edit");
@@ -163,11 +154,6 @@ export const updateDocumentMutation = createServerFn({ method: "POST" })
   .inputValidator(updateDocumentMutationSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { documents } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireDocumentAccess } = await import("../authz");
 
     // Require edit access
     await requireDocumentAccess(session, data.documentId, "edit");
@@ -196,11 +182,6 @@ export const deleteDocumentMutation = createServerFn({ method: "POST" })
   .inputValidator(deleteDocumentMutationSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { documents } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireDocumentAccess } = await import("../authz");
 
     // Require edit access
     await requireDocumentAccess(session, data.documentId, "edit");

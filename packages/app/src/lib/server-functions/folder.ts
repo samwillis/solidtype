@@ -4,13 +4,19 @@
  * All functions use session-based authentication via middleware.
  * No userId is accepted from client inputs.
  *
- * NOTE: Server-only modules (db, authz, repos) are imported dynamically
- * inside handlers to avoid bundling them for the client.
+ * TanStack Start automatically code-splits server function handlers
+ * so top-level imports of server-only modules are safe here.
  */
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { eq, and, asc } from "drizzle-orm";
 import { authMiddleware } from "../server-fn-middleware";
+import { db } from "../db";
+import { folders } from "../../db/schema";
+import { requireBranchAccess } from "../authz";
+import { getCurrentTxid } from "./db-helpers";
+import { NotFoundError } from "../http/errors";
 import {
   createFolderSchema,
   updateFolderSchema,
@@ -39,11 +45,6 @@ export const getFoldersForBranch = createServerFn({ method: "POST" })
   .inputValidator(getFoldersSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-
-    const { db } = await import("../db");
-    const { folders } = await import("../../db/schema");
-    const { eq, and, asc } = await import("drizzle-orm");
-    const { requireBranchAccess } = await import("../authz");
 
     // Verify branch access
     await requireBranchAccess(session, data.branchId, "view");
@@ -81,11 +82,6 @@ export const createFolderMutation = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { session } = context;
 
-    const { db } = await import("../db");
-    const { folders } = await import("../../db/schema");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireBranchAccess } = await import("../authz");
-
     // Verify branch access for edit
     await requireBranchAccess(session, data.folder.branchId, "edit");
 
@@ -115,13 +111,6 @@ export const updateFolderMutation = createServerFn({ method: "POST" })
   .inputValidator(updateFolderSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-
-    const { db } = await import("../db");
-    const { folders } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireBranchAccess } = await import("../authz");
-    const { NotFoundError } = await import("../http/errors");
 
     // Get the folder to find its branch
     const folder = await db.query.folders.findFirst({
@@ -155,13 +144,6 @@ export const deleteFolderMutation = createServerFn({ method: "POST" })
   .inputValidator(deleteFolderSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-
-    const { db } = await import("../db");
-    const { folders } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireBranchAccess } = await import("../authz");
-    const { NotFoundError } = await import("../http/errors");
 
     // Get the folder to find its branch
     const folder = await db.query.folders.findFirst({

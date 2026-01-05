@@ -4,19 +4,24 @@
  * All functions use session-based authentication via middleware.
  * No userId is accepted from client inputs.
  *
- * NOTE: Server-only modules (db, authz, repos) are imported dynamically
- * inside handlers to avoid bundling them for the client.
+ * TanStack Start automatically code-splits server function handlers
+ * so top-level imports of server-only modules are safe here.
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { eq } from "drizzle-orm";
 import { authMiddleware } from "../server-fn-middleware";
+import { db } from "../db";
+import { aiChatSessions } from "../../db/schema";
+import { requireChatSessionOwner } from "../authz";
+import { getCurrentTxid } from "./db-helpers";
+import { normalizeNullableUuid } from "./helpers";
 import {
   createChatSessionSchema,
   createChatSessionDirectSchema,
   updateChatSessionSchema,
   deleteChatSessionSchema,
 } from "../../validators/ai-chat";
-import { normalizeNullableUuid } from "./helpers";
 
 // ============================================================================
 // Mutation Functions
@@ -30,10 +35,6 @@ export const createChatSessionMutation = createServerFn({ method: "POST" })
   .inputValidator(createChatSessionSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-
-    const { db } = await import("../db");
-    const { aiChatSessions } = await import("../../db/schema");
-    const { getCurrentTxid } = await import("./db-helpers");
 
     return await db.transaction(async (tx) => {
       // Use client-provided ID for optimistic updates, or generate a new one
@@ -67,12 +68,6 @@ export const updateChatSessionMutation = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { session } = context;
 
-    const { db } = await import("../db");
-    const { aiChatSessions } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireChatSessionOwner } = await import("../authz");
-
     // Ensure user owns the session
     await requireChatSessionOwner(session, data.sessionId);
 
@@ -100,12 +95,6 @@ export const deleteChatSessionMutation = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { session } = context;
 
-    const { db } = await import("../db");
-    const { aiChatSessions } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireChatSessionOwner } = await import("../authz");
-
     // Ensure user owns the session
     await requireChatSessionOwner(session, data.sessionId);
 
@@ -127,9 +116,6 @@ export const createChatSessionDirect = createServerFn({ method: "POST" })
   .inputValidator(createChatSessionDirectSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-
-    const { db } = await import("../db");
-    const { aiChatSessions } = await import("../../db/schema");
 
     const sessionId = crypto.randomUUID();
     const durableStreamId = `ai-chat/${sessionId}`;

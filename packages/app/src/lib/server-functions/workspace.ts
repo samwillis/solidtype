@@ -4,12 +4,18 @@
  * All functions use session-based authentication via middleware.
  * No userId is accepted from client inputs.
  *
- * NOTE: Server-only modules (db, authz, repos) are imported dynamically
- * inside handlers to avoid bundling them for the client.
+ * TanStack Start automatically code-splits server function handlers
+ * so top-level imports of server-only modules are safe here.
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { eq } from "drizzle-orm";
 import { authMiddleware } from "../server-fn-middleware";
+import { db } from "../db";
+import { workspaces, workspaceMembers } from "../../db/schema";
+import { requireWorkspaceMember, requireWorkspaceRole } from "../authz";
+import * as workspacesRepo from "../../repos/workspaces";
+import { getCurrentTxid } from "./db-helpers";
 import {
   getWorkspacesSchema,
   getWorkspaceSchema,
@@ -30,7 +36,6 @@ export const getWorkspaces = createServerFn({ method: "GET" })
   .inputValidator(getWorkspacesSchema)
   .handler(async ({ context }) => {
     const { session } = context;
-    const workspacesRepo = await import("../../repos/workspaces");
     return workspacesRepo.listForUser(session.user.id);
   });
 
@@ -42,8 +47,6 @@ export const getWorkspace = createServerFn({ method: "GET" })
   .inputValidator(getWorkspaceSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { requireWorkspaceMember } = await import("../authz");
-    const workspacesRepo = await import("../../repos/workspaces");
 
     const membership = await requireWorkspaceMember(session, data.workspaceId);
 
@@ -67,8 +70,6 @@ export const createWorkspace = createServerFn({ method: "POST" })
   .inputValidator(createWorkspaceSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { workspaces, workspaceMembers } = await import("../../db/schema");
 
     const [workspace] = await db.transaction(async (tx) => {
       const [ws] = await tx
@@ -101,9 +102,6 @@ export const createWorkspaceMutation = createServerFn({ method: "POST" })
   .inputValidator(createWorkspaceSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { workspaces, workspaceMembers } = await import("../../db/schema");
-    const { getCurrentTxid } = await import("./db-helpers");
 
     return await db.transaction(async (tx) => {
       const [ws] = await tx
@@ -135,11 +133,6 @@ export const updateWorkspaceMutation = createServerFn({ method: "POST" })
   .inputValidator(updateWorkspaceSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { workspaces } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireWorkspaceRole } = await import("../authz");
 
     // Require owner or admin role for updates
     await requireWorkspaceRole(session, data.workspaceId, ["owner", "admin"]);
@@ -164,11 +157,6 @@ export const deleteWorkspaceMutation = createServerFn({ method: "POST" })
   .inputValidator(deleteWorkspaceSchema)
   .handler(async ({ context, data }) => {
     const { session } = context;
-    const { db } = await import("../db");
-    const { workspaces } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getCurrentTxid } = await import("./db-helpers");
-    const { requireWorkspaceRole } = await import("../authz");
 
     // Only owners can delete workspaces
     await requireWorkspaceRole(session, data.workspaceId, ["owner"]);
