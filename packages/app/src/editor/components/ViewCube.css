@@ -1,12 +1,14 @@
 .view-cube-container {
   position: absolute;
-  bottom: 16px;
-  right: 16px;
+  bottom: 0;
+  right: 0;
+  width: 130px;
+  height: 130px;
 }
 
 .view-cube {
-  width: 100px;
-  height: 100px;
+  width: 130px;
+  height: 130px;
   border-radius: 6px;
   overflow: visible;
 }
