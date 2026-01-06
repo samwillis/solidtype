@@ -26,6 +26,7 @@ import { useSketch } from "../../contexts/SketchContext";
 import { useDocument } from "../../contexts/DocumentContext";
 import { UserCursors3D } from "../UserCursors3D";
 import { UserCursor2D } from "../UserCursor2D";
+import { SketchCursors } from "../SketchCursors";
 import { useFollowing } from "../../../hooks/useFollowing";
 import {
   findFeature,
@@ -257,6 +258,69 @@ const Viewer: React.FC = () => {
     [cameraRef, sketchMode.sketchId, sketchPlaneTransforms]
   );
 
+  // Sketch to screen conversion (inverse of screenToSketch)
+  // Used for rendering other users' sketch cursors
+  const sketchToScreen = useCallback(
+    (sketchPoint: [number, number]): { x: number; y: number } | null => {
+      const camera = cameraRef.current;
+      const container = containerRef.current;
+      if (!camera || !container) return null;
+
+      const sketchId = sketchMode.sketchId;
+      const planeId = sketchMode.planeId;
+      if (!sketchId || !planeId) return null;
+
+      const kernelTransform = sketchPlaneTransforms[sketchId];
+
+      let planePoint: THREE.Vector3;
+      let xDir: THREE.Vector3;
+      let yDir: THREE.Vector3;
+
+      if (kernelTransform) {
+        planePoint = new THREE.Vector3(...kernelTransform.origin);
+        xDir = new THREE.Vector3(...kernelTransform.xDir);
+        yDir = new THREE.Vector3(...kernelTransform.yDir);
+      } else {
+        switch (planeId) {
+          case "xy":
+            planePoint = new THREE.Vector3(0, 0, 0);
+            xDir = new THREE.Vector3(1, 0, 0);
+            yDir = new THREE.Vector3(0, 1, 0);
+            break;
+          case "xz":
+            planePoint = new THREE.Vector3(0, 0, 0);
+            xDir = new THREE.Vector3(1, 0, 0);
+            yDir = new THREE.Vector3(0, 0, 1);
+            break;
+          case "yz":
+            planePoint = new THREE.Vector3(0, 0, 0);
+            xDir = new THREE.Vector3(0, 1, 0);
+            yDir = new THREE.Vector3(0, 0, 1);
+            break;
+          default:
+            return null;
+        }
+      }
+
+      // Convert 2D sketch coords to 3D world point
+      const [sketchX, sketchY] = sketchPoint;
+      const worldPoint = planePoint
+        .clone()
+        .add(xDir.clone().multiplyScalar(sketchX))
+        .add(yDir.clone().multiplyScalar(sketchY));
+
+      // Project to screen coordinates
+      const screenPos = worldPoint.clone().project(camera);
+      const rect = container.getBoundingClientRect();
+
+      return {
+        x: ((screenPos.x + 1) / 2) * rect.width,
+        y: ((-screenPos.y + 1) / 2) * rect.height,
+      };
+    },
+    [cameraRef, sketchMode.sketchId, sketchMode.planeId, sketchPlaneTransforms]
+  );
+
   // Constraint value update
   const updateConstraintValue = useCallback(
     (constraintId: string, value: number) => {
@@ -474,6 +538,35 @@ const Viewer: React.FC = () => {
     [sketchMode.active, setHover]
   );
 
+  // Handle 3D cursor broadcast for collaborative awareness
+  const handleCursorBroadcast = useCallback(
+    (hit: RaycastHit | null) => {
+      if (!awareness) return;
+      if (hit) {
+        awareness.updateCursor3D({
+          position: [hit.point.x, hit.point.y, hit.point.z],
+          normal: hit.normal ? [hit.normal.x, hit.normal.y, hit.normal.z] : undefined,
+          visible: true,
+        });
+      } else {
+        awareness.updateCursor3D({
+          position: [0, 0, 0],
+          visible: false,
+        });
+      }
+    },
+    [awareness]
+  );
+
+  // Handle 2D cursor broadcast for collaborative awareness (when not over 3D model)
+  const handleCursor2DBroadcast = useCallback(
+    (x: number, y: number, visible: boolean) => {
+      if (!awareness) return;
+      awareness.updateCursor2D({ x, y, visible });
+    },
+    [awareness]
+  );
+
   // 3D selection (face/edge click and hover)
   use3DSelection({
     containerRef,
@@ -487,6 +580,8 @@ const Viewer: React.FC = () => {
     onSelectEdge: handleSelectEdge,
     onClearSelection: handleClearSelection,
     onHover: handleHover,
+    onCursorBroadcast: handleCursorBroadcast,
+    onCursor2DBroadcast: handleCursor2DBroadcast,
     showEdges: viewerState.showEdges,
   });
 
@@ -499,9 +594,19 @@ const Viewer: React.FC = () => {
       container: containerRef,
       updateCamera,
       requestRender,
+      broadcastCamera,
       screenToSketch,
     });
-  }, [registerRefs, requestRender, updateCamera, screenToSketch, cameraRef, sceneRef, targetRef]);
+  }, [
+    registerRefs,
+    requestRender,
+    updateCamera,
+    broadcastCamera,
+    screenToSketch,
+    cameraRef,
+    sceneRef,
+    targetRef,
+  ]);
 
   // Toggle edge visibility
   /* eslint-disable react-hooks/immutability -- modifying Three.js object is intentional */
@@ -630,6 +735,16 @@ const Viewer: React.FC = () => {
       />
       {/* 2D cursor overlay for followed user */}
       <UserCursor2D followedUser={followedUser} containerRef={containerRef} />
+
+      {/* Sketch cursors for other users in the same sketch */}
+      {sketchMode.active && sketchMode.sketchId && (
+        <SketchCursors
+          connectedUsers={connectedUsers}
+          sketchId={sketchMode.sketchId}
+          transformPoint={sketchToScreen}
+          followingUserId={followingUserId}
+        />
+      )}
 
       {/* Selection box overlay for sketch mode drag selection */}
       {boxSelection && selectionBoxStyle && (

@@ -178,7 +178,9 @@ export class AIChatWorkerClient {
         // Timeout after 30 seconds
         setTimeout(() => {
           if (this.readyResolve === resolve) {
-            console.warn("[AI Chat Worker Client] ⚠️ waitForReady timed out after 30s, resolving anyway");
+            console.warn(
+              "[AI Chat Worker Client] ⚠️ waitForReady timed out after 30s, resolving anyway"
+            );
             resolve(); // Resolve anyway to prevent hanging
           }
         }, 30000);
@@ -211,7 +213,10 @@ export class AIChatWorkerClient {
       this.initializedDocumentId !== options.documentId;
 
     if (needsReinit) {
-      console.log("[AI Chat Worker Client] 🔄 Re-initializing with new documentId:", options.documentId);
+      console.log(
+        "[AI Chat Worker Client] 🔄 Re-initializing with new documentId:",
+        options.documentId
+      );
       this.sessionInitialized = false;
     }
 

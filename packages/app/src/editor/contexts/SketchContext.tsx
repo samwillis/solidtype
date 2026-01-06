@@ -2,7 +2,7 @@
  * SketchContext - manages sketch editing mode state
  */
 
-import React, { createContext, useContext, useState, useCallback, useRef } from "react";
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
 import * as Y from "yjs";
 import { useDocument } from "./DocumentContext";
 import { useViewer, type ViewPreset } from "./ViewerContext";
@@ -154,7 +154,16 @@ interface SketchProviderProps {
 }
 
 export function SketchProvider({ children }: SketchProviderProps) {
-  const { doc, addSketch, deleteFeature, undoManager, rebuildGate, setRebuildGate } = useDocument();
+  const {
+    doc,
+    addSketch,
+    deleteFeature,
+    undoManager,
+    rebuildGate,
+    setRebuildGate,
+    awareness,
+    features,
+  } = useDocument();
   const { actions, state } = useViewer();
 
   const [mode, setMode] = useState<SketchModeState>({
@@ -172,8 +181,31 @@ export function SketchProvider({ children }: SketchProviderProps) {
   // Store the previous rebuild gate position to restore when exiting sketch mode
   const previousRebuildGateRef = useRef<string | null>(null);
 
+  // Track if we're currently following someone's sketch mode (to avoid feedback loops)
+  const isFollowingSketchRef = useRef(false);
+
+  // Track the last followed user's sketch state to detect changes
+  const lastFollowedSketchIdRef = useRef<string | null>(null);
+
   // Mouse position in sketch coordinates (shared with StatusBar)
-  const [sketchMousePos, setSketchMousePos] = useState<SketchMousePos | null>(null);
+  const [sketchMousePos, setSketchMousePosInternal] = useState<SketchMousePos | null>(null);
+
+  // Wrap setSketchMousePos to also broadcast to awareness
+  const setSketchMousePos = useCallback(
+    (pos: SketchMousePos | null) => {
+      setSketchMousePosInternal(pos);
+
+      // Broadcast sketch cursor position to awareness
+      if (awareness && mode.active && mode.sketchId) {
+        awareness.updateSketchCursor({
+          sketchId: mode.sketchId,
+          cursorPosition: pos ? [pos.x, pos.y] : [0, 0],
+          activeToolId: mode.activeTool,
+        });
+      }
+    },
+    [awareness, mode.active, mode.sketchId, mode.activeTool]
+  );
 
   // Preview line for draft rendering (shared with Viewer)
   const [previewLine, setPreviewLine] = useState<SketchPreviewLine | null>(null);
@@ -252,6 +284,13 @@ export function SketchProvider({ children }: SketchProviderProps) {
         tempPoints: [],
         isNewSketch: true,
       });
+
+      // Broadcast sketch state for followers
+      awareness?.updateSketchCursor({
+        sketchId,
+        cursorPosition: [0, 0],
+        activeToolId: "line",
+      });
     },
     [
       addSketch,
@@ -261,6 +300,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
       state.currentView,
       rebuildGate,
       setRebuildGate,
+      awareness,
     ]
   );
 
@@ -289,8 +329,23 @@ export function SketchProvider({ children }: SketchProviderProps) {
         tempPoints: [],
         isNewSketch: false,
       });
+
+      // Broadcast sketch state for followers
+      awareness?.updateSketchCursor({
+        sketchId,
+        cursorPosition: [0, 0],
+        activeToolId: "line",
+      });
     },
-    [getViewForPlane, actions, state.currentView, undoManager, rebuildGate, setRebuildGate]
+    [
+      getViewForPlane,
+      actions,
+      state.currentView,
+      undoManager,
+      rebuildGate,
+      setRebuildGate,
+      awareness,
+    ]
   );
 
   const finishSketch = useCallback(() => {
@@ -306,7 +361,10 @@ export function SketchProvider({ children }: SketchProviderProps) {
       tempPoints: [],
       isNewSketch: false,
     });
-  }, [setRebuildGate]);
+
+    // Clear sketch state for followers
+    awareness?.clearSketchState();
+  }, [setRebuildGate, awareness]);
 
   const cancelSketch = useCallback(() => {
     const { sketchId, isNewSketch } = mode;
@@ -337,7 +395,10 @@ export function SketchProvider({ children }: SketchProviderProps) {
       tempPoints: [],
       isNewSketch: false,
     });
-  }, [mode, deleteFeature, undoManager, setRebuildGate]);
+
+    // Clear sketch state for followers
+    awareness?.clearSketchState();
+  }, [mode, deleteFeature, undoManager, setRebuildGate, awareness]);
 
   const setTool = useCallback((tool: SketchTool) => {
     setMode((prev) => ({
@@ -814,6 +875,125 @@ export function SketchProvider({ children }: SketchProviderProps) {
       toggleEntityConstruction(sketch, lineId);
     }
   }, [getSketchElement, selectedLines]);
+
+  // Sync sketch mode when following another user
+  useEffect(() => {
+    if (!awareness || !doc) return;
+
+    const handleUsersChange = () => {
+      // Get our local state to check if we're following someone
+      const localState = awareness.getLocalState();
+      const followingUserId = localState?.following?.userId;
+
+      if (!followingUserId) {
+        // Not following anyone - reset tracking state
+        lastFollowedSketchIdRef.current = null;
+        isFollowingSketchRef.current = false;
+        return;
+      }
+
+      // Find the followed user's state
+      const connectedUsers = awareness.getConnectedUsers();
+      const followedUser = connectedUsers.find((u) => u.user.id === followingUserId);
+      if (!followedUser) {
+        // Followed user not found (maybe left)
+        lastFollowedSketchIdRef.current = null;
+        return;
+      }
+
+      const followedSketchId = followedUser.sketch?.sketchId ?? null;
+      const lastSketchId = lastFollowedSketchIdRef.current;
+
+      // Check if the followed user's sketch state changed
+      if (followedSketchId !== lastSketchId) {
+        lastFollowedSketchIdRef.current = followedSketchId;
+
+        if (followedSketchId && !lastSketchId) {
+          // Followed user entered a sketch - we should enter it too
+          // Get the sketch feature to find its plane
+          const sketchFeature = doc.featuresById.get(followedSketchId);
+          if (sketchFeature) {
+            const planeRef = sketchFeature.get("plane") as
+              | { kind: string; ref: string }
+              | undefined;
+            if (planeRef?.ref) {
+              isFollowingSketchRef.current = true;
+
+              // NOTE: We do NOT call setView here when following.
+              // The followed user's camera state will be applied via the
+              // normal camera following mechanism, which already has their
+              // camera oriented to the sketch plane. Calling setView here
+              // causes a race condition where both try to control the camera.
+
+              setMode({
+                active: true,
+                sketchId: followedSketchId,
+                planeId: planeRef.ref,
+                activeTool: "line",
+                tempPoints: [],
+                isNewSketch: false,
+              });
+
+              // Don't broadcast - we're following, not leading
+              isFollowingSketchRef.current = false;
+            }
+          }
+        } else if (!followedSketchId && lastSketchId) {
+          // Followed user exited a sketch - we should exit too
+          // Only exit if we're in the same sketch
+          if (mode.active && mode.sketchId === lastSketchId) {
+            isFollowingSketchRef.current = true;
+
+            setMode({
+              active: false,
+              sketchId: null,
+              planeId: null,
+              activeTool: "line",
+              tempPoints: [],
+              isNewSketch: false,
+            });
+
+            isFollowingSketchRef.current = false;
+          }
+        } else if (followedSketchId && lastSketchId && followedSketchId !== lastSketchId) {
+          // Followed user switched to a different sketch
+          const sketchFeature = doc.featuresById.get(followedSketchId);
+          if (sketchFeature) {
+            const planeRef = sketchFeature.get("plane") as
+              | { kind: string; ref: string }
+              | undefined;
+            if (planeRef?.ref) {
+              isFollowingSketchRef.current = true;
+
+              // NOTE: We do NOT call setView here when following.
+              // Camera orientation comes from the followed user's camera state.
+
+              setMode({
+                active: true,
+                sketchId: followedSketchId,
+                planeId: planeRef.ref,
+                activeTool: "line",
+                tempPoints: [],
+                isNewSketch: false,
+              });
+
+              isFollowingSketchRef.current = false;
+            }
+          }
+        }
+      }
+    };
+
+    // Subscribe to awareness changes
+    const unsubscribe = awareness.onUsersChange(handleUsersChange);
+
+    // Check initial state
+    handleUsersChange();
+
+    return unsubscribe;
+    // Note: getViewForPlane, state.currentView, and actions are intentionally
+    // not included - we don't set the view when following, we rely on camera following
+  }, [awareness, doc, features, mode.active, mode.sketchId]);
 
   const value: SketchContextValue = {
     mode,

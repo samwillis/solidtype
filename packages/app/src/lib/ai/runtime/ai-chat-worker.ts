@@ -134,7 +134,11 @@ async function handleCommand(command: AIChatWorkerCommand) {
     switch (command.type) {
       case "init-session": {
         const { sessionId, documentId, projectId } = command;
-        console.log("[AI Chat Worker] 📥 Received init-session:", { sessionId, documentId, projectId });
+        console.log("[AI Chat Worker] 📥 Received init-session:", {
+          sessionId,
+          documentId,
+          projectId,
+        });
 
         // Clean up existing session if re-initializing
         const existingSession = sessions.get(sessionId);

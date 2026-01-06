@@ -104,20 +104,3 @@
   right: 250px; /* Offset from properties panel */
   z-index: 100;
 }
-
-/* Responsive adjustments */
-@media (max-width: 800px) {
-  .resizable-panel-right {
-    display: none;
-  }
-
-  .user-presence-container {
-    right: 12px;
-  }
-}
-
-@media (max-width: 600px) {
-  .resizable-panel-left {
-    display: none;
-  }
-}

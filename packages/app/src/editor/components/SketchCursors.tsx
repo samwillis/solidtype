@@ -15,17 +15,22 @@ interface SketchCursorsProps {
   /** Current sketch ID to filter users */
   sketchId: string;
   /** Transform from sketch coordinates to screen coordinates */
-  transformPoint?: (point: [number, number]) => { x: number; y: number };
+  transformPoint?: (point: [number, number]) => { x: number; y: number } | null;
+  /** User ID we're following (to exclude from this view - UserCursor2D handles them) */
+  followingUserId?: string | null;
 }
 
 export const SketchCursors: React.FC<SketchCursorsProps> = ({
   connectedUsers,
   sketchId,
   transformPoint,
+  followingUserId,
 }) => {
-  // Filter to users in the same sketch
+  // Filter to users in the same sketch, excluding the user we're following
+  // (their cursor is shown by UserCursor2D instead to avoid duplicates)
   const usersInSketch = connectedUsers.filter(
-    (u) => u.sketch?.sketchId === sketchId && u.sketch?.cursorPosition
+    (u) =>
+      u.sketch?.sketchId === sketchId && u.sketch?.cursorPosition && u.user.id !== followingUserId
   );
 
   if (usersInSketch.length === 0) {
@@ -39,6 +44,11 @@ export const SketchCursors: React.FC<SketchCursorsProps> = ({
         const screenPos = transformPoint
           ? transformPoint(cursorPos)
           : { x: cursorPos[0], y: cursorPos[1] };
+
+        // Skip rendering if transform failed (e.g., sketch not active locally)
+        if (!screenPos) {
+          return null;
+        }
 
         return (
           <g

@@ -141,9 +141,7 @@ describe("executeModelingTool", () => {
   });
 
   it("throws for unknown tool", () => {
-    expect(() => executeModelingTool("unknownTool", {}, { doc })).toThrow(
-      "Unknown modeling tool"
-    );
+    expect(() => executeModelingTool("unknownTool", {}, { doc })).toThrow("Unknown modeling tool");
   });
 });
 
@@ -218,7 +216,14 @@ describe("Feature Tools", () => {
   describe("createLinearPatternImpl", () => {
     it("creates a linear pattern feature", () => {
       const result = modelingImpl.createLinearPatternImpl(
-        { featureIds: ["f1", "f2"], directionX: 1, directionY: 0, directionZ: 0, count: 5, spacing: 10 },
+        {
+          featureIds: ["f1", "f2"],
+          directionX: 1,
+          directionY: 0,
+          directionZ: 0,
+          count: 5,
+          spacing: 10,
+        },
         { doc }
       ) as { featureId: string; status: string };
 
@@ -278,10 +283,10 @@ describe("Modify Tools", () => {
       const sketchId = createTestSketch(doc);
       expect(doc.featuresById.has(sketchId)).toBe(true);
 
-      const result = modelingImpl.deleteFeatureImpl(
-        { featureId: sketchId },
-        { doc }
-      ) as { success: boolean; deletedIds: string[] };
+      const result = modelingImpl.deleteFeatureImpl({ featureId: sketchId }, { doc }) as {
+        success: boolean;
+        deletedIds: string[];
+      };
 
       expect(result.success).toBe(true);
       expect(result.deletedIds).toContain(sketchId);
@@ -335,10 +340,10 @@ describe("Modify Tools", () => {
   describe("duplicateFeatureImpl", () => {
     it("duplicates a feature", () => {
       const sketchId = createTestSketch(doc);
-      const result = modelingImpl.duplicateFeatureImpl(
-        { featureId: sketchId },
-        { doc }
-      ) as { success: boolean; newFeatureId: string };
+      const result = modelingImpl.duplicateFeatureImpl({ featureId: sketchId }, { doc }) as {
+        success: boolean;
+        newFeatureId: string;
+      };
 
       expect(result.success).toBe(true);
       expect(result.newFeatureId).toBeDefined();

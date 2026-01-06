@@ -12,8 +12,7 @@ import { z } from "zod";
 
 export const createBoxDef = toolDefinition({
   name: "createBox",
-  description:
-    "Create a box primitive (creates a sketch with rectangle and extrudes it)",
+  description: "Create a box primitive (creates a sketch with rectangle and extrudes it)",
   inputSchema: z.object({
     width: z.number().positive().describe("Width (X dimension)"),
     height: z.number().positive().describe("Height (Z dimension / extrusion)"),
@@ -22,10 +21,7 @@ export const createBoxDef = toolDefinition({
       .boolean()
       .default(true)
       .describe("If true, box is centered at origin; if false, corner at origin"),
-    plane: z
-      .enum(["xy", "xz", "yz"])
-      .default("xy")
-      .describe("Plane for the base sketch"),
+    plane: z.enum(["xy", "xz", "yz"]).default("xy").describe("Plane for the base sketch"),
     name: z.string().nullish().describe("Optional feature name"),
   }),
   outputSchema: z.object({
@@ -40,14 +36,8 @@ export const createCylinderDef = toolDefinition({
   inputSchema: z.object({
     radius: z.number().positive().describe("Cylinder radius"),
     height: z.number().positive().describe("Cylinder height"),
-    centered: z
-      .boolean()
-      .default(true)
-      .describe("If true, circle centered at origin"),
-    plane: z
-      .enum(["xy", "xz", "yz"])
-      .default("xy")
-      .describe("Plane for the base sketch"),
+    centered: z.boolean().default(true).describe("If true, circle centered at origin"),
+    plane: z.enum(["xy", "xz", "yz"]).default("xy").describe("Plane for the base sketch"),
     name: z.string().nullish().describe("Optional feature name"),
   }),
   outputSchema: z.object({
@@ -79,10 +69,7 @@ export const createConeDef = toolDefinition({
     baseRadius: z.number().positive().describe("Base radius"),
     topRadius: z.number().min(0).describe("Top radius (0 for a point)"),
     height: z.number().positive().describe("Cone height"),
-    plane: z
-      .enum(["xy", "xz", "yz"])
-      .default("xy")
-      .describe("Plane for the base sketch"),
+    plane: z.enum(["xy", "xz", "yz"]).default("xy").describe("Plane for the base sketch"),
     name: z.string().nullish().describe("Optional feature name"),
   }),
   outputSchema: z.object({
@@ -101,8 +88,14 @@ export const createHoleDef = toolDefinition({
     diameter: z.number().positive().describe("Hole diameter"),
     depthValue: z.number().nullish().describe("Hole depth in units (omit for through-all)"),
     throughAll: z.boolean().default(false).describe("If true, hole goes through entire body"),
-    positionU: z.number().nullish().describe("Position along face U parameter (0-1), omit for center"),
-    positionV: z.number().nullish().describe("Position along face V parameter (0-1), omit for center"),
+    positionU: z
+      .number()
+      .nullish()
+      .describe("Position along face U parameter (0-1), omit for center"),
+    positionV: z
+      .number()
+      .nullish()
+      .describe("Position along face V parameter (0-1), omit for center"),
     name: z.string().nullish().describe("Optional feature name"),
   }),
   outputSchema: z.object({
@@ -120,8 +113,14 @@ export const createPocketDef = toolDefinition({
     length: z.number().positive().describe("Pocket length"),
     depth: z.number().positive().describe("Pocket depth"),
     cornerRadius: z.number().min(0).default(0).describe("Corner radius (0 for sharp corners)"),
-    positionU: z.number().nullish().describe("Position along face U parameter (0-1), omit for center"),
-    positionV: z.number().nullish().describe("Position along face V parameter (0-1), omit for center"),
+    positionU: z
+      .number()
+      .nullish()
+      .describe("Position along face U parameter (0-1), omit for center"),
+    positionV: z
+      .number()
+      .nullish()
+      .describe("Position along face V parameter (0-1), omit for center"),
     name: z.string().nullish().describe("Optional feature name"),
   }),
   outputSchema: z.object({
@@ -141,8 +140,14 @@ export const createBossDef = toolDefinition({
     width: z.number().positive().nullish().describe("Width (for rectangle)"),
     length: z.number().positive().nullish().describe("Length (for rectangle)"),
     height: z.number().positive().describe("Boss height"),
-    positionU: z.number().nullish().describe("Position along face U parameter (0-1), omit for center"),
-    positionV: z.number().nullish().describe("Position along face V parameter (0-1), omit for center"),
+    positionU: z
+      .number()
+      .nullish()
+      .describe("Position along face U parameter (0-1), omit for center"),
+    positionV: z
+      .number()
+      .nullish()
+      .describe("Position along face V parameter (0-1), omit for center"),
     name: z.string().nullish().describe("Optional feature name"),
   }),
   outputSchema: z.object({
@@ -156,10 +161,7 @@ export const createShellDef = toolDefinition({
   description: "Hollow out a solid body with uniform wall thickness",
   inputSchema: z.object({
     thickness: z.number().positive().describe("Wall thickness"),
-    openFaces: z
-      .array(z.string())
-      .nullish()
-      .describe("Face references to leave open (remove)"),
+    openFaces: z.array(z.string()).nullish().describe("Face references to leave open (remove)"),
     name: z.string().nullish().describe("Optional feature name"),
   }),
   outputSchema: z.object({
@@ -196,10 +198,7 @@ export const filletAllEdgesDef = toolDefinition({
   description: "Add fillets to all edges of a feature or the entire model",
   inputSchema: z.object({
     radius: z.number().positive().describe("Fillet radius"),
-    featureId: z
-      .string()
-      .nullish()
-      .describe("Feature ID to fillet; omit for all edges on model"),
+    featureId: z.string().nullish().describe("Feature ID to fillet; omit for all edges on model"),
     excludeEdges: z
       .array(z.string())
       .nullish()

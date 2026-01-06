@@ -604,7 +604,9 @@ async function getEditorToolsWithWorkerBridge(
       }
 
       // Wait for worker to execute and write result
-      console.log(`[Editor Bridge] Waiting for worker result: ${toolName} (${toolCall.toolCallId})`);
+      console.log(
+        `[Editor Bridge] Waiting for worker result: ${toolName} (${toolCall.toolCallId})`
+      );
       const result = await waitForClientToolResult(streamDb, toolCall.toolCallId);
       console.log(`[Editor Bridge] Got result for ${toolName}:`, result);
 
@@ -622,7 +624,9 @@ async function getEditorToolsWithWorkerBridge(
           server: (fn: (input: unknown) => Promise<unknown>) => ServerTool;
         };
         if (typeof toolDef.server !== "function") {
-          console.error(`[getEditorToolsWithWorkerBridge] Tool ${toolDef.name} has no server method`);
+          console.error(
+            `[getEditorToolsWithWorkerBridge] Tool ${toolDef.name} has no server method`
+          );
           continue;
         }
         tools.push(toolDef.server(createBridgeImpl(toolDef.name)));

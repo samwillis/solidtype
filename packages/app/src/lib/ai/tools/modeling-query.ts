@@ -99,10 +99,7 @@ export const findEdgesDef = toolDefinition({
       .describe("Filter by curve type"),
     faceRef: z.string().nullish().describe("Only edges on this face"),
     featureId: z.string().nullish().describe("Only edges from this feature"),
-    convexity: z
-      .enum(["convex", "concave", "any"])
-      .nullish()
-      .describe("Filter by edge convexity"),
+    convexity: z.enum(["convex", "concave", "any"]).nullish().describe("Filter by edge convexity"),
   }),
   outputSchema: z.array(
     z.object({

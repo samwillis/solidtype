@@ -17,10 +17,14 @@ export const createSketchDef = toolDefinition({
     // Use separate fields instead of discriminatedUnion (OpenAI doesn't support oneOf)
     planeType: z
       .enum(["datumRole", "planeFeatureId", "faceRef"])
-      .describe("Type of plane reference: 'datumRole' for xy/xz/yz planes, 'planeFeatureId' for a plane feature, 'faceRef' for a face"),
+      .describe(
+        "Type of plane reference: 'datumRole' for xy/xz/yz planes, 'planeFeatureId' for a plane feature, 'faceRef' for a face"
+      ),
     planeRef: z
       .string()
-      .describe("Reference value: 'xy', 'xz', or 'yz' for datumRole; feature ID for planeFeatureId; face reference for faceRef"),
+      .describe(
+        "Reference value: 'xy', 'xz', or 'yz' for datumRole; feature ID for planeFeatureId; face reference for faceRef"
+      ),
     name: z.string().nullish().describe("Optional name for the sketch"),
     enterSketch: z
       .boolean()
@@ -373,19 +377,31 @@ export const addConstraintDef = toolDefinition({
       ])
       .describe("Type of constraint to add"),
     // Point references
-    point: z.string().nullish().describe("Single point ID (for fixed, pointOnLine, pointOnArc, midpoint)"),
+    point: z
+      .string()
+      .nullish()
+      .describe("Single point ID (for fixed, pointOnLine, pointOnArc, midpoint)"),
     points: z
       .array(z.string())
       .optional()
       .describe("Array of 2 point IDs (for horizontal, vertical, coincident, distance, symmetric)"),
     // Line references
     line: z.string().nullish().describe("Single line ID (for tangent, pointOnLine, midpoint)"),
-    lines: z.array(z.string()).nullish().describe("Array of 2 line IDs (for parallel, perpendicular, etc.)"),
+    lines: z
+      .array(z.string())
+      .nullish()
+      .describe("Array of 2 line IDs (for parallel, perpendicular, etc.)"),
     // Arc references
     arc: z.string().nullish().describe("Single arc ID (for radius, tangent, pointOnArc)"),
-    arcs: z.array(z.string()).nullish().describe("Array of 2 arc IDs (for equalRadius, concentric)"),
+    arcs: z
+      .array(z.string())
+      .nullish()
+      .describe("Array of 2 arc IDs (for equalRadius, concentric)"),
     // Value for dimensional constraints
-    value: z.number().nullish().describe("Value for dimensional constraints (distance, angle, radius)"),
+    value: z
+      .number()
+      .nullish()
+      .describe("Value for dimensional constraints (distance, angle, radius)"),
     // Axis for symmetric constraint
     axis: z.string().nullish().describe("Axis line ID for symmetric constraint"),
   }),

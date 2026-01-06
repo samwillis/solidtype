@@ -136,14 +136,19 @@ export function use3DSelection(options: Selection3DOptions): void {
     let clickStartPos = { x: 0, y: 0 };
     let clickStartTime = 0;
     let isDragging = false;
+    let isMouseDown = false;
 
     const onClickStart = (e: MouseEvent) => {
       clickStartPos = { x: e.clientX, y: e.clientY };
       clickStartTime = Date.now();
+      isMouseDown = true;
     };
 
     const onMouseMove = () => {
-      isDragging = true;
+      // Only set dragging if mouse button is pressed
+      if (isMouseDown) {
+        isDragging = true;
+      }
     };
 
     const onClick = (e: MouseEvent) => {
@@ -245,6 +250,7 @@ export function use3DSelection(options: Selection3DOptions): void {
 
     const onMouseUp = () => {
       isDragging = false;
+      isMouseDown = false;
     };
 
     // Get the renderer's DOM element (it should be a child of container)

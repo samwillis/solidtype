@@ -203,7 +203,6 @@ export function useAIChat(options: UseAIChatOptions) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-
   // Wrapper around setActiveSessionId to log all transitions for debugging
   const setActiveSessionId = useCallback((newId: string | null, source?: string) => {
     setActiveSessionIdRaw((prev) => {
@@ -418,7 +417,10 @@ export function useAIChat(options: UseAIChatOptions) {
     })();
 
     return () => {
-      console.debug("[useAIChat effect cleanup] Cancelling and closing db for:", sessionBeingLoaded);
+      console.debug(
+        "[useAIChat effect cleanup] Cancelling and closing db for:",
+        sessionBeingLoaded
+      );
       cancelled = true;
       db?.close();
     };
@@ -599,19 +601,22 @@ export function useAIChat(options: UseAIChatOptions) {
         // - Streaming chunks from Durable Stream
         // - Executing client tools (sketch operations) against synced Yjs doc
         const workerClient = getAIChatWorkerClient(sessionId);
-        console.debug("[useAIChat] Sending message via worker:", { sessionId, contentLength: content.length });
-        
+        console.debug("[useAIChat] Sending message via worker:", {
+          sessionId,
+          contentLength: content.length,
+        });
+
         await workerClient.sendMessage(sessionId, content, {
           documentId: options.documentId,
           projectId: options.projectId,
         });
 
         console.debug("[useAIChat] Worker reported run completed");
-        
+
         // Keep isLoading = true for a bit to allow polling to fetch the messages
         // This handles the race where StreamDB isn't created yet when worker finishes
         await new Promise((r) => setTimeout(r, 500));
-        
+
         // UI should now have the data via live queries
       } catch (err) {
         console.error("AI chat error:", err);

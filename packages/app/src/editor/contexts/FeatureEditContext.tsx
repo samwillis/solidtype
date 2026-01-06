@@ -180,6 +180,12 @@ export function FeatureEditProvider({ children }: FeatureEditProviderProps) {
   );
 
   const acceptEdit = useCallback(() => {
+    // Cancel any pending preview timer to prevent race conditions
+    if (previewTimerRef.current) {
+      window.clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+
     if (editMode.type === "extrude") {
       const { data, sketchId } = editMode;
       addExtrude(sketchId, data.distance ?? 10, data.op, data.direction);
@@ -193,6 +199,12 @@ export function FeatureEditProvider({ children }: FeatureEditProviderProps) {
   }, [editMode, addExtrude, addRevolve, clearPreview]);
 
   const cancelEdit = useCallback(() => {
+    // Cancel any pending preview timer to prevent race conditions
+    if (previewTimerRef.current) {
+      window.clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+
     clearPreview();
     setEditMode({ type: "none" });
   }, [clearPreview]);

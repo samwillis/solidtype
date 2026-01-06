@@ -91,6 +91,8 @@ interface ViewerRefs {
   container: React.MutableRefObject<HTMLDivElement | null>;
   updateCamera: (projection: ProjectionMode) => void;
   requestRender: () => void;
+  /** Broadcast camera state to awareness (for collaborative features) */
+  broadcastCamera?: () => void;
   /** Convert screen coordinates to sketch coordinates via ray-plane intersection */
   screenToSketch: (
     screenX: number,
@@ -217,6 +219,9 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
 
     setState((prev) => ({ ...prev, currentView: preset }));
     refs.requestRender();
+
+    // Broadcast camera state for collaborative features
+    refs.broadcastCamera?.();
   }, []);
 
   const setViewToPlane = useCallback((transform: PlaneTransform) => {
@@ -243,6 +248,9 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
 
     setState((prev) => ({ ...prev, currentView: null })); // Custom view, not a preset
     refs.requestRender();
+
+    // Broadcast camera state for collaborative features
+    refs.broadcastCamera?.();
   }, []);
 
   const setDisplayMode = useCallback((mode: DisplayMode) => {

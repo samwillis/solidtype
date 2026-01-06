@@ -81,15 +81,15 @@ The AI system enables users to interact with SolidType through natural language 
 
 ### Component Roles
 
-| Component                    | Responsibility                                                           |
-| ---------------------------- | ------------------------------------------------------------------------ |
-| **Postgres/Electric**        | Session metadata (`ai_chat_sessions` table)                              |
-| **Durable Streams**          | Chat transcript storage (messages, chunks, runs)                         |
-| **Server /run endpoint**     | Runs `@tanstack/ai` chat(), writes events to Durable State, coordinates local tool execution via bridge pattern |
-| **Client UI**                | Renders transcript via Durable State live queries                        |
+| Component                    | Responsibility                                                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Postgres/Electric**        | Session metadata (`ai_chat_sessions` table)                                                                        |
+| **Durable Streams**          | Chat transcript storage (messages, chunks, runs)                                                                   |
+| **Server /run endpoint**     | Runs `@tanstack/ai` chat(), writes events to Durable State, coordinates local tool execution via bridge pattern    |
+| **Client UI**                | Renders transcript via Durable State live queries                                                                  |
 | **Per-Session SharedWorker** | Isolated OCCT kernel per session, observes Durable Stream via custom adapter, executes local tools, writes results |
-| **WorkerChatController**     | Manages TanStack AI chat loop in worker, routes tool calls, executes on Yjs document |
-| **DurableStreamAdapter**     | Custom TanStack AI adapter that polls StreamDB and converts records to StreamChunks |
+| **WorkerChatController**     | Manages TanStack AI chat loop in worker, routes tool calls, executes on Yjs document                               |
+| **DurableStreamAdapter**     | Custom TanStack AI adapter that polls StreamDB and converts records to StreamChunks                                |
 
 ---
 
@@ -145,8 +145,8 @@ Chat transcripts are stored in Durable Streams using three collections:
 
 ### 4.1 Tool Categories
 
-| Category            | Context              | Execution Location | Registry |
-| ------------------- | -------------------- | ------------------ | -------- |
+| Category            | Context              | Execution Location | Registry                |
+| ------------------- | -------------------- | ------------------ | ----------------------- |
 | **Dashboard Tools** | Dashboard            | Server             | `execution-registry.ts` |
 | **Sketch Tools**    | Editor (sketch mode) | SharedWorker + Yjs | `execution-registry.ts` |
 | **Modeling Tools**  | Editor (3D mode)     | SharedWorker + Yjs | `execution-registry.ts` |
@@ -262,12 +262,12 @@ Each SharedWorker contains:
 
 ### Worker Commands
 
-| Command              | Purpose                                      |
-| -------------------- | -------------------------------------------- |
-| `init-session`       | Initialize session with documentId/projectId |
-| `terminate-session`  | Clean up session resources                   |
-| `send-message`       | Send a new user message (starts new run)     |
-| `ping`               | Health check                                 |
+| Command             | Purpose                                      |
+| ------------------- | -------------------------------------------- |
+| `init-session`      | Initialize session with documentId/projectId |
+| `terminate-session` | Clean up session resources                   |
+| `send-message`      | Send a new user message (starts new run)     |
+| `ping`              | Health check                                 |
 
 ### Client API
 
@@ -362,6 +362,7 @@ For tools that need to run locally (CAD operations), the system uses a bridge pa
 ### Tool Execution Registry
 
 Tools are registered in `execution-registry.ts` with their execution mode:
+
 - `"server"`: Execute on server (database operations, API calls)
 - `"local"`: Execute in SharedWorker (CAD operations on Yjs document)
 
@@ -383,6 +384,7 @@ The `DurableStreamAdapter` is a custom TanStack AI stream adapter that enables t
 ### Implementation
 
 The adapter:
+
 - Polls `StreamDB.collections` (messages, chunks, runs) at configurable intervals
 - Converts Durable Stream records to TanStack AI `StreamChunk` types:
   - `content`: Text chunks from assistant messages
