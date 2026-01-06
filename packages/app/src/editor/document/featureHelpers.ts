@@ -136,7 +136,7 @@ export function addSketchFeature(doc: SolidTypeDoc, planeIdOrRole: string, name?
       type: "sketch",
       name: name ?? `Sketch${doc.featureOrder.length}`,
       plane: planeRef,
-      visible: false,
+      visible: true,
       data,
     });
 
@@ -186,6 +186,12 @@ export function addExtrudeFeature(
   const extent = options.extent ?? "blind";
 
   doc.ydoc.transact(() => {
+    // Hide the referenced sketch if it's currently visible
+    const sketchFeature = doc.featuresById.get(options.sketchId);
+    if (sketchFeature && sketchFeature.get("visible") === true) {
+      sketchFeature.set("visible", false);
+    }
+
     const extrude = createFeatureMap();
     doc.featuresById.set(id, extrude);
 
@@ -267,6 +273,12 @@ export function addRevolveFeature(
   const id = uuid();
 
   doc.ydoc.transact(() => {
+    // Hide the referenced sketch if it's currently visible
+    const sketchFeature = doc.featuresById.get(options.sketchId);
+    if (sketchFeature && sketchFeature.get("visible") === true) {
+      sketchFeature.set("visible", false);
+    }
+
     const revolve = createFeatureMap();
     doc.featuresById.set(id, revolve);
 

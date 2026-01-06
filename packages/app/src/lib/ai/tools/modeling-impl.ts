@@ -14,10 +14,7 @@ import * as Y from "yjs";
  * Helper to create a feature and add it to the document.
  * Properties MUST be set AFTER the map is integrated for proper sync.
  */
-function createFeature(
-  doc: SolidTypeDoc,
-  props: Record<string, unknown>
-): string {
+function createFeature(doc: SolidTypeDoc, props: Record<string, unknown>): string {
   const featureId = uuid();
   const featureMap = new Y.Map<unknown>();
 
@@ -59,16 +56,18 @@ export function getModelContextImpl(
 ): unknown {
   const { doc } = ctx;
   const featureOrder = doc.featureOrder.toArray();
-  const features = featureOrder.map((id) => {
-    const feature = doc.featuresById.get(id);
-    if (!feature) return null;
-    return {
-      id,
-      type: feature.get("type") as string,
-      name: (feature.get("name") as string) || null,
-      status: "ok" as const, // TODO: Get actual status from kernel
-    };
-  }).filter(Boolean);
+  const features = featureOrder
+    .map((id) => {
+      const feature = doc.featuresById.get(id);
+      if (!feature) return null;
+      return {
+        id,
+        type: feature.get("type") as string,
+        name: (feature.get("name") as string) || null,
+        status: "ok" as const, // TODO: Get actual status from kernel
+      };
+    })
+    .filter(Boolean);
 
   return {
     documentName: doc.metadata.get("name") || "Untitled",
@@ -79,18 +78,12 @@ export function getModelContextImpl(
   };
 }
 
-export function findFacesImpl(
-  _args: Record<string, unknown>,
-  _ctx: ModelingToolContext
-): unknown {
+export function findFacesImpl(_args: Record<string, unknown>, _ctx: ModelingToolContext): unknown {
   // TODO: Implement when OCCT face query is available
   return [];
 }
 
-export function findEdgesImpl(
-  _args: Record<string, unknown>,
-  _ctx: ModelingToolContext
-): unknown {
+export function findEdgesImpl(_args: Record<string, unknown>, _ctx: ModelingToolContext): unknown {
   // TODO: Implement when OCCT edge query is available
   return [];
 }
@@ -153,6 +146,11 @@ export function createExtrudeImpl(
     return { featureId: "", status: "error", error: `Sketch ${sketchId} not found` };
   }
 
+  // Hide the referenced sketch if it's currently visible
+  if (sketchFeature.get("visible") === true) {
+    sketchFeature.set("visible", false);
+  }
+
   // Create extrude feature using helper (ensures proper sync)
   const featureId = createFeature(doc, {
     type: "extrude",
@@ -185,6 +183,11 @@ export function createRevolveImpl(
     return { featureId: "", status: "error", error: `Sketch ${sketchId} not found` };
   }
 
+  // Hide the referenced sketch if it's currently visible
+  if (sketchFeature.get("visible") === true) {
+    sketchFeature.set("visible", false);
+  }
+
   // Create revolve feature using helper
   const featureId = createFeature(doc, {
     type: "revolve",
@@ -198,10 +201,7 @@ export function createRevolveImpl(
   return { featureId, status: "ok" };
 }
 
-export function createLoftImpl(
-  args: Record<string, unknown>,
-  ctx: ModelingToolContext
-): unknown {
+export function createLoftImpl(args: Record<string, unknown>, ctx: ModelingToolContext): unknown {
   const { doc } = ctx;
   const { sketchIds, op, name } = args as {
     sketchIds: string[];
@@ -209,11 +209,15 @@ export function createLoftImpl(
     name?: string;
   };
 
-  // Verify all sketches exist
+  // Verify all sketches exist and hide them if visible
   for (const sketchId of sketchIds) {
     const sketchFeature = doc.featuresById.get(sketchId);
     if (!sketchFeature || sketchFeature.get("type") !== "sketch") {
       return { featureId: "", status: "error", error: `Sketch ${sketchId} not found` };
+    }
+    // Hide the referenced sketch if it's currently visible
+    if (sketchFeature.get("visible") === true) {
+      sketchFeature.set("visible", false);
     }
   }
 
@@ -228,10 +232,7 @@ export function createLoftImpl(
   return { featureId, status: "ok" };
 }
 
-export function createSweepImpl(
-  args: Record<string, unknown>,
-  ctx: ModelingToolContext
-): unknown {
+export function createSweepImpl(args: Record<string, unknown>, ctx: ModelingToolContext): unknown {
   const { doc } = ctx;
   const { profileSketchId, pathSketchId, pathEntityId, op, name } = args as {
     profileSketchId: string;
@@ -240,6 +241,16 @@ export function createSweepImpl(
     op: "add" | "cut";
     name?: string;
   };
+
+  // Hide the referenced sketches if they're currently visible
+  const profileSketch = doc.featuresById.get(profileSketchId);
+  if (profileSketch && profileSketch.get("visible") === true) {
+    profileSketch.set("visible", false);
+  }
+  const pathSketch = doc.featuresById.get(pathSketchId);
+  if (pathSketch && pathSketch.get("visible") === true) {
+    pathSketch.set("visible", false);
+  }
 
   // Create sweep feature using helper
   const featureId = createFeature(doc, {
@@ -254,10 +265,7 @@ export function createSweepImpl(
   return { featureId, status: "ok" };
 }
 
-export function createFilletImpl(
-  args: Record<string, unknown>,
-  ctx: ModelingToolContext
-): unknown {
+export function createFilletImpl(args: Record<string, unknown>, ctx: ModelingToolContext): unknown {
   const { doc } = ctx;
   const { edgeRefs, radius, name } = args as {
     edgeRefs: string[];
@@ -298,10 +306,7 @@ export function createChamferImpl(
   return { featureId, status: "ok" };
 }
 
-export function createDraftImpl(
-  args: Record<string, unknown>,
-  ctx: ModelingToolContext
-): unknown {
+export function createDraftImpl(args: Record<string, unknown>, ctx: ModelingToolContext): unknown {
   const { doc } = ctx;
   const { faceRefs, angle, pullDirectionX, pullDirectionY, pullDirectionZ, name } = args as {
     faceRefs: string[];
@@ -357,7 +362,18 @@ export function createCircularPatternImpl(
   ctx: ModelingToolContext
 ): unknown {
   const { doc } = ctx;
-  const { featureIds, axisX, axisY, axisZ, axisPointX, axisPointY, axisPointZ, count, totalAngle, name } = args as {
+  const {
+    featureIds,
+    axisX,
+    axisY,
+    axisZ,
+    axisPointX,
+    axisPointY,
+    axisPointZ,
+    count,
+    totalAngle,
+    name,
+  } = args as {
     featureIds: string[];
     axisX: number;
     axisY: number;
@@ -384,10 +400,7 @@ export function createCircularPatternImpl(
   return { featureId, status: "ok" };
 }
 
-export function createMirrorImpl(
-  args: Record<string, unknown>,
-  ctx: ModelingToolContext
-): unknown {
+export function createMirrorImpl(args: Record<string, unknown>, ctx: ModelingToolContext): unknown {
   const { doc } = ctx;
   const { featureIds, planeRef, name } = args as {
     featureIds: string[];
@@ -685,8 +698,14 @@ export function createBoxImpl(args: Record<string, unknown>, ctx: ModelingToolCo
   // Prepare IDs
   const sketchId = uuid();
   const extrudeId = uuid();
-  const p1 = uuid(), p2 = uuid(), p3 = uuid(), p4 = uuid();
-  const l1 = uuid(), l2 = uuid(), l3 = uuid(), l4 = uuid();
+  const p1 = uuid(),
+    p2 = uuid(),
+    p3 = uuid(),
+    p4 = uuid();
+  const l1 = uuid(),
+    l2 = uuid(),
+    l3 = uuid(),
+    l4 = uuid();
 
   // Prepare data as plain objects (will be set after integration)
   const pointsData = {
@@ -712,6 +731,7 @@ export function createBoxImpl(args: Record<string, unknown>, ctx: ModelingToolCo
     sketchFeature.set("type", "sketch");
     sketchFeature.set("name", name ? `${name} Sketch` : "Box Sketch");
     sketchFeature.set("plane", { kind: "datumRole", ref: sketchPlane });
+    sketchFeature.set("visible", false); // Hide sketch since it's used by extrude
 
     // Create nested Y.Maps for sketch data (must also set AFTER integration)
     const sketchData = new Y.Map<unknown>();
@@ -784,6 +804,7 @@ export function createCylinderImpl(
     sketchFeature.set("type", "sketch");
     sketchFeature.set("name", name ? `${name} Sketch` : "Cylinder Sketch");
     sketchFeature.set("plane", { kind: "datumRole", ref: sketchPlane });
+    sketchFeature.set("visible", false); // Hide sketch since it's used by extrude
 
     // Create nested Y.Maps for sketch data
     const sketchData = new Y.Map<unknown>();
@@ -825,18 +846,12 @@ export function createSphereImpl(
   return { sketchId: "", revolveId: "" };
 }
 
-export function createConeImpl(
-  _args: Record<string, unknown>,
-  _ctx: ModelingToolContext
-): unknown {
+export function createConeImpl(_args: Record<string, unknown>, _ctx: ModelingToolContext): unknown {
   // TODO: Implement cone (triangle + revolve)
   return { sketchId: "", revolveId: "" };
 }
 
-export function createHoleImpl(
-  _args: Record<string, unknown>,
-  _ctx: ModelingToolContext
-): unknown {
+export function createHoleImpl(_args: Record<string, unknown>, _ctx: ModelingToolContext): unknown {
   // TODO: Implement hole (sketch on face + cut extrude)
   return { sketchId: "", featureId: "" };
 }
@@ -849,18 +864,12 @@ export function createPocketImpl(
   return { sketchId: "", featureId: "" };
 }
 
-export function createBossImpl(
-  _args: Record<string, unknown>,
-  _ctx: ModelingToolContext
-): unknown {
+export function createBossImpl(_args: Record<string, unknown>, _ctx: ModelingToolContext): unknown {
   // TODO: Implement boss (sketch on face + add extrude)
   return { sketchId: "", featureId: "" };
 }
 
-export function createShellImpl(
-  args: Record<string, unknown>,
-  ctx: ModelingToolContext
-): unknown {
+export function createShellImpl(args: Record<string, unknown>, ctx: ModelingToolContext): unknown {
   const { doc } = ctx;
   const { thickness, openFaces, name } = args as {
     thickness: number;
@@ -879,10 +888,7 @@ export function createShellImpl(
   return { featureId, status: "ok" };
 }
 
-export function createRibImpl(
-  _args: Record<string, unknown>,
-  _ctx: ModelingToolContext
-): unknown {
+export function createRibImpl(_args: Record<string, unknown>, _ctx: ModelingToolContext): unknown {
   // TODO: Implement rib
   return { featureId: "", status: "error", error: "Not implemented" };
 }
