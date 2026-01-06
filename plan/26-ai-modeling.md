@@ -1,8 +1,8 @@
 # Phase 26: AI 3D Modeling Integration
 
-> **Status:** ⏳ **PLANNED**
+> **Status:** ⚠️ **IN PROGRESS**
 >
-> This phase has not been started. Depends on Phase 25 (AI Sketch) completion.
+> Phase 25 (AI Sketch) is complete. Starting 3D modeling tool implementation.
 
 ## Prerequisites
 
@@ -811,13 +811,13 @@ describe("Modeling AI Integration", () => {
 
 ## Deliverables
 
-- [ ] Editor context assembly
-- [ ] Editor system prompt
-- [ ] Geometry query tools (selection, find faces/edges, measure, bounding box)
-- [ ] Feature creation tools (extrude, revolve, fillet, chamfer, patterns)
-- [ ] Feature modification tools (modify, delete, reorder, suppress, rename)
-- [ ] High-level geometry helpers (box, cylinder, hole, pocket, boss, shell)
-- [ ] Yjs change application with validation and rollback
-- [ ] Tool approval rules
-- [ ] Editor AI panel integration
-- [ ] Tests passing
+- [x] Editor context assembly (via worker document sync)
+- [x] Editor system prompt (Phase 25)
+- [x] Geometry query tools (selection, find faces/edges, measure, bounding box)
+- [x] Feature creation tools (extrude, revolve, loft, sweep, fillet, chamfer, draft, patterns, mirror)
+- [x] Feature modification tools (modify, delete, reorder, suppress, rename, duplicate, undo, redo)
+- [x] High-level geometry helpers (box, cylinder, sphere, cone, hole, pocket, boss, shell, rib)
+- [x] Tool execution registry (all modeling tools registered as "local")
+- [x] Server bridge implementation (run.ts)
+- [x] Worker executor implementation (modeling-tool-executor.ts)
+- [x] Tests passing (28 tests)

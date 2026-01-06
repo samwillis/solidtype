@@ -557,7 +557,7 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
 /**
  * Create editor tools that bridge to worker execution via Durable Stream
  *
- * For client tools (sketch tools), we use toolDefinition().server() to create
+ * For client tools (sketch and modeling tools), we use toolDefinition().server() to create
  * proper ServerTool objects. The implementation:
  * 1. Waits for the tool_call to be written to Durable Stream
  * 2. Waits for worker's tool_result to appear
@@ -568,9 +568,15 @@ async function getEditorToolsWithWorkerBridge(
   runId: string,
   _assistantMessageId: string
 ): Promise<Awaited<ReturnType<typeof getDashboardTools>>> {
-  // Import all sketch tool definitions
-  const { sketchToolDefs, sketchHelperToolDefs } =
-    await import("../../../../../lib/ai/tools/index");
+  // Import all tool definitions
+  const {
+    sketchToolDefs,
+    sketchHelperToolDefs,
+    modelingQueryToolDefs,
+    modelingFeatureToolDefs,
+    modelingModifyToolDefs,
+    modelingHelperToolDefs,
+  } = await import("../../../../../lib/ai/tools/index");
 
   type ServerTool = Awaited<ReturnType<typeof getDashboardTools>>[number];
   const tools: ServerTool[] = [];
@@ -603,17 +609,26 @@ async function getEditorToolsWithWorkerBridge(
       return result;
     };
 
-  // Add all sketch tools using .server() to create proper ServerTool objects
-  for (const def of Object.values(sketchToolDefs)) {
-    const toolDef = def as { name: string; server: (fn: (input: unknown) => Promise<unknown>) => ServerTool };
-    tools.push(toolDef.server(createBridgeImpl(toolDef.name)));
-  }
+  // Helper to add tool definitions to the tools array
+  const addToolDefs = (defs: Record<string, unknown>) => {
+    for (const def of Object.values(defs)) {
+      const toolDef = def as {
+        name: string;
+        server: (fn: (input: unknown) => Promise<unknown>) => ServerTool;
+      };
+      tools.push(toolDef.server(createBridgeImpl(toolDef.name)));
+    }
+  };
 
-  // Add helper tools
-  for (const def of Object.values(sketchHelperToolDefs)) {
-    const toolDef = def as { name: string; server: (fn: (input: unknown) => Promise<unknown>) => ServerTool };
-    tools.push(toolDef.server(createBridgeImpl(toolDef.name)));
-  }
+  // Add all sketch tools (Phase 25)
+  addToolDefs(sketchToolDefs);
+  addToolDefs(sketchHelperToolDefs);
+
+  // Add all modeling tools (Phase 26)
+  addToolDefs(modelingQueryToolDefs);
+  addToolDefs(modelingFeatureToolDefs);
+  addToolDefs(modelingModifyToolDefs);
+  addToolDefs(modelingHelperToolDefs);
 
   return tools;
 }

@@ -81,13 +81,50 @@ const TOOL_EXECUTION_REGISTRY: Record<string, ToolExecutionMode> = {
   createChamferedRectangle: "local",
   createRoundedRectangle: "local",
 
-  // ============ 3D Modeling Tools (Phase 26) ============
-  // These will also execute locally in the worker
-  // extrude: "local",
-  // revolve: "local",
-  // fillet: "local",
-  // chamfer: "local",
-  // etc.
+  // ============ 3D Modeling Query Tools (Phase 26) ============
+  // Query tools execute locally to access OCCT kernel state
+  getCurrentSelection: "local",
+  getModelContext: "local",
+  findFaces: "local",
+  findEdges: "local",
+  measureDistance: "local",
+  getBoundingBox: "local",
+  measureAngle: "local",
+
+  // ============ 3D Modeling Feature Tools (Phase 26) ============
+  // Feature creation executes locally in the worker with OCCT kernel
+  createExtrude: "local",
+  createRevolve: "local",
+  createLoft: "local",
+  createSweep: "local",
+  createFillet: "local",
+  createChamfer: "local",
+  createDraft: "local",
+  createLinearPattern: "local",
+  createCircularPattern: "local",
+  createMirror: "local",
+
+  // ============ 3D Modeling Modify Tools (Phase 26) ============
+  modifyFeature: "local",
+  deleteFeature: "local",
+  reorderFeature: "local",
+  suppressFeature: "local",
+  renameFeature: "local",
+  duplicateFeature: "local",
+  undo: "local",
+  redo: "local",
+
+  // ============ 3D Modeling Helper Tools (Phase 26) ============
+  createBox: "local",
+  createCylinder: "local",
+  createSphere: "local",
+  createCone: "local",
+  createHole: "local",
+  createPocket: "local",
+  createBoss: "local",
+  createShell: "local",
+  createRib: "local",
+  filletAllEdges: "local",
 };
 
 /**

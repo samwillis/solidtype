@@ -15,6 +15,7 @@ import { streamChunksFromDurableStream, type StreamChunk } from "./durable-strea
 import { createChatStreamDB, type ChatStreamDB } from "../state/db";
 import { chatStateSchema, type Run } from "../state/schema";
 import { executeSketchTool, isSketchTool } from "./sketch-tool-executor";
+import { executeModelingTool, isModelingTool } from "./modeling-tool-executor";
 import { createDocumentSync, type DocumentSync } from "../../yjs-sync";
 import { loadDocument, type SolidTypeDoc } from "../../../editor/document/createDocument";
 import type { AIChatWorkerEvent } from "./types";
@@ -338,7 +339,7 @@ export class WorkerChatController {
   }
 
   /**
-   * Execute a client tool (sketch tool)
+   * Execute a client tool (sketch or modeling tool)
    */
   private async executeClientTool(
     toolName: string,
@@ -362,7 +363,17 @@ export class WorkerChatController {
     }
 
     try {
-      const result = executeSketchTool(toolName, args, this.wrappedDoc, this.activeSketchId);
+      let result: unknown;
+
+      // Route to appropriate tool executor
+      if (isSketchTool(toolName)) {
+        result = executeSketchTool(toolName, args, this.wrappedDoc, this.activeSketchId);
+      } else if (isModelingTool(toolName)) {
+        result = executeModelingTool(toolName, args, { doc: this.wrappedDoc });
+      } else {
+        throw new Error(`Unknown tool type: ${toolName}`);
+      }
+
       console.log("[ChatController] Tool result:", result);
 
       // Track active sketch from createSketch result (if enterSketch was true)

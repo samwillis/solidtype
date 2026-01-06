@@ -11,6 +11,12 @@ export type { SketchToolName } from "./sketch";
 export { sketchHelperToolDefs } from "./sketch-helpers";
 export type { SketchHelperToolName } from "./sketch-helpers";
 
+// Modeling tool definitions (Phase 26)
+export { modelingQueryToolDefs } from "./modeling-query";
+export { modelingFeatureToolDefs } from "./modeling-features";
+export { modelingModifyToolDefs } from "./modeling-modify";
+export { modelingHelperToolDefs } from "./modeling-helpers";
+
 // Client tool schemas (browser-side navigation/UI)
 export { dashboardClientToolSchemas, editorClientToolSchemas } from "./client-tools";
 export type { DashboardClientToolName, EditorClientToolName, ClientToolName } from "./client-tools";
