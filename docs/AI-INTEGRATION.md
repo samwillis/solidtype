@@ -29,41 +29,54 @@ The AI system enables users to interact with SolidType through natural language 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  User clicks "Send"                                                  │
+│  User clicks "Send"                                                 │
 └─────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  SharedWorker                                                        │
-│  - Checks: is there already a run in progress for this session?      │
-│  - If yes: queue or reject                                           │
-│  - If no: POST /api/ai/sessions/${sessionId}/run                     │
+│  SharedWorker (WorkerChatController)                                │
+│  - Generates runId locally                                          │
+│  - POST /api/ai/sessions/${sessionId}/run with runId                │
+│  - Starts observing Durable Stream for new chunks                   │
 └─────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Server /run endpoint                                                │
-│  - Preloads StreamDB (catches up with existing transcript)           │
-│  - Builds history from messages + chunks                             │
-│  - Appends: run record, user message, assistant placeholder          │
-│  - Streams chat() and writes chunks as they arrive                   │
-│  - On complete: updates assistant message status, run status         │
+│  Server /run endpoint                                               │
+│  - Preloads StreamDB (catches up with existing transcript)          │
+│  - Builds history from messages (includes tool_call/tool_result)    │
+│  - Appends: run record, user message, assistant placeholder         │
+│  - Registers tools:                                                 │
+│    • Server tools: execute directly                                 │
+│    • Local tools: bridge wrappers that wait for worker              │
+│  - Streams chat() and writes chunks as they arrive                  │
+│  - For local tools: writes tool_call, waits for tool_result         │
+│  - On complete: updates assistant message status, run status        │
 └─────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Durable Stream (JSON events)                                        │
-│  - Stream ID: ai-chat/${sessionId}                                   │
-│  - Event types: message, chunk, run                                  │
+│  Durable Stream (JSON events)                                       │
+│  - Stream ID: ai-chat/${sessionId}                                  │
+│  - Event types: message, chunk, run                                 │
+│  - tool_call messages: written by server, observed by worker        │
+│  - tool_result messages: written by worker, observed by server      │
 └─────────────────────────────────────────────────────────────────────┘
                                     │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Client StreamDB (live queries)                                      │
-│  - Observes messages, chunks, runs                                   │
-│  - Hydrates assistant content: join chunks by messageId, sort by seq │
-│  - UI updates automatically as events arrive                         │
-└─────────────────────────────────────────────────────────────────────┘
+                    ┌───────────────┴───────────────┐
+                    │                               │
+                    ▼                               ▼
+┌──────────────────────────────────┐  ┌────────────────────────────────────┐
+│  SharedWorker (Durable Stream    │  │  Client UI (StreamDB)              │
+│  Adapter)                        │  │  - Observes messages, chunks, runs │
+│  - Polls StreamDB for new chunks │  │  - Hydrates assistant content      │
+│  - Converts to TanStack AI       │  │  - UI updates automatically        │
+│    StreamChunks                  │  │                                    │
+│  - Routes tool_call chunks to    │  │                                    │
+│    executeClientTool()           │  │                                    │
+│  - Executes tools on Yjs doc     │  │                                    │
+│  - Writes tool_result messages   │  │                                    │
+└──────────────────────────────────┘  └────────────────────────────────────┘
 ```
 
 ### Component Roles
@@ -72,9 +85,11 @@ The AI system enables users to interact with SolidType through natural language 
 | ---------------------------- | ------------------------------------------------------------------------ |
 | **Postgres/Electric**        | Session metadata (`ai_chat_sessions` table)                              |
 | **Durable Streams**          | Chat transcript storage (messages, chunks, runs)                         |
-| **Server /run endpoint**     | Runs `@tanstack/ai` chat(), writes events to Durable State               |
+| **Server /run endpoint**     | Runs `@tanstack/ai` chat(), writes events to Durable State, coordinates local tool execution via bridge pattern |
 | **Client UI**                | Renders transcript via Durable State live queries                        |
-| **Per-Session SharedWorker** | Isolated OCCT kernel per session, run coordination, local tool execution |
+| **Per-Session SharedWorker** | Isolated OCCT kernel per session, observes Durable Stream via custom adapter, executes local tools, writes results |
+| **WorkerChatController**     | Manages TanStack AI chat loop in worker, routes tool calls, executes on Yjs document |
+| **DurableStreamAdapter**     | Custom TanStack AI adapter that polls StreamDB and converts records to StreamChunks |
 
 ---
 
@@ -130,11 +145,13 @@ Chat transcripts are stored in Durable Streams using three collections:
 
 ### 4.1 Tool Categories
 
-| Category            | Context              | Execution Location |
-| ------------------- | -------------------- | ------------------ |
-| **Dashboard Tools** | Dashboard            | Server             |
-| **Sketch Tools**    | Editor (sketch mode) | Server + Yjs       |
-| **Modeling Tools**  | Editor (3D mode)     | Server + Yjs       |
+| Category            | Context              | Execution Location | Registry |
+| ------------------- | -------------------- | ------------------ | -------- |
+| **Dashboard Tools** | Dashboard            | Server             | `execution-registry.ts` |
+| **Sketch Tools**    | Editor (sketch mode) | SharedWorker + Yjs | `execution-registry.ts` |
+| **Modeling Tools**  | Editor (3D mode)     | SharedWorker + Yjs | `execution-registry.ts` |
+
+All tools are registered in `execution-registry.ts` with their execution mode (`"server"` or `"local"`). The server uses this registry to determine which tools need bridge wrappers for local execution.
 
 ### 4.2 Dashboard Tools
 
@@ -147,24 +164,30 @@ Workspace, project, document, and branch management:
 - `listFolders`, `createFolder`, `renameFolder`, `deleteFolder`
 - `searchDocuments`, `searchProjects`
 
-### 4.3 Sketch Tools (Planned)
+### 4.3 Sketch Tools (Implemented)
 
 Geometry creation and constraint management:
 
 - **Lifecycle**: `createSketch`, `enterSketch`, `exitSketch`, `getSketchStatus`
 - **Geometry**: `addLine`, `addCircle`, `addArc`, `addRectangle`, `addPolygon`, `addSlot`
-- **Points**: `movePoint`, `mergePoints`
+- **Points**: `addPoint`, `movePoint`, `mergePoints`
 - **Constraints**: `addConstraint`, `removeConstraint`, `modifyConstraintValue`
 - **Deletion**: `deleteEntity`, `deletePoint`
+- **Helpers**: `createCenteredRectangle`, `createCircleWithRadius`, `createSymmetricProfile`, `createBoltCircle`, `createCenterlinesAtOrigin`, `createChamferedRectangle`, `createRoundedRectangle`
+- **Construction**: `toggleConstruction`
 
-### 4.4 Modeling Tools (Planned)
+All sketch tools execute locally in the SharedWorker where the Yjs document is available.
+
+### 4.4 Modeling Tools (Implemented)
 
 Feature creation and modification:
 
-- **Query**: `getCurrentSelection`, `getModelContext`, `findFaces`, `findEdges`, `measureDistance`, `getBoundingBox`
-- **Features**: `createExtrude`, `createRevolve`, `createFillet`, `createChamfer`, `createLinearPattern`, `createCircularPattern`
-- **Modify**: `modifyFeature`, `deleteFeature`, `reorderFeature`, `suppressFeature`, `renameFeature`
-- **Helpers**: `createBox`, `createCylinder`, `createHole`, `createPocket`, `createBoss`, `createShell`
+- **Query**: `getCurrentSelection`, `getModelContext`, `findFaces`, `findEdges`, `measureDistance`, `getBoundingBox`, `measureAngle`
+- **Features**: `createExtrude`, `createRevolve`, `createLoft`, `createSweep`, `createFillet`, `createChamfer`, `createDraft`, `createLinearPattern`, `createCircularPattern`, `createMirror`
+- **Modify**: `modifyFeature`, `deleteFeature`, `reorderFeature`, `suppressFeature`, `renameFeature`, `duplicateFeature`, `undo`, `redo`
+- **Helpers**: `createBox`, `createCylinder`, `createSphere`, `createCone`, `createHole`, `createPocket`, `createBoss`, `createShell`, `createRib`, `filletAllEdges`
+
+All modeling tools execute locally in the SharedWorker where the OCCT kernel is available.
 
 ### 4.5 Tool Approval
 
@@ -215,15 +238,35 @@ Workers are named by session ID: `ai-chat-worker-${sessionId}`. This means:
 
 Each worker loads its own OCCT WASM instance (~50-100MB). The idle timeout mitigates memory usage by cleaning up unused workers after 3 minutes.
 
+### Worker Architecture
+
+Each SharedWorker contains:
+
+1. **WorkerChatController**: Manages the TanStack AI chat loop
+   - Initializes StreamDB connection to Durable Stream
+   - Syncs Yjs document for tool execution
+   - Observes stream via `DurableStreamAdapter`
+   - Routes tool calls to `executeClientTool()`
+   - Writes tool results back to Durable Stream
+   - Broadcasts UI events to main thread
+
+2. **DurableStreamAdapter**: Custom TanStack AI stream adapter
+   - Polls StreamDB collections (messages, chunks, runs)
+   - Converts Durable Stream records to TanStack AI `StreamChunk` types
+   - Handles `content`, `tool_call`, `tool_result`, `done`, `error` chunks
+   - Enables resilient streaming that survives browser/worker closure
+
+3. **OCCT Kernel**: Isolated CAD kernel instance
+   - Loaded per worker for modeling tool execution
+   - Used by `executeModelingTool()` for 3D operations
+
 ### Worker Commands
 
 | Command              | Purpose                                      |
 | -------------------- | -------------------------------------------- |
 | `init-session`       | Initialize session with documentId/projectId |
 | `terminate-session`  | Clean up session resources                   |
-| `start-run`          | Begin a new chat run                         |
-| `run-complete`       | Mark run as finished                         |
-| `execute-local-tool` | Execute a CAD tool locally                   |
+| `send-message`       | Send a new user message (starts new run)     |
 | `ping`               | Health check                                 |
 
 ### Client API
@@ -235,11 +278,11 @@ const client = getAIChatWorkerClient(sessionId);
 // Initialize session (connects to session-specific worker)
 await client.initSession(sessionId, { documentId, projectId });
 
-// Execute a local CAD tool
-const result = await client.executeLocalTool(sessionId, "addLine", args);
+// Send a message (worker handles run coordination and tool execution)
+await client.sendMessage(sessionId, "Create a sketch with a circle");
 
 // Clean up when session is terminated
-disposeAIChatWorkerClient(sessionId);
+client.disconnect();
 ```
 
 ---
@@ -250,9 +293,10 @@ disposeAIChatWorkerClient(sessionId);
 
 1. **Create** – User opens chat; session created in `ai_chat_sessions` table
 2. **Connect** – Client creates StreamDB for session's Durable Stream
-3. **Run** – User sends message → SharedWorker → Server → LLM → Durable Stream
-4. **Reconnect** – On page refresh, client reconnects and catches up from Durable Stream
-5. **Resume** – Stale runs (>5 min) are marked as error; user can send new message
+3. **Initialize Worker** – SharedWorker initializes, connects to StreamDB, syncs Yjs document if needed
+4. **Run** – User sends message → Worker generates `runId` → Worker POSTs to `/run` → Server runs LLM → Writes to Durable Stream → Worker observes stream → Executes tools → Writes results
+5. **Reconnect** – On page refresh, client reconnects and catches up from Durable Stream
+6. **Resume** – Worker checks for active runs on initialization and resumes if found
 
 ### Session Metadata (Postgres via Electric)
 
@@ -289,21 +333,84 @@ disposeAIChatWorkerClient(sessionId);
 
 ## 8. Local Tool Execution Bridge
 
-For tools that need to run locally (CAD operations):
+For tools that need to run locally (CAD operations), the system uses a bridge pattern that coordinates between the server's LLM loop and the worker's tool execution:
 
-1. Server writes `tool_call` message with `status: "pending"`
-2. Server waits for `tool_result` message to appear
-3. SharedWorker observes the pending tool_call
-4. Worker requests approval (or auto-approves based on rules)
-5. Worker executes the tool locally (using CAD kernel)
-6. Worker writes `tool_result` message
-7. Server receives result and continues LLM conversation
+### Architecture
 
-This keeps tool execution within TanStack AI's tool architecture while using Durable State as the transport mechanism.
+1. **Tool Registration**: Server registers all tools (both server and local) with TanStack AI
+   - Server tools: Direct implementations that execute on the server
+   - Local tools: Bridge wrappers created by `getEditorToolsWithWorkerBridge()`
+
+2. **Bridge Implementation**: For local tools, the server creates a wrapper that:
+   - Writes `tool_call` message to Durable Stream (via `processStream`)
+   - Polls StreamDB for a matching `tool_result` message
+   - Returns the result to TanStack AI so the conversation continues
+
+3. **Worker Execution**: The SharedWorker's `WorkerChatController`:
+   - Observes Durable Stream via `DurableStreamAdapter` (custom TanStack AI adapter)
+   - Receives `tool_call` chunks from the stream
+   - Routes to `executeClientTool()` which calls `executeSketchTool()` or `executeModelingTool()`
+   - Executes tool on Yjs document (with OCCT kernel for modeling tools)
+   - Writes `tool_result` message back to Durable Stream
+
+4. **Coordination**: The bridge pattern ensures:
+   - Server's LLM loop can use TanStack AI's standard tool calling API
+   - Worker executes tools in isolation with access to Yjs document
+   - Durable Streams provides the transport layer for coordination
+   - All tool calls and results are persisted for resumability
+
+### Tool Execution Registry
+
+Tools are registered in `execution-registry.ts` with their execution mode:
+- `"server"`: Execute on server (database operations, API calls)
+- `"local"`: Execute in SharedWorker (CAD operations on Yjs document)
+
+The registry is used by the server to determine which tools need bridge wrappers.
 
 ---
 
-## 9. File Organization
+## 9. Durable Stream Adapter
+
+The `DurableStreamAdapter` is a custom TanStack AI stream adapter that enables the worker to consume Durable Streams as an `AsyncIterable<StreamChunk>`. This provides:
+
+### Key Features
+
+1. **Resilient Streaming**: Stream survives browser/worker closure and reconnects automatically
+2. **Multi-Tab Sync**: All tabs observing the same session see updates in real-time
+3. **Server-Side Persistence**: LLM responses are persisted on the server before worker consumes them
+4. **Tool Coordination**: Tool calls and results flow through the same stream
+
+### Implementation
+
+The adapter:
+- Polls `StreamDB.collections` (messages, chunks, runs) at configurable intervals
+- Converts Durable Stream records to TanStack AI `StreamChunk` types:
+  - `content`: Text chunks from assistant messages
+  - `tool_call`: Tool invocation requests from LLM
+  - `tool_result`: Tool execution results from worker
+  - `done`: Stream completion signal
+  - `error`: Error conditions
+- Handles deduplication to prevent processing the same chunk twice
+- Tracks state (last chunk sequence, seen tool calls/results) across polls
+
+### Usage
+
+```typescript
+// In WorkerChatController
+const stream = streamChunksFromDurableStream({
+  sessionId: this.sessionId,
+  documentId: this.documentId,
+  projectId: this.projectId,
+});
+
+for await (const chunk of stream) {
+  await this.handleChunk(chunk, runId);
+}
+```
+
+---
+
+## 10. File Organization
 
 ```
 packages/app/src/lib/ai/
@@ -329,6 +436,10 @@ packages/app/src/lib/ai/
 ├── runtime/
 │   ├── ai-chat-worker.ts  # SharedWorker implementation
 │   ├── ai-chat-worker-client.ts # Client for SharedWorker
+│   ├── worker-chat-controller.ts # Manages TanStack AI chat loop in worker
+│   ├── durable-stream-adapter.ts # Custom TanStack AI adapter for Durable Streams
+│   ├── sketch-tool-executor.ts # Routes sketch tool names to implementations
+│   ├── modeling-tool-executor.ts # Routes modeling tool names to implementations
 │   └── types.ts           # Worker message types
 ├── context/
 │   ├── sketch-context.ts  # Serialize active sketch for AI
@@ -340,7 +451,7 @@ packages/app/src/lib/ai/
 
 ---
 
-## 10. API Routes
+## 11. API Routes
 
 ```
 /api/ai/sessions/
