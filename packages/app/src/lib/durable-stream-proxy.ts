@@ -102,15 +102,28 @@ export async function proxyToDurableStream(
     // Determine if request has a body (POST and PUT can have bodies)
     const hasBody = request.method === "POST" || request.method === "PUT";
 
+    // Buffer the request body to avoid "body already disturbed" errors
+    // This can happen when middleware or TanStack Start touches the body
+    let body: ArrayBuffer | undefined = undefined;
+    if (hasBody) {
+      try {
+        // Clone the request first to avoid consuming the original body
+        const clonedRequest = request.clone();
+        body = await clonedRequest.arrayBuffer();
+      } catch (err) {
+        // If cloning fails, the body might be empty or already consumed
+        console.debug("[proxyToDurableStream] Could not read request body:", err);
+        body = undefined;
+      }
+    }
+
     const response = await fetch(durableUrl.toString(), {
       method: request.method,
       headers: {
         "Content-Type": request.headers.get("Content-Type") || "application/octet-stream",
         Accept: request.headers.get("Accept") || "*/*",
       },
-      body: hasBody ? request.body : undefined,
-      // @ts-expect-error duplex is needed for streaming request bodies
-      duplex: hasBody ? "half" : undefined,
+      body: body && body.byteLength > 0 ? body : undefined,
     });
 
     // Handle 404 for GET requests - stream doesn't exist yet

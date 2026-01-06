@@ -794,13 +794,19 @@ function interpretExtrude(
       if (startId !== undefined && endId !== undefined) {
         sketch.addLine(startId, endId);
       }
-    }
-    if (entity.type === "arc" && entity.start && entity.end && entity.center) {
+    } else if (entity.type === "arc" && entity.start && entity.end && entity.center) {
       const startId = pointIdMap.get(entity.start);
       const endId = pointIdMap.get(entity.end);
       const centerId = pointIdMap.get(entity.center);
       if (startId !== undefined && endId !== undefined && centerId !== undefined) {
         sketch.addArc(startId, endId, centerId, entity.ccw ?? true);
+      }
+    } else if (entity.type === "circle" && entity.center && entity.radius) {
+      // Circle entities are stored as center + radius
+      // The sketch.addCircle creates a center point and a full arc (start=end)
+      const centerPoint = sketchInfo.data.pointsById[entity.center];
+      if (centerPoint) {
+        sketch.addCircle(centerPoint.x, centerPoint.y, entity.radius);
       }
     }
   }

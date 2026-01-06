@@ -516,6 +516,8 @@ export const Route = createFileRoute("/api/ai/sessions/$sessionId/run")({
           }
 
           // 11. Start chat stream
+          console.log("[run] Starting chat with", tools.length, "tools");
+          console.log("[run] Tool names:", tools.map((t) => t.name).join(", "));
           const stream = await chat({
             adapter: getAdapter(),
             messages: [...historyMessages, { role: "user" as const, content }],
@@ -610,25 +612,37 @@ async function getEditorToolsWithWorkerBridge(
     };
 
   // Helper to add tool definitions to the tools array
-  const addToolDefs = (defs: Record<string, unknown>) => {
-    for (const def of Object.values(defs)) {
-      const toolDef = def as {
-        name: string;
-        server: (fn: (input: unknown) => Promise<unknown>) => ServerTool;
-      };
-      tools.push(toolDef.server(createBridgeImpl(toolDef.name)));
+  const addToolDefs = (defs: Record<string, unknown> | unknown[], label: string) => {
+    const values = Array.isArray(defs) ? defs : Object.values(defs);
+    console.log(`[getEditorToolsWithWorkerBridge] Adding ${values.length} tools from ${label}`);
+    for (const def of values) {
+      try {
+        const toolDef = def as {
+          name: string;
+          server: (fn: (input: unknown) => Promise<unknown>) => ServerTool;
+        };
+        if (typeof toolDef.server !== "function") {
+          console.error(`[getEditorToolsWithWorkerBridge] Tool ${toolDef.name} has no server method`);
+          continue;
+        }
+        tools.push(toolDef.server(createBridgeImpl(toolDef.name)));
+      } catch (err) {
+        console.error("[getEditorToolsWithWorkerBridge] Error adding tool:", err);
+      }
     }
   };
 
   // Add all sketch tools (Phase 25)
-  addToolDefs(sketchToolDefs);
-  addToolDefs(sketchHelperToolDefs);
+  addToolDefs(sketchToolDefs, "sketchToolDefs");
+  addToolDefs(sketchHelperToolDefs, "sketchHelperToolDefs");
 
   // Add all modeling tools (Phase 26)
-  addToolDefs(modelingQueryToolDefs);
-  addToolDefs(modelingFeatureToolDefs);
-  addToolDefs(modelingModifyToolDefs);
-  addToolDefs(modelingHelperToolDefs);
+  addToolDefs(modelingQueryToolDefs, "modelingQueryToolDefs");
+  addToolDefs(modelingFeatureToolDefs, "modelingFeatureToolDefs");
+  addToolDefs(modelingModifyToolDefs, "modelingModifyToolDefs");
+  addToolDefs(modelingHelperToolDefs, "modelingHelperToolDefs");
+
+  console.log(`[getEditorToolsWithWorkerBridge] Total tools registered: ${tools.length}`);
 
   return tools;
 }

@@ -14,9 +14,11 @@ export const modifyFeatureDef = toolDefinition({
   description: "Change parameters of an existing feature",
   inputSchema: z.object({
     featureId: z.string().describe("ID of the feature to modify"),
-    changes: z
-      .record(z.union([z.string(), z.number(), z.boolean(), z.null()]))
-      .describe("Key-value pairs of parameters to change"),
+    // Use individual optional fields instead of z.record() which causes JSON Schema issues
+    parameterName: z.string().describe("Name of the parameter to change"),
+    stringValue: z.string().nullish().describe("New string value (if applicable)"),
+    numberValue: z.number().nullish().describe("New number value (if applicable)"),
+    booleanValue: z.boolean().nullish().describe("New boolean value (if applicable)"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -85,13 +87,10 @@ export const renameFeatureDef = toolDefinition({
 
 export const duplicateFeatureDef = toolDefinition({
   name: "duplicateFeature",
-  description: "Duplicate a feature with optional parameter changes",
+  description: "Duplicate a feature with optional new name",
   inputSchema: z.object({
     featureId: z.string().describe("ID of the feature to duplicate"),
-    changes: z
-      .record(z.union([z.string(), z.number(), z.boolean(), z.null()]))
-      .nullish()
-      .describe("Optional parameter overrides for the duplicate"),
+    newName: z.string().nullish().describe("Optional new name for the duplicate"),
     insertAfter: z
       .string()
       .nullish()

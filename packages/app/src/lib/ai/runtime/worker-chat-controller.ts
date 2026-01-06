@@ -158,6 +158,16 @@ export class WorkerChatController {
         reject(error);
       });
 
+      // Keep listening for errors even after initial sync
+      sync.onError((error) => {
+        console.error("[ChatController] ❌ Document sync error (ongoing):", error);
+      });
+
+      // Log status changes
+      sync.onStatus((status) => {
+        console.log("[ChatController] 📡 Document sync status:", status);
+      });
+
       sync.connect();
     });
   }
@@ -306,16 +316,16 @@ export class WorkerChatController {
         break;
 
       case "tool_call":
-        // Check if this is a client tool (sketch tool)
+        // Check if this is a client tool (sketch or modeling tool)
         const toolName = chunk.toolCall.function.name;
         const toolArgs = JSON.parse(chunk.toolCall.function.arguments);
         const toolCallId = chunk.toolCall.id;
 
-        if (isSketchTool(toolName)) {
+        if (isSketchTool(toolName) || isModelingTool(toolName)) {
           // Execute client tool locally
           await this.executeClientTool(toolName, toolArgs, toolCallId, runId);
         }
-        // Server tools are handled by the server
+        // Server tools (if any) are handled by the server
         break;
 
       case "tool_result":
@@ -365,6 +375,19 @@ export class WorkerChatController {
     try {
       let result: unknown;
 
+      // Log document state before tool execution
+      const featureCountBefore = this.wrappedDoc.featureOrder.length;
+      console.log(
+        "[ChatController] Before tool:",
+        toolName,
+        "features:",
+        featureCountBefore,
+        "docSync connected:",
+        this.docSync?.connected,
+        "synced:",
+        this.docSync?.synced
+      );
+
       // Route to appropriate tool executor
       if (isSketchTool(toolName)) {
         result = executeSketchTool(toolName, args, this.wrappedDoc, this.activeSketchId);
@@ -373,6 +396,28 @@ export class WorkerChatController {
       } else {
         throw new Error(`Unknown tool type: ${toolName}`);
       }
+
+      // Log document state after tool execution
+      const featureCountAfter = this.wrappedDoc.featureOrder.length;
+      console.log(
+        "[ChatController] After tool:",
+        toolName,
+        "features:",
+        featureCountAfter,
+        "added:",
+        featureCountAfter - featureCountBefore
+      );
+
+      // Log sync status to diagnose sync issues
+      console.log(
+        "[ChatController] Sync status after tool:",
+        "connected:",
+        this.docSync?.connected,
+        "synced:",
+        this.docSync?.synced,
+        "featureOrder:",
+        this.wrappedDoc.featureOrder.toArray()
+      );
 
       console.log("[ChatController] Tool result:", result);
 

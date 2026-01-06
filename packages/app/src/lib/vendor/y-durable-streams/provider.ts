@@ -396,6 +396,10 @@ export class DurableStreamsProvider extends ObservableV2<DurableStreamsProviderE
     // Don't re-send updates from server
     if (origin === `server`) return;
 
+    console.log(
+      `[y-durable-streams] 📤 Local document update detected, size=${update.length}, origin=${String(origin)}`
+    );
+
     this.batchDocumentUpdate(update);
     this.sendDocumentChanges();
   };
@@ -410,8 +414,8 @@ export class DurableStreamsProvider extends ObservableV2<DurableStreamsProviderE
 
   private async sendDocumentChanges(): Promise<void> {
     if (!this.connected || this.sendingDocumentChanges || !this.documentStream) {
-      console.debug(
-        `[y-durable-streams] sendDocumentChanges skipped:`,
+      console.warn(
+        `[y-durable-streams] ⚠️ sendDocumentChanges skipped:`,
         `connected=${this.connected}`,
         `sending=${this.sendingDocumentChanges}`,
         `hasStream=${!!this.documentStream}`
@@ -434,14 +438,14 @@ export class DurableStreamsProvider extends ObservableV2<DurableStreamsProviderE
         // Frame with lib0 VarUint8Array encoding
         const encoder = encoding.createEncoder();
         encoding.writeVarUint8Array(encoder, lastSending);
-        console.debug(`[y-durable-streams] Sending document update, size=${lastSending.length}`);
+        console.log(`[y-durable-streams] 📤 Sending document update, size=${lastSending.length}`);
         await this.documentStream.append(encoding.toUint8Array(encoder));
-        console.debug(`[y-durable-streams] Document update sent successfully`);
+        console.log(`[y-durable-streams] ✅ Document update sent successfully`);
         lastSending = null; // Clear on success
       }
       this.synced = true;
     } catch (err) {
-      console.error(`[y-durable-streams] Failed to send document changes:`, err);
+      console.error(`[y-durable-streams] ❌ Failed to send document changes:`, err);
       // Re-batch the failed update (lastSending is always set when catch is reached)
       this.batchDocumentUpdate(lastSending!);
       this.emit(`error`, [err instanceof Error ? err : new Error(String(err))]);

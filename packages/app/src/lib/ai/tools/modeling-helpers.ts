@@ -61,10 +61,9 @@ export const createSphereDef = toolDefinition({
   description: "Create a sphere primitive (creates a semicircle sketch and revolves it)",
   inputSchema: z.object({
     radius: z.number().positive().describe("Sphere radius"),
-    center: z
-      .tuple([z.number(), z.number(), z.number()])
-      .default([0, 0, 0])
-      .describe("Center point"),
+    centerX: z.number().default(0).describe("Center point X coordinate"),
+    centerY: z.number().default(0).describe("Center point Y coordinate"),
+    centerZ: z.number().default(0).describe("Center point Z coordinate"),
     name: z.string().nullish().describe("Optional feature name"),
   }),
   outputSchema: z.object({
@@ -100,16 +99,10 @@ export const createHoleDef = toolDefinition({
   inputSchema: z.object({
     faceRef: z.string().describe("Persistent reference to the face"),
     diameter: z.number().positive().describe("Hole diameter"),
-    depth: z
-      .union([z.number().positive(), z.literal("through")])
-      .describe("Hole depth or 'through' for through-all"),
-    position: z
-      .object({
-        u: z.number().describe("Position along face U parameter (0-1)"),
-        v: z.number().describe("Position along face V parameter (0-1)"),
-      })
-      .nullish()
-      .describe("Position on face; omit for center"),
+    depthValue: z.number().nullish().describe("Hole depth in units (omit for through-all)"),
+    throughAll: z.boolean().default(false).describe("If true, hole goes through entire body"),
+    positionU: z.number().nullish().describe("Position along face U parameter (0-1), omit for center"),
+    positionV: z.number().nullish().describe("Position along face V parameter (0-1), omit for center"),
     name: z.string().nullish().describe("Optional feature name"),
   }),
   outputSchema: z.object({
@@ -126,18 +119,9 @@ export const createPocketDef = toolDefinition({
     width: z.number().positive().describe("Pocket width"),
     length: z.number().positive().describe("Pocket length"),
     depth: z.number().positive().describe("Pocket depth"),
-    cornerRadius: z
-      .number()
-      .min(0)
-      .default(0)
-      .describe("Corner radius (0 for sharp corners)"),
-    position: z
-      .object({
-        u: z.number().describe("Position along face U parameter (0-1)"),
-        v: z.number().describe("Position along face V parameter (0-1)"),
-      })
-      .nullish()
-      .describe("Position on face; omit for center"),
+    cornerRadius: z.number().min(0).default(0).describe("Corner radius (0 for sharp corners)"),
+    positionU: z.number().nullish().describe("Position along face U parameter (0-1), omit for center"),
+    positionV: z.number().nullish().describe("Position along face V parameter (0-1), omit for center"),
     name: z.string().nullish().describe("Optional feature name"),
   }),
   outputSchema: z.object({
@@ -157,13 +141,8 @@ export const createBossDef = toolDefinition({
     width: z.number().positive().nullish().describe("Width (for rectangle)"),
     length: z.number().positive().nullish().describe("Length (for rectangle)"),
     height: z.number().positive().describe("Boss height"),
-    position: z
-      .object({
-        u: z.number().describe("Position along face U parameter (0-1)"),
-        v: z.number().describe("Position along face V parameter (0-1)"),
-      })
-      .nullish()
-      .describe("Position on face; omit for center"),
+    positionU: z.number().nullish().describe("Position along face U parameter (0-1), omit for center"),
+    positionV: z.number().nullish().describe("Position along face V parameter (0-1), omit for center"),
     name: z.string().nullish().describe("Optional feature name"),
   }),
   outputSchema: z.object({

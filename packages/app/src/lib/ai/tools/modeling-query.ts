@@ -82,7 +82,9 @@ export const findFacesDef = toolDefinition({
       featureId: z.string(),
       surfaceType: z.string(),
       area: z.number(),
-      normal: z.tuple([z.number(), z.number(), z.number()]),
+      normalX: z.number(),
+      normalY: z.number(),
+      normalZ: z.number(),
     })
   ),
 });
@@ -134,10 +136,18 @@ export const getBoundingBoxDef = toolDefinition({
     featureId: z.string().nullish().describe("Feature ID, or omit for entire model"),
   }),
   outputSchema: z.object({
-    min: z.tuple([z.number(), z.number(), z.number()]),
-    max: z.tuple([z.number(), z.number(), z.number()]),
-    size: z.tuple([z.number(), z.number(), z.number()]),
-    center: z.tuple([z.number(), z.number(), z.number()]),
+    minX: z.number(),
+    minY: z.number(),
+    minZ: z.number(),
+    maxX: z.number(),
+    maxY: z.number(),
+    maxZ: z.number(),
+    sizeX: z.number(),
+    sizeY: z.number(),
+    sizeZ: z.number(),
+    centerX: z.number(),
+    centerY: z.number(),
+    centerZ: z.number(),
   }),
 });
 

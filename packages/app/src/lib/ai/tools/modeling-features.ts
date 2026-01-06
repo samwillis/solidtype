@@ -117,9 +117,9 @@ export const createDraftDef = toolDefinition({
   inputSchema: z.object({
     faceRefs: z.array(z.string()).min(1).describe("Persistent references to faces"),
     angle: z.number().min(0).max(45).describe("Draft angle in degrees"),
-    pullDirection: z
-      .tuple([z.number(), z.number(), z.number()])
-      .describe("Pull direction vector"),
+    pullDirectionX: z.number().describe("Pull direction vector X component"),
+    pullDirectionY: z.number().describe("Pull direction vector Y component"),
+    pullDirectionZ: z.number().describe("Pull direction vector Z component"),
     name: z.string().nullish().describe("Optional feature name"),
   }),
   outputSchema: z.object({
@@ -136,9 +136,9 @@ export const createLinearPatternDef = toolDefinition({
   description: "Create a linear pattern of features along a direction",
   inputSchema: z.object({
     featureIds: z.array(z.string()).min(1).describe("Feature IDs to pattern"),
-    direction: z
-      .tuple([z.number(), z.number(), z.number()])
-      .describe("Pattern direction vector"),
+    directionX: z.number().describe("Pattern direction vector X component"),
+    directionY: z.number().describe("Pattern direction vector Y component"),
+    directionZ: z.number().describe("Pattern direction vector Z component"),
     count: z.number().int().min(2).describe("Number of instances"),
     spacing: z.number().positive().describe("Distance between instances"),
     name: z.string().nullish().describe("Optional feature name"),
@@ -155,8 +155,12 @@ export const createCircularPatternDef = toolDefinition({
   description: "Create a circular pattern of features around an axis",
   inputSchema: z.object({
     featureIds: z.array(z.string()).min(1).describe("Feature IDs to pattern"),
-    axis: z.tuple([z.number(), z.number(), z.number()]).describe("Axis direction vector"),
-    axisPoint: z.tuple([z.number(), z.number(), z.number()]).describe("Point on the axis"),
+    axisX: z.number().describe("Axis direction vector X component"),
+    axisY: z.number().describe("Axis direction vector Y component"),
+    axisZ: z.number().describe("Axis direction vector Z component"),
+    axisPointX: z.number().describe("Point on axis X coordinate"),
+    axisPointY: z.number().describe("Point on axis Y coordinate"),
+    axisPointZ: z.number().describe("Point on axis Z coordinate"),
     count: z.number().int().min(2).describe("Number of instances"),
     totalAngle: z.number().default(360).describe("Total angle of pattern in degrees"),
     name: z.string().nullish().describe("Optional feature name"),

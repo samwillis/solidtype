@@ -167,7 +167,7 @@ describe("Feature Tools", () => {
       expect(feature.get("type")).toBe("extrude");
       expect(feature.get("name")).toBe("Test Extrude");
       expect(feature.get("distance")).toBe(20);
-      expect(feature.get("operation")).toBe("cut");
+      expect(feature.get("op")).toBe("cut");
       expect(feature.get("direction")).toBe("reverse");
     });
   });
@@ -218,7 +218,7 @@ describe("Feature Tools", () => {
   describe("createLinearPatternImpl", () => {
     it("creates a linear pattern feature", () => {
       const result = modelingImpl.createLinearPatternImpl(
-        { featureIds: ["f1", "f2"], direction: [1, 0, 0], count: 5, spacing: 10 },
+        { featureIds: ["f1", "f2"], directionX: 1, directionY: 0, directionZ: 0, count: 5, spacing: 10 },
         { doc }
       ) as { featureId: string; status: string };
 
@@ -227,6 +227,7 @@ describe("Feature Tools", () => {
       expect(feature.get("type")).toBe("linearPattern");
       expect(feature.get("count")).toBe(5);
       expect(feature.get("spacing")).toBe(10);
+      expect(feature.get("direction")).toEqual([1, 0, 0]);
     });
   });
 });
@@ -239,10 +240,10 @@ describe("Modify Tools", () => {
   });
 
   describe("modifyFeatureImpl", () => {
-    it("modifies feature properties", () => {
+    it("modifies feature properties with string value", () => {
       const sketchId = createTestSketch(doc);
       const result = modelingImpl.modifyFeatureImpl(
-        { featureId: sketchId, changes: { name: "Modified Sketch" } },
+        { featureId: sketchId, parameterName: "name", stringValue: "Modified Sketch" },
         { doc }
       ) as { success: boolean };
 
@@ -250,9 +251,20 @@ describe("Modify Tools", () => {
       expect(doc.featuresById.get(sketchId)?.get("name")).toBe("Modified Sketch");
     });
 
+    it("modifies feature properties with number value", () => {
+      const sketchId = createTestSketch(doc);
+      const result = modelingImpl.modifyFeatureImpl(
+        { featureId: sketchId, parameterName: "distance", numberValue: 25 },
+        { doc }
+      ) as { success: boolean };
+
+      expect(result.success).toBe(true);
+      expect(doc.featuresById.get(sketchId)?.get("distance")).toBe(25);
+    });
+
     it("returns error for nonexistent feature", () => {
       const result = modelingImpl.modifyFeatureImpl(
-        { featureId: "nonexistent", changes: { name: "New" } },
+        { featureId: "nonexistent", parameterName: "name", stringValue: "New" },
         { doc }
       ) as { success: boolean; error: string };
 
@@ -365,7 +377,7 @@ describe("Helper Tools", () => {
       expect(extrude.get("type")).toBe("extrude");
       expect(extrude.get("name")).toBe("Test Box");
       expect(extrude.get("distance")).toBe(30);
-      expect(extrude.get("sketchId")).toBe(result.sketchId);
+      expect(extrude.get("sketch")).toBe(result.sketchId);
 
       // Verify sketch data has 4 points and 4 lines
       const data = sketch.get("data") as Y.Map<Y.Map<unknown>>;

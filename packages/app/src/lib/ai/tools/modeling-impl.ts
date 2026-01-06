@@ -6,8 +6,39 @@
  */
 
 import type { ModelingToolContext } from "../runtime/modeling-tool-executor";
+import type { SolidTypeDoc } from "../../../editor/document/createDocument";
 import { v4 as uuid } from "uuid";
 import * as Y from "yjs";
+
+/**
+ * Helper to create a feature and add it to the document.
+ * Properties MUST be set AFTER the map is integrated for proper sync.
+ */
+function createFeature(
+  doc: SolidTypeDoc,
+  props: Record<string, unknown>
+): string {
+  const featureId = uuid();
+  const featureMap = new Y.Map<unknown>();
+
+  doc.ydoc.transact(() => {
+    // First, integrate the map into the document
+    doc.featuresById.set(featureId, featureMap);
+    doc.featureOrder.push([featureId]);
+
+    // Set the id property (required for parseFeature to work)
+    featureMap.set("id", featureId);
+
+    // Then set properties (AFTER integration for proper sync tracking)
+    for (const [key, value] of Object.entries(props)) {
+      if (value !== undefined) {
+        featureMap.set(key, value);
+      }
+    }
+  });
+
+  return featureId;
+}
 
 // ============ Query Tool Implementations ============
 
@@ -78,10 +109,18 @@ export function getBoundingBoxImpl(
 ): unknown {
   // TODO: Implement when OCCT bounding box query is available
   return {
-    min: [0, 0, 0],
-    max: [0, 0, 0],
-    size: [0, 0, 0],
-    center: [0, 0, 0],
+    minX: 0,
+    minY: 0,
+    minZ: 0,
+    maxX: 0,
+    maxY: 0,
+    maxZ: 0,
+    sizeX: 0,
+    sizeY: 0,
+    sizeZ: 0,
+    centerX: 0,
+    centerY: 0,
+    centerZ: 0,
   };
 }
 
@@ -114,19 +153,14 @@ export function createExtrudeImpl(
     return { featureId: "", status: "error", error: `Sketch ${sketchId} not found` };
   }
 
-  // Create extrude feature
-  const featureId = uuid();
-  const featureMap = new Y.Map();
-  featureMap.set("type", "extrude");
-  featureMap.set("name", name || `Extrude ${op === "cut" ? "Cut" : ""}`);
-  featureMap.set("sketchId", sketchId);
-  featureMap.set("distance", distance);
-  featureMap.set("operation", op);
-  featureMap.set("direction", direction || "normal");
-
-  doc.ydoc.transact(() => {
-    doc.featuresById.set(featureId, featureMap);
-    doc.featureOrder.push([featureId]);
+  // Create extrude feature using helper (ensures proper sync)
+  const featureId = createFeature(doc, {
+    type: "extrude",
+    name: name || `Extrude ${op === "cut" ? "Cut" : ""}`,
+    sketch: sketchId, // Note: field name is "sketch" to match featureHelpers.ts
+    distance,
+    op: op,
+    direction: direction || "normal",
   });
 
   return { featureId, status: "ok" };
@@ -151,19 +185,14 @@ export function createRevolveImpl(
     return { featureId: "", status: "error", error: `Sketch ${sketchId} not found` };
   }
 
-  // Create revolve feature
-  const featureId = uuid();
-  const featureMap = new Y.Map();
-  featureMap.set("type", "revolve");
-  featureMap.set("name", name || `Revolve ${op === "cut" ? "Cut" : ""}`);
-  featureMap.set("sketchId", sketchId);
-  featureMap.set("axisLineId", axisLineId);
-  featureMap.set("angle", angle);
-  featureMap.set("operation", op);
-
-  doc.ydoc.transact(() => {
-    doc.featuresById.set(featureId, featureMap);
-    doc.featureOrder.push([featureId]);
+  // Create revolve feature using helper
+  const featureId = createFeature(doc, {
+    type: "revolve",
+    name: name || `Revolve ${op === "cut" ? "Cut" : ""}`,
+    sketch: sketchId,
+    axis: axisLineId,
+    angle,
+    op,
   });
 
   return { featureId, status: "ok" };
@@ -188,17 +217,12 @@ export function createLoftImpl(
     }
   }
 
-  // Create loft feature
-  const featureId = uuid();
-  const featureMap = new Y.Map();
-  featureMap.set("type", "loft");
-  featureMap.set("name", name || "Loft");
-  featureMap.set("sketchIds", sketchIds);
-  featureMap.set("operation", op);
-
-  doc.ydoc.transact(() => {
-    doc.featuresById.set(featureId, featureMap);
-    doc.featureOrder.push([featureId]);
+  // Create loft feature using helper
+  const featureId = createFeature(doc, {
+    type: "loft",
+    name: name || "Loft",
+    sketches: sketchIds,
+    op,
   });
 
   return { featureId, status: "ok" };
@@ -217,19 +241,14 @@ export function createSweepImpl(
     name?: string;
   };
 
-  // Create sweep feature
-  const featureId = uuid();
-  const featureMap = new Y.Map();
-  featureMap.set("type", "sweep");
-  featureMap.set("name", name || "Sweep");
-  featureMap.set("profileSketchId", profileSketchId);
-  featureMap.set("pathSketchId", pathSketchId);
-  featureMap.set("pathEntityId", pathEntityId);
-  featureMap.set("operation", op);
-
-  doc.ydoc.transact(() => {
-    doc.featuresById.set(featureId, featureMap);
-    doc.featureOrder.push([featureId]);
+  // Create sweep feature using helper
+  const featureId = createFeature(doc, {
+    type: "sweep",
+    name: name || "Sweep",
+    profileSketch: profileSketchId,
+    pathSketch: pathSketchId,
+    pathEntity: pathEntityId,
+    op,
   });
 
   return { featureId, status: "ok" };
@@ -246,17 +265,12 @@ export function createFilletImpl(
     name?: string;
   };
 
-  // Create fillet feature
-  const featureId = uuid();
-  const featureMap = new Y.Map();
-  featureMap.set("type", "fillet");
-  featureMap.set("name", name || "Fillet");
-  featureMap.set("edgeRefs", edgeRefs);
-  featureMap.set("radius", radius);
-
-  doc.ydoc.transact(() => {
-    doc.featuresById.set(featureId, featureMap);
-    doc.featureOrder.push([featureId]);
+  // Create fillet feature using helper
+  const featureId = createFeature(doc, {
+    type: "fillet",
+    name: name || "Fillet",
+    edges: edgeRefs,
+    radius,
   });
 
   return { featureId, status: "ok" };
@@ -273,17 +287,12 @@ export function createChamferImpl(
     name?: string;
   };
 
-  // Create chamfer feature
-  const featureId = uuid();
-  const featureMap = new Y.Map();
-  featureMap.set("type", "chamfer");
-  featureMap.set("name", name || "Chamfer");
-  featureMap.set("edgeRefs", edgeRefs);
-  featureMap.set("distance", distance);
-
-  doc.ydoc.transact(() => {
-    doc.featuresById.set(featureId, featureMap);
-    doc.featureOrder.push([featureId]);
+  // Create chamfer feature using helper
+  const featureId = createFeature(doc, {
+    type: "chamfer",
+    name: name || "Chamfer",
+    edges: edgeRefs,
+    distance,
   });
 
   return { featureId, status: "ok" };
@@ -294,25 +303,22 @@ export function createDraftImpl(
   ctx: ModelingToolContext
 ): unknown {
   const { doc } = ctx;
-  const { faceRefs, angle, pullDirection, name } = args as {
+  const { faceRefs, angle, pullDirectionX, pullDirectionY, pullDirectionZ, name } = args as {
     faceRefs: string[];
     angle: number;
-    pullDirection: [number, number, number];
+    pullDirectionX: number;
+    pullDirectionY: number;
+    pullDirectionZ: number;
     name?: string;
   };
 
-  // Create draft feature
-  const featureId = uuid();
-  const featureMap = new Y.Map();
-  featureMap.set("type", "draft");
-  featureMap.set("name", name || "Draft");
-  featureMap.set("faceRefs", faceRefs);
-  featureMap.set("angle", angle);
-  featureMap.set("pullDirection", pullDirection);
-
-  doc.ydoc.transact(() => {
-    doc.featuresById.set(featureId, featureMap);
-    doc.featureOrder.push([featureId]);
+  // Create draft feature using helper
+  const featureId = createFeature(doc, {
+    type: "draft",
+    name: name || "Draft",
+    faces: faceRefs,
+    angle,
+    pullDirection: [pullDirectionX, pullDirectionY, pullDirectionZ],
   });
 
   return { featureId, status: "ok" };
@@ -323,27 +329,24 @@ export function createLinearPatternImpl(
   ctx: ModelingToolContext
 ): unknown {
   const { doc } = ctx;
-  const { featureIds, direction, count, spacing, name } = args as {
+  const { featureIds, directionX, directionY, directionZ, count, spacing, name } = args as {
     featureIds: string[];
-    direction: [number, number, number];
+    directionX: number;
+    directionY: number;
+    directionZ: number;
     count: number;
     spacing: number;
     name?: string;
   };
 
-  // Create linear pattern feature
-  const featureId = uuid();
-  const featureMap = new Y.Map();
-  featureMap.set("type", "linearPattern");
-  featureMap.set("name", name || "Linear Pattern");
-  featureMap.set("sourceFeatures", featureIds);
-  featureMap.set("direction", direction);
-  featureMap.set("count", count);
-  featureMap.set("spacing", spacing);
-
-  doc.ydoc.transact(() => {
-    doc.featuresById.set(featureId, featureMap);
-    doc.featureOrder.push([featureId]);
+  // Create linear pattern feature using helper
+  const featureId = createFeature(doc, {
+    type: "linearPattern",
+    name: name || "Linear Pattern",
+    sourceFeatures: featureIds,
+    direction: [directionX, directionY, directionZ],
+    count,
+    spacing,
   });
 
   return { featureId, status: "ok" };
@@ -354,29 +357,28 @@ export function createCircularPatternImpl(
   ctx: ModelingToolContext
 ): unknown {
   const { doc } = ctx;
-  const { featureIds, axis, axisPoint, count, totalAngle, name } = args as {
+  const { featureIds, axisX, axisY, axisZ, axisPointX, axisPointY, axisPointZ, count, totalAngle, name } = args as {
     featureIds: string[];
-    axis: [number, number, number];
-    axisPoint: [number, number, number];
+    axisX: number;
+    axisY: number;
+    axisZ: number;
+    axisPointX: number;
+    axisPointY: number;
+    axisPointZ: number;
     count: number;
     totalAngle: number;
     name?: string;
   };
 
-  // Create circular pattern feature
-  const featureId = uuid();
-  const featureMap = new Y.Map();
-  featureMap.set("type", "circularPattern");
-  featureMap.set("name", name || "Circular Pattern");
-  featureMap.set("sourceFeatures", featureIds);
-  featureMap.set("axis", axis);
-  featureMap.set("axisPoint", axisPoint);
-  featureMap.set("count", count);
-  featureMap.set("totalAngle", totalAngle);
-
-  doc.ydoc.transact(() => {
-    doc.featuresById.set(featureId, featureMap);
-    doc.featureOrder.push([featureId]);
+  // Create circular pattern feature using helper
+  const featureId = createFeature(doc, {
+    type: "circularPattern",
+    name: name || "Circular Pattern",
+    sourceFeatures: featureIds,
+    axis: [axisX, axisY, axisZ],
+    axisPoint: [axisPointX, axisPointY, axisPointZ],
+    count,
+    totalAngle,
   });
 
   return { featureId, status: "ok" };
@@ -393,17 +395,12 @@ export function createMirrorImpl(
     name?: string;
   };
 
-  // Create mirror feature
-  const featureId = uuid();
-  const featureMap = new Y.Map();
-  featureMap.set("type", "mirror");
-  featureMap.set("name", name || "Mirror");
-  featureMap.set("sourceFeatures", featureIds);
-  featureMap.set("planeRef", planeRef);
-
-  doc.ydoc.transact(() => {
-    doc.featuresById.set(featureId, featureMap);
-    doc.featureOrder.push([featureId]);
+  // Create mirror feature using helper
+  const featureId = createFeature(doc, {
+    type: "mirror",
+    name: name || "Mirror",
+    sourceFeatures: featureIds,
+    plane: planeRef,
   });
 
   return { featureId, status: "ok" };
@@ -416,9 +413,12 @@ export function modifyFeatureImpl(
   ctx: ModelingToolContext
 ): unknown {
   const { doc } = ctx;
-  const { featureId, changes } = args as {
+  const { featureId, parameterName, stringValue, numberValue, booleanValue } = args as {
     featureId: string;
-    changes: Record<string, unknown>;
+    parameterName: string;
+    stringValue?: string | null;
+    numberValue?: number | null;
+    booleanValue?: boolean | null;
   };
 
   const feature = doc.featuresById.get(featureId);
@@ -426,10 +426,20 @@ export function modifyFeatureImpl(
     return { success: false, rebuildStatus: "error", error: `Feature ${featureId} not found` };
   }
 
+  // Determine the value to set
+  let value: unknown;
+  if (stringValue !== undefined && stringValue !== null) {
+    value = stringValue;
+  } else if (numberValue !== undefined && numberValue !== null) {
+    value = numberValue;
+  } else if (booleanValue !== undefined && booleanValue !== null) {
+    value = booleanValue;
+  } else {
+    return { success: false, rebuildStatus: "error", error: "No value provided" };
+  }
+
   doc.ydoc.transact(() => {
-    for (const [key, value] of Object.entries(changes)) {
-      feature.set(key, value);
-    }
+    feature.set(parameterName, value);
   });
 
   return { success: true, rebuildStatus: "ok" };
@@ -561,10 +571,10 @@ export function duplicateFeatureImpl(
   ctx: ModelingToolContext
 ): unknown {
   const { doc } = ctx;
-  const { featureId, changes, insertAfter } = args as {
+  const { featureId, newName, insertAfter } = args as {
     featureId: string;
-    changes?: Record<string, unknown>;
-    insertAfter?: string;
+    newName?: string | null;
+    insertAfter?: string | null;
   };
 
   const feature = doc.featuresById.get(featureId);
@@ -573,33 +583,38 @@ export function duplicateFeatureImpl(
   }
 
   const newFeatureId = uuid();
-  const newFeature = new Y.Map();
-
-  // Copy all properties (deep clone to avoid Y.Map reference issues)
   const featureJson = feature.toJSON();
-  for (const [key, value] of Object.entries(featureJson)) {
-    // Skip nested Y types - they need special handling
-    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-      // For nested objects like 'data' or 'plane', convert to plain object
-      newFeature.set(key, JSON.parse(JSON.stringify(value)));
-    } else {
-      newFeature.set(key, value);
-    }
-  }
-
-  // Apply changes
-  if (changes) {
-    for (const [key, value] of Object.entries(changes)) {
-      newFeature.set(key, value);
-    }
-  }
-
-  // Rename to indicate it's a copy
   const originalName = (featureJson.name as string) || "Feature";
-  newFeature.set("name", `${originalName} (Copy)`);
 
+  // Build properties object for the new feature
+  const props: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(featureJson)) {
+    // Deep clone nested objects
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      props[key] = JSON.parse(JSON.stringify(value));
+    } else {
+      props[key] = value;
+    }
+  }
+  // Set new name
+  props["name"] = newName || `${originalName} (Copy)`;
+
+  // Create the feature and add to document properly
+  const newFeature = new Y.Map<unknown>();
   doc.ydoc.transact(() => {
+    // First integrate into document
     doc.featuresById.set(newFeatureId, newFeature);
+
+    // Set the id property (must be the new ID, not the copied one)
+    newFeature.set("id", newFeatureId);
+
+    // Then set properties (AFTER integration for proper sync)
+    for (const [key, value] of Object.entries(props)) {
+      if (value !== undefined && key !== "id") {
+        // Skip id since we already set it above
+        newFeature.set(key, value);
+      }
+    }
 
     // Insert at correct position
     const featureOrder = doc.featureOrder.toArray();
@@ -653,19 +668,6 @@ export function createBoxImpl(args: Record<string, unknown>, ctx: ModelingToolCo
   const isCentered = centered ?? true;
   const sketchPlane = plane || "xy";
 
-  // Create sketch with rectangle
-  const sketchId = uuid();
-  const sketchFeature = new Y.Map();
-  sketchFeature.set("type", "sketch");
-  sketchFeature.set("name", name ? `${name} Sketch` : "Box Sketch");
-  sketchFeature.set("plane", { kind: "datumRole", ref: sketchPlane });
-
-  // Create sketch data with rectangle
-  const sketchData = new Y.Map();
-  const pointsById = new Y.Map();
-  const entitiesById = new Y.Map();
-  const constraintsById = new Y.Map();
-
   // Calculate rectangle corners based on centering
   let x1: number, y1: number, x2: number, y2: number;
   if (isCentered) {
@@ -680,38 +682,67 @@ export function createBoxImpl(args: Record<string, unknown>, ctx: ModelingToolCo
     y2 = depth;
   }
 
-  // Create 4 corner points
-  const p1 = uuid(), p2 = uuid(), p3 = uuid(), p4 = uuid();
-  pointsById.set(p1, { id: p1, x: x1, y: y1 });
-  pointsById.set(p2, { id: p2, x: x2, y: y1 });
-  pointsById.set(p3, { id: p3, x: x2, y: y2 });
-  pointsById.set(p4, { id: p4, x: x1, y: y2 });
-
-  // Create 4 lines
-  const l1 = uuid(), l2 = uuid(), l3 = uuid(), l4 = uuid();
-  entitiesById.set(l1, { id: l1, type: "line", start: p1, end: p2 });
-  entitiesById.set(l2, { id: l2, type: "line", start: p2, end: p3 });
-  entitiesById.set(l3, { id: l3, type: "line", start: p3, end: p4 });
-  entitiesById.set(l4, { id: l4, type: "line", start: p4, end: p1 });
-
-  sketchData.set("pointsById", pointsById);
-  sketchData.set("entitiesById", entitiesById);
-  sketchData.set("constraintsById", constraintsById);
-  sketchFeature.set("data", sketchData);
-
-  // Create extrude
+  // Prepare IDs
+  const sketchId = uuid();
   const extrudeId = uuid();
-  const extrudeFeature = new Y.Map();
-  extrudeFeature.set("type", "extrude");
-  extrudeFeature.set("name", name || "Box");
-  extrudeFeature.set("sketchId", sketchId);
-  extrudeFeature.set("distance", height);
-  extrudeFeature.set("operation", "add");
-  extrudeFeature.set("direction", "normal");
+  const p1 = uuid(), p2 = uuid(), p3 = uuid(), p4 = uuid();
+  const l1 = uuid(), l2 = uuid(), l3 = uuid(), l4 = uuid();
+
+  // Prepare data as plain objects (will be set after integration)
+  const pointsData = {
+    [p1]: { id: p1, x: x1, y: y1 },
+    [p2]: { id: p2, x: x2, y: y1 },
+    [p3]: { id: p3, x: x2, y: y2 },
+    [p4]: { id: p4, x: x1, y: y2 },
+  };
+  const entitiesData = {
+    [l1]: { id: l1, type: "line", start: p1, end: p2 },
+    [l2]: { id: l2, type: "line", start: p2, end: p3 },
+    [l3]: { id: l3, type: "line", start: p3, end: p4 },
+    [l4]: { id: l4, type: "line", start: p4, end: p1 },
+  };
 
   doc.ydoc.transact(() => {
+    // Create and integrate sketch feature first
+    const sketchFeature = new Y.Map<unknown>();
     doc.featuresById.set(sketchId, sketchFeature);
+
+    // Now set properties AFTER integration
+    sketchFeature.set("id", sketchId);
+    sketchFeature.set("type", "sketch");
+    sketchFeature.set("name", name ? `${name} Sketch` : "Box Sketch");
+    sketchFeature.set("plane", { kind: "datumRole", ref: sketchPlane });
+
+    // Create nested Y.Maps for sketch data (must also set AFTER integration)
+    const sketchData = new Y.Map<unknown>();
+    sketchFeature.set("data", sketchData);
+
+    const pointsById = new Y.Map<unknown>();
+    const entitiesById = new Y.Map<unknown>();
+    const constraintsById = new Y.Map<unknown>();
+    sketchData.set("pointsById", pointsById);
+    sketchData.set("entitiesById", entitiesById);
+    sketchData.set("constraintsById", constraintsById);
+
+    // Set point and entity data
+    for (const [id, pt] of Object.entries(pointsData)) {
+      pointsById.set(id, pt);
+    }
+    for (const [id, ent] of Object.entries(entitiesData)) {
+      entitiesById.set(id, ent);
+    }
+
+    // Create and integrate extrude feature
+    const extrudeFeature = new Y.Map<unknown>();
     doc.featuresById.set(extrudeId, extrudeFeature);
+    extrudeFeature.set("id", extrudeId);
+    extrudeFeature.set("type", "extrude");
+    extrudeFeature.set("name", name || "Box");
+    extrudeFeature.set("sketch", sketchId);
+    extrudeFeature.set("distance", height);
+    extrudeFeature.set("op", "add");
+    extrudeFeature.set("direction", "normal");
+
     doc.featureOrder.push([sketchId, extrudeId]);
   });
 
@@ -734,45 +765,52 @@ export function createCylinderImpl(
   const isCentered = centered ?? true;
   const sketchPlane = plane || "xy";
 
-  // Create sketch with circle
+  // Prepare IDs
   const sketchId = uuid();
-  const sketchFeature = new Y.Map();
-  sketchFeature.set("type", "sketch");
-  sketchFeature.set("name", name ? `${name} Sketch` : "Cylinder Sketch");
-  sketchFeature.set("plane", { kind: "datumRole", ref: sketchPlane });
-
-  // Create sketch data with circle
-  const sketchData = new Y.Map();
-  const pointsById = new Y.Map();
-  const entitiesById = new Y.Map();
-  const constraintsById = new Y.Map();
-
+  const extrudeId = uuid();
   const centerId = uuid();
+  const circleId = uuid();
+
   const cx = isCentered ? 0 : radius;
   const cy = isCentered ? 0 : radius;
-  pointsById.set(centerId, { id: centerId, x: cx, y: cy });
-
-  const circleId = uuid();
-  entitiesById.set(circleId, { id: circleId, type: "circle", center: centerId, radius });
-
-  sketchData.set("pointsById", pointsById);
-  sketchData.set("entitiesById", entitiesById);
-  sketchData.set("constraintsById", constraintsById);
-  sketchFeature.set("data", sketchData);
-
-  // Create extrude
-  const extrudeId = uuid();
-  const extrudeFeature = new Y.Map();
-  extrudeFeature.set("type", "extrude");
-  extrudeFeature.set("name", name || "Cylinder");
-  extrudeFeature.set("sketchId", sketchId);
-  extrudeFeature.set("distance", height);
-  extrudeFeature.set("operation", "add");
-  extrudeFeature.set("direction", "normal");
 
   doc.ydoc.transact(() => {
+    // Create and integrate sketch feature first
+    const sketchFeature = new Y.Map<unknown>();
     doc.featuresById.set(sketchId, sketchFeature);
+
+    // Set properties AFTER integration
+    sketchFeature.set("id", sketchId);
+    sketchFeature.set("type", "sketch");
+    sketchFeature.set("name", name ? `${name} Sketch` : "Cylinder Sketch");
+    sketchFeature.set("plane", { kind: "datumRole", ref: sketchPlane });
+
+    // Create nested Y.Maps for sketch data
+    const sketchData = new Y.Map<unknown>();
+    sketchFeature.set("data", sketchData);
+
+    const pointsById = new Y.Map<unknown>();
+    const entitiesById = new Y.Map<unknown>();
+    const constraintsById = new Y.Map<unknown>();
+    sketchData.set("pointsById", pointsById);
+    sketchData.set("entitiesById", entitiesById);
+    sketchData.set("constraintsById", constraintsById);
+
+    // Set point and entity data
+    pointsById.set(centerId, { id: centerId, x: cx, y: cy });
+    entitiesById.set(circleId, { id: circleId, type: "circle", center: centerId, radius });
+
+    // Create and integrate extrude feature
+    const extrudeFeature = new Y.Map<unknown>();
     doc.featuresById.set(extrudeId, extrudeFeature);
+    extrudeFeature.set("id", extrudeId);
+    extrudeFeature.set("type", "extrude");
+    extrudeFeature.set("name", name || "Cylinder");
+    extrudeFeature.set("sketch", sketchId);
+    extrudeFeature.set("distance", height);
+    extrudeFeature.set("op", "add");
+    extrudeFeature.set("direction", "normal");
+
     doc.featureOrder.push([sketchId, extrudeId]);
   });
 
@@ -830,17 +868,12 @@ export function createShellImpl(
     name?: string;
   };
 
-  // Create shell feature
-  const featureId = uuid();
-  const featureMap = new Y.Map();
-  featureMap.set("type", "shell");
-  featureMap.set("name", name || "Shell");
-  featureMap.set("thickness", thickness);
-  featureMap.set("openFaces", openFaces || []);
-
-  doc.ydoc.transact(() => {
-    doc.featuresById.set(featureId, featureMap);
-    doc.featureOrder.push([featureId]);
+  // Create shell feature using helper
+  const featureId = createFeature(doc, {
+    type: "shell",
+    name: name || "Shell",
+    thickness,
+    openFaces: openFaces || [],
   });
 
   return { featureId, status: "ok" };

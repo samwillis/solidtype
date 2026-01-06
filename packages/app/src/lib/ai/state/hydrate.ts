@@ -145,22 +145,42 @@ export function hydrateFromArrays(messages: Message[], chunks: Chunk[]): Hydrate
  * Model message role type (for LLM APIs)
  * Note: "system" is not included as it's passed separately to TanStack AI
  */
-type ModelRole = "user" | "assistant";
+type ModelRole = "user" | "assistant" | "tool";
 
 /**
- * Model message format (for LLM APIs)
+ * Tool call structure for assistant messages
+ */
+interface ToolCall {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
+/**
+ * Model message format (for LLM APIs / TanStack AI)
  *
- * We only include user and assistant messages in history.
- * Tool calls/results are handled by TanStack AI during the current run.
+ * Supports user, assistant (with optional toolCalls), and tool result messages.
+ * Note: TanStack AI uses camelCase (toolCallId, toolCalls) internally.
  */
 export interface ModelMessage {
   role: ModelRole;
   content: string;
+  toolCalls?: ToolCall[];
+  toolCallId?: string;
 }
 
 /**
  * Build model-compatible messages from hydrated transcript
- * Converts to the format expected by LLM APIs
+ * Converts to the format expected by LLM APIs (OpenAI format)
+ *
+ * For multi-turn conversations with tools, we include:
+ * 1. User messages
+ * 2. Assistant messages (with tool_calls array if any)
+ * 3. Tool result messages (immediately after the assistant message that called them)
+ *
  * Note: System messages are not included - pass them separately via the `system` parameter
  *
  * @param transcript - Hydrated messages
@@ -169,31 +189,86 @@ export interface ModelMessage {
 export function toModelMessages(transcript: HydratedMessage[]): ModelMessage[] {
   const result: ModelMessage[] = [];
 
+  // Group messages by runId to associate tool calls with their results
+  const messagesByRun = new Map<string, HydratedMessage[]>();
   for (const m of transcript) {
-    // Only include user and assistant messages
-    // Tool calls and results are complex to replay correctly and TanStack AI
-    // handles them internally during the current run. For history, we just
-    // need the user prompts and final assistant responses.
-    if (m.role !== "user" && m.role !== "assistant") {
-      continue;
+    const existing = messagesByRun.get(m.runId) || [];
+    existing.push(m);
+    messagesByRun.set(m.runId, existing);
+  }
+
+  // Get unique runs in order (by first message timestamp)
+  const runOrder = Array.from(messagesByRun.entries())
+    .sort(
+      ([, a], [, b]) =>
+        new Date(a[0]?.createdAt || 0).getTime() - new Date(b[0]?.createdAt || 0).getTime()
+    )
+    .map(([runId]) => runId);
+
+  for (const runId of runOrder) {
+    const runMessages = messagesByRun.get(runId) || [];
+
+    // Find messages by role for this run
+    const userMsg = runMessages.find((m) => m.role === "user");
+    const assistantMsg = runMessages.find((m) => m.role === "assistant");
+    const toolCalls = runMessages.filter((m) => m.role === "tool_call");
+    const toolResults = runMessages.filter((m) => m.role === "tool_result");
+
+    // Add user message
+    if (userMsg && userMsg.content) {
+      result.push({
+        role: "user",
+        content: userMsg.content,
+      });
     }
 
-    // Skip assistant messages that are streaming or error (incomplete)
-    if (m.role === "assistant" && (m.status === "streaming" || m.status === "error")) {
-      continue;
+    // Add assistant message with tool calls
+    if (assistantMsg) {
+      // Skip streaming/error assistant messages
+      if (assistantMsg.status === "streaming" || assistantMsg.status === "error") {
+        continue;
+      }
+
+      const assistantMessage: ModelMessage = {
+        role: "assistant",
+        content: assistantMsg.content || "",
+      };
+
+      // Filter valid tool calls (must have non-empty toolName and toolCallId)
+      const validToolCalls = toolCalls.filter(
+        (tc) => tc.toolName && tc.toolCallId && tc.toolCallId.length > 0
+      );
+
+      // If there were valid tool calls, add them to the assistant message
+      if (validToolCalls.length > 0) {
+        assistantMessage.toolCalls = validToolCalls.map((tc) => ({
+          id: tc.toolCallId!,
+          type: "function" as const,
+          function: {
+            name: tc.toolName!,
+            arguments: JSON.stringify(tc.toolArgs || {}),
+          },
+        }));
+      }
+
+      // Only add if there's content or toolCalls
+      if (assistantMessage.content || (assistantMessage.toolCalls?.length ?? 0) > 0) {
+        result.push(assistantMessage);
+      }
+
+      // Add tool results (must come after assistant message with toolCalls)
+      // Only add for valid tool calls that we included above
+      for (const toolCall of validToolCalls) {
+        const matchingResult = toolResults.find((tr) => tr.toolCallId === toolCall.toolCallId);
+        if (matchingResult && toolCall.toolCallId) {
+          result.push({
+            role: "tool",
+            toolCallId: toolCall.toolCallId,
+            content: JSON.stringify(matchingResult.toolResult ?? { success: true }),
+          });
+        }
+      }
     }
-
-    // Skip assistant messages with no content (tool-call-only messages)
-    if (m.role === "assistant" && (!m.content || m.content.trim() === "")) {
-      continue;
-    }
-
-    const message: ModelMessage = {
-      role: m.role,
-      content: m.content,
-    };
-
-    result.push(message);
   }
 
   return result;
