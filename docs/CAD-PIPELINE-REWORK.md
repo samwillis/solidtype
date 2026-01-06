@@ -1,848 +1,1311 @@
-## CAD pipeline rework
+## CAD Pipeline Rework
 
-### What we’re building
+### What we're building
 
-We’re turning SolidType’s modelling and AI systems into a single, coherent CAD pipeline where:
+We're turning SolidType's modelling and AI systems into a single, coherent CAD pipeline where:
 
-* The **Yjs document is the shared, collaborative “source program”** (feature tree + sketches + parameters).
-* There is **one canonical command layer** that mutates that program (used by both the UI tools and the AI agent).
-* The **OCCT-based kernel is the compiler/runtime** that deterministically rebuilds geometry from the Yjs program in workers.
-* A **merge-safe topological naming system** (“PersistentRef”) lets both humans and the AI refer to faces/edges/surfaces in a way that survives edits, rebuilds, and—critically—**Yjs fork/merge**.
+- The **Yjs document is the shared, collaborative "source program"** (feature tree + sketches + parameters).
+- There is **one canonical command layer** that mutates that program (used by both the UI tools and the AI agent).
+- The **OCCT-based kernel is the compiler/runtime** that deterministically rebuilds geometry from the Yjs program.
+- A **merge-safe topological naming system** ("PersistentRef") lets both humans and the AI refer to faces/edges/surfaces in a way that survives edits, rebuilds, and—critically—**Yjs fork/merge**.
 
 This enables the AI agent to operate both:
 
-* **synchronously** (while the user is in the document, with extra context like current selection), and
-* **asynchronously** in the background (running its own kernel/model copy in a SharedWorker, doing long tasks, generating snapshots, and syncing results back via Yjs).
+- **synchronously** (while the user is in the document, with extra context like current selection), and
+- **asynchronously** in the background (running its own kernel instance, doing long tasks, generating snapshots, and syncing results back via Yjs).
 
-### Why we’re doing it
+### Why we're doing it
 
-We’re addressing four structural risks that grow as SolidType becomes a serious CAD system:
+We're addressing four structural risks that grow as SolidType becomes a serious CAD system:
 
 1. **Tool drift between UI and AI**
-   Today, UI CAD tools and AI modelling tools can diverge because they each implement their own Yjs mutations. That’s a long-term correctness trap: features evolve, schemas change, and one path breaks silently. A unified command layer eliminates this class of bugs.
-
+  Today, UI CAD tools and AI modelling tools can diverge because they each implement their own Yjs mutations. That's a long-term correctness trap: features evolve, schemas change, and one path breaks silently. A unified command layer eliminates this class of bugs.
 2. **AI needs grounded model understanding, not just doc edits**
-   To reliably answer requests like “fillet that edge” or “sketch on the top face”, the AI needs access to the *current built geometry*, selection context, and visual snapshots—not just the feature list. Running the kernel inside the SharedWorker provides that, even when no tab is open.
-
+  To reliably answer requests like "fillet that edge" or "sketch on the top face", the AI needs access to the *current built geometry*, selection context, and visual snapshots—not just the feature list. Running the kernel alongside the AI enables this, even when no tab is open.
 3. **Topological naming must survive collaboration and merges**
-   In a CRDT world, users can fork documents, make changes in parallel, and merge. Topological naming must be **conflict-free and merge-safe** so the document remains buildable and repairable post-merge. We explicitly design references as stable, versioned identifiers with graceful degradation (found / ambiguous / not found) and repair workflows.
-
+  In a CRDT world, users can fork documents, make changes in parallel, and merge. Topological naming must be **conflict-free and merge-safe** so the document remains buildable and repairable post-merge. We explicitly design references as stable, versioned identifiers with graceful degradation (found / ambiguous / not found) and repair workflows.
 4. **Sketching is constraint-driven and the AI must see solver feedback**
-   We already have a TS constraint solver; the AI should use it as an oracle when adding geometry/constraints (“did that overconstrain the sketch?”). Exposing solver reports as first-class query tools makes AI sketching reliable rather than guessy.
+  We already have a TS constraint solver; the AI should use it as an oracle when adding geometry/constraints ("did that overconstrain the sketch?"). Exposing solver reports as first-class query tools makes AI sketching reliable rather than guessy.
 
 ### Where it lives in the architecture
 
 This plan clarifies the roles of each major subsystem:
 
-* **Yjs document**
-  The durable, collaborative representation of the model: feature tree + sketches + parameters + references.
+- **Yjs document**
+The durable, collaborative representation of the model: feature tree + sketches + parameters + references.
+- **Commands layer (new canonical API)**
+The only code allowed to mutate the Yjs model. UI interactions and AI tool calls both dispatch the same commands.
+- **KernelEngine (extracted/reused)**
+A shared module that rebuilds OCCT geometry from the Yjs program and produces:
+  - meshes/edges for rendering,
+  - build status/errors,
+  - a **ReferenceIndex** mapping transient topology indices → stable refs,
+  - queryable geometry info (bbox, measurements, candidate faces/edges).
+- **UI kernel worker**
+Uses KernelEngine to rebuild and stream render data to the app.
+- **AI worker (background agent runtime)**
+Runs its own KernelEngine instance against the same Yjs doc to:
+  - answer modelling/geometry queries,
+  - generate snapshots for multimodal reasoning,
+  - perform long-running tasks without blocking the UI,
+  - sync results and progress back via Yjs/presence.
 
-* **Commands layer (new canonical API)**
-  The only code allowed to mutate the Yjs model. UI interactions and AI tool calls both dispatch the same commands.
+### Worker architecture
 
-* **KernelEngine (extracted/reused)**
-  A shared module that rebuilds OCCT geometry from the Yjs program and produces:
+The KernelEngine is designed to be **deployment-flexible**:
 
-  * meshes/edges for rendering,
-  * build status/errors,
-  * a **ReferenceIndex** mapping transient topology indices → stable refs,
-  * queryable geometry info (bbox, measurements, candidate faces/edges).
+- **Development/Browser**: Kernel can run in a dedicated Web Worker (for UI) and optionally a separate instance in the AI worker.
+- **Future/Edge**: Both UI rebuilds and AI can share a single-threaded runtime (e.g., Cloudflare Durable Object) where the kernel runs inline.
 
-* **Dedicated kernel worker (UI)**
-  Uses KernelEngine to rebuild and stream render data to the app.
+To support both patterns:
 
-* **AI SharedWorker (background agent runtime)**
-  Runs its own KernelEngine instance against the same Yjs doc to:
+1. `KernelEngine` is a **plain class** with no worker-specific APIs (no `postMessage`, no `self`).
+2. Worker glue code wraps `KernelEngine` and handles messaging.
+3. The AI worker can either:
+  - Instantiate its own `KernelEngine` (separate rebuild, separate memory)
+  - Or share one via message-passing (deferred, not in V1)
 
-  * answer modelling/geometry queries,
-  * generate snapshots for multimodal reasoning,
-  * perform long-running tasks without blocking the UI,
-  * sync results and progress back via Yjs/presence.
+For V1, we run **separate KernelEngine instances** in UI worker and AI worker. This is simpler and allows independent rebuilds. The abstraction supports consolidation later.
 
-### How we’ll do it (approach in one paragraph)
+### How we'll do it
 
-We’ll first eliminate drift by introducing a single commands layer and refactoring both UI tools and AI tools to use it. Next, we’ll introduce a **merge-safe PersistentRef V1** format (versioned, string-encoded, CRDT-friendly) and teach the kernel rebuild to produce a **ReferenceIndex** so selections and feature parameters store stable references instead of ephemeral face/edge indices. We’ll then add a resolver that can map PersistentRefs back onto current topology (found/ambiguous/not found), surfacing broken refs as non-fatal diagnostics with explicit repair commands. Finally, we’ll extract the rebuild pipeline into a reusable KernelEngine used by both the UI worker and the AI SharedWorker, enabling background geometry-aware tool calls and worker-generated snapshots, and we’ll expose sketch solver feedback as query tools so AI sketching can be constraint-aware. Over time, we’ll progressively replace heuristic matching with OCCT history where available, keeping the abstraction thin and OCCT-aligned.
-
-If you want it even tighter for the very top of the doc, here’s a 3-sentence version:
-
-SolidType will treat the Yjs document as the collaborative “feature program”, compiled by OCCT in workers into geometry. We’ll unify UI and AI through a single command layer and add merge-safe topological naming (PersistentRef) so references remain meaningful across edits, rebuilds, and CRDT fork/merge, with graceful ambiguity and repair. The AI will run its own kernel/model copy in a SharedWorker for background tasks, geometry queries, and snapshots, and will use the sketch constraint solver’s feedback to drive reliable AI sketching.
+We'll first eliminate drift by introducing a single commands layer and refactoring both UI tools and AI tools to use it. Next, we'll introduce a **merge-safe PersistentRef V1** format (versioned, string-encoded, CRDT-friendly) and teach the kernel rebuild to produce a **ReferenceIndex** so selections and feature parameters store stable references instead of ephemeral face/edge indices. We'll then add a resolver that can map PersistentRefs back onto current topology (found/ambiguous/not found), surfacing broken refs as non-fatal diagnostics with explicit repair commands. Finally, we'll extract the rebuild pipeline into a reusable KernelEngine used by both the UI worker and the AI worker, enabling background geometry-aware tool calls and worker-generated snapshots, and we'll expose sketch solver feedback as query tools so AI sketching can be constraint-aware. Over time, we'll progressively replace heuristic matching with OCCT history where available.
 
 ---
 
-## Phase 0 — Baseline audit and guardrails (small, fast, unblock everything)
+## Phase 0 — Baseline audit and guardrails
 
-### 0.1 Map what exists today (repo-guided checklist)
+### 0.1 Current state (for reference)
 
-**AI tool mutations (Yjs direct):**
+**AI tool mutations:**
 
-* `packages/app/src/lib/ai/tools/modeling-impl.ts` creates features via bespoke `createFeature()`.
-* `packages/app/src/lib/ai/runtime/worker-chat-controller.ts` routes tools to `executeModelingTool()` / `executeSketchTool()`.
+- `packages/app/src/lib/ai/tools/modeling-impl.ts` — uses bespoke `createFeature()` helper
+- `packages/app/src/lib/ai/runtime/worker-chat-controller.ts` — routes tools to executors
 
-**UI tool mutations (Yjs via helpers):**
+**UI tool mutations:**
 
-* `packages/app/src/editor/contexts/DocumentContext.tsx` calls `packages/app/src/editor/document/featureHelpers.ts`.
+- `packages/app/src/editor/contexts/DocumentContext.tsx` — calls `featureHelpers.ts`
+- `packages/app/src/editor/document/featureHelpers.ts` — has `addExtrudeFeature()` etc.
 
-**Kernel build (OCCT in dedicated worker):**
+**Key divergence identified:**
 
-* `packages/app/src/editor/worker/kernel.worker.ts` rebuilds from Yjs → `SolidSession` → tessellation.
-* Viewer selection currently uses `faceIndex` from `faceMap` and has placeholder persistent refs (strings).
+- AI's `createFeature()` does NOT call `insertFeatureAtGate()` — features append to end
+- AI's helper doesn't use `createFeatureMap()` / `setMapProperties()` from `yjs.ts`
 
-### 0.2 Add “don’t regress” invariants (tests + runtime asserts)
+**Kernel build:**
 
-Add a tiny test suite and runtime checks so refactors don’t silently diverge:
+- `packages/app/src/editor/worker/kernel.worker.ts` — rebuilds Yjs → SolidSession → tessellation
+- Selection uses ephemeral `faceIndex` / `edgeIndex` from `faceMap` / `edgeMap`
 
-* **Invariant A:** UI command and AI command produce **byte-identical Yjs updates** for the same high-level action (at least for sketch/extrude/revolve initially).
-* **Invariant B:** “PersistentRef” strings/objects always parse; never store ephemeral indices.
-* **Invariant C:** After Yjs fork+merge, the doc is still valid and rebuild does not crash; unresolved refs are surfaced, not fatal.
+### 0.2 Regression tests (must-have before refactoring)
 
-Implementation notes:
+Create `packages/app/tests/integration/commands-invariants.test.ts`:
 
-* Add `packages/app/src/editor/naming/__tests__/persistentRef.test.ts`
-* Add `packages/app/src/editor/naming/__tests__/yjsMergeRefs.test.ts` (see Phase 4.3 for exact scenarios)
+```typescript
+// Invariant A: UI and AI produce identical Yjs state
+test("createExtrude via UI and AI produces identical doc state", () => {
+  const docA = createTestDocument();
+  const docB = createTestDocument();
+  const sketchId = addTestSketch(docA); // also in docB
+  
+  // UI path
+  addExtrudeFeature(docA, sketchId, 10, "add");
+  
+  // AI path (after refactor, both call commands.createExtrude)
+  createExtrudeImpl({ sketchId, distance: 10, op: "add" }, { doc: docB });
+  
+  // State vectors should match (ignoring timestamps)
+  expect(normalizeYjsState(docA.ydoc)).toEqual(normalizeYjsState(docB.ydoc));
+});
+
+// Invariant B: PersistentRefs always parse
+test("all stored refs are valid PersistentRef strings", () => {
+  const doc = createTestDocument();
+  // ... create features with refs ...
+  for (const ref of extractAllRefs(doc)) {
+    expect(decodePersistentRef(ref).ok).toBe(true);
+  }
+});
+
+// Invariant C: Fork+merge doesn't crash rebuild
+test("document remains buildable after Yjs fork and merge", async () => {
+  const docA = createTestDocument();
+  // Add sketch + extrude
+  const docB = Y.Doc.from(Y.encodeStateAsUpdate(docA.ydoc));
+  
+  // Divergent edits
+  modifyInDocA(docA);
+  modifyInDocB(docB);
+  
+  // Merge
+  Y.applyUpdate(docA.ydoc, Y.encodeStateAsUpdate(docB));
+  
+  // Rebuild should not throw
+  const engine = new KernelEngine();
+  await engine.rebuild(docA);
+  expect(engine.errors.every(e => e.code !== "CRASH")).toBe(true);
+});
+```
 
 ---
 
 ## Phase 1 — Unify UI + AI mutations into a single command layer
 
-### 1.1 Introduce a shared “commands” module (the one place that mutates the Yjs doc)
+### 1.1 Scope
 
-Create:
+**In scope (Phase 1):**
 
-* `packages/app/src/editor/commands/index.ts`
-* `packages/app/src/editor/commands/modeling.ts`
-* `packages/app/src/editor/commands/sketch.ts`
+- Feature-level operations: `createSketch`, `createExtrude`, `createRevolve`, `createBoolean`
+- Feature modification: `modifyFeatureParam`, `deleteFeature`, `reorderFeature`, `renameFeature`, `suppressFeature`
 
-Design goals:
+**Deferred (later phases):**
 
-* Commands accept `(doc: SolidTypeDoc, args)` and mutate within `doc.ydoc.transact()`.
-* Commands return structured results `{ ok: true, ... } | { ok: false, error }`.
-* Commands internally call existing helper functions where they already exist (so we don’t rewrite logic).
+- Sketch geometry operations (addLine, addCircle, etc.) — already shared via `sketch-impl.ts`
+- Sketch constraint operations — already shared
 
-Example (initial set to implement fully):
+### 1.2 Create the commands module
 
-* `createSketch`
-* `createExtrude`
-* `createRevolve`
-* `modifyFeatureParam`
-* `deleteFeature`
-* `reorderFeature`
-* sketch primitives + constraints that are already stable
+```
+packages/app/src/editor/commands/
+├── index.ts           # Re-exports all commands
+├── types.ts           # Shared types (CommandResult, etc.)
+├── modeling.ts        # Feature creation/modification
+└── sketch.ts          # Sketch lifecycle (create, delete)
+```
 
-**Concrete refactor steps**
+**Design principles:**
 
-1. Move the “feature creation” logic out of `modeling-impl.ts` and into `editor/commands/modeling.ts`.
-2. In `DocumentContext.tsx`, replace direct calls to `addExtrudeFeature(...)` etc with `commands.modeling.createExtrude(...)` (the command can still call `addExtrudeFeature` internally at first).
-3. In `packages/app/src/lib/ai/tools/modeling-impl.ts`, replace bespoke `createFeature()` with calls into `editor/commands/*`.
+1. Commands accept `(doc: SolidTypeDoc, args: T)` and return `CommandResult<R>`.
+2. Commands wrap mutations in `doc.ydoc.transact()`.
+3. Commands call existing helpers internally (don't rewrite logic).
+4. Commands are pure functions (no React hooks, no worker APIs).
 
-**Acceptance criteria**
+**Example command signature:**
 
-* For extrude/revolve/sketch creation, UI and AI both produce the same shape in the doc.
-* `packages/app/src/lib/ai/tools/modeling-impl.ts` no longer contains any low-level Y.Map integration rules (no duplicated “integrate then set props” knowledge).
+```typescript
+// packages/app/src/editor/commands/types.ts
+export type CommandResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: string };
+
+// packages/app/src/editor/commands/modeling.ts
+export interface CreateExtrudeArgs {
+  sketchId: string;
+  distance: number;
+  op?: "add" | "cut";
+  direction?: "normal" | "reverse";
+  name?: string;
+}
+
+export function createExtrude(
+  doc: SolidTypeDoc,
+  args: CreateExtrudeArgs
+): CommandResult<{ featureId: string }> {
+  // Validate
+  const sketch = doc.featuresById.get(args.sketchId);
+  if (!sketch || sketch.get("type") !== "sketch") {
+    return { ok: false, error: `Sketch ${args.sketchId} not found` };
+  }
+
+  // Execute (calls existing helper internally)
+  const featureId = addExtrudeFeature(doc, {
+    sketchId: args.sketchId,
+    distance: args.distance,
+    op: args.op ?? "add",
+    direction: args.direction ?? "normal",
+    name: args.name,
+  });
+
+  return { ok: true, value: { featureId } };
+}
+```
+
+### 1.3 Refactor consumers
+
+**DocumentContext.tsx:**
+
+```typescript
+// Before
+const addExtrude = useCallback((sketchId, distance, op, direction) => {
+  return addExtrudeFeature(doc, sketchId, distance, op, direction);
+}, [doc]);
+
+// After
+const addExtrude = useCallback((sketchId, distance, op, direction) => {
+  const result = commands.createExtrude(doc, { sketchId, distance, op, direction });
+  if (!result.ok) throw new Error(result.error);
+  return result.value.featureId;
+}, [doc]);
+```
+
+**modeling-impl.ts:**
+
+```typescript
+// Before
+export function createExtrudeImpl(args, ctx) {
+  const featureId = createFeature(doc, { type: "extrude", ... });
+  return { featureId, status: "ok" };
+}
+
+// After
+export function createExtrudeImpl(args, ctx) {
+  const result = commands.createExtrude(ctx.doc, {
+    sketchId: args.sketchId,
+    distance: args.distance,
+    op: args.op,
+    direction: args.direction,
+    name: args.name,
+  });
+  if (!result.ok) {
+    return { featureId: "", status: "error", error: result.error };
+  }
+  return { featureId: result.value.featureId, status: "ok" };
+}
+```
+
+### 1.4 Acceptance criteria
+
+- `createExtrude` from UI and AI produce identical Yjs diffs
+- Rebuild gate is respected by both paths
+- Undo/redo works identically for both
+- All existing tests pass
+- `modeling-impl.ts` no longer contains `Y.Map` manipulation
 
 ---
 
-## Phase 2 — Define a merge-safe PersistentRef format (CRDT-safe topological naming)
+## Phase 2 — Define merge-safe PersistentRef format
 
-You already have a strong start in core (`packages/core/src/naming/*`), but it uses **numeric FeatureId**, which is **not fork/merge stable** in a Yjs world. We’ll create an **App-level PersistentRef V1** that is explicitly CRDT/merge friendly.
+### 2.1 PersistentRef V1 (simplified)
 
-### 2.1 PersistentRef V1 (app-level) — stable under Yjs fork/merge
+Create `packages/app/src/editor/naming/persistentRef.ts`:
 
-Create:
+```typescript
+/**
+ * PersistentRef V1 — merge-safe topological reference
+ *
+ * Design goals:
+ * - Survives Yjs fork/merge (uses UUIDs, not sequential IDs)
+ * - Portable across tool calls (string-encoded)
+ * - Progressive enhancement (fingerprints optional, semantic hints deferred)
+ */
 
-* `packages/app/src/editor/naming/persistentRef.ts`
-
-Define a versioned JSON payload (string-encoded for tool schemas and easy storage):
-
-```ts
-export type PersistentRefV1 = {
+export interface PersistentRefV1 {
+  /** Version for forward compatibility */
   v: 1;
+
+  /** Expected subshape type */
   expectedType: "face" | "edge" | "vertex";
-  originFeatureId: string; // Yjs feature UUID (merge-safe)
+
+  /** UUID of the feature that created this subshape */
+  originFeatureId: string;
+
+  /** Feature-local selector (how to find within the feature) */
   localSelector: {
-    kind: string;          // e.g. "extrude.cap", "extrude.side", "face.semantic", "edge.semantic"
+    /** Selector kind (e.g., "extrude.topCap", "extrude.side", "revolve.side") */
+    kind: string;
+    /** Disambiguation data */
     data: Record<string, string | number>;
   };
+
+  /** Geometry fingerprint for fallback matching */
   fingerprint?: {
+    /** Approximate centroid [x, y, z] */
     centroid: [number, number, number];
-    approxAreaOrLength: number;
+    /** Approximate area (faces) or length (edges) */
+    size: number;
+    /** Surface normal for faces [nx, ny, nz] */
     normal?: [number, number, number];
-    adjacencyHint?: number;
   };
-};
+}
+
+/** Encode to portable string: stref:v1:<base64url> */
+export function encodePersistentRef(ref: PersistentRefV1): string {
+  const json = JSON.stringify(ref, Object.keys(ref).sort());
+  const base64 = btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return `stref:v1:${base64}`;
+}
+
+/** Decode from string */
+export function decodePersistentRef(s: string): 
+  | { ok: true; ref: PersistentRefV1 }
+  | { ok: false; error: string } {
+  if (!s.startsWith("stref:v1:")) {
+    return { ok: false, error: "Invalid prefix" };
+  }
+  try {
+    const base64 = s.slice(9).replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(base64);
+    const ref = JSON.parse(json) as PersistentRefV1;
+    // Basic validation
+    if (ref.v !== 1 || !ref.expectedType || !ref.originFeatureId || !ref.localSelector) {
+      return { ok: false, error: "Missing required fields" };
+    }
+    return { ok: true, ref };
+  } catch (e) {
+    return { ok: false, error: `Parse error: ${e}` };
+  }
+}
 ```
 
-And stable encode/decode helpers:
+### 2.2 Local selector kinds (initial set)
 
-* `encodePersistentRef(ref: PersistentRefV1): string`
-* `decodePersistentRef(s: string): PersistentRefV1 | { error: string }`
 
-**Encoding rule**
+| Kind                 | Data                                | Description                    |
+| -------------------- | ----------------------------------- | ------------------------------ |
+| `extrude.topCap`     | `{ loop: number }`                  | Top cap face of extrude        |
+| `extrude.bottomCap`  | `{ loop: number }`                  | Bottom cap face                |
+| `extrude.side`       | `{ loop: number, segment: number }` | Side face from profile segment |
+| `extrude.topEdge`    | `{ loop: number, segment: number }` | Edge on top cap                |
+| `extrude.bottomEdge` | `{ loop: number, segment: number }` | Edge on bottom cap             |
+| `extrude.sideEdge`   | `{ loop: number, vertex: number }`  | Vertical edge                  |
+| `revolve.side`       | `{ segment: number }`               | Side face from profile         |
+| `revolve.startCap`   | `{}`                                | Start cap (if < 360°)          |
+| `revolve.endCap`     | `{}`                                | End cap (if < 360°)            |
 
-* Use canonical JSON (stable key sort) then base64url (no padding) with a prefix:
 
-  * `stref:v1:<base64url(canon_json)>`
-    This makes refs:
-* portable across tool calls
-* safe to store in Yjs as atomic strings
-* resilient to merges (strings always valid)
+Semantic hints (e.g., `"top" | "bottom" | "front"`) are **deferred to V2** — they require more sophisticated heuristics.
 
-### 2.2 CRDT merge behaviour (what we guarantee)
-
-We **do not** promise the merged model always makes geometric sense. We promise:
-
-* Persistent refs remain **well-formed** after merge.
-* Kernel resolution returns:
-
-  * `found`
-  * `ambiguous` (with candidates)
-  * `not_found` (with reason)
-* Unresolved refs become **repairable state**, not a crash.
-
-### 2.3 Store refs in the doc in CRDT-friendly shapes
+### 2.3 Storage in Yjs
 
 Rules for feature parameters that reference geometry:
 
-* Single ref: store a single `string` (PersistentRef V1).
-* Multi-ref (fillet edges etc, later): store a `Y.Array<string>` so merges tend to union rather than last-write-wins.
+- **Single ref**: Store as `string` (PersistentRef V1 encoded).
+- **Multi-ref** (e.g., fillet edges): Store as `Y.Array<string>` for merge-friendly unions.
 
-(If you later need “conflict-preserving single ref”, store `{ chosen: string, candidates: Y.Array<string> }`, but don’t start there.)
+Example in extrude feature:
 
----
+```typescript
+{
+  type: "extrude",
+  sketch: "uuid-of-sketch",  // sketch reference (not a PersistentRef)
+  extentRef: "stref:v1:eyJ2IjoxLC...",  // face reference for "to face" extent
+}
+```
 
-## Phase 3 — Build a ReferenceIndex in the kernel worker (turn faceIndex/edgeIndex into PersistentRefs)
+### 2.4 Tests
 
-Right now selection uses:
+Create `packages/app/tests/unit/persistentRef.test.ts`:
 
-* triangle → `faceMap` → `faceIndex`
-* edge segment → `edgeMap` → `edgeIndex`
-  These indices are ephemeral. We’ll keep them internal, and publish stable PersistentRefs.
+```typescript
+test("round-trip encode/decode", () => {
+  const ref: PersistentRefV1 = {
+    v: 1,
+    expectedType: "face",
+    originFeatureId: "abc-123",
+    localSelector: { kind: "extrude.topCap", data: { loop: 0 } },
+  };
+  const encoded = encodePersistentRef(ref);
+  const decoded = decodePersistentRef(encoded);
+  expect(decoded.ok).toBe(true);
+  expect(decoded.ref).toEqual(ref);
+});
 
-### 3.1 Extend kernel rebuild to compute per-face/per-edge fingerprints
+test("encoded string is valid after JSON stringify (for Yjs storage)", () => {
+  const ref = { /* ... */ };
+  const encoded = encodePersistentRef(ref);
+  const stored = JSON.parse(JSON.stringify(encoded));
+  expect(stored).toBe(encoded);
+});
 
-In `packages/app/src/editor/worker/kernel.worker.ts` after tessellation:
-
-* For each body (currently keyed by `featureId`), compute:
-
-  * face fingerprints: approx centroid/area/normal
-  * edge fingerprints: midpoint/length
-
-Implementation approach (cheap, works today):
-
-* Use tessellated triangles + `faceMap` to aggregate:
-
-  * area-weighted centroid
-  * averaged normal
-  * approx area
-* Use sampled edge segments to aggregate:
-
-  * total polyline length
-  * midpoint (or average of segment midpoints)
-
-### 3.2 Produce PersistentRef V1 for each face/edge
-
-For each face:
-
-* `originFeatureId = bodyFeatureId` (today bodies are mostly created per feature; good enough initially)
-* `localSelector.kind = "face.semantic"`
-* `localSelector.data` should include at least:
-
-  * `orientation`: `"top" | "bottom" | "front" | "back" | "left" | "right" | "other"` (based on normal)
-  * `rank`: a stable-ish ordinal within that orientation bucket (sort by centroid projected into view plane)
-* `fingerprint` filled from aggregates
-
-Same for edges:
-
-* `localSelector.kind = "edge.semantic"`
-* `data`: `{ orientationHint?: "...", rank: number }`
-* `fingerprint`: midpoint/length
-
-**Why this works for merge-safety**
-
-* Nothing depends on ephemeral faceIndex being stable.
-* When the model changes after merge, we can re-resolve by fingerprint + semantic hints.
-
-### 3.3 Publish ReferenceIndex to the main thread
-
-Extend `WorkerToMainMessage` in `packages/app/src/editor/worker/types.ts`:
-
-* Add to `rebuild-complete`:
-
-  * `referenceIndex?: { [bodyKey: string]: { faces: string[]; edges: string[] } }`
-    Where arrays are indexed by `faceIndex` / `edgeIndex` and values are PersistentRef strings.
-
-Update the viewer pipeline:
-
-* When raycasting yields `(bodyKey, faceIndex)`, lookup:
-
-  * `persistentRef = referenceIndex[bodyKey].faces[faceIndex]`
-* Populate `SelectionContext` with that `persistentRef`.
-
-Update `SelectionContext` types if needed, but you can keep it as `persistentRef?: string`.
-
-**Acceptance criteria**
-
-* Clicking a face/edge yields a non-empty `persistentRef` string.
-* The `persistentRef` survives:
-
-  * rebuild
-  * undo/redo
-  * remote updates
-  * fork+merge (it might become unresolved later; that’s fine)
+test("fingerprint is optional", () => {
+  const refWithout = { v: 1, expectedType: "face", originFeatureId: "x", localSelector: { kind: "a", data: {} } };
+  const refWith = { ...refWithout, fingerprint: { centroid: [0,0,0], size: 1 } };
+  expect(decodePersistentRef(encodePersistentRef(refWithout)).ok).toBe(true);
+  expect(decodePersistentRef(encodePersistentRef(refWith)).ok).toBe(true);
+});
+```
 
 ---
 
-## Phase 4 — Make PersistentRef resolution robust (including fork+merge degradation)
+## Phase 3 — Build ReferenceIndex in the kernel rebuild
 
-### 4.1 Add a resolver that can answer “what does this ref mean in the current build?”
+### 3.1 Compute fingerprints from tessellation
 
-Create:
+After tessellating each body in `kernel.worker.ts`, compute per-face and per-edge fingerprints:
 
-* `packages/app/src/editor/naming/resolvePersistentRef.ts`
+```typescript
+interface FaceFingerprint {
+  centroid: [number, number, number];
+  size: number;  // approximate area
+  normal: [number, number, number];
+}
 
-Inputs:
+interface EdgeFingerprint {
+  centroid: [number, number, number];  // midpoint
+  size: number;  // length
+}
 
-* `refString: string`
-* current kernel build artifacts (face/edge fingerprint tables per body)
+function computeFaceFingerprints(mesh: Mesh): FaceFingerprint[] {
+  const fingerprints: FaceFingerprint[] = [];
+  const faceCount = Math.max(...mesh.faceMap) + 1;
 
-Outputs:
+  for (let faceIdx = 0; faceIdx < faceCount; faceIdx++) {
+    // Collect triangles for this face
+    const triangles = getTrianglesForFace(mesh, faceIdx);
+    
+    // Compute area-weighted centroid and total area
+    const { centroid, area, normal } = computeFaceStats(triangles, mesh);
+    
+    fingerprints.push({ centroid, size: area, normal });
+  }
+  
+  return fingerprints;
+}
+```
 
-* `{ status: "found", bodyKey, faceIndex | edgeIndex }`
-* `{ status: "ambiguous", candidates: Array<{ bodyKey, index, score }> }`
-* `{ status: "not_found", reason }`
+### 3.2 Generate PersistentRefs for each face/edge
 
-Resolution algorithm (V1; simple but reliable):
+For each face, determine its `localSelector` based on feature type and position:
 
-1. Parse ref; if invalid → `not_found`.
-2. Narrow search space:
+```typescript
+function generateFaceRef(
+  featureId: string,
+  featureType: string,
+  faceIdx: number,
+  fingerprint: FaceFingerprint,
+  sketchData?: SketchInfo
+): PersistentRefV1 {
+  let localSelector: { kind: string; data: Record<string, number> };
 
-   * same `originFeatureId` body first (if present)
-   * same `expectedType`
-3. Score candidates by:
+  if (featureType === "extrude") {
+    // Use normal direction to determine cap vs side
+    const normal = fingerprint.normal;
+    const isTopCap = normal[2] > 0.9;  // Pointing up
+    const isBottomCap = normal[2] < -0.9;  // Pointing down
+    
+    if (isTopCap) {
+      localSelector = { kind: "extrude.topCap", data: { loop: 0 } };
+    } else if (isBottomCap) {
+      localSelector = { kind: "extrude.bottomCap", data: { loop: 0 } };
+    } else {
+      // Side face — use sketch segment index if available
+      const segmentIdx = matchToSketchSegment(fingerprint, sketchData);
+      localSelector = { kind: "extrude.side", data: { loop: 0, segment: segmentIdx } };
+    }
+  } else {
+    // Generic fallback
+    localSelector = { kind: "face.index", data: { index: faceIdx } };
+  }
 
-   * centroid distance (primary)
-   * normal similarity (faces)
-   * area/length similarity
-   * semantic match (orientation/rank bucket)
-4. Choose:
+  return {
+    v: 1,
+    expectedType: "face",
+    originFeatureId: featureId,
+    localSelector,
+    fingerprint: {
+      centroid: fingerprint.centroid,
+      size: fingerprint.size,
+      normal: fingerprint.normal,
+    },
+  };
+}
+```
 
-   * best score under threshold → `found`
-   * multiple close scores → `ambiguous`
-   * none → `not_found`
+### 3.3 Publish ReferenceIndex
 
-### 4.2 Surface unresolved refs as non-fatal build diagnostics
+Extend `WorkerToMainMessage` in `types.ts`:
 
-Extend build status in kernel worker:
+```typescript
+interface RebuildCompleteMessage {
+  type: "rebuild-complete";
+  bodies: BodyInfo[];
+  featureStatus: Record<string, FeatureStatus>;
+  errors: BuildError[];
+  
+  /** Map from bodyKey to arrays of encoded PersistentRef strings */
+  referenceIndex: {
+    [bodyKey: string]: {
+      faces: string[];   // Indexed by faceIndex
+      edges: string[];   // Indexed by edgeIndex
+    };
+  };
+}
+```
 
-* After rebuild, scan all feature parameters that contain persistent refs (start with `extentRef`, sketch-on-face, etc).
-* Attempt to resolve; if unresolved/ambiguous, add a `BuildError` with code `"INVALID_REFERENCE"` including the feature id + parameter name.
+### 3.4 Update selection pipeline
 
-This is how merges become “repairable”:
+In the viewer/selection code, when a face is picked:
 
-* The model might build partially.
-* The UI can highlight broken references and offer “repair”.
+```typescript
+function handleFaceClick(bodyKey: string, faceIndex: number) {
+  const refString = referenceIndex[bodyKey]?.faces[faceIndex];
+  
+  selectFace({
+    bodyId: bodyKey,
+    faceIndex,
+    featureId: getFeatureIdForBody(bodyKey),
+    persistentRef: refString,  // Now populated!
+  });
+}
+```
 
-### 4.3 Automated fork+merge tests (must-have)
+### 3.5 Acceptance criteria
 
-Add tests in `vitest` that do:
-
-1. Create doc A. Add sketch + extrude.
-2. Fork to doc B via Yjs updates.
-3. In A: modify extrude distance.
-4. In B: add second extrude or tweak sketch.
-5. Merge updates both ways.
-6. Assert:
-
-   * doc loads (no exceptions)
-   * all stored refs still parse (`decodePersistentRef` ok)
-   * kernel rebuild returns either found/ambiguous/not_found, but never crashes
-
----
-
-## Phase 5 — Give the AI SharedWorker its own kernel build + screenshot pipeline (background-safe)
-
-Right now, the AI worker can mutate the doc, but it **does not** maintain a model build suitable for:
-
-* `findFaces`, `findEdges`, measurements
-* generating screenshots
-* long-running background tasks with progress
-
-### 5.1 Extract kernel rebuild logic into a reusable “KernelEngine”
-
-Goal: one build pipeline used by:
-
-* dedicated kernel worker (`kernel.worker.ts`)
-* AI shared worker runtime
-
-Create:
-
-* `packages/app/src/editor/kernel/KernelEngine.ts`
-
-Responsibilities:
-
-* Own a `SolidSession` instance and rebuild it from a `Y.Doc`.
-* Produce:
-
-  * tessellated meshes (optional, for UI worker)
-  * `referenceIndex` (required)
-  * `buildErrors`, `featureStatus`
-  * optional `snapshot` images
-
-Refactor steps:
-
-1. Move “rebuild from features” core loop out of `kernel.worker.ts` into `KernelEngine.rebuildFromYDoc(ydoc)`.
-2. Keep worker-specific messaging in `kernel.worker.ts`, but call into the engine.
-
-### 5.2 Instantiate KernelEngine inside the AI SharedWorker
-
-In `packages/app/src/lib/ai/runtime/worker-chat-controller.ts`:
-
-* Create `this.kernelEngine = new KernelEngine({ mode: "headless" })`
-* Observe Yjs doc changes (the same wrapped doc / ydoc already exists there) and trigger rebuild debounce.
-
-Key requirement: **AI worker uses its own session + model copy**, not the UI’s.
-
-* That satisfies background tasks and independent screenshots.
-* It also allows AI to ask geometry queries even when UI thread is busy.
-
-### 5.3 Add a “getModelSnapshot” tool for multimodal context
-
-Add tool definition + implementation:
-
-* `packages/app/src/lib/ai/tools/modeling-query.ts`: `getModelSnapshot`
-* `packages/app/src/lib/ai/tools/modeling-impl.ts`: `getModelSnapshotImpl`
-
-Implementation (pragmatic and worker-compatible):
-
-* Use `mesh.edges` (already B-Rep edge polylines) and render a **line-drawing** in an `OffscreenCanvas` 2D context:
-
-  * Choose a canonical camera: `"iso" | "top" | "front" | "right"`
-  * Fit bounding box to frame
-  * Project segments to 2D
-  * Draw black lines on white background
-* Output:
-
-  * `{ width, height, view, pngBase64, bbox, bodyCount }`
-
-This avoids WebGL-in-worker issues and is “good enough” for an LLM to infer intent.
-
-**Acceptance criteria**
-
-* AI can call `getModelSnapshot` and receive a PNG base64 string.
-* Works even if no UI tab is actively rendering.
+- Clicking a face yields a valid `stref:v1:...` string
+- The same face has the same ref after rebuild (without edits)
+- The same face has the same ref after undo/redo
+- Ref survives Yjs sync to another client
 
 ---
 
-## Phase 6 — Constraint solver feedback becomes first-class AI context
+## Phase 4 — Extract KernelEngine for reuse
 
-You want AI sketching to get feedback from the TS constraint solver, and to remain consistent with the kernel worker’s solve behaviour.
+### 4.1 Create KernelEngine class
 
-### 6.1 Add “getSketchSolveReport” tool
+```typescript
+// packages/app/src/editor/kernel/KernelEngine.ts
 
-Add:
+export interface KernelEngineOptions {
+  /** Whether to compute meshes (false for headless/query-only mode) */
+  computeMeshes?: boolean;
+}
 
-* `packages/app/src/lib/ai/tools/sketch.ts`: tool definition
-* `packages/app/src/lib/ai/tools/sketch-impl.ts`: implementation
+export interface RebuildResult {
+  bodies: BodyInfo[];
+  meshes: Map<string, TransferableMesh>;
+  referenceIndex: ReferenceIndex;
+  featureStatus: Record<string, FeatureStatus>;
+  errors: BuildError[];
+  sketchSolveResults: Map<string, SketchSolveResult>;
+}
 
-Report should include:
+export class KernelEngine {
+  private session: SolidSession | null = null;
+  private options: KernelEngineOptions;
 
-* DOF summary (already in `SketchSolvedMessage` shape)
-* list of violated/overconstrained constraints (if available)
-* last solve status (“ok / under / over / failed”)
+  constructor(options: KernelEngineOptions = {}) {
+    this.options = { computeMeshes: true, ...options };
+  }
 
-### 6.2 Share the solver code path
+  async init(): Promise<void> {
+    const oc = await initOCCT();
+    setOC(oc);
+    this.session = new SolidSession();
+    await this.session.init();
+  }
 
-Don’t create a second solver implementation.
-Instead:
+  async rebuildFromYDoc(ydoc: Y.Doc): Promise<RebuildResult> {
+    // Extract feature tree from Yjs
+    const root = ydoc.getMap("root");
+    const featuresById = root.get("featuresById") as Y.Map<Y.Map<unknown>>;
+    const featureOrder = root.get("featureOrder") as Y.Array<string>;
+    const state = root.get("state") as Y.Map<unknown>;
+    const rebuildGate = state?.get("rebuildGate") as string | null;
 
-* Extract the “solve sketch” function currently embedded in `kernel.worker.ts` (where it uses the core constraint functions) into a shared module, e.g.:
+    // Run rebuild loop (extracted from kernel.worker.ts)
+    return this.rebuild(featuresById, featureOrder, rebuildGate);
+  }
 
-  * `packages/app/src/editor/sketch/solveSketch.ts`
-* Kernel worker uses it during rebuild.
-* AI worker uses it on demand for tool calls.
+  private async rebuild(
+    featuresById: Y.Map<Y.Map<unknown>>,
+    featureOrder: Y.Array<string>,
+    rebuildGate: string | null
+  ): Promise<RebuildResult> {
+    // ... existing rebuild logic from kernel.worker.ts ...
+  }
 
-**Acceptance criteria**
+  // Geometry query methods
+  getFacePlane(bodyId: BodyId, faceIndex: number): FacePlane | null { /* ... */ }
+  getBoundingBox(): BoundingBox { /* ... */ }
+  measureDistance(ref1: string, ref2: string): number { /* ... */ }
 
-* AI can ask “is this sketch fully constrained?” and get an accurate, consistent answer.
-* When AI adds constraints, it can immediately see if it overconstrained the sketch and backtrack.
+  dispose(): void {
+    this.session?.dispose();
+    this.session = null;
+  }
+}
+```
 
----
+### 4.2 Refactor kernel.worker.ts
 
-## Phase 7 — Repair workflow for broken refs (the merge-friendly “it could work” guarantee)
+```typescript
+// packages/app/src/editor/worker/kernel.worker.ts
 
-Fork+merge inevitably breaks some semantic intent. We need explicit repair primitives.
+let engine: KernelEngine | null = null;
 
-### 7.1 Represent “unresolved ref” as a state the system can carry
+async function performRebuild(): Promise<void> {
+  if (!doc || !engine) return;
 
-* Do **not** delete broken refs automatically.
-* Keep the string, report it as unresolved, and allow user/AI to repair.
+  self.postMessage({ type: "rebuild-start" });
 
-### 7.2 Add “repairReference” command + UI hook
+  try {
+    const result = await engine.rebuildFromYDoc(doc);
 
-Create command:
+    self.postMessage({
+      type: "rebuild-complete",
+      bodies: result.bodies,
+      featureStatus: result.featureStatus,
+      errors: result.errors,
+      referenceIndex: result.referenceIndex,
+    });
 
-* `commands/repairReference({ featureId, paramName, oldRef, newRef })`
+    // Send meshes
+    for (const [bodyKey, mesh] of result.meshes) {
+      sendMesh(bodyKey, mesh);
+    }
 
-UI:
+    // Send sketch solve results
+    for (const [sketchId, solveResult] of result.sketchSolveResults) {
+      self.postMessage({ type: "sketch-solved", sketchId, ...solveResult });
+    }
+  } catch (err) {
+    self.postMessage({ type: "error", message: String(err) });
+  }
+}
+```
 
-* When build errors include `"INVALID_REFERENCE"`, show:
+### 4.3 Acceptance criteria
 
-  * “Select replacement face/edge”
-  * update the parameter to the newly selected `persistentRef`
-
-AI:
-
-* Provide a tool that can accept a list of candidates from `resolvePersistentRef(... status:"ambiguous")` and choose one based on the user’s natural language (“the top face”, “the outer edge”).
-
-**Acceptance criteria**
-
-* After a fork+merge that causes ambiguity, the model doesn’t brick.
-* The user can repair references without manual JSON hacking.
-
----
-
-## Phase 8 — OCCT-first evolution: thinner abstractions, better naming, FreeCAD lessons
-
-This phase is explicitly “make it more OCCT-like over time” and reduces the amount of heuristic matching.
-
-### 8.1 Move from heuristic fingerprints → OCCT history when available
-
-In core, operations like prism/revolve/boolean often expose history via OCCT APIs (e.g. generated/modified shapes).
-Plan:
-
-* Extend `@solidtype/core` operations to optionally return:
-
-  * created faces/edges for a feature (top cap/bottom cap/side faces)
-  * evolution mapping when modifying geometry
-* Feed that into the existing `packages/core/src/naming/*` subsystem.
-
-Even if OpenCascade.js bindings are incomplete, structure the API so you can swap implementations later.
-
-### 8.2 Align selectors to sketch entity IDs (strongest merge-safe naming)
-
-Upgrade local selectors for extrudes/revolves to reference **sketch entity ids** rather than segment ordinals:
-
-* Example:
-
-  * `extrude.side` with `{ sketchEntityId: "line-uuid" }`
-    This is extremely merge friendly because sketch entity IDs are already CRDT-native.
-
-### 8.3 Consider FreeCAD-style “TopoNaming repair” (longer-term)
-
-FreeCAD’s experience (and the “topo naming problem”) suggests you want:
-
-* stable identifiers when possible (history)
-* fallback heuristics (fingerprints)
-* explicit repair workflow
-
-Your architecture above deliberately supports all three.
-
----
-
-## Deliverable sequencing (what to implement in what order)
-
-If you want the shortest path that unlocks everything:
-
-1. **Phase 1** (commands) → kills UI/AI duplication risk immediately.
-2. **Phase 2 + 3** (PersistentRef V1 + ReferenceIndex publish) → selection + refs exist and are merge-safe.
-3. **Phase 5** (KernelEngine in AI worker + snapshot tool) → AI becomes genuinely geometry-aware and background-capable.
-4. **Phase 4 + 7** (resolver + repair) → fork/merge story becomes robust.
-5. **Phase 6** (solver report tool) → AI sketching becomes constraint-aware.
-6. **Phase 8** (OCCT history/naming upgrades) → progressively replace heuristics with OCCT-derived truth.
+- UI rebuild produces identical results to before
+- Unit tests can instantiate KernelEngine directly (no worker)
+- Rebuild performance is unchanged (±10%)
 
 ---
 
-# 🧭 High-Level Milestones
+## Phase 5 — KernelEngine in AI worker
 
-| Milestone | Goal                                                                     |
-| --------- | ------------------------------------------------------------------------ |
-| **M1**    | Unify UI + AI mutations (shared command layer).                          |
-| **M2**    | Introduce merge-safe PersistentRef V1 and helpers.                       |
-| **M3**    | Generate & publish ReferenceIndex from kernel rebuild.                   |
-| **M4**    | Implement resolver + non-fatal reference repair flow.                    |
-| **M5**    | Extract KernelEngine and use it in both kernel worker & AI SharedWorker. |
-| **M6**    | Add AI snapshot & model-query tools (background-safe).                   |
-| **M7**    | Expose constraint-solver feedback to both UI + AI.                       |
-| **M8**    | Extend to OCCT history naming & sketch-entity-based selectors.           |
+### 5.1 Add KernelEngine to WorkerChatController
+
+```typescript
+// packages/app/src/lib/ai/runtime/worker-chat-controller.ts
+
+export class WorkerChatController {
+  // ... existing fields ...
+  
+  private kernelEngine: KernelEngine | null = null;
+  private lastRebuildResult: RebuildResult | null = null;
+  private rebuildDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  async initialize(): Promise<void> {
+    // ... existing init ...
+
+    // Initialize kernel engine for geometry queries
+    if (this.documentId) {
+      this.kernelEngine = new KernelEngine({ computeMeshes: false });
+      await this.kernelEngine.init();
+      
+      // Observe Yjs changes and trigger rebuilds
+      this.ydoc?.on("update", () => this.scheduleRebuild());
+    }
+  }
+
+  private scheduleRebuild(): void {
+    if (this.rebuildDebounceTimer) {
+      clearTimeout(this.rebuildDebounceTimer);
+    }
+    this.rebuildDebounceTimer = setTimeout(async () => {
+      if (this.kernelEngine && this.ydoc) {
+        this.lastRebuildResult = await this.kernelEngine.rebuildFromYDoc(this.ydoc);
+      }
+    }, 100);
+  }
+
+  // Exposed to tool implementations
+  getRebuildResult(): RebuildResult | null {
+    return this.lastRebuildResult;
+  }
+
+  getKernelEngine(): KernelEngine | null {
+    return this.kernelEngine;
+  }
+}
+```
+
+### 5.2 Implement geometry query tools
+
+```typescript
+// packages/app/src/lib/ai/tools/modeling-impl.ts
+
+export function findFacesImpl(
+  args: { featureId?: string; normalFilter?: { x: number; y: number; z: number; tolerance?: number } },
+  ctx: ModelingToolContext
+): unknown {
+  const result = ctx.getRebuildResult?.();
+  if (!result) {
+    return { faces: [], error: "No rebuild result available" };
+  }
+
+  const faces: Array<{ ref: string; featureId: string; normal: number[]; area: number }> = [];
+
+  for (const [bodyKey, refIndex] of Object.entries(result.referenceIndex)) {
+    for (let i = 0; i < refIndex.faces.length; i++) {
+      const refString = refIndex.faces[i];
+      const decoded = decodePersistentRef(refString);
+      if (!decoded.ok) continue;
+
+      const ref = decoded.ref;
+      
+      // Filter by feature if specified
+      if (args.featureId && ref.originFeatureId !== args.featureId) continue;
+
+      // Filter by normal if specified
+      if (args.normalFilter && ref.fingerprint?.normal) {
+        const dot = 
+          ref.fingerprint.normal[0] * args.normalFilter.x +
+          ref.fingerprint.normal[1] * args.normalFilter.y +
+          ref.fingerprint.normal[2] * args.normalFilter.z;
+        const tolerance = args.normalFilter.tolerance ?? 0.1;
+        if (dot < 1 - tolerance) continue;
+      }
+
+      faces.push({
+        ref: refString,
+        featureId: ref.originFeatureId,
+        normal: ref.fingerprint?.normal ?? [0, 0, 0],
+        area: ref.fingerprint?.size ?? 0,
+      });
+    }
+  }
+
+  return { faces };
+}
+
+export function getBoundingBoxImpl(
+  args: { featureId?: string },
+  ctx: ModelingToolContext
+): unknown {
+  const engine = ctx.getKernelEngine?.();
+  if (!engine) {
+    return { error: "Kernel not available" };
+  }
+  
+  return engine.getBoundingBox(args.featureId);
+}
+```
+
+### 5.3 Add getModelSnapshot tool
+
+```typescript
+// packages/app/src/editor/kernel/snapshotRenderer.ts
+
+export interface SnapshotOptions {
+  view: "iso" | "top" | "front" | "right";
+  width?: number;
+  height?: number;
+}
+
+export function renderSnapshot(
+  rebuildResult: RebuildResult,
+  options: SnapshotOptions
+): { pngBase64: string; width: number; height: number } {
+  const width = options.width ?? 512;
+  const height = options.height ?? 512;
+
+  // Use OffscreenCanvas if available
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext("2d")!;
+
+  // White background
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, width, height);
+
+  // Get camera transform for view
+  const camera = getCameraForView(options.view, rebuildResult.boundingBox);
+
+  // Draw edges as black lines
+  ctx.strokeStyle = "black";
+  ctx.lineWidth = 1;
+
+  for (const [_, mesh] of rebuildResult.meshes) {
+    if (!mesh.edges) continue;
+    
+    for (let i = 0; i < mesh.edges.length; i += 6) {
+      const p1 = projectPoint([mesh.edges[i], mesh.edges[i+1], mesh.edges[i+2]], camera);
+      const p2 = projectPoint([mesh.edges[i+3], mesh.edges[i+4], mesh.edges[i+5]], camera);
+      
+      ctx.beginPath();
+      ctx.moveTo(p1.x * width, p1.y * height);
+      ctx.lineTo(p2.x * width, p2.y * height);
+      ctx.stroke();
+    }
+  }
+
+  // Convert to base64
+  const blob = canvas.convertToBlob({ type: "image/png" });
+  // ... convert blob to base64 ...
+
+  return { pngBase64, width, height };
+}
+```
+
+Tool implementation:
+
+```typescript
+export function getModelSnapshotImpl(
+  args: { view?: "iso" | "top" | "front" | "right" },
+  ctx: ModelingToolContext
+): unknown {
+  const result = ctx.getRebuildResult?.();
+  if (!result) {
+    return { error: "No rebuild result available" };
+  }
+
+  const snapshot = renderSnapshot(result, { view: args.view ?? "iso" });
+  
+  return {
+    view: args.view ?? "iso",
+    width: snapshot.width,
+    height: snapshot.height,
+    pngBase64: snapshot.pngBase64,
+    bodyCount: result.bodies.length,
+  };
+}
+```
+
+### 5.4 Acceptance criteria
+
+- AI can call `findFaces` and get actual face refs
+- AI can call `getBoundingBox` and get real dimensions
+- AI can call `getModelSnapshot` and receive a PNG
+- All above work even if no UI tab is rendering
 
 ---
 
-## **M1 – Unify Mutations (UI + AI)**
+## Phase 6 — PersistentRef resolution and repair
 
-### PR-1 – Create `commands/` Layer
+### 6.1 Implement resolver
 
-**Goal:** One canonical API for Yjs mutations.
-**Files**
+```typescript
+// packages/app/src/editor/naming/resolvePersistentRef.ts
 
-* `packages/app/src/editor/commands/index.ts` *(new)*
-* `packages/app/src/editor/commands/modeling.ts`
-* `packages/app/src/editor/commands/sketch.ts`
-* update imports in
+export type ResolveResult =
+  | { status: "found"; bodyKey: string; index: number }
+  | { status: "ambiguous"; candidates: Array<{ bodyKey: string; index: number; score: number }> }
+  | { status: "not_found"; reason: string };
 
-  * `editor/contexts/DocumentContext.tsx`
-  * `lib/ai/tools/modeling-impl.ts`
+export function resolvePersistentRef(
+  refString: string,
+  referenceIndex: ReferenceIndex,
+  rebuildResult: RebuildResult
+): ResolveResult {
+  // 1. Parse the ref
+  const decoded = decodePersistentRef(refString);
+  if (!decoded.ok) {
+    return { status: "not_found", reason: decoded.error };
+  }
+  const ref = decoded.ref;
 
-**Tasks**
+  // 2. Find candidates by originFeatureId
+  const candidates: Array<{ bodyKey: string; index: number; score: number }> = [];
 
-1. Implement `createExtrude`, `createRevolve`, `createSketch`, `modifyFeatureParam`.
-2. Each wraps `ydoc.transact()` → `featureHelpers` → returns `{ok:true,id}`.
-3. Replace direct mutations in both UI + AI.
+  for (const [bodyKey, refIndex] of Object.entries(referenceIndex)) {
+    const refs = ref.expectedType === "face" ? refIndex.faces : refIndex.edges;
+    
+    for (let i = 0; i < refs.length; i++) {
+      const candidateDecoded = decodePersistentRef(refs[i]);
+      if (!candidateDecoded.ok) continue;
+      
+      const candidate = candidateDecoded.ref;
+      
+      // Match by feature ID first
+      if (candidate.originFeatureId !== ref.originFeatureId) continue;
+      
+      // Match by selector kind
+      if (candidate.localSelector.kind !== ref.localSelector.kind) continue;
+      
+      // Score by fingerprint similarity
+      const score = computeScore(ref, candidate);
+      candidates.push({ bodyKey, index: i, score });
+    }
+  }
 
-**Acceptance**
+  // 3. Return result
+  if (candidates.length === 0) {
+    return { status: "not_found", reason: "No matching subshape found" };
+  }
 
-* `createExtrude` from UI and from AI produce identical Yjs diffs (`diffYjsDocs` helper).
-* Undo/redo works identically.
+  // Sort by score (lower is better)
+  candidates.sort((a, b) => a.score - b.score);
 
-**Tests**
+  // If best candidate is significantly better, return found
+  if (candidates.length === 1 || candidates[0].score < candidates[1].score * 0.5) {
+    return { status: "found", bodyKey: candidates[0].bodyKey, index: candidates[0].index };
+  }
 
-* `packages/app/__tests__/commands.modeling.test.ts`.
+  // Otherwise ambiguous
+  return { status: "ambiguous", candidates: candidates.slice(0, 5) };
+}
+
+function computeScore(ref: PersistentRefV1, candidate: PersistentRefV1): number {
+  let score = 0;
+
+  // Selector data match
+  for (const [key, value] of Object.entries(ref.localSelector.data)) {
+    if (candidate.localSelector.data[key] !== value) {
+      score += 10;
+    }
+  }
+
+  // Fingerprint distance
+  if (ref.fingerprint && candidate.fingerprint) {
+    const dx = ref.fingerprint.centroid[0] - candidate.fingerprint.centroid[0];
+    const dy = ref.fingerprint.centroid[1] - candidate.fingerprint.centroid[1];
+    const dz = ref.fingerprint.centroid[2] - candidate.fingerprint.centroid[2];
+    score += Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+    if (ref.fingerprint.normal && candidate.fingerprint.normal) {
+      const dot = 
+        ref.fingerprint.normal[0] * candidate.fingerprint.normal[0] +
+        ref.fingerprint.normal[1] * candidate.fingerprint.normal[1] +
+        ref.fingerprint.normal[2] * candidate.fingerprint.normal[2];
+      score += (1 - dot) * 10;
+    }
+  }
+
+  return score;
+}
+```
+
+### 6.2 Surface unresolved refs as build diagnostics
+
+In KernelEngine rebuild, after computing referenceIndex:
+
+```typescript
+// Validate all refs in feature parameters
+for (const [featureId, feature] of featuresById) {
+  const extentRef = feature.get("extentRef") as string | undefined;
+  if (extentRef) {
+    const result = resolvePersistentRef(extentRef, referenceIndex, rebuildResult);
+    if (result.status !== "found") {
+      errors.push({
+        featureId,
+        code: "INVALID_REFERENCE",
+        message: `Cannot resolve extentRef: ${result.status === "ambiguous" ? "ambiguous" : result.reason}`,
+        data: { paramName: "extentRef", refString: extentRef, resolution: result },
+      });
+    }
+  }
+}
+```
+
+### 6.3 Add repair command
+
+```typescript
+// packages/app/src/editor/commands/repair.ts
+
+export interface RepairReferenceArgs {
+  featureId: string;
+  paramName: string;
+  newRef: string;
+}
+
+export function repairReference(
+  doc: SolidTypeDoc,
+  args: RepairReferenceArgs
+): CommandResult<void> {
+  const feature = doc.featuresById.get(args.featureId);
+  if (!feature) {
+    return { ok: false, error: `Feature ${args.featureId} not found` };
+  }
+
+  // Validate the new ref
+  const decoded = decodePersistentRef(args.newRef);
+  if (!decoded.ok) {
+    return { ok: false, error: `Invalid ref: ${decoded.error}` };
+  }
+
+  doc.ydoc.transact(() => {
+    feature.set(args.paramName, args.newRef);
+  });
+
+  return { ok: true, value: undefined };
+}
+```
+
+### 6.4 Behavior on ambiguous refs during rebuild
+
+When a feature references an ambiguous ref:
+
+1. **Continue rebuild** — don't stop the entire model
+2. **Use first candidate** — deterministic, allows model to render
+3. **Surface warning** — add to `errors` with code `"AMBIGUOUS_REFERENCE"`
+4. **Mark feature status** — set to `"warning"` not `"error"`
+
+This ensures the model is always buildable, just possibly not exactly as intended.
+
+### 6.5 Tests
+
+```typescript
+test("resolve finds exact match", () => {
+  const ref = encodePersistentRef({ /* ... */ });
+  const index = { body1: { faces: [ref], edges: [] } };
+  const result = resolvePersistentRef(ref, index, mockRebuild);
+  expect(result.status).toBe("found");
+});
+
+test("resolve returns ambiguous for multiple matches", () => {
+  const ref1 = encodePersistentRef({ v: 1, originFeatureId: "f1", localSelector: { kind: "extrude.side", data: { loop: 0, segment: 0 } }, expectedType: "face" });
+  const ref2 = encodePersistentRef({ v: 1, originFeatureId: "f1", localSelector: { kind: "extrude.side", data: { loop: 0, segment: 1 } }, expectedType: "face" });
+  
+  // Search for a ref that matches both (same selector kind, no disambiguation)
+  const searchRef = encodePersistentRef({ v: 1, originFeatureId: "f1", localSelector: { kind: "extrude.side", data: {} }, expectedType: "face" });
+  
+  const index = { body1: { faces: [ref1, ref2], edges: [] } };
+  const result = resolvePersistentRef(searchRef, index, mockRebuild);
+  expect(result.status).toBe("ambiguous");
+});
+
+test("repair command updates feature parameter", () => {
+  const doc = createTestDocument();
+  const featureId = createTestExtrude(doc);
+  
+  const result = repairReference(doc, {
+    featureId,
+    paramName: "extentRef",
+    newRef: "stref:v1:...",
+  });
+  
+  expect(result.ok).toBe(true);
+  expect(doc.featuresById.get(featureId)?.get("extentRef")).toBe("stref:v1:...");
+});
+```
 
 ---
 
-## **M2 – PersistentRef V1**
+## Phase 7 — Constraint solver feedback for AI
 
-### PR-2 – Add PersistentRef Schema & Helpers
+### 7.1 Extract solver into shared module
 
-**Goal:** Merge-safe, versioned, portable refs.
-**Files**
+```typescript
+// packages/app/src/editor/sketch/solveSketch.ts
 
-* `packages/app/src/editor/naming/persistentRef.ts` *(new)*
-* `packages/app/src/editor/naming/__tests__/persistentRef.test.ts`
+export interface SketchSolveResult {
+  status: "ok" | "underconstrained" | "overconstrained" | "failed";
+  dof: number;
+  /** Points with their solved positions */
+  solvedPoints: Array<{ id: string; x: number; y: number }>;
+  /** Constraints that couldn't be satisfied */
+  failedConstraints: string[];
+}
 
-**Tasks**
+export function solveSketch(
+  sketchData: SketchData,
+  plane: DatumPlane
+): SketchSolveResult {
+  const sketch = new CoreSketch(plane);
+  
+  // Add points, entities, constraints (existing logic from kernel.worker.ts)
+  // ...
+  
+  const result = sketch.solve();
+  const dof = sketch.analyzeDOF();
+  
+  // Extract solved positions
+  const solvedPoints = /* ... */;
+  
+  return {
+    status: result.status === "ok" ? (dof === 0 ? "ok" : "underconstrained") : result.status,
+    dof,
+    solvedPoints,
+    failedConstraints: result.failedConstraints ?? [],
+  };
+}
+```
 
-1. Define `PersistentRefV1` JSON → `stref:v1:<base64url(canon_json)>`.
-2. Add `encodePersistentRef`, `decodePersistentRef`, runtime validator.
-3. Add Vitest coverage for round-trip + merge stability.
+### 7.2 Use in KernelEngine
 
-**Acceptance**
+```typescript
+// In KernelEngine.rebuild()
+for (const feature of sketches) {
+  const sketchData = parseSketchData(feature);
+  const plane = getSketchPlane(feature.get("plane"), featuresById);
+  
+  const solveResult = solveSketch(sketchData, plane);
+  sketchSolveResults.set(feature.get("id"), solveResult);
+  
+  // Update feature status based on solve result
+  if (solveResult.status === "overconstrained") {
+    featureStatus[feature.get("id")] = "error";
+    errors.push({ featureId: feature.get("id"), code: "OVERCONSTRAINED", message: "Sketch is overconstrained" });
+  }
+}
+```
 
-* 100 % decode success after random merge strings.
-* Stable string order (canonical JSON).
+### 7.3 Add AI tool
 
----
+```typescript
+// packages/app/src/lib/ai/tools/sketch.ts
 
-## **M3 – ReferenceIndex Generation**
+export const getSketchSolveReportTool = {
+  name: "getSketchSolveReport",
+  description: "Get the constraint solver status for a sketch",
+  parameters: z.object({
+    sketchId: z.string().describe("ID of the sketch to analyze"),
+  }),
+  execute: "client",
+};
 
-### PR-3 – Extend Kernel Rebuild
+// packages/app/src/lib/ai/tools/sketch-impl.ts
 
-**Goal:** Publish stable refs for every face/edge.
-**Files**
+export function getSketchSolveReportImpl(
+  ctx: SketchToolContext,
+  input: { sketchId: string }
+): SketchSolveResult {
+  const rebuildResult = ctx.getRebuildResult?.();
+  if (!rebuildResult) {
+    return { status: "failed", dof: -1, solvedPoints: [], failedConstraints: [] };
+  }
+  
+  return rebuildResult.sketchSolveResults.get(input.sketchId) ?? {
+    status: "failed",
+    dof: -1,
+    solvedPoints: [],
+    failedConstraints: [],
+  };
+}
+```
 
-* `editor/worker/kernel.worker.ts`
-* `editor/kernel/utils/referenceIndex.ts` *(new)*
-* `editor/worker/types.ts`
-* `editor/contexts/SelectionContext.tsx`
+### 7.4 Acceptance criteria
 
-**Tasks**
-
-1. Aggregate centroid/normal/area for faces from tessellation.
-2. Compute `PersistentRefV1` for each.
-3. Build `referenceIndex` and append to `rebuild-complete` message.
-4. Replace `faceIndex`→`persistentRef` lookup in selection.
-
-**Acceptance**
-
-* Clicking a face logs a valid `stref:v1…`.
-* Undo/redo and remote update keep same ref.
-
-**Tests**
-
-* `__tests__/referenceIndex.test.ts`: deterministic mapping for a static cube.
-
----
-
-## **M4 – Resolver + Repair Flow**
-
-### PR-4 – Implement `resolvePersistentRef` Utility
-
-**Goal:** Turn PersistentRef → current topology (+diagnostics).
-**Files**
-
-* `editor/naming/resolvePersistentRef.ts` *(new)*
-* `editor/worker/kernel.worker.ts` (call resolver)
-* `editor/ui/errors/BuildErrorPanel.tsx` (show repair button)
-
-**Tasks**
-
-1. Implement centroid/normal/area matching scorer.
-2. Return `{found|ambiguous|not_found}`.
-3. Kernel worker runs resolver for all refs → emits diagnostics.
-4. Add `INVALID_REFERENCE` errors to feature status.
-
-**Acceptance**
-
-* Corrupted ref → build succeeds but flagged as invalid.
-* UI “Repair” opens selection tool.
-
-**Tests**
-
-* `resolvePersistentRef.test.ts` with perturbed geometry.
-
-### PR-5 – Add `commands/repairReference`
-
-**Goal:** One repair entrypoint.
-**Files**
-
-* `editor/commands/repair.ts` *(new)*
-* integrate into BuildErrorPanel.
-
-**Acceptance**
-
-* Repair replaces ref string → rebuild clears error.
-
----
-
-## **M5 – KernelEngine Extraction**
-
-### PR-6 – Create `KernelEngine`
-
-**Goal:** Reuse rebuild/query logic in both workers.
-**Files**
-
-* `editor/kernel/KernelEngine.ts` *(new)*
-* refactor `editor/worker/kernel.worker.ts` to call it.
-
-**Tasks**
-
-1. Move Yjs → SolidSession → mesh logic into class with hooks:
-
-   * `applyUpdate()`
-   * `rebuild()`
-   * `getReferenceIndex()`
-2. Emit events for `buildComplete`.
-
-**Acceptance**
-
-* UI rebuild identical speed/results.
-* Unit test: `KernelEngine` rebuild matches worker output bit-for-bit.
+- AI can query solve status before/after adding constraints
+- AI receives accurate DOF count
+- AI sees which constraints failed (if any)
+- Result matches what UI kernel worker reports
 
 ---
 
-## **M6 – AI Worker Snapshot & Model Query**
+## Phase 8 — Progressive OCCT history integration
 
-### PR-7 – Use KernelEngine in AI SharedWorker
+### 8.1 Extend core ops to return generated shapes
 
-**Goal:** Independent background kernel.
-**Files**
+When OCCT operations provide history (e.g., `BRepPrimAPI_MakePrism::Generated`), capture it:
 
-* `lib/ai/runtime/worker-chat-controller.ts`
-* `lib/ai/runtime/ai-worker.ts` *(if exists)*
-* `lib/ai/tools/modeling-query.ts`
+```typescript
+// packages/core/src/api/SolidSession.ts
 
-**Tasks**
+interface ExtrudeResult {
+  bodyId: BodyId;
+  generatedFaces?: {
+    topCap: FaceId[];
+    bottomCap: FaceId[];
+    sides: Array<{ sketchSegmentIndex: number; faceId: FaceId }>;
+  };
+}
 
-1. Instantiate `new KernelEngine({mode:"headless"})`.
-2. Mirror Yjs doc updates (already synced).
-3. Add debounce rebuild.
+extrude(profile: Profile, options: ExtrudeOptions): OperationResult<ExtrudeResult> {
+  // ... existing extrude logic ...
+  
+  // Extract generated face mappings from OCCT
+  const generatedFaces = this.extractGeneratedFaces(prism);
+  
+  return {
+    success: true,
+    value: { bodyId, generatedFaces },
+  };
+}
+```
 
-### PR-8 – Add `getModelSnapshot` Tool
+### 8.2 Use OCCT history in ReferenceIndex generation
 
-**Goal:** Low-res 2D render inside worker.
-**Files**
+```typescript
+function generateFaceRef(
+  featureId: string,
+  featureType: string,
+  faceIdx: number,
+  fingerprint: FaceFingerprint,
+  occtHistory?: ExtrudeResult["generatedFaces"]
+): PersistentRefV1 {
+  // If OCCT history available, use it for accurate selectors
+  if (occtHistory && featureType === "extrude") {
+    if (occtHistory.topCap.includes(faceIdx)) {
+      return { /* topCap selector */ };
+    }
+    const sideMatch = occtHistory.sides.find(s => s.faceId === faceIdx);
+    if (sideMatch) {
+      return {
+        v: 1,
+        expectedType: "face",
+        originFeatureId: featureId,
+        localSelector: {
+          kind: "extrude.side",
+          data: { loop: 0, segment: sideMatch.sketchSegmentIndex },
+        },
+        fingerprint: { /* ... */ },
+      };
+    }
+  }
+  
+  // Fall back to heuristic matching
+  return heuristicFaceRef(featureId, featureType, faceIdx, fingerprint);
+}
+```
 
-* `lib/ai/tools/modeling-query.ts`
-* `lib/ai/tools/modeling-impl.ts`
-* `editor/kernel/snapshotRenderer.ts` *(new)*
+### 8.3 Add sketch entity IDs to selectors
 
-**Tasks**
+For extrude side faces, include the sketch entity UUID for merge-safe matching:
 
-1. Render via `OffscreenCanvas` if available, else software renderer.
-2. Project iso/top/front.
-3. Return `{pngBase64, bbox}`.
+```typescript
+localSelector: {
+  kind: "extrude.side",
+  data: {
+    loop: 0,
+    segment: 2,
+    sketchEntityId: "abc-123-def",  // UUID of the sketch line/arc
+  },
+}
+```
 
-**Acceptance**
+This makes selectors robust to sketch entity reordering.
 
-* Tool returns valid PNG string (<100 KB).
-* Works with no UI tab open.
+### 8.4 Acceptance criteria
 
----
-
-## **M7 – Constraint Solver Feedback**
-
-### PR-9 – Expose Solver API
-
-**Goal:** AI + UI share solver reports.
-**Files**
-
-* `editor/sketch/solveSketch.ts` *(extracted)*
-* `editor/worker/kernel.worker.ts`
-* `lib/ai/tools/sketch-impl.ts`
-
-**Tasks**
-
-1. Extract solver from worker into pure function.
-2. Add `getSketchSolveReport(sketchId)` tool.
-3. Include DOF, over/under/failed.
-
-**Acceptance**
-
-* AI call matches UI solver output exactly.
-
-**Tests**
-
-* `sketchSolver.test.ts`: known sketch → DOF count stable.
-
----
-
-## **M8 – OCCT History & Sketch Entity Refs**
-
-### PR-10 – Use OCCT Generated/Modified Mapping
-
-**Goal:** Replace heuristics when data available.
-**Files**
-
-* `@solidtype/core/src/ops/*`
-* `editor/kernel/utils/referenceIndex.ts`
-
-**Tasks**
-
-1. Extend core ops to return `GeneratedShapes` lists (faces/edges).
-2. Build PersistentRefs using that when present.
-3. Fallback to heuristic fingerprints.
-
-**Acceptance**
-
-* OCCT history produces same ref after local edit; heuristic path unchanged otherwise.
-
-### PR-11 – Attach Sketch Entity IDs
-
-**Goal:** Merge-stable selectors for sides.
-**Files**
-
-* `editor/naming/persistentRef.ts`
-* `core/ops/extrude.ts`, `revolve.ts`
-
-**Tasks**
-
-1. Populate `localSelector.data.sketchEntityId` where available.
-2. Update resolver to prioritise matching by sketchEntityId.
-3. Update tests for stability across sketch reorder.
+- When OCCT history is available, selectors are more accurate
+- Fallback to heuristics works when history unavailable
+- Sketch entity IDs survive sketch reordering
 
 ---
 
-# 🧪 Integration & Regression Tests
+## Deliverable Summary
 
-Add under `packages/app/__tests__/integration/`:
 
-| Test                           | Description                                        |
-| ------------------------------ | -------------------------------------------------- |
-| `merge_persistentRefs.test.ts` | Create A/B forks, merge, ensure decode + no crash. |
-| `background_rebuild.test.ts`   | Run AI worker rebuild while UI busy; both stable.  |
-| `repair_reference.test.ts`     | Break ref, rebuild non-fatal, repair clears.       |
-| `solver_feedback.test.ts`      | Compare AI vs UI DOF counts.                       |
+| Phase | Deliverable       | Key Files                                                     |
+| ----- | ----------------- | ------------------------------------------------------------- |
+| 0     | Regression tests  | `tests/integration/commands-invariants.test.ts`               |
+| 1     | Commands layer    | `editor/commands/*.ts`                                        |
+| 2     | PersistentRef V1  | `editor/naming/persistentRef.ts`                              |
+| 3     | ReferenceIndex    | `editor/kernel/referenceIndex.ts`, `worker/types.ts`          |
+| 4     | KernelEngine      | `editor/kernel/KernelEngine.ts`                               |
+| 5     | AI geometry tools | `lib/ai/tools/modeling-impl.ts`, `kernel/snapshotRenderer.ts` |
+| 6     | Resolver + repair | `editor/naming/resolvePersistentRef.ts`, `commands/repair.ts` |
+| 7     | Solver feedback   | `editor/sketch/solveSketch.ts`, `lib/ai/tools/sketch-impl.ts` |
+| 8     | OCCT history      | `core/src/api/SolidSession.ts`                                |
+
 
 ---
 
-# ✅ Final Deliverables
+## Milestones
 
-After **PR 11**, the system supports:
 
-* **Unified Command Layer** for deterministic Yjs mutation.
-* **Merge-safe PersistentRef V1** identifiers.
-* **ReferenceIndex + Resolver** pipeline (UI ↔ AI).
-* **Background KernelEngine** inside SharedWorker.
-* **Snapshot + Query tools** for multimodal AI.
-* **Constraint-solver feedback loop**.
-* **Progressive OCCT history integration** for topo naming stability.
-* **User/AI repair flow** for merge conflicts.
+| Milestone | Phases | Goal                                           |
+| --------- | ------ | ---------------------------------------------- |
+| **M1**    | 0-1    | Unified command layer, no more UI/AI drift     |
+| **M2**    | 2-3    | Merge-safe refs generated for all faces/edges  |
+| **M3**    | 4-5    | AI has geometry awareness (queries, snapshots) |
+| **M4**    | 6      | Refs can be resolved and repaired              |
+| **M5**    | 7      | AI sketching is constraint-aware               |
+| **M6**    | 8      | OCCT history improves ref accuracy             |
 
+
+---
+
+## Testing Strategy
+
+Each phase includes specific tests:
+
+```
+packages/app/tests/
+├── integration/
+│   ├── commands-invariants.test.ts    # Phase 0
+│   ├── reference-persistence.test.ts  # Phase 3
+│   ├── ai-geometry-queries.test.ts    # Phase 5
+│   ├── fork-merge-refs.test.ts        # Phase 6
+│   └── solver-feedback.test.ts        # Phase 7
+└── unit/
+    ├── persistentRef.test.ts          # Phase 2
+    ├── referenceIndex.test.ts         # Phase 3
+    ├── KernelEngine.test.ts           # Phase 4
+    ├── resolvePersistentRef.test.ts   # Phase 6
+    └── solveSketch.test.ts            # Phase 7
+```
+
+All tests must pass before merging each phase's PR.
