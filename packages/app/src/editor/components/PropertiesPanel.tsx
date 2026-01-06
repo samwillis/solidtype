@@ -36,7 +36,7 @@ import { ExtrudeEditForm, RevolveEditForm } from "./properties-panel/edit-forms"
 // ============================================================================
 
 const PropertiesPanel: React.FC = () => {
-  const { doc, getFeatureById, isLoading } = useDocument();
+  const { doc, documentId, getFeatureById, isLoading } = useDocument();
   const { selectedFeatureId, selectedFaces } = useSelection();
   const { editMode, updateFormData, acceptEdit, cancelEdit, isEditing } = useFeatureEdit();
   const [showAIChat, setShowAIChat] = useState(false);
@@ -148,7 +148,11 @@ const PropertiesPanel: React.FC = () => {
     }
   };
 
-  const content = showAIChat ? <AIPanel context="editor" /> : renderProperties();
+  const content = showAIChat ? (
+    <AIPanel context="editor" documentId={documentId} />
+  ) : (
+    renderProperties()
+  );
 
   return (
     <>

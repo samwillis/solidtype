@@ -187,7 +187,7 @@ describe("Dashboard Prompt Unit Tests", () => {
 describe("Tool Definition Validation", () => {
   it("createDocument requires branchId", async () => {
     // Import the tool definition
-    const { createDocumentDef } = await import("../lib/ai/tools/dashboard");
+    const { createDocumentDef } = await import("../../src/lib/ai/tools/dashboard");
 
     // Check the input schema requires branchId
     const schema = createDocumentDef.inputSchema;
@@ -204,7 +204,7 @@ describe("Tool Definition Validation", () => {
   });
 
   it("createDocument accepts valid input with branchId (folderId is optional)", async () => {
-    const { createDocumentDef } = await import("../lib/ai/tools/dashboard");
+    const { createDocumentDef } = await import("../../src/lib/ai/tools/dashboard");
 
     const schema = createDocumentDef.inputSchema;
 
@@ -227,7 +227,7 @@ describe("Tool Definition Validation", () => {
   });
 
   it("createDocument works without folderId for root-level documents", async () => {
-    const { createDocumentDef } = await import("../lib/ai/tools/dashboard");
+    const { createDocumentDef } = await import("../../src/lib/ai/tools/dashboard");
 
     const schema = createDocumentDef.inputSchema;
     const result = schema.safeParse({
@@ -246,7 +246,7 @@ describe("Tool Definition Validation", () => {
   });
 
   it("createDocument accepts optional folderId", async () => {
-    const { createDocumentDef } = await import("../lib/ai/tools/dashboard");
+    const { createDocumentDef } = await import("../../src/lib/ai/tools/dashboard");
 
     const schema = createDocumentDef.inputSchema;
     const result = schema.safeParse({
@@ -263,7 +263,7 @@ describe("Tool Definition Validation", () => {
   });
 
   it("listDocuments accepts projectId without branchId", async () => {
-    const { listDocumentsDef } = await import("../lib/ai/tools/dashboard");
+    const { listDocumentsDef } = await import("../../src/lib/ai/tools/dashboard");
 
     const schema = listDocumentsDef.inputSchema;
     const result = schema.safeParse({
@@ -274,7 +274,7 @@ describe("Tool Definition Validation", () => {
   });
 
   it("listFolders requires branchId", async () => {
-    const { listFoldersDef } = await import("../lib/ai/tools/dashboard");
+    const { listFoldersDef } = await import("../../src/lib/ai/tools/dashboard");
 
     const schema = listFoldersDef.inputSchema;
     const result = schema.safeParse({});
@@ -283,7 +283,7 @@ describe("Tool Definition Validation", () => {
   });
 
   it("createFolder requires branchId", async () => {
-    const { createFolderDef } = await import("../lib/ai/tools/dashboard");
+    const { createFolderDef } = await import("../../src/lib/ai/tools/dashboard");
 
     const schema = createFolderDef.inputSchema;
     const result = schema.safeParse({

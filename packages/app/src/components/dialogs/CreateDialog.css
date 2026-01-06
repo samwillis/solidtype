@@ -30,7 +30,7 @@
 
 [data-theme="light"] .create-dialog-popup {
   background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .create-dialog-title {
@@ -83,7 +83,7 @@
 [data-theme="light"] .create-dialog-input,
 [data-theme="light"] .create-dialog-textarea {
   background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   color: var(--color-text, rgba(0, 0, 0, 0.9));
 }
 
@@ -146,7 +146,7 @@
 
 [data-theme="light"] .create-dialog-button-cancel {
   background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   color: var(--color-text, rgba(0, 0, 0, 0.9));
 }
 
@@ -185,7 +185,7 @@
 
 [data-theme="light"] .create-dialog-select-trigger {
   background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   color: var(--color-text, rgba(0, 0, 0, 0.9));
 }
 
@@ -234,7 +234,7 @@
 
 [data-theme="light"] .create-dialog-select-popup {
   background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .create-dialog-select-option {

@@ -1,8 +1,8 @@
 # Phase 25: AI 2D Sketch Integration
 
-> **Status:** ⏳ **PLANNED**
+> **Status:** ⚠️ **IN PROGRESS**
 >
-> This phase has not been started. The infrastructure from Phase 23 is in place and ready for sketch tool implementation.
+> Tool definitions and implementations are complete. Integration with the AI chat UI and worker execution loop is pending.
 
 ## Prerequisites
 
@@ -821,14 +821,16 @@ describe("Sketch AI Integration", () => {
 
 ## Deliverables
 
-- [ ] Sketch context serialization
-- [ ] Sketch system prompt
-- [ ] Sketch lifecycle tools (create, enter, exit, status)
-- [ ] Geometry creation tools (line, circle, arc, rectangle, polygon, slot)
-- [ ] Point manipulation tools (move, merge)
-- [ ] Constraint tools (all constraint types)
-- [ ] Geometry deletion tools
-- [ ] High-level helpers (centered rectangle, etc.)
-- [ ] Tool implementations with solver integration
-- [ ] Tool approval rules
-- [ ] Tests passing
+- [x] Sketch context serialization
+- [x] Sketch system prompt
+- [x] Sketch lifecycle tools (create, enter, exit, status)
+- [x] Geometry creation tools (line, circle, arc, rectangle, polygon, slot)
+- [x] Point manipulation tools (move, merge)
+- [x] Constraint tools (all constraint types)
+- [x] Geometry deletion tools
+- [x] High-level helpers (centered rectangle, etc.)
+- [x] Tool implementations with solver integration
+- [x] Tool approval rules
+- [x] Tests passing (41 tests)
+- [ ] Integration with AI chat worker
+- [ ] End-to-end testing with LLM

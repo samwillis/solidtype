@@ -68,13 +68,13 @@ The AI system enables users to interact with SolidType through natural language 
 
 ### Component Roles
 
-| Component                   | Responsibility                                                              |
-| --------------------------- | --------------------------------------------------------------------------- |
-| **Postgres/Electric**       | Session metadata (`ai_chat_sessions` table)                                 |
-| **Durable Streams**         | Chat transcript storage (messages, chunks, runs)                            |
-| **Server /run endpoint**    | Runs `@tanstack/ai` chat(), writes events to Durable State                  |
-| **Client UI**               | Renders transcript via Durable State live queries                           |
-| **Per-Session SharedWorker** | Isolated OCCT kernel per session, run coordination, local tool execution   |
+| Component                    | Responsibility                                                           |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| **Postgres/Electric**        | Session metadata (`ai_chat_sessions` table)                              |
+| **Durable Streams**          | Chat transcript storage (messages, chunks, runs)                         |
+| **Server /run endpoint**     | Runs `@tanstack/ai` chat(), writes events to Durable State               |
+| **Client UI**                | Renders transcript via Durable State live queries                        |
+| **Per-Session SharedWorker** | Isolated OCCT kernel per session, run coordination, local tool execution |
 
 ---
 
@@ -207,6 +207,7 @@ Each AI chat session gets its own **named SharedWorker** with an isolated OCCT k
 ```
 
 Workers are named by session ID: `ai-chat-worker-${sessionId}`. This means:
+
 - Multiple tabs viewing the same chat session connect to the **same** worker
 - Different chat sessions get **completely isolated** workers with their own OCCT kernels
 

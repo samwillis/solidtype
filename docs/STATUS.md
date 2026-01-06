@@ -1,6 +1,6 @@
 # SolidType Status
 
-**Last Updated:** 2026-01-04
+**Last Updated:** 2026-01-05
 
 This document tracks the current implementation status of SolidType.
 
@@ -40,7 +40,7 @@ This document tracks the current implementation status of SolidType.
 | 22    | Patterns                  | ⏳ Planned         |                              |
 | 23    | AI Core Infrastructure    | ✅ Complete        | Durable Streams architecture |
 | 24    | AI Dashboard              | ✅ Complete        | Dashboard tools working      |
-| 25    | AI Sketch                 | ⏳ Planned         |                              |
+| 25    | AI Sketch                 | ⚠️ In Progress     | Tool defs & impls complete   |
 | 26    | AI Modeling               | ⏳ Planned         |                              |
 | 27    | User System & Persistence | ✅ Complete        |                              |
 
@@ -108,6 +108,18 @@ Phase 27 delivered the complete user system and persistence infrastructure:
 ---
 
 ## Recent Changes
+
+### 2026-01-05: Phase 25 AI Sketch Tools
+
+| Change                       | Impact                                        |
+| ---------------------------- | --------------------------------------------- |
+| Sketch context serialization | Yjs sketch data → AI-friendly context         |
+| Sketch system prompt         | Context-aware prompts for sketch editing      |
+| Sketch tool definitions      | 19 tools for geometry, constraints, lifecycle |
+| Sketch helper tools          | 7 high-level convenience tools                |
+| Sketch tool implementations  | Full local implementations using Yjs          |
+| Execution registry update    | All sketch tools marked as local (browser)    |
+| Unit tests                   | 41 tests passing                              |
 
 ### 2026-01-01: Phase 1-18 Gap Fixes
 

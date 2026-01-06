@@ -1,29 +1,50 @@
 /**
  * AI Chat SharedWorker
  *
- * Manages local session state, run coordination, and CAD kernel instance.
- * LLM calls remain server-side, this worker handles:
- * - Session state management
- * - Run coordination across tabs (single run at a time per session)
+ * Manages AI chat sessions using TanStack AI with Durable Streams transport.
+ *
+ * Architecture:
+ * - Worker runs TanStack AI chat loop with custom Durable Stream adapter
+ * - Client tools (sketch) execute in worker against synced Yjs document
+ * - Server tools execute on server during chat() call
+ * - Main thread delegates message sending to worker
+ *
+ * Key responsibilities:
+ * - Session lifecycle (init, terminate, idle shutdown)
+ * - Chat controller management (one per session)
+ * - Run coordination across tabs
  * - CAD kernel initialization (for editor context)
- * - Local tool execution (Phase 25/26)
- * - Idle shutdown after inactivity
+ * - Broadcasting UI updates to main thread
  */
 
 /// <reference lib="webworker" />
 
 import { SolidSession, setOC } from "@solidtype/core";
 import { initOCCTBrowser } from "../../../editor/worker/occt-init";
-import type { AIChatWorkerCommand, AIChatWorkerEvent, AIChatSessionState } from "./types";
+import { WorkerChatController } from "./worker-chat-controller";
+import type { AIChatWorkerCommand, AIChatWorkerEvent } from "./types";
 
 // Support both SharedWorker and Worker
 declare const self: SharedWorkerGlobalScope | DedicatedWorkerGlobalScope;
 
+/**
+ * Extended session state with chat controller
+ */
+interface WorkerSessionState {
+  sessionId: string;
+  documentId?: string;
+  projectId?: string;
+  controller: WorkerChatController;
+  kernelInitialized: boolean;
+}
+
 // Worker state
-const sessions = new Map<string, AIChatSessionState>();
+const sessions = new Map<string, WorkerSessionState>();
 let kernelSession: SolidSession | null = null;
 let kernelInitialized = false;
 let initializationPromise: Promise<void> | null = null;
+
+console.log("[AI Chat Worker] 🚀 Worker script loaded and executing");
 
 // Connection management for SharedWorker
 const ports = new Set<MessagePort>();
@@ -36,9 +57,19 @@ let lastActivity = Date.now();
 const idleCheckInterval = setInterval(() => {
   if (ports.size === 0 && Date.now() - lastActivity > IDLE_TIMEOUT_MS) {
     console.log("[AI Chat Worker] Idle timeout, shutting down");
+
+    // Clean up all sessions
+    for (const session of sessions.values()) {
+      session.controller.dispose();
+    }
+    sessions.clear();
+
+    // Clean up kernel
     if (kernelSession) {
       kernelSession.dispose();
+      kernelSession = null;
     }
+
     clearInterval(idleCheckInterval);
     self.close();
   }
@@ -103,29 +134,62 @@ async function handleCommand(command: AIChatWorkerCommand) {
     switch (command.type) {
       case "init-session": {
         const { sessionId, documentId, projectId } = command;
-        sessions.set(sessionId, {
+        console.log("[AI Chat Worker] 📥 Received init-session:", { sessionId, documentId, projectId });
+
+        // Clean up existing session if re-initializing
+        const existingSession = sessions.get(sessionId);
+        if (existingSession) {
+          existingSession.controller.dispose();
+          sessions.delete(sessionId);
+        }
+
+        // Initialize kernel if we have a documentId (editor context)
+        let kernelReady = false;
+        if (documentId) {
+          try {
+            await ensureKernelInitialized();
+            kernelReady = true;
+            broadcast({ type: "kernel-initialized", sessionId });
+          } catch (error) {
+            console.error("[AI Chat Worker] Kernel init failed:", error);
+            // Non-fatal - continue without kernel
+          }
+        }
+
+        // Create chat controller
+        const controller = new WorkerChatController({
           sessionId,
           documentId,
           projectId,
-          kernelInitialized: false,
-          activeRunId: null,
+          broadcast,
         });
 
-        // Initialize kernel if we have a documentId (editor context)
-        if (documentId) {
-          await ensureKernelInitialized();
-          const session = sessions.get(sessionId);
-          if (session) {
-            session.kernelInitialized = true;
-          }
-          broadcast({ type: "kernel-initialized", sessionId });
-        }
+        // Store session
+        const session: WorkerSessionState = {
+          sessionId,
+          documentId,
+          projectId,
+          controller,
+          kernelInitialized: kernelReady,
+        };
+        sessions.set(sessionId, session);
 
-        broadcast({ type: "session-ready", sessionId });
+        // Initialize controller (connects to streams, syncs document)
+        try {
+          await controller.initialize();
+          // session-ready is broadcast by controller
+        } catch (error) {
+          console.error("[AI Chat Worker] Controller init failed:", error);
+          broadcast({
+            type: "session-error",
+            sessionId,
+            error: error instanceof Error ? error.message : "Initialization failed",
+          });
+        }
         break;
       }
 
-      case "start-run": {
+      case "send-message": {
         const { sessionId, content } = command;
         const session = sessions.get(sessionId);
 
@@ -138,98 +202,90 @@ async function handleCommand(command: AIChatWorkerCommand) {
           return;
         }
 
-        if (session.activeRunId) {
-          broadcast({
-            type: "run-rejected",
-            sessionId,
-            reason: "already-running",
-          });
-          return;
-        }
-
-        // Call server /run endpoint
-        // Note: credentials: 'include' is required to pass auth cookies from worker
+        // Delegate to controller
         try {
-          const response = await fetch(`/api/ai/sessions/${sessionId}/run`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ content }),
-          });
-
-          if (response.status === 409) {
-            // Run already in progress (detected server-side)
-            const data = await response.json();
-            session.activeRunId = data.runId;
-            broadcast({
-              type: "run-rejected",
-              sessionId,
-              reason: "already-running",
-            });
-            return;
-          }
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            broadcast({
-              type: "run-error",
-              sessionId,
-              error: errorData.error || `HTTP ${response.status}`,
-            });
-            return;
-          }
-
-          const { runId, userMessageId, assistantMessageId } = await response.json();
-          session.activeRunId = runId;
-
-          broadcast({
-            type: "run-started",
-            sessionId,
-            runId,
-            userMessageId,
-            assistantMessageId,
-          });
-
-          // Note: Run completion is detected by the UI observing Durable State
-          // The UI will call run-complete when it sees the run status change
-        } catch (err) {
+          await session.controller.sendMessage(content);
+        } catch (error) {
           broadcast({
             type: "run-error",
             sessionId,
-            error: err instanceof Error ? err.message : String(err),
+            error: error instanceof Error ? error.message : "Send failed",
+          });
+        }
+        break;
+      }
+
+      case "stop-run": {
+        const { sessionId } = command;
+        const session = sessions.get(sessionId);
+        if (session) {
+          session.controller.stop();
+        }
+        break;
+      }
+
+      case "set-active-sketch": {
+        const { sessionId, sketchId } = command;
+        const session = sessions.get(sessionId);
+        if (session) {
+          session.controller.setActiveSketchId(sketchId);
+        }
+        break;
+      }
+
+      // Legacy commands for backward compatibility
+      case "start-run": {
+        // Map to send-message
+        console.warn("[AI Chat Worker] start-run is deprecated, use send-message");
+        const { sessionId, content } = command;
+        const session = sessions.get(sessionId);
+        if (session) {
+          try {
+            await session.controller.sendMessage(content);
+          } catch (error) {
+            broadcast({
+              type: "run-error",
+              sessionId,
+              error: error instanceof Error ? error.message : "Send failed",
+            });
+          }
+        } else {
+          broadcast({
+            type: "run-rejected",
+            sessionId,
+            reason: "session-not-initialized",
           });
         }
         break;
       }
 
       case "run-complete": {
-        const { sessionId } = command;
-        const session = sessions.get(sessionId);
-        if (session) {
-          session.activeRunId = null;
-        }
-        broadcast({ type: "run-complete", sessionId });
+        // No longer needed - controller detects completion via Durable Stream
+        console.warn("[AI Chat Worker] run-complete is deprecated");
         break;
       }
 
       case "execute-local-tool": {
-        // For Phase 25/26 - execute CAD operations in worker kernel
-        if (!kernelInitialized || !kernelSession) {
-          await ensureKernelInitialized();
-        }
-
-        // TODO: Implement tool execution when editor tools are added
+        // No longer needed - tools executed via controller
+        console.warn("[AI Chat Worker] execute-local-tool is deprecated");
+        const { toolName, sessionId } = command;
         broadcast({
           type: "tool-result",
-          toolName: command.toolName,
-          result: { message: "Local tool execution not yet implemented" },
+          sessionId,
+          toolName,
+          error: "execute-local-tool is deprecated",
         });
         break;
       }
 
       case "terminate-session": {
         const { sessionId } = command;
-        sessions.delete(sessionId);
+        const session = sessions.get(sessionId);
+
+        if (session) {
+          session.controller.dispose();
+          sessions.delete(sessionId);
+        }
 
         // Cleanup kernel if no sessions remain
         if (sessions.size === 0 && kernelSession) {
@@ -257,12 +313,21 @@ async function handleCommand(command: AIChatWorkerCommand) {
 }
 
 // SharedWorker connection handler
+console.log("[AI Chat Worker] Checking for SharedWorker context:", {
+  hasSelf: typeof self !== "undefined",
+  hasOnconnect: typeof self !== "undefined" && "onconnect" in self,
+});
+
 if (typeof self !== "undefined" && "onconnect" in self) {
+  console.log("[AI Chat Worker] 🎯 Setting up SharedWorker onconnect handler");
   (self as SharedWorkerGlobalScope).onconnect = (e: MessageEvent) => {
+    console.log("[AI Chat Worker] 🔗 New connection received!");
     const port = e.ports[0];
     ports.add(port);
+    console.log("[AI Chat Worker] Total connected ports:", ports.size);
 
     port.onmessage = (msg: MessageEvent<AIChatWorkerCommand>) => {
+      console.log("[AI Chat Worker] 📨 Received command:", msg.data.type);
       handleCommand(msg.data);
     };
 
@@ -294,4 +359,4 @@ if (typeof self !== "undefined" && "onconnect" in self) {
   };
 }
 
-console.log("[AI Chat Worker] Worker initialized");
+console.log("[AI Chat Worker] Worker initialized (Durable Stream transport)");

@@ -8,7 +8,24 @@ import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
 import { DurableStreamsProvider } from "./vendor/y-durable-streams";
 
-const API_BASE = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+/**
+ * Get the API base URL
+ * Works in both main thread (window) and workers (self)
+ */
+function getApiBase(): string {
+  // Check for window (main thread)
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+  // Check for self (workers - SharedWorker, Worker, ServiceWorker)
+  if (typeof self !== "undefined" && self.location?.origin) {
+    return self.location.origin;
+  }
+  // Fallback for SSR/Node
+  return "http://localhost:3000";
+}
+
+const API_BASE = getApiBase();
 
 /**
  * Create sync providers for a document

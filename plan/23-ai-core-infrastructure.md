@@ -3099,7 +3099,7 @@ export function AISettingsMenu() {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .ai-settings-label {

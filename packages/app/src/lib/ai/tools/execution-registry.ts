@@ -50,14 +50,39 @@ const TOOL_EXECUTION_REGISTRY: Record<string, ToolExecutionMode> = {
   searchDocuments: "server",
   searchProjects: "server",
 
-  // ============ Editor/CAD Tools (Phase 25/26) ============
-  // These will execute locally in the worker
-  // createSketch: "local",
-  // addLine: "local",
-  // addArc: "local",
-  // addRectangle: "local",
-  // addCircle: "local",
-  // addConstraint: "local",
+  // ============ Sketch Tools (Phase 25) ============
+  // These execute locally in the browser where Yjs document is available
+  createSketch: "local",
+  enterSketch: "local",
+  exitSketch: "local",
+  getSketchStatus: "local",
+  addLine: "local",
+  addCircle: "local",
+  addArc: "local",
+  addRectangle: "local",
+  addPolygon: "local",
+  addSlot: "local",
+  addPoint: "local",
+  movePoint: "local",
+  mergePoints: "local",
+  addConstraint: "local",
+  removeConstraint: "local",
+  modifyConstraintValue: "local",
+  deleteEntity: "local",
+  deletePoint: "local",
+  toggleConstruction: "local",
+
+  // ============ Sketch Helper Tools (Phase 25) ============
+  createCenteredRectangle: "local",
+  createCircleWithRadius: "local",
+  createSymmetricProfile: "local",
+  createBoltCircle: "local",
+  createCenterlinesAtOrigin: "local",
+  createChamferedRectangle: "local",
+  createRoundedRectangle: "local",
+
+  // ============ 3D Modeling Tools (Phase 26) ============
+  // These will also execute locally in the worker
   // extrude: "local",
   // revolve: "local",
   // fillet: "local",

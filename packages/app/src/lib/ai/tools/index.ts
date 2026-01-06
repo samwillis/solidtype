@@ -6,6 +6,10 @@
 
 // Tool definitions (schemas only)
 export { dashboardToolDefs } from "./dashboard";
+export { sketchToolDefs } from "./sketch";
+export type { SketchToolName } from "./sketch";
+export { sketchHelperToolDefs } from "./sketch-helpers";
+export type { SketchHelperToolName } from "./sketch-helpers";
 
 // Client tool schemas (browser-side navigation/UI)
 export { dashboardClientToolSchemas, editorClientToolSchemas } from "./client-tools";
@@ -13,6 +17,10 @@ export type { DashboardClientToolName, EditorClientToolName, ClientToolName } fr
 
 // Tool implementations (server-side) - Phase 24
 export { getDashboardTools } from "./dashboard-impl";
+
+// Sketch tool implementations (local/browser-side) - Phase 25
+export * from "./sketch-impl";
+export type { SketchToolContext } from "./sketch-impl";
 
 // Tool execution registry (server vs local)
 export {

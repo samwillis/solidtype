@@ -47,6 +47,8 @@ export type DocumentUnits = "mm" | "cm" | "m" | "in" | "ft";
 export type SyncStatus = "disconnected" | "connecting" | "connected" | "synced" | "error";
 
 interface DocumentContextValue {
+  /** The document ID (for cloud documents) */
+  documentId: string | undefined;
   /** The document - null while loading */
   doc: SolidTypeDoc | null;
   /** Whether the document is still loading */
@@ -491,6 +493,7 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
   const isLoading = !doc;
 
   const value: DocumentContextValue = {
+    documentId,
     doc,
     isLoading,
     features,

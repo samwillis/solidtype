@@ -41,10 +41,7 @@ interface CamelCaseSession {
   createdAt: string;
   updatedAt: string;
 }
-import {
-  getAIChatWorkerClient,
-  disposeAIChatWorkerClient,
-} from "../lib/ai/runtime/ai-chat-worker-client";
+import { getAIChatWorkerClient } from "../lib/ai/runtime/ai-chat-worker-client";
 
 interface UseAIChatOptions {
   context: "dashboard" | "editor";
@@ -78,11 +75,10 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
   // Query sessions from TanStack DB collection (synced via Electric)
   const sessionsQuery = useLiveQuery(() => aiChatSessionsCollection as any);
 
-  // Filter and transform collection rows (snake_case from DB → camelCase for app)
+  // Get all sessions - don't filter by context so sessions are visible everywhere
   const allSessions = sessionsQuery.data || [];
-  const filteredSessions = options.context
-    ? allSessions.filter((row) => row.context === options.context)
-    : allSessions;
+  // All sessions are visible in both dashboard and editor
+  const filteredSessions = allSessions;
 
   // Sort by updated_at descending
   const sortedSessions = [...filteredSessions].sort(
@@ -206,6 +202,7 @@ export function useAIChat(options: UseAIChatOptions) {
   const [loadedSessionId, setLoadedSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
 
   // Wrapper around setActiveSessionId to log all transitions for debugging
   const setActiveSessionId = useCallback((newId: string | null, source?: string) => {
@@ -335,7 +332,7 @@ export function useAIChat(options: UseAIChatOptions) {
   // Create StreamDB when session changes
   // Live queries (above) will automatically update when StreamDB collections change
   useEffect(() => {
-    console.log("[useAIChat effect] activeSessionId changed to:", activeSessionId);
+    console.debug("[useAIChat effect] activeSessionId changed to:", activeSessionId);
 
     // IMMEDIATELY clear the old streamDb so UI doesn't show stale data
     // This ensures messages show as empty while loading the new session
@@ -343,7 +340,7 @@ export function useAIChat(options: UseAIChatOptions) {
     setLoadedSessionId(null);
 
     if (!activeSessionId) {
-      console.log("[useAIChat effect] No activeSessionId, done");
+      console.debug("[useAIChat effect] No activeSessionId, done");
       return;
     }
 
@@ -379,21 +376,27 @@ export function useAIChat(options: UseAIChatOptions) {
     const sessionBeingLoaded = activeSessionId;
 
     (async () => {
-      console.log("[useAIChat effect] Creating StreamDB for:", sessionBeingLoaded);
+      console.debug("[useAIChat effect] Creating StreamDB for:", sessionBeingLoaded);
       db = createChatStreamDB(sessionBeingLoaded);
 
       try {
         await tryPreload();
         if (!cancelled) {
-          console.log(
-            "[useAIChat effect] StreamDB preloaded, setting state for:",
-            sessionBeingLoaded
-          );
+          // Debug: Log what we got from preload
+          const messagesCount = Array.from(db.collections.messages.values()).length;
+          const chunksCount = Array.from(db.collections.chunks.values()).length;
+          const runsCount = Array.from(db.collections.runs.values()).length;
+          console.debug("[useAIChat effect] StreamDB preloaded:", {
+            session: sessionBeingLoaded,
+            messages: messagesCount,
+            chunks: chunksCount,
+            runs: runsCount,
+          });
           // Once preloaded, set the streamDb and mark which session it belongs to
           setStreamDb(db);
           setLoadedSessionId(sessionBeingLoaded);
         } else {
-          console.log("[useAIChat effect] Cancelled before setting streamDb, closing db");
+          console.debug("[useAIChat effect] Cancelled before setting streamDb, closing db");
           db?.close();
         }
       } catch (err) {
@@ -415,7 +418,7 @@ export function useAIChat(options: UseAIChatOptions) {
     })();
 
     return () => {
-      console.log("[useAIChat effect cleanup] Cancelling and closing db for:", sessionBeingLoaded);
+      console.debug("[useAIChat effect cleanup] Cancelling and closing db for:", sessionBeingLoaded);
       cancelled = true;
       db?.close();
     };
@@ -423,12 +426,21 @@ export function useAIChat(options: UseAIChatOptions) {
 
   // Initialize session in worker when it becomes active
   // Each session gets its own SharedWorker for complete isolation
+  // Note: We intentionally exclude `sessions` from deps to avoid re-running
+  // when the sessions list updates (which causes terminate/init race conditions)
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
+
   useEffect(() => {
     if (!activeSessionId) return;
 
     const workerClient = getAIChatWorkerClient(activeSessionId);
-    const session = sessions.find((s) => s.id === activeSessionId);
+    const session = sessionsRef.current.find((s) => s.id === activeSessionId);
+
+    // Only initialize if we have session details
+    // For new sessions, sendMessage will initialize with the correct options
     if (session) {
+      console.debug("[useAIChat] Initializing worker for session:", activeSessionId);
       workerClient
         .initSession(activeSessionId, {
           documentId: session.documentId || undefined,
@@ -442,13 +454,14 @@ export function useAIChat(options: UseAIChatOptions) {
 
     // Cleanup on unmount or session change
     return () => {
+      console.debug("[useAIChat] Terminating worker session:", activeSessionId);
       workerClient.terminateSession(activeSessionId).catch(() => {
         // Ignore cleanup errors
       });
       // Note: Don't dispose the client here - the SharedWorker will self-terminate
       // after idle timeout, and other tabs may still be using it
     };
-  }, [activeSessionId, sessions]);
+  }, [activeSessionId]); // Only re-run when activeSessionId changes
 
   // Hydrate transcript from messages and chunks
   // Live queries return arrays or undefined when collection not available
@@ -513,16 +526,37 @@ export function useAIChat(options: UseAIChatOptions) {
 
   const isStreaming = activeRun !== undefined;
 
-  // Notify worker when run completes
+  // Track previous run state for debugging
+  // Note: Worker now detects completion via Durable Stream, no notification needed
   const prevActiveRun = useRef<Run | undefined>();
   useEffect(() => {
     if (prevActiveRun.current && !activeRun && activeSessionId) {
-      // Run just completed - notify the session-specific worker
-      const workerClient = getAIChatWorkerClient(activeSessionId);
-      workerClient.notifyRunComplete(activeSessionId);
+      console.debug("[useAIChat] Run completed:", prevActiveRun.current.id);
     }
     prevActiveRun.current = activeRun;
   }, [activeRun, activeSessionId]);
+
+  // Poll streamDb while loading/streaming to ensure we get updates
+  // This is a fallback in case the live subscription doesn't work
+  useEffect(() => {
+    if (!streamDb || (!isLoading && !isStreaming)) return;
+
+    const poll = async () => {
+      try {
+        await streamDb.preload();
+      } catch (err) {
+        console.debug("[useAIChat] Poll preload failed:", err);
+      }
+    };
+
+    // Poll every 200ms while loading/streaming
+    const interval = setInterval(poll, 200);
+
+    // Also poll immediately
+    poll();
+
+    return () => clearInterval(interval);
+  }, [streamDb, isLoading, isStreaming]);
 
   // Computed ready state - ready to send messages (session will be created on first send)
   const isReady = isAuthenticated && sessionsLoaded;
@@ -560,22 +594,25 @@ export function useAIChat(options: UseAIChatOptions) {
           console.debug("[useAIChat] Session created:", sessionId);
         }
 
-        // Call the run endpoint directly from main thread (cookies work here)
-        // The worker is only used for CAD kernel operations, not HTTP requests
-        const response = await fetch(`/api/ai/sessions/${sessionId}/run`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ content }),
+        // Delegate to worker - it handles:
+        // - POSTing to /run (cookies DO work in SharedWorkers for same-origin)
+        // - Streaming chunks from Durable Stream
+        // - Executing client tools (sketch operations) against synced Yjs doc
+        const workerClient = getAIChatWorkerClient(sessionId);
+        console.debug("[useAIChat] Sending message via worker:", { sessionId, contentLength: content.length });
+        
+        await workerClient.sendMessage(sessionId, content, {
+          documentId: options.documentId,
+          projectId: options.projectId,
         });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || `HTTP ${response.status}`);
-        }
-
-        // Run has started - UI will update via live queries from Durable State
-        // StreamDB subscription will automatically show streaming content
+        console.debug("[useAIChat] Worker reported run completed");
+        
+        // Keep isLoading = true for a bit to allow polling to fetch the messages
+        // This handles the race where StreamDB isn't created yet when worker finishes
+        await new Promise((r) => setTimeout(r, 500));
+        
+        // UI should now have the data via live queries
       } catch (err) {
         console.error("AI chat error:", err);
         setError(err instanceof Error ? err : new Error("Unknown error"));
@@ -585,12 +622,12 @@ export function useAIChat(options: UseAIChatOptions) {
     },
     [
       activeSessionId,
-      sessions,
       isAuthenticated,
       sessionsLoaded,
       options.context,
       options.documentId,
       options.projectId,
+      setActiveSessionId,
     ]
   );
 

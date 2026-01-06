@@ -6,3 +6,4 @@
 
 export { buildDashboardSystemPrompt } from "./dashboard";
 export { buildEditorSystemPrompt } from "./editor";
+export { buildSketchSystemPrompt, buildSketchContextSummary } from "./sketch";

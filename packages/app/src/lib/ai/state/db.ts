@@ -10,7 +10,16 @@ import { chatStateSchema } from "./schema";
 import { getChatStreamId } from "../session";
 
 // Durable Streams server URL (direct access, no auth proxy)
-const DURABLE_STREAMS_URL = process.env.DURABLE_STREAMS_URL || "http://localhost:3200";
+// Note: Server-side functions use this directly; client-side uses the auth proxy
+// Use import.meta.env for Vite compatibility in workers/browser
+const getDurableStreamsUrl = (): string => {
+  // In browser/worker: this code path shouldn't be reached (we use the proxy)
+  // On server (SSR/API routes): Vite replaces import.meta.env at build time
+  if (typeof import.meta !== "undefined" && import.meta.env?.DURABLE_STREAMS_URL) {
+    return import.meta.env.DURABLE_STREAMS_URL;
+  }
+  return "http://localhost:3200";
+};
 
 /**
  * StreamDB type with our chat state schema
@@ -25,7 +34,8 @@ export type ChatStreamDB = StreamDB<typeof chatStateSchema>;
  */
 export function createChatStreamDB(sessionId: string): ChatStreamDB {
   // Client-side: use the app's proxy endpoint (handles auth)
-  const apiBase = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  // Note: In SharedWorkers, `window` is undefined but `self.location` works
+  const apiBase = getClientOrigin();
 
   return createStreamDB({
     streamOptions: {
@@ -34,6 +44,23 @@ export function createChatStreamDB(sessionId: string): ChatStreamDB {
     },
     state: chatStateSchema,
   });
+}
+
+/**
+ * Get the origin URL for client-side requests
+ * Works in both main thread (window) and workers (self)
+ */
+function getClientOrigin(): string {
+  // Check for window (main thread)
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+  // Check for self (workers - SharedWorker, Worker, ServiceWorker)
+  if (typeof self !== "undefined" && self.location?.origin) {
+    return self.location.origin;
+  }
+  // Fallback for SSR/Node
+  return "http://localhost:3000";
 }
 
 /**
@@ -46,10 +73,11 @@ export function createChatStreamDB(sessionId: string): ChatStreamDB {
  */
 export function createServerChatStreamDB(sessionId: string): ChatStreamDB {
   const streamId = getChatStreamId(sessionId);
+  const baseUrl = getDurableStreamsUrl();
 
   return createStreamDB({
     streamOptions: {
-      url: `${DURABLE_STREAMS_URL}/v1/stream/${streamId}`,
+      url: `${baseUrl}/v1/stream/${streamId}`,
       contentType: "application/json",
     },
     state: chatStateSchema,
@@ -63,7 +91,8 @@ export function createServerChatStreamDB(sessionId: string): ChatStreamDB {
  */
 async function ensureStreamExists(sessionId: string): Promise<void> {
   const streamId = getChatStreamId(sessionId);
-  const url = `${DURABLE_STREAMS_URL}/v1/stream/${streamId}`;
+  const baseUrl = getDurableStreamsUrl();
+  const url = `${baseUrl}/v1/stream/${streamId}`;
 
   // Create stream with PUT (idempotent - safe to call if already exists)
   const response = await fetch(url, {
