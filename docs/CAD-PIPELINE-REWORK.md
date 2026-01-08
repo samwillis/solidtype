@@ -19,32 +19,32 @@ This enables the AI agent to operate both:
 We're addressing four structural risks that grow as SolidType becomes a serious CAD system:
 
 1. **Tool drift between UI and AI**
-  Today, UI CAD tools and AI modelling tools can diverge because they each implement their own Yjs mutations. That's a long-term correctness trap: features evolve, schemas change, and one path breaks silently. A unified command layer eliminates this class of bugs.
+   Today, UI CAD tools and AI modelling tools can diverge because they each implement their own Yjs mutations. That's a long-term correctness trap: features evolve, schemas change, and one path breaks silently. A unified command layer eliminates this class of bugs.
 2. **AI needs grounded model understanding, not just doc edits**
-  To reliably answer requests like "fillet that edge" or "sketch on the top face", the AI needs access to the *current built geometry*, selection context, and visual snapshots—not just the feature list. Running the kernel alongside the AI enables this, even when no tab is open.
+   To reliably answer requests like "fillet that edge" or "sketch on the top face", the AI needs access to the _current built geometry_, selection context, and visual snapshots—not just the feature list. Running the kernel alongside the AI enables this, even when no tab is open.
 3. **Topological naming must survive collaboration and merges**
-  In a CRDT world, users can fork documents, make changes in parallel, and merge. Topological naming must be **conflict-free and merge-safe** so the document remains buildable and repairable post-merge. We explicitly design references as stable, versioned identifiers with graceful degradation (found / ambiguous / not found) and repair workflows.
+   In a CRDT world, users can fork documents, make changes in parallel, and merge. Topological naming must be **conflict-free and merge-safe** so the document remains buildable and repairable post-merge. We explicitly design references as stable, versioned identifiers with graceful degradation (found / ambiguous / not found) and repair workflows.
 4. **Sketching is constraint-driven and the AI must see solver feedback**
-  We already have a TS constraint solver; the AI should use it as an oracle when adding geometry/constraints ("did that overconstrain the sketch?"). Exposing solver reports as first-class query tools makes AI sketching reliable rather than guessy.
+   We already have a TS constraint solver; the AI should use it as an oracle when adding geometry/constraints ("did that overconstrain the sketch?"). Exposing solver reports as first-class query tools makes AI sketching reliable rather than guessy.
 
 ### Where it lives in the architecture
 
 This plan clarifies the roles of each major subsystem:
 
 - **Yjs document**
-The durable, collaborative representation of the model: feature tree + sketches + parameters + references.
+  The durable, collaborative representation of the model: feature tree + sketches + parameters + references.
 - **Commands layer (new canonical API)**
-The only code allowed to mutate the Yjs model. UI interactions and AI tool calls both dispatch the same commands.
+  The only code allowed to mutate the Yjs model. UI interactions and AI tool calls both dispatch the same commands.
 - **KernelEngine (extracted/reused)**
-A shared module that rebuilds OCCT geometry from the Yjs program and produces:
+  A shared module that rebuilds OCCT geometry from the Yjs program and produces:
   - meshes/edges for rendering,
   - build status/errors,
   - a **ReferenceIndex** mapping transient topology indices → stable refs,
   - queryable geometry info (bbox, measurements, candidate faces/edges).
 - **UI kernel worker**
-Uses KernelEngine to rebuild and stream render data to the app.
+  Uses KernelEngine to rebuild and stream render data to the app.
 - **AI worker (background agent runtime)**
-Runs its own KernelEngine instance against the same Yjs doc to:
+  Runs its own KernelEngine instance against the same Yjs doc to:
   - answer modelling/geometry queries,
   - generate snapshots for multimodal reasoning,
   - perform long-running tasks without blocking the UI,
@@ -62,8 +62,9 @@ To support both patterns:
 1. `KernelEngine` is a **plain class** with no worker-specific APIs (no `postMessage`, no `self`).
 2. Worker glue code wraps `KernelEngine` and handles messaging.
 3. The AI worker can either:
-  - Instantiate its own `KernelEngine` (separate rebuild, separate memory)
-  - Or share one via message-passing (deferred, not in V1)
+
+- Instantiate its own `KernelEngine` (separate rebuild, separate memory)
+- Or share one via message-passing (deferred, not in V1)
 
 For V1, we run **separate KernelEngine instances** in UI worker and AI worker. This is simpler and allows independent rebuilds. The abstraction supports consolidation later.
 
@@ -117,13 +118,13 @@ test("createExtrude via UI and AI produces identical doc state", () => {
   const docA = createTestDocument();
   const docB = createTestDocument();
   const sketchId = addTestSketch(docA); // also in docB
-  
+
   // UI path
   addExtrudeFeature(docA, sketchId, 10, "add");
-  
+
   // AI path (after refactor, both call commands.createExtrude)
   createExtrudeImpl({ sketchId, distance: 10, op: "add" }, { doc: docB });
-  
+
   // State vectors should match (ignoring timestamps)
   expect(normalizeYjsState(docA.ydoc)).toEqual(normalizeYjsState(docB.ydoc));
 });
@@ -142,18 +143,18 @@ test("document remains buildable after Yjs fork and merge", async () => {
   const docA = createTestDocument();
   // Add sketch + extrude
   const docB = Y.Doc.from(Y.encodeStateAsUpdate(docA.ydoc));
-  
+
   // Divergent edits
   modifyInDocA(docA);
   modifyInDocB(docB);
-  
+
   // Merge
   Y.applyUpdate(docA.ydoc, Y.encodeStateAsUpdate(docB));
-  
+
   // Rebuild should not throw
   const engine = new KernelEngine();
   await engine.rebuild(docA);
-  expect(engine.errors.every(e => e.code !== "CRASH")).toBe(true);
+  expect(engine.errors.every((e) => e.code !== "CRASH")).toBe(true);
 });
 ```
 
@@ -194,9 +195,7 @@ packages/app/src/editor/commands/
 
 ```typescript
 // packages/app/src/editor/commands/types.ts
-export type CommandResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: string };
+export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
 // packages/app/src/editor/commands/modeling.ts
 export interface CreateExtrudeArgs {
@@ -236,16 +235,22 @@ export function createExtrude(
 
 ```typescript
 // Before
-const addExtrude = useCallback((sketchId, distance, op, direction) => {
-  return addExtrudeFeature(doc, sketchId, distance, op, direction);
-}, [doc]);
+const addExtrude = useCallback(
+  (sketchId, distance, op, direction) => {
+    return addExtrudeFeature(doc, sketchId, distance, op, direction);
+  },
+  [doc]
+);
 
 // After
-const addExtrude = useCallback((sketchId, distance, op, direction) => {
-  const result = commands.createExtrude(doc, { sketchId, distance, op, direction });
-  if (!result.ok) throw new Error(result.error);
-  return result.value.featureId;
-}, [doc]);
+const addExtrude = useCallback(
+  (sketchId, distance, op, direction) => {
+    const result = commands.createExtrude(doc, { sketchId, distance, op, direction });
+    if (!result.ok) throw new Error(result.error);
+    return result.value.featureId;
+  },
+  [doc]
+);
 ```
 
 **modeling-impl.ts:**
@@ -371,9 +376,9 @@ export function encodePersistentRef(ref: PersistentRefV1): string {
 declare function canonicalJsonStringify(value: unknown): string;
 
 /** Decode from string */
-export function decodePersistentRef(s: string): 
-  | { ok: true; ref: PersistentRefV1 }
-  | { ok: false; error: string } {
+export function decodePersistentRef(
+  s: string
+): { ok: true; ref: PersistentRefV1 } | { ok: false; error: string } {
   if (!s.startsWith("stref:v1:")) {
     return { ok: false, error: "Invalid prefix" };
   }
@@ -394,19 +399,17 @@ export function decodePersistentRef(s: string):
 
 ### 2.2 Local selector kinds (initial set)
 
-
-| Kind                 | Data                                | Description                    |
-| -------------------- | ----------------------------------- | ------------------------------ |
-| `extrude.topCap`     | `{ loopId: string }`                | Top cap face of extrude        |
-| `extrude.bottomCap`  | `{ loopId: string }`                | Bottom cap face                |
+| Kind                 | Data                                    | Description                                              |
+| -------------------- | --------------------------------------- | -------------------------------------------------------- |
+| `extrude.topCap`     | `{ loopId: string }`                    | Top cap face of extrude                                  |
+| `extrude.bottomCap`  | `{ loopId: string }`                    | Bottom cap face                                          |
 | `extrude.side`       | `{ loopId: string, segmentId: string }` | Side face from profile segment (stable IDs, not indices) |
-| `extrude.topEdge`    | `{ loopId: string, segmentId: string }` | Edge on top cap                |
-| `extrude.bottomEdge` | `{ loopId: string, segmentId: string }` | Edge on bottom cap             |
-| `extrude.sideEdge`   | `{ loopId: string, vertexId: string }`  | Vertical edge (stable vertex/entity ID) |
-| `revolve.side`       | `{ segmentId: string }`             | Side face from profile segment (stable ID) |
-| `revolve.startCap`   | `{}`                                | Start cap (if < 360°)          |
-| `revolve.endCap`     | `{}`                                | End cap (if < 360°)            |
-
+| `extrude.topEdge`    | `{ loopId: string, segmentId: string }` | Edge on top cap                                          |
+| `extrude.bottomEdge` | `{ loopId: string, segmentId: string }` | Edge on bottom cap                                       |
+| `extrude.sideEdge`   | `{ loopId: string, vertexId: string }`  | Vertical edge (stable vertex/entity ID)                  |
+| `revolve.side`       | `{ segmentId: string }`                 | Side face from profile segment (stable ID)               |
+| `revolve.startCap`   | `{}`                                    | Start cap (if < 360°)                                    |
+| `revolve.endCap`     | `{}`                                    | End cap (if < 360°)                                      |
 
 **CRDT requirement:** selector data must be keyed by **stable IDs**, not array positions.
 For extrude/revolve selectors this means using sketch/profile **entity UUIDs** (or deterministic IDs derived from them), not `segment: 2`.
@@ -486,15 +489,22 @@ test("round-trip encode/decode", () => {
 });
 
 test("encoded string is valid after JSON stringify (for Yjs storage)", () => {
-  const ref = { /* ... */ };
+  const ref = {
+    /* ... */
+  };
   const encoded = encodePersistentRef(ref);
   const stored = JSON.parse(JSON.stringify(encoded));
   expect(stored).toBe(encoded);
 });
 
 test("fingerprint is optional", () => {
-  const refWithout = { v: 1, expectedType: "face", originFeatureId: "x", localSelector: { kind: "a", data: {} } };
-  const refWith = { ...refWithout, fingerprint: { centroid: [0,0,0], size: 1 } };
+  const refWithout = {
+    v: 1,
+    expectedType: "face",
+    originFeatureId: "x",
+    localSelector: { kind: "a", data: {} },
+  };
+  const refWith = { ...refWithout, fingerprint: { centroid: [0, 0, 0], size: 1 } };
   expect(decodePersistentRef(encodePersistentRef(refWithout)).ok).toBe(true);
   expect(decodePersistentRef(encodePersistentRef(refWith)).ok).toBe(true);
 });
@@ -511,13 +521,13 @@ After tessellating each body in `kernel.worker.ts`, compute per-face and per-edg
 ```typescript
 interface FaceFingerprint {
   centroid: [number, number, number];
-  size: number;  // approximate area
+  size: number; // approximate area
   normal: [number, number, number];
 }
 
 interface EdgeFingerprint {
-  centroid: [number, number, number];  // midpoint
-  size: number;  // length
+  centroid: [number, number, number]; // midpoint
+  size: number; // length
 }
 
 function computeFaceFingerprints(mesh: Mesh): FaceFingerprint[] {
@@ -527,13 +537,13 @@ function computeFaceFingerprints(mesh: Mesh): FaceFingerprint[] {
   for (let faceIdx = 0; faceIdx < faceCount; faceIdx++) {
     // Collect triangles for this face
     const triangles = getTrianglesForFace(mesh, faceIdx);
-    
+
     // Compute area-weighted centroid and total area
     const { centroid, area, normal } = computeFaceStats(triangles, mesh);
-    
+
     fingerprints.push({ centroid, size: area, normal });
   }
-  
+
   return fingerprints;
 }
 ```
@@ -555,9 +565,9 @@ function generateFaceRef(
   if (featureType === "extrude") {
     // Use normal direction to determine cap vs side
     const normal = fingerprint.normal;
-    const isTopCap = normal[2] > 0.9;  // Pointing up
-    const isBottomCap = normal[2] < -0.9;  // Pointing down
-    
+    const isTopCap = normal[2] > 0.9; // Pointing up
+    const isBottomCap = normal[2] < -0.9; // Pointing down
+
     if (isTopCap) {
       const loopId = sketchData?.profileLoops?.[0]?.loopId ?? "loop:unknown";
       localSelector = { kind: "extrude.topCap", data: { loopId } };
@@ -608,12 +618,12 @@ interface RebuildCompleteMessage {
   bodies: BodyInfo[];
   featureStatus: Record<string, FeatureStatus>;
   errors: BuildError[];
-  
+
   /** Map from bodyKey to arrays of encoded PersistentRef strings */
   referenceIndex: {
     [bodyKey: string]: {
-      faces: string[];   // Indexed by faceIndex
-      edges: string[];   // Indexed by edgeIndex
+      faces: string[]; // Indexed by faceIndex
+      edges: string[]; // Indexed by edgeIndex
     };
   };
 }
@@ -638,7 +648,7 @@ interface RebuildCompleteMessage {
 
 `loop:unknown` is allowed as an internal sentinel, but it must not produce “confident” resolution:
 
-- If a selector contains `loopId: "loop:unknown"`, treat selector matching as *coarse*:
+- If a selector contains `loopId: "loop:unknown"`, treat selector matching as _coarse_:
   - prefer OCCT history match (Phase 8),
   - otherwise rely on fingerprint scoring and return `ambiguous` if multiple candidates are plausible.
 - Never treat two refs with `loop:unknown` as an exact selector match by itself.
@@ -652,12 +662,12 @@ In the viewer/selection code, when a face is picked:
 ```typescript
 function handleFaceClick(bodyKey: string, faceIndex: number) {
   const refString = referenceIndex[bodyKey]?.faces[faceIndex];
-  
+
   selectFace({
     bodyId: bodyKey,
     faceIndex,
     featureId: getFeatureIdForBody(bodyKey),
-    persistentRef: refString,  // Now populated!
+    persistentRef: refString, // Now populated!
   });
 }
 ```
@@ -728,9 +738,15 @@ export class KernelEngine {
   }
 
   // Geometry query methods
-  getFacePlane(bodyId: BodyId, faceIndex: number): FacePlane | null { /* ... */ }
-  getBoundingBox(): BoundingBox { /* ... */ }
-  measureDistance(ref1: string, ref2: string): number { /* ... */ }
+  getFacePlane(bodyId: BodyId, faceIndex: number): FacePlane | null {
+    /* ... */
+  }
+  getBoundingBox(): BoundingBox {
+    /* ... */
+  }
+  measureDistance(ref1: string, ref2: string): number {
+    /* ... */
+  }
 
   dispose(): void {
     this.session?.dispose();
@@ -794,7 +810,7 @@ async function performRebuild(): Promise<void> {
 
 export class WorkerChatController {
   // ... existing fields ...
-  
+
   private kernelEngine: KernelEngine | null = null;
   private lastRebuildResult: RebuildResult | null = null;
   private rebuildDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -806,7 +822,7 @@ export class WorkerChatController {
     if (this.documentId) {
       this.kernelEngine = new KernelEngine({ computeMeshes: false });
       await this.kernelEngine.init();
-      
+
       // Observe Yjs changes and trigger rebuilds
       this.ydoc?.on("update", () => this.scheduleRebuild());
     }
@@ -840,7 +856,10 @@ export class WorkerChatController {
 // packages/app/src/lib/ai/tools/modeling-impl.ts
 
 export function findFacesImpl(
-  args: { featureId?: string; normalFilter?: { x: number; y: number; z: number; tolerance?: number } },
+  args: {
+    featureId?: string;
+    normalFilter?: { x: number; y: number; z: number; tolerance?: number };
+  },
   ctx: ModelingToolContext
 ): unknown {
   const result = ctx.getRebuildResult?.();
@@ -857,13 +876,13 @@ export function findFacesImpl(
       if (!decoded.ok) continue;
 
       const ref = decoded.ref;
-      
+
       // Filter by feature if specified
       if (args.featureId && ref.originFeatureId !== args.featureId) continue;
 
       // Filter by normal if specified
       if (args.normalFilter && ref.fingerprint?.normal) {
-        const dot = 
+        const dot =
           ref.fingerprint.normal[0] * args.normalFilter.x +
           ref.fingerprint.normal[1] * args.normalFilter.y +
           ref.fingerprint.normal[2] * args.normalFilter.z;
@@ -891,7 +910,7 @@ export function getBoundingBoxImpl(
   if (!engine) {
     return { error: "Kernel not available" };
   }
-  
+
   return engine.getBoundingBox(args.featureId);
 }
 ```
@@ -931,11 +950,11 @@ export function renderSnapshot(
 
   for (const [_, mesh] of rebuildResult.meshes) {
     if (!mesh.edges) continue;
-    
+
     for (let i = 0; i < mesh.edges.length; i += 6) {
-      const p1 = projectPoint([mesh.edges[i], mesh.edges[i+1], mesh.edges[i+2]], camera);
-      const p2 = projectPoint([mesh.edges[i+3], mesh.edges[i+4], mesh.edges[i+5]], camera);
-      
+      const p1 = projectPoint([mesh.edges[i], mesh.edges[i + 1], mesh.edges[i + 2]], camera);
+      const p2 = projectPoint([mesh.edges[i + 3], mesh.edges[i + 4], mesh.edges[i + 5]], camera);
+
       ctx.beginPath();
       ctx.moveTo(p1.x * width, p1.y * height);
       ctx.lineTo(p2.x * width, p2.y * height);
@@ -964,7 +983,7 @@ export function getModelSnapshotImpl(
   }
 
   const snapshot = renderSnapshot(result, { view: args.view ?? "iso" });
-  
+
   return {
     view: args.view ?? "iso",
     width: snapshot.width,
@@ -1019,19 +1038,19 @@ export function resolvePersistentRef(
 
     for (const [bodyKey, refIndex] of Object.entries(referenceIndex)) {
       const refs = parsed.expectedType === "face" ? refIndex.faces : refIndex.edges;
-    
+
       for (let i = 0; i < refs.length; i++) {
         const candidateDecoded = decodePersistentRef(refs[i]);
         if (!candidateDecoded.ok) continue;
-      
+
         const candidate = candidateDecoded.ref;
-      
+
         // Match by feature ID first
         if (candidate.originFeatureId !== parsed.originFeatureId) continue;
-      
+
         // Match by selector kind
         if (candidate.localSelector.kind !== parsed.localSelector.kind) continue;
-      
+
         // Score by selector data + fingerprint similarity
         const score = computeScore(parsed, candidate);
         hits.push({ bodyKey, index: i, score });
@@ -1065,10 +1084,10 @@ function computeScore(ref: PersistentRefV1, candidate: PersistentRefV1): number 
     const dx = ref.fingerprint.centroid[0] - candidate.fingerprint.centroid[0];
     const dy = ref.fingerprint.centroid[1] - candidate.fingerprint.centroid[1];
     const dz = ref.fingerprint.centroid[2] - candidate.fingerprint.centroid[2];
-    score += Math.sqrt(dx*dx + dy*dy + dz*dz);
+    score += Math.sqrt(dx * dx + dy * dy + dz * dz);
 
     if (ref.fingerprint.normal && candidate.fingerprint.normal) {
-      const dot = 
+      const dot =
         ref.fingerprint.normal[0] * candidate.fingerprint.normal[0] +
         ref.fingerprint.normal[1] * candidate.fingerprint.normal[1] +
         ref.fingerprint.normal[2] * candidate.fingerprint.normal[2];
@@ -1113,10 +1132,7 @@ export interface RepairReferenceArgs {
   newRef: string;
 }
 
-export function repairReference(
-  doc: SolidTypeDoc,
-  args: RepairReferenceArgs
-): CommandResult<void> {
+export function repairReference(doc: SolidTypeDoc, args: RepairReferenceArgs): CommandResult<void> {
   const feature = doc.featuresById.get(args.featureId);
   if (!feature) {
     return { ok: false, error: `Feature ${args.featureId} not found` };
@@ -1151,7 +1167,9 @@ This ensures the model is always buildable, just possibly not exactly as intende
 
 ```typescript
 test("resolve finds exact match", () => {
-  const ref = encodePersistentRef({ /* ... */ });
+  const ref = encodePersistentRef({
+    /* ... */
+  });
   const index = { body1: { faces: [ref], edges: [] } };
   const result = resolvePersistentRef(ref, index, mockRebuild);
   expect(result.status).toBe("found");
@@ -1170,7 +1188,7 @@ test("resolve returns ambiguous for multiple matches", () => {
     localSelector: { kind: "extrude.side", data: { loopId: "loop:...", segmentId: "seg-b" } },
     expectedType: "face",
   });
-  
+
   // Search for a ref that matches both (same selector kind, no disambiguation)
   const searchRef = encodePersistentRef({
     v: 1,
@@ -1178,7 +1196,7 @@ test("resolve returns ambiguous for multiple matches", () => {
     localSelector: { kind: "extrude.side", data: { loopId: "loop:..." } },
     expectedType: "face",
   });
-  
+
   const index = { body1: { faces: [ref1, ref2], edges: [] } };
   const result = resolvePersistentRef(searchRef, index, mockRebuild);
   expect(result.status).toBe("ambiguous");
@@ -1187,13 +1205,13 @@ test("resolve returns ambiguous for multiple matches", () => {
 test("repair command updates feature parameter", () => {
   const doc = createTestDocument();
   const featureId = createTestExtrude(doc);
-  
+
   const result = repairReference(doc, {
     featureId,
     paramName: "extentRef",
     newRef: "stref:v1:...",
   });
-  
+
   expect(result.ok).toBe(true);
   expect(doc.featuresById.get(featureId)?.get("extentRef")).toBe("stref:v1:...");
 });
@@ -1222,16 +1240,16 @@ export function solveSketch(
   plane: DatumPlane
 ): SketchSolveResult {
   const sketch = new CoreSketch(plane);
-  
+
   // Add points, entities, constraints (existing logic from kernel.worker.ts)
   // ...
-  
+
   const result = sketch.solve();
   const dof = sketch.analyzeDOF();
-  
+
   // Extract solved positions
   const solvedPoints = /* ... */;
-  
+
   return {
     status: result.status === "ok" ? (dof === 0 ? "ok" : "underconstrained") : result.status,
     dof,
@@ -1248,14 +1266,18 @@ export function solveSketch(
 for (const feature of sketches) {
   const sketchData = parseSketchData(feature);
   const plane = getSketchPlane(feature.get("plane"), featuresById);
-  
+
   const solveResult = solveSketch(sketchData, plane);
   sketchSolveResults.set(feature.get("id"), solveResult);
-  
+
   // Update feature status based on solve result
   if (solveResult.status === "overconstrained") {
     featureStatus[feature.get("id")] = "error";
-    errors.push({ featureId: feature.get("id"), code: "OVERCONSTRAINED", message: "Sketch is overconstrained" });
+    errors.push({
+      featureId: feature.get("id"),
+      code: "OVERCONSTRAINED",
+      message: "Sketch is overconstrained",
+    });
   }
 }
 ```
@@ -1284,13 +1306,15 @@ export function getSketchSolveReportImpl(
   if (!rebuildResult) {
     return { status: "failed", dof: -1, solvedPoints: [], failedConstraints: [] };
   }
-  
-  return rebuildResult.sketchSolveResults.get(input.sketchId) ?? {
-    status: "failed",
-    dof: -1,
-    solvedPoints: [],
-    failedConstraints: [],
-  };
+
+  return (
+    rebuildResult.sketchSolveResults.get(input.sketchId) ?? {
+      status: "failed",
+      dof: -1,
+      solvedPoints: [],
+      failedConstraints: [],
+    }
+  );
 }
 ```
 
@@ -1309,7 +1333,7 @@ export function getSketchSolveReportImpl(
 
 OCCT history APIs and core naming work in terms of **kernel topology handles** (`FaceId`, `EdgeId`). The viewer/selection pipeline works in terms of **mesh indices** (`faceIndex`, `edgeIndex`) derived from tessellation.
 
-To connect these layers, KernelEngine must have (for each rebuilt body) a mapping for *this rebuild*:
+To connect these layers, KernelEngine must have (for each rebuilt body) a mapping for _this rebuild_:
 
 - `faceIndexToFaceId: FaceId[]` where `faceIndex` (as used by `mesh.faceMap`) maps to the kernel face handle
 - `edgeIndexToEdgeId: EdgeId[]` where `edgeIndex` (as used by `mesh.edgeMap`) maps to the kernel edge handle
@@ -1341,10 +1365,10 @@ interface ExtrudeResult {
 
 extrude(profile: Profile, options: ExtrudeOptions): OperationResult<ExtrudeResult> {
   // ... existing extrude logic ...
-  
+
   // Extract generated face mappings from OCCT
   const generatedFaces = this.extractGeneratedFaces(prism);
-  
+
   return {
     success: true,
     value: { bodyId, generatedFaces },
@@ -1368,7 +1392,9 @@ function generateFaceRef(
     // KernelEngine must provide a mapping from mesh faceIndex -> FaceId for this rebuild.
     const faceId = meshFaceIndexToFaceId(faceIdx);
     if (occtHistory.topCap.includes(faceId)) {
-      return { /* topCap selector */ };
+      return {
+        /* topCap selector */
+      };
     }
     const sideMatch = occtHistory.sides.find((s) => s.faceId === faceId);
     if (sideMatch) {
@@ -1380,11 +1406,13 @@ function generateFaceRef(
           kind: "extrude.side",
           data: { loopId: "loop:...", segmentId: sideMatch.segmentId },
         },
-        fingerprint: { /* ... */ },
+        fingerprint: {
+          /* ... */
+        },
       };
     }
   }
-  
+
   // Fall back to heuristic matching
   return heuristicFaceRef(featureId, featureType, faceIdx, fingerprint);
 }
@@ -1416,7 +1444,6 @@ This makes selectors robust to sketch entity reordering.
 
 ## Deliverable Summary
 
-
 | Phase | Deliverable       | Key Files                                                     |
 | ----- | ----------------- | ------------------------------------------------------------- |
 | 0     | Regression tests  | `tests/integration/commands-invariants.test.ts`               |
@@ -1429,11 +1456,9 @@ This makes selectors robust to sketch entity reordering.
 | 7     | Solver feedback   | `editor/sketch/solveSketch.ts`, `lib/ai/tools/sketch-impl.ts` |
 | 8     | OCCT history      | `core/src/api/SolidSession.ts`                                |
 
-
 ---
 
 ## Milestones
-
 
 | Milestone | Phases | Goal                                           |
 | --------- | ------ | ---------------------------------------------- |
@@ -1443,7 +1468,6 @@ This makes selectors robust to sketch entity reordering.
 | **M4**    | 6      | Refs can be resolved and repaired              |
 | **M5**    | 7      | AI sketching is constraint-aware               |
 | **M6**    | 8      | OCCT history improves ref accuracy             |
-
 
 ---
 
@@ -1478,7 +1502,10 @@ test("two clients compute identical loopId for same loop (CRDT merge-safe)", () 
 
   // Both clients create the same sketch entities (same UUIDs) and constraints.
   // (Use a helper that builds sketch data deterministically by ID.)
-  const sketchId = addDeterministicRectangleSketch(docA, { id: "sk1", lineIds: ["l1", "l2", "l3", "l4"] });
+  const sketchId = addDeterministicRectangleSketch(docA, {
+    id: "sk1",
+    lineIds: ["l1", "l2", "l3", "l4"],
+  });
   addDeterministicRectangleSketch(docB, { id: "sk1", lineIds: ["l1", "l2", "l3", "l4"] });
 
   // Both compute loopId locally during rebuild/profile extraction

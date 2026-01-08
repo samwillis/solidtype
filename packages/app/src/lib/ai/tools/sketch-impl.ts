@@ -36,6 +36,12 @@ export interface SketchToolContext {
   onEnterSketch?: (sketchId: string, planeId: string) => void;
   /** Callback to exit sketch mode (for UI sync) */
   onExitSketch?: () => void;
+  /**
+   * Get the last rebuild result from the kernel.
+   * Used by getSketchSolveReport to access actual solver feedback.
+   * @see docs/CAD-PIPELINE-REWORK.md Phase 7
+   */
+  getRebuildResult?: () => import("../../../editor/kernel").RebuildResult | null;
 }
 
 /**
@@ -172,6 +178,119 @@ export function getSketchStatusImpl(ctx: SketchToolContext): {
     pointCount: context.points.length,
     entityCount: context.entities.length,
     constraintCount: context.constraints.length,
+  };
+}
+
+/**
+ * Get detailed solver report for a sketch from the kernel rebuild.
+ *
+ * This uses the actual constraint solver results from KernelEngine,
+ * providing accurate DOF analysis and solver status.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 7
+ */
+export function getSketchSolveReportImpl(
+  ctx: SketchToolContext,
+  input: { sketchId: string }
+): {
+  sketchId: string;
+  status: "ok" | "underconstrained" | "overconstrained" | "failed";
+  dof: number;
+  totalDOF: number;
+  constrainedDOF: number;
+  isFullyConstrained: boolean;
+  isOverConstrained: boolean;
+  solvedPoints: Array<{ id: string; x: number; y: number }>;
+  failedConstraints: string[];
+  message?: string;
+} {
+  const rebuildResult = ctx.getRebuildResult?.();
+
+  // Fallback response when rebuild result is not available
+  const fallbackResponse = {
+    sketchId: input.sketchId,
+    status: "failed" as const,
+    dof: -1,
+    totalDOF: 0,
+    constrainedDOF: 0,
+    isFullyConstrained: false,
+    isOverConstrained: false,
+    solvedPoints: [],
+    failedConstraints: [],
+    message: "Kernel rebuild result not available",
+  };
+
+  if (!rebuildResult) {
+    return fallbackResponse;
+  }
+
+  // Look up the solve result for this sketch
+  const solveResult = rebuildResult.sketchSolveResults.get(input.sketchId);
+  if (!solveResult) {
+    return {
+      ...fallbackResponse,
+      message: `No solve result found for sketch ${input.sketchId}`,
+    };
+  }
+
+  // Map kernel solver status to user-facing status
+  let status: "ok" | "underconstrained" | "overconstrained" | "failed";
+  const dofInfo = solveResult.dof;
+
+  if (!dofInfo) {
+    // No DOF info available - use basic status mapping
+    switch (solveResult.status) {
+      case "success":
+      case "ok":
+        status = "ok";
+        break;
+      case "under_constrained":
+        status = "underconstrained";
+        break;
+      case "not_converged":
+      case "singular":
+        status = "overconstrained";
+        break;
+      default:
+        status = "failed";
+    }
+
+    return {
+      sketchId: input.sketchId,
+      status,
+      dof: 0,
+      totalDOF: 0,
+      constrainedDOF: 0,
+      isFullyConstrained: status === "ok",
+      isOverConstrained: status === "overconstrained",
+      solvedPoints: solveResult.points || [],
+      failedConstraints: [],
+    };
+  }
+
+  // Use DOF info for more accurate status
+  if (dofInfo.isOverConstrained) {
+    status = "overconstrained";
+  } else if (dofInfo.isFullyConstrained) {
+    status = "ok";
+  } else if (dofInfo.remainingDOF > 0) {
+    status = "underconstrained";
+  } else if (solveResult.status === "success" || solveResult.status === "ok") {
+    status = "ok";
+  } else {
+    status = "failed";
+  }
+
+  return {
+    sketchId: input.sketchId,
+    status,
+    dof: dofInfo.remainingDOF,
+    totalDOF: dofInfo.totalDOF,
+    constrainedDOF: dofInfo.constrainedDOF,
+    isFullyConstrained: dofInfo.isFullyConstrained,
+    isOverConstrained: dofInfo.isOverConstrained,
+    solvedPoints: solveResult.points || [],
+    failedConstraints: [],
   };
 }
 

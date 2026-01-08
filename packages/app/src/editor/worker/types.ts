@@ -84,6 +84,18 @@ export interface RebuildCompleteMessage {
   bodies: BodyInfo[];
   featureStatus: Record<string, FeatureStatus>;
   errors: BuildError[];
+  /**
+   * Map from bodyKey to arrays of encoded PersistentRef strings
+   * @see docs/CAD-PIPELINE-REWORK.md Phase 3
+   */
+  referenceIndex?: {
+    [bodyKey: string]: {
+      /** Encoded PersistentRef strings, indexed by faceIndex */
+      faces: string[];
+      /** Encoded PersistentRef strings, indexed by edgeIndex */
+      edges: string[];
+    };
+  };
 }
 
 export interface MeshMessage {

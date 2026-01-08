@@ -13,11 +13,15 @@ import type {
   BodyInfo,
   FeatureStatus,
   PlaneTransform,
+  RebuildCompleteMessage,
 } from "../worker/types";
 
 // ============================================================================
 // Context Types
 // ============================================================================
+
+/** Type for the ReferenceIndex from the worker (Phase 3) */
+type ReferenceIndex = RebuildCompleteMessage["referenceIndex"];
 
 interface KernelContextValue {
   /** Map of body IDs to their meshes */
@@ -28,6 +32,8 @@ interface KernelContextValue {
   featureStatus: Record<string, FeatureStatus>;
   /** Body info from last rebuild */
   bodies: BodyInfo[];
+  /** Reference index mapping mesh indices to PersistentRefs (Phase 3) */
+  referenceIndex: ReferenceIndex;
   /** Whether a rebuild is in progress */
   isRebuilding: boolean;
   /** Whether the worker is ready */
@@ -113,6 +119,7 @@ export function KernelProvider({ children }: KernelProviderProps) {
   const [errors, setErrors] = useState<BuildError[]>([]);
   const [featureStatus, setFeatureStatus] = useState<Record<string, FeatureStatus>>({});
   const [bodies, setBodies] = useState<BodyInfo[]>([]);
+  const [referenceIndex, setReferenceIndex] = useState<ReferenceIndex>(undefined);
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -178,6 +185,7 @@ export function KernelProvider({ children }: KernelProviderProps) {
           setErrors(msg.errors);
           setFeatureStatus(msg.featureStatus);
           setBodies(msg.bodies);
+          setReferenceIndex(msg.referenceIndex);
           setIsRebuilding(false);
           break;
 
@@ -388,6 +396,7 @@ export function KernelProvider({ children }: KernelProviderProps) {
     errors,
     featureStatus,
     bodies,
+    referenceIndex,
     isRebuilding,
     isReady,
     previewExtrude,

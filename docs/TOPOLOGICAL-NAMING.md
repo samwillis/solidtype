@@ -45,7 +45,7 @@ This section documents explicit design decisions made to align the FreeCAD-style
 **Canonical encoding (CRDT-safe):**
 
 - Persistent references are stored as versioned strings: `stref:v1:<base64url(canonical-json)>`
-- The decoded payload contains the pinned *semantic fields* (type + origin feature UUID + local selector + optional fingerprint).
+- The decoded payload contains the pinned _semantic fields_ (type + origin feature UUID + local selector + optional fingerprint).
 - For migration/debugging we may also accept a legacy human-readable rendering (e.g. `face:<uuid>:top`), but **the document should canonicalize to `stref:v1` on write**.
 
 ### 0.2 API Boundary (App ↔ Core)
@@ -114,7 +114,7 @@ SolidType’s document is a CRDT (Yjs). That changes what “safe to persist” 
 - **Persist references as immutable strings.** Do not store a mutable nested Yjs object for a reference.
 - **Prefer stable IDs in selectors.** Selector data must be keyed by stable identifiers (UUIDs of sketch entities / profile segments), not positional indices in an array.
 
-To reach FreeCAD-style robustness while staying CRDT-safe, the document may store a *small set of candidate references* (“RefSet”), not just a single ref:
+To reach FreeCAD-style robustness while staying CRDT-safe, the document may store a _small set of candidate references_ (“RefSet”), not just a single ref:
 
 - In the common case, a RefSet has exactly **one** candidate.
 - The set grows only when we learn better naming signals (e.g. history-backed name), when merge creates competing repairs, or when resolution is ambiguous.
