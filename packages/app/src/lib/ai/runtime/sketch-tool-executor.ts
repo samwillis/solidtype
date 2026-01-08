@@ -3,11 +3,22 @@
  *
  * Executes sketch AI tools against a Yjs document.
  * Used by the SharedWorker to process local tool calls.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 7 - Constraint solver feedback
  */
 
 import type { SolidTypeDoc } from "../../../editor/document";
+import type { RebuildResult } from "../../../editor/kernel";
 import type { SketchToolContext } from "../tools/sketch-impl";
 import * as sketchImpl from "../tools/sketch-impl";
+
+/**
+ * Options for sketch tool execution
+ */
+export interface SketchToolExecutorOptions {
+  /** Function to get the current rebuild result (for solver feedback) */
+  getRebuildResult?: () => RebuildResult | null;
+}
 
 /**
  * Execute a sketch tool by name
@@ -16,19 +27,23 @@ import * as sketchImpl from "../tools/sketch-impl";
  * @param args - The tool arguments
  * @param doc - The Yjs document
  * @param activeSketchId - The active sketch ID (for geometry/constraint tools)
+ * @param options - Additional options including rebuild result access
  * @returns The tool result or throws an error
  */
 export function executeSketchTool(
   toolName: string,
   args: Record<string, unknown>,
   doc: SolidTypeDoc,
-  activeSketchId: string | null
+  activeSketchId: string | null,
+  options?: SketchToolExecutorOptions
 ): unknown {
   // Create context without UI callbacks (worker has no React)
   const ctx: SketchToolContext = {
     doc,
     activeSketchId,
     // No UI callbacks in worker - changes sync via Yjs
+    // Phase 7: Provide access to rebuild result for solver feedback
+    getRebuildResult: options?.getRebuildResult,
   };
 
   switch (toolName) {
@@ -50,6 +65,12 @@ export function executeSketchTool(
 
     case "getSketchStatus":
       return sketchImpl.getSketchStatusImpl(ctx);
+
+    case "getSketchSolveReport":
+      return sketchImpl.getSketchSolveReportImpl(
+        ctx,
+        args as Parameters<typeof sketchImpl.getSketchSolveReportImpl>[1]
+      );
 
     // ============ Geometry Creation Tools ============
     case "addLine":
@@ -162,6 +183,7 @@ export function isSketchTool(toolName: string): boolean {
     "enterSketch",
     "exitSketch",
     "getSketchStatus",
+    "getSketchSolveReport",
     // Geometry
     "addLine",
     "addCircle",

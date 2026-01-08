@@ -58,7 +58,7 @@ const Viewer: React.FC = () => {
   // Context hooks
   const { theme } = useTheme();
   const { registerRefs, cameraStateRef, state: viewerState } = useViewer();
-  const { meshes, bodies, sketchPlaneTransforms, featureStatus } = useKernel();
+  const { meshes, bodies, sketchPlaneTransforms, featureStatus, referenceIndex } = useKernel();
   const {
     selectedFeatureId,
     hoveredFeatureId,
@@ -495,18 +495,26 @@ const Viewer: React.FC = () => {
   const handleSelectFace = useCallback(
     (selection: { bodyId: string; faceIndex: number; featureId: string }, multi: boolean) => {
       if (sketchMode.active) return; // Don't handle 3D selection during sketch mode
-      selectFace(selection, multi);
+
+      // Look up PersistentRef from referenceIndex (Phase 3)
+      const persistentRef = referenceIndex?.[selection.bodyId]?.faces?.[selection.faceIndex];
+
+      selectFace({ ...selection, persistentRef }, multi);
     },
-    [sketchMode.active, selectFace]
+    [sketchMode.active, selectFace, referenceIndex]
   );
 
   // Handle edge selection (only when not in sketch mode)
   const handleSelectEdge = useCallback(
     (selection: { bodyId: string; edgeIndex: number; featureId: string }, multi: boolean) => {
       if (sketchMode.active) return; // Don't handle 3D selection during sketch mode
-      selectEdge(selection, multi);
+
+      // Look up PersistentRef from referenceIndex (Phase 3)
+      const persistentRef = referenceIndex?.[selection.bodyId]?.edges?.[selection.edgeIndex];
+
+      selectEdge({ ...selection, persistentRef }, multi);
     },
-    [sketchMode.active, selectEdge]
+    [sketchMode.active, selectEdge, referenceIndex]
   );
 
   // Handle clear selection

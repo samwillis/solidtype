@@ -30,8 +30,14 @@ export {
   chamferAllEdges,
   translate,
   rotate,
+  // Phase 8: Extended operations with OCCT history
+  extrudeWithHistory,
+  revolveWithHistory,
   type BooleanOp,
   type BooleanResult,
+  type ExtrudeWithHistoryResult,
+  type RevolveWithHistoryResult,
+  type GeneratedFaceInfo,
 } from "./operations.js";
 
 // Sketch conversion

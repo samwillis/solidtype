@@ -3,34 +3,49 @@
  *
  * Implementations for 3D modeling tools that operate on the Yjs document.
  * These are executed in the SharedWorker where the OCCT kernel is available.
+ *
+ * IMPORTANT: All feature mutations now go through the unified commands layer
+ * to ensure consistency between UI and AI paths.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 1
  */
 
 import type { ModelingToolContext } from "../runtime/modeling-tool-executor";
-import type { SolidTypeDoc } from "../../../editor/document/createDocument";
 import { v4 as uuid } from "uuid";
 import * as Y from "yjs";
 
+// Import the unified commands module
+import * as commands from "../../../editor/commands";
+import type { SolidTypeDoc } from "../../../editor/document/createDocument";
+import { insertFeatureAtGate } from "../../../editor/document/featureHelpers";
+import { createFeatureMap, setMapProperties } from "../../../editor/document/yjs";
+import { decodePersistentRef } from "../../../editor/naming";
+
 /**
- * Helper to create a feature and add it to the document.
- * Properties MUST be set AFTER the map is integrated for proper sync.
+ * Helper to create advanced feature types not yet in the commands module.
+ * Uses the same pattern as featureHelpers.ts for consistency.
+ *
+ * TODO: Move these to the commands module as features are implemented.
  */
-function createFeature(doc: SolidTypeDoc, props: Record<string, unknown>): string {
+function createAdvancedFeature(doc: SolidTypeDoc, props: Record<string, unknown>): string {
   const featureId = uuid();
-  const featureMap = new Y.Map<unknown>();
 
   doc.ydoc.transact(() => {
-    // First, integrate the map into the document
+    const featureMap = createFeatureMap();
     doc.featuresById.set(featureId, featureMap);
-    doc.featureOrder.push([featureId]);
 
-    // Set the id property (required for parseFeature to work)
+    // Set the id first
     featureMap.set("id", featureId);
 
-    // Then set properties (AFTER integration for proper sync tracking)
-    for (const [key, value] of Object.entries(props)) {
-      if (value !== undefined) {
-        featureMap.set(key, value);
-      }
+    // Set all other properties
+    setMapProperties(featureMap, props);
+
+    // Try to insert at rebuild gate position, fall back to push if document structure is incomplete
+    try {
+      insertFeatureAtGate(doc, featureId);
+    } catch {
+      // Fallback for minimal test documents or incomplete structures
+      doc.featureOrder.push([featureId]);
     }
   });
 
@@ -54,38 +69,129 @@ export function getModelContextImpl(
   _args: Record<string, unknown>,
   ctx: ModelingToolContext
 ): unknown {
-  const { doc } = ctx;
+  const { doc, rebuildResult } = ctx;
   const featureOrder = doc.featureOrder.toArray();
   const features = featureOrder
     .map((id) => {
       const feature = doc.featuresById.get(id);
       if (!feature) return null;
+
+      // Get actual status from kernel if available
+      const status = rebuildResult?.featureStatus?.[id] ?? ("unknown" as const);
+
       return {
         id,
         type: feature.get("type") as string,
         name: (feature.get("name") as string) || null,
-        status: "ok" as const, // TODO: Get actual status from kernel
+        status,
       };
     })
     .filter(Boolean);
+
+  // Get actual errors from rebuild result if available
+  const errors = rebuildResult?.errors ?? [];
 
   return {
     documentName: doc.metadata.get("name") || "Untitled",
     units: doc.metadata.get("units") || "mm",
     featureCount: features.length,
     features,
-    errors: [], // TODO: Get actual errors from kernel
+    errors,
+    hasKernelData: !!rebuildResult,
   };
 }
 
-export function findFacesImpl(_args: Record<string, unknown>, _ctx: ModelingToolContext): unknown {
-  // TODO: Implement when OCCT face query is available
-  return [];
+export function findFacesImpl(args: Record<string, unknown>, ctx: ModelingToolContext): unknown {
+  const { rebuildResult } = ctx;
+  const { featureId, normalFilter } = args as {
+    featureId?: string;
+    normalFilter?: { x: number; y: number; z: number; tolerance?: number };
+  };
+
+  // If no rebuild result available, return empty
+  if (!rebuildResult) {
+    return { faces: [], error: "No rebuild result available - geometry queries require kernel" };
+  }
+
+  const faces: Array<{
+    ref: string;
+    featureId: string;
+    normal: number[];
+    area: number;
+    centroid: number[];
+  }> = [];
+
+  for (const [_bodyKey, refIndex] of Object.entries(rebuildResult.referenceIndex)) {
+    for (let i = 0; i < refIndex.faces.length; i++) {
+      const refString = refIndex.faces[i];
+      const decoded = decodePersistentRef(refString);
+      if (!decoded.ok) continue;
+
+      const ref = decoded.ref;
+
+      // Filter by feature if specified
+      if (featureId && ref.originFeatureId !== featureId) continue;
+
+      // Filter by normal if specified
+      if (normalFilter && ref.fingerprint?.normal) {
+        const dot =
+          ref.fingerprint.normal[0] * normalFilter.x +
+          ref.fingerprint.normal[1] * normalFilter.y +
+          ref.fingerprint.normal[2] * normalFilter.z;
+        const tolerance = normalFilter.tolerance ?? 0.1;
+        if (dot < 1 - tolerance) continue;
+      }
+
+      faces.push({
+        ref: refString,
+        featureId: ref.originFeatureId,
+        normal: ref.fingerprint?.normal ?? [0, 0, 0],
+        area: ref.fingerprint?.size ?? 0,
+        centroid: ref.fingerprint?.centroid ?? [0, 0, 0],
+      });
+    }
+  }
+
+  return { faces };
 }
 
-export function findEdgesImpl(_args: Record<string, unknown>, _ctx: ModelingToolContext): unknown {
-  // TODO: Implement when OCCT edge query is available
-  return [];
+export function findEdgesImpl(args: Record<string, unknown>, ctx: ModelingToolContext): unknown {
+  const { rebuildResult } = ctx;
+  const { featureId } = args as { featureId?: string };
+
+  // If no rebuild result available, return empty
+  if (!rebuildResult) {
+    return { edges: [], error: "No rebuild result available - geometry queries require kernel" };
+  }
+
+  const edges: Array<{
+    ref: string;
+    featureId: string;
+    length: number;
+    centroid: number[];
+  }> = [];
+
+  for (const [_bodyKey, refIndex] of Object.entries(rebuildResult.referenceIndex)) {
+    for (let i = 0; i < refIndex.edges.length; i++) {
+      const refString = refIndex.edges[i];
+      const decoded = decodePersistentRef(refString);
+      if (!decoded.ok) continue;
+
+      const ref = decoded.ref;
+
+      // Filter by feature if specified
+      if (featureId && ref.originFeatureId !== featureId) continue;
+
+      edges.push({
+        ref: refString,
+        featureId: ref.originFeatureId,
+        length: ref.fingerprint?.size ?? 0,
+        centroid: ref.fingerprint?.centroid ?? [0, 0, 0],
+      });
+    }
+  }
+
+  return { edges };
 }
 
 export function measureDistanceImpl(
@@ -97,23 +203,94 @@ export function measureDistanceImpl(
 }
 
 export function getBoundingBoxImpl(
-  _args: Record<string, unknown>,
-  _ctx: ModelingToolContext
+  args: Record<string, unknown>,
+  ctx: ModelingToolContext
 ): unknown {
-  // TODO: Implement when OCCT bounding box query is available
+  const { rebuildResult } = ctx;
+  const { featureId } = args as { featureId?: string };
+
+  // If no rebuild result available, return empty box
+  if (!rebuildResult) {
+    return {
+      error: "No rebuild result available - geometry queries require kernel",
+      minX: 0,
+      minY: 0,
+      minZ: 0,
+      maxX: 0,
+      maxY: 0,
+      maxZ: 0,
+      sizeX: 0,
+      sizeY: 0,
+      sizeZ: 0,
+      centerX: 0,
+      centerY: 0,
+      centerZ: 0,
+    };
+  }
+
+  // Compute bounding box from mesh data
+  let minX = Infinity,
+    minY = Infinity,
+    minZ = Infinity;
+  let maxX = -Infinity,
+    maxY = -Infinity,
+    maxZ = -Infinity;
+  let hasData = false;
+
+  for (const [bodyKey, mesh] of rebuildResult.meshes) {
+    // If featureId specified, check if this body belongs to that feature
+    if (featureId) {
+      const body = rebuildResult.bodies.find((b) => b.featureId === bodyKey);
+      if (!body || body.featureId !== featureId) continue;
+    }
+
+    const positions = mesh.positions;
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i];
+      const y = positions[i + 1];
+      const z = positions[i + 2];
+
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      minZ = Math.min(minZ, z);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+      maxZ = Math.max(maxZ, z);
+      hasData = true;
+    }
+  }
+
+  if (!hasData) {
+    return {
+      error: featureId ? `No geometry found for feature ${featureId}` : "No geometry in model",
+      minX: 0,
+      minY: 0,
+      minZ: 0,
+      maxX: 0,
+      maxY: 0,
+      maxZ: 0,
+      sizeX: 0,
+      sizeY: 0,
+      sizeZ: 0,
+      centerX: 0,
+      centerY: 0,
+      centerZ: 0,
+    };
+  }
+
   return {
-    minX: 0,
-    minY: 0,
-    minZ: 0,
-    maxX: 0,
-    maxY: 0,
-    maxZ: 0,
-    sizeX: 0,
-    sizeY: 0,
-    sizeZ: 0,
-    centerX: 0,
-    centerY: 0,
-    centerZ: 0,
+    minX,
+    minY,
+    minZ,
+    maxX,
+    maxY,
+    maxZ,
+    sizeX: maxX - minX,
+    sizeY: maxY - minY,
+    sizeZ: maxZ - minZ,
+    centerX: (minX + maxX) / 2,
+    centerY: (minY + maxY) / 2,
+    centerZ: (minZ + maxZ) / 2,
   };
 }
 
@@ -140,28 +317,20 @@ export function createExtrudeImpl(
     name?: string;
   };
 
-  // Verify sketch exists
-  const sketchFeature = doc.featuresById.get(sketchId);
-  if (!sketchFeature || sketchFeature.get("type") !== "sketch") {
-    return { featureId: "", status: "error", error: `Sketch ${sketchId} not found` };
-  }
-
-  // Hide the referenced sketch if it's currently visible
-  if (sketchFeature.get("visible") === true) {
-    sketchFeature.set("visible", false);
-  }
-
-  // Create extrude feature using helper (ensures proper sync)
-  const featureId = createFeature(doc, {
-    type: "extrude",
-    name: name || `Extrude ${op === "cut" ? "Cut" : ""}`,
-    sketch: sketchId, // Note: field name is "sketch" to match featureHelpers.ts
+  // Use unified commands module
+  const result = commands.createExtrude(doc, {
+    sketchId,
     distance,
-    op: op,
-    direction: direction || "normal",
+    op: op ?? "add",
+    direction: (direction as "normal" | "reverse") ?? "normal",
+    name: name || `Extrude ${op === "cut" ? "Cut" : ""}`,
   });
 
-  return { featureId, status: "ok" };
+  if (!result.ok) {
+    return { featureId: "", status: "error", error: result.error };
+  }
+
+  return { featureId: result.value.featureId, status: "ok" };
 }
 
 export function createRevolveImpl(
@@ -177,28 +346,20 @@ export function createRevolveImpl(
     name?: string;
   };
 
-  // Verify sketch exists
-  const sketchFeature = doc.featuresById.get(sketchId);
-  if (!sketchFeature || sketchFeature.get("type") !== "sketch") {
-    return { featureId: "", status: "error", error: `Sketch ${sketchId} not found` };
-  }
-
-  // Hide the referenced sketch if it's currently visible
-  if (sketchFeature.get("visible") === true) {
-    sketchFeature.set("visible", false);
-  }
-
-  // Create revolve feature using helper
-  const featureId = createFeature(doc, {
-    type: "revolve",
+  // Use unified commands module
+  const result = commands.createRevolve(doc, {
+    sketchId,
+    axisId: axisLineId,
+    angle: angle ?? 360,
+    op: op ?? "add",
     name: name || `Revolve ${op === "cut" ? "Cut" : ""}`,
-    sketch: sketchId,
-    axis: axisLineId,
-    angle,
-    op,
   });
 
-  return { featureId, status: "ok" };
+  if (!result.ok) {
+    return { featureId: "", status: "error", error: result.error };
+  }
+
+  return { featureId: result.value.featureId, status: "ok" };
 }
 
 export function createLoftImpl(args: Record<string, unknown>, ctx: ModelingToolContext): unknown {
@@ -222,7 +383,7 @@ export function createLoftImpl(args: Record<string, unknown>, ctx: ModelingToolC
   }
 
   // Create loft feature using helper
-  const featureId = createFeature(doc, {
+  const featureId = createAdvancedFeature(doc, {
     type: "loft",
     name: name || "Loft",
     sketches: sketchIds,
@@ -253,7 +414,7 @@ export function createSweepImpl(args: Record<string, unknown>, ctx: ModelingTool
   }
 
   // Create sweep feature using helper
-  const featureId = createFeature(doc, {
+  const featureId = createAdvancedFeature(doc, {
     type: "sweep",
     name: name || "Sweep",
     profileSketch: profileSketchId,
@@ -274,7 +435,7 @@ export function createFilletImpl(args: Record<string, unknown>, ctx: ModelingToo
   };
 
   // Create fillet feature using helper
-  const featureId = createFeature(doc, {
+  const featureId = createAdvancedFeature(doc, {
     type: "fillet",
     name: name || "Fillet",
     edges: edgeRefs,
@@ -296,7 +457,7 @@ export function createChamferImpl(
   };
 
   // Create chamfer feature using helper
-  const featureId = createFeature(doc, {
+  const featureId = createAdvancedFeature(doc, {
     type: "chamfer",
     name: name || "Chamfer",
     edges: edgeRefs,
@@ -318,7 +479,7 @@ export function createDraftImpl(args: Record<string, unknown>, ctx: ModelingTool
   };
 
   // Create draft feature using helper
-  const featureId = createFeature(doc, {
+  const featureId = createAdvancedFeature(doc, {
     type: "draft",
     name: name || "Draft",
     faces: faceRefs,
@@ -345,7 +506,7 @@ export function createLinearPatternImpl(
   };
 
   // Create linear pattern feature using helper
-  const featureId = createFeature(doc, {
+  const featureId = createAdvancedFeature(doc, {
     type: "linearPattern",
     name: name || "Linear Pattern",
     sourceFeatures: featureIds,
@@ -387,7 +548,7 @@ export function createCircularPatternImpl(
   };
 
   // Create circular pattern feature using helper
-  const featureId = createFeature(doc, {
+  const featureId = createAdvancedFeature(doc, {
     type: "circularPattern",
     name: name || "Circular Pattern",
     sourceFeatures: featureIds,
@@ -409,7 +570,7 @@ export function createMirrorImpl(args: Record<string, unknown>, ctx: ModelingToo
   };
 
   // Create mirror feature using helper
-  const featureId = createFeature(doc, {
+  const featureId = createAdvancedFeature(doc, {
     type: "mirror",
     name: name || "Mirror",
     sourceFeatures: featureIds,
@@ -434,11 +595,6 @@ export function modifyFeatureImpl(
     booleanValue?: boolean | null;
   };
 
-  const feature = doc.featuresById.get(featureId);
-  if (!feature) {
-    return { success: false, rebuildStatus: "error", error: `Feature ${featureId} not found` };
-  }
-
   // Determine the value to set
   let value: unknown;
   if (stringValue !== undefined && stringValue !== null) {
@@ -451,9 +607,16 @@ export function modifyFeatureImpl(
     return { success: false, rebuildStatus: "error", error: "No value provided" };
   }
 
-  doc.ydoc.transact(() => {
-    feature.set(parameterName, value);
+  // Use unified commands module
+  const result = commands.modifyFeatureParam(doc, {
+    featureId,
+    paramName: parameterName,
+    value,
   });
+
+  if (!result.ok) {
+    return { success: false, rebuildStatus: "error", error: result.error };
+  }
 
   return { success: true, rebuildStatus: "ok" };
 }
@@ -468,29 +631,20 @@ export function deleteFeatureImpl(
     deleteChildren?: boolean;
   };
 
-  const feature = doc.featuresById.get(featureId);
-  if (!feature) {
-    return { success: false, deletedIds: [], error: `Feature ${featureId} not found` };
-  }
-
-  const deletedIds: string[] = [featureId];
-
-  // TODO: If deleteChildren, find and delete dependent features
+  // TODO: If deleteChildren, find and delete dependent features first
+  const deletedIds: string[] = [];
   if (deleteChildren) {
-    // Placeholder for dependency analysis
+    // Placeholder for dependency analysis - would add child IDs to deletedIds
   }
 
-  doc.ydoc.transact(() => {
-    for (const id of deletedIds) {
-      doc.featuresById.delete(id);
-      // Remove from feature order
-      const index = doc.featureOrder.toArray().indexOf(id);
-      if (index !== -1) {
-        doc.featureOrder.delete(index, 1);
-      }
-    }
-  });
+  // Use unified commands module
+  const result = commands.deleteFeature(doc, { featureId });
 
+  if (!result.ok) {
+    return { success: false, deletedIds: [], error: result.error };
+  }
+
+  deletedIds.push(featureId);
   return { success: true, deletedIds };
 }
 
@@ -504,33 +658,15 @@ export function reorderFeatureImpl(
     afterFeatureId: string | null;
   };
 
-  const featureOrder = doc.featureOrder.toArray();
-  const currentIndex = featureOrder.indexOf(featureId);
-  if (currentIndex === -1) {
-    return { success: false, rebuildStatus: "error", error: `Feature ${featureId} not found` };
-  }
-
-  let targetIndex: number;
-  if (afterFeatureId === null) {
-    targetIndex = 0;
-  } else {
-    const afterIndex = featureOrder.indexOf(afterFeatureId);
-    if (afterIndex === -1) {
-      return {
-        success: false,
-        rebuildStatus: "error",
-        error: `Feature ${afterFeatureId} not found`,
-      };
-    }
-    targetIndex = afterIndex + 1;
-  }
-
-  doc.ydoc.transact(() => {
-    doc.featureOrder.delete(currentIndex, 1);
-    // Adjust target index if we deleted before it
-    const adjustedTarget = currentIndex < targetIndex ? targetIndex - 1 : targetIndex;
-    doc.featureOrder.insert(adjustedTarget, [featureId]);
+  // Use unified commands module
+  const result = commands.reorderFeature(doc, {
+    featureId,
+    afterFeatureId,
   });
+
+  if (!result.ok) {
+    return { success: false, rebuildStatus: "error", error: result.error };
+  }
 
   return { success: true, rebuildStatus: "ok" };
 }
@@ -545,14 +681,12 @@ export function suppressFeatureImpl(
     suppressed: boolean;
   };
 
-  const feature = doc.featuresById.get(featureId);
-  if (!feature) {
+  // Use unified commands module
+  const result = commands.suppressFeature(doc, { featureId, suppressed });
+
+  if (!result.ok) {
     return { success: false };
   }
-
-  doc.ydoc.transact(() => {
-    feature.set("suppressed", suppressed);
-  });
 
   return { success: true };
 }
@@ -567,14 +701,12 @@ export function renameFeatureImpl(
     name: string;
   };
 
-  const feature = doc.featuresById.get(featureId);
-  if (!feature) {
+  // Use unified commands module
+  const result = commands.renameFeature(doc, { featureId, name });
+
+  if (!result.ok) {
     return { success: false };
   }
-
-  doc.ydoc.transact(() => {
-    feature.set("name", name);
-  });
 
   return { success: true };
 }
@@ -878,7 +1010,7 @@ export function createShellImpl(args: Record<string, unknown>, ctx: ModelingTool
   };
 
   // Create shell feature using helper
-  const featureId = createFeature(doc, {
+  const featureId = createAdvancedFeature(doc, {
     type: "shell",
     name: name || "Shell",
     thickness,

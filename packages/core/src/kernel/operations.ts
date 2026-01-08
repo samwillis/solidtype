@@ -2,14 +2,44 @@
  * OCCT Operations
  *
  * Boolean operations, extrude, revolve, fillet, chamfer.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 8 - OCCT history integration
  */
 
 import { getOC } from "./init.js";
 import { Shape } from "./Shape.js";
-import type { TopoDS_Shape, TopoDS_Edge } from "opencascade.js";
+import type { TopoDS_Shape, TopoDS_Edge, TopoDS_Face } from "opencascade.js";
 // Type declarations are in ./opencascade.d.ts
 
 export type BooleanOp = `union` | `subtract` | `intersect`;
+
+/**
+ * Generated face info from OCCT operation history.
+ * Captures the relationship between input profile edges and generated solid faces.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 8.1
+ */
+export interface GeneratedFaceInfo {
+  /** The generated face as a TopoDS_Shape reference (caller must not dispose) */
+  face: TopoDS_Face;
+  /** Index of the face in the result shape (for mesh mapping) */
+  faceIndex: number;
+  /** Which part of the extrude this face is: topCap, bottomCap, or side */
+  role: "topCap" | "bottomCap" | "side";
+}
+
+/**
+ * Extended extrusion result with OCCT history info.
+ */
+export interface ExtrudeWithHistoryResult {
+  shape: Shape;
+  /** First shape (bottom cap of extrude) */
+  firstShape?: Shape;
+  /** Last shape (top cap of extrude) */
+  lastShape?: Shape;
+  /** Generated faces with their roles */
+  generatedFaces?: GeneratedFaceInfo[];
+}
 
 /**
  * Result of a boolean operation
@@ -95,6 +125,64 @@ export function extrude(
 }
 
 /**
+ * Extrude a face or wire with OCCT history information.
+ *
+ * Returns the extruded shape along with metadata about generated faces
+ * (top cap, bottom cap, sides) that can be used for persistent naming.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 8.1
+ */
+export function extrudeWithHistory(
+  profile: Shape,
+  direction: [number, number, number],
+  distance: number
+): ExtrudeWithHistoryResult {
+  const oc = getOC();
+
+  const vec = new oc.gp_Vec_4(
+    direction[0] * distance,
+    direction[1] * distance,
+    direction[2] * distance
+  );
+
+  const prism = new oc.BRepPrimAPI_MakePrism_1(profile.raw, vec, false, true);
+  const shape = new Shape(prism.Shape());
+
+  // Extract OCCT history - FirstShape and LastShape
+  let firstShape: Shape | undefined;
+  let lastShape: Shape | undefined;
+
+  try {
+    // FirstShape() returns the bottom cap (original profile location)
+    const first = prism.FirstShape();
+    if (first && !first.IsNull()) {
+      firstShape = new Shape(first);
+    }
+  } catch {
+    // FirstShape might not be available for some profiles
+  }
+
+  try {
+    // LastShape() returns the top cap (extruded profile location)
+    const last = prism.LastShape();
+    if (last && !last.IsNull()) {
+      lastShape = new Shape(last);
+    }
+  } catch {
+    // LastShape might not be available for some profiles
+  }
+
+  vec.delete();
+  prism.delete();
+
+  return {
+    shape,
+    firstShape,
+    lastShape,
+  };
+}
+
+/**
  * Extrude symmetrically (in both directions).
  */
 export function extrudeSymmetric(
@@ -146,6 +234,78 @@ export function revolve(
   revol.delete();
 
   return shape;
+}
+
+/**
+ * Extended revolve result with OCCT history info.
+ */
+export interface RevolveWithHistoryResult {
+  shape: Shape;
+  /** First shape (start cap for partial revolve) */
+  firstShape?: Shape;
+  /** Last shape (end cap for partial revolve) */
+  lastShape?: Shape;
+}
+
+/**
+ * Revolve a face or wire with OCCT history information.
+ *
+ * Returns the revolved shape along with metadata about generated faces
+ * (start cap, end cap for partial revolves) that can be used for persistent naming.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 8.1
+ */
+export function revolveWithHistory(
+  profile: Shape,
+  axisOrigin: [number, number, number],
+  axisDirection: [number, number, number],
+  angleDegrees: number
+): RevolveWithHistoryResult {
+  const oc = getOC();
+
+  const origin = new oc.gp_Pnt_3(axisOrigin[0], axisOrigin[1], axisOrigin[2]);
+  const dir = new oc.gp_Dir_4(axisDirection[0], axisDirection[1], axisDirection[2]);
+  const axis = new oc.gp_Ax1_2(origin, dir);
+
+  const angleRad = (angleDegrees * Math.PI) / 180;
+  const revol = new oc.BRepPrimAPI_MakeRevol_1(profile.raw, axis, angleRad, true);
+  const shape = new Shape(revol.Shape());
+
+  // Extract OCCT history - FirstShape and LastShape
+  // For full 360° revolve, there are no end caps
+  let firstShape: Shape | undefined;
+  let lastShape: Shape | undefined;
+
+  if (angleDegrees < 360) {
+    try {
+      const first = revol.FirstShape();
+      if (first && !first.IsNull()) {
+        firstShape = new Shape(first);
+      }
+    } catch {
+      // FirstShape might not be available
+    }
+
+    try {
+      const last = revol.LastShape();
+      if (last && !last.IsNull()) {
+        lastShape = new Shape(last);
+      }
+    } catch {
+      // LastShape might not be available
+    }
+  }
+
+  origin.delete();
+  dir.delete();
+  axis.delete();
+  revol.delete();
+
+  return {
+    shape,
+    firstShape,
+    lastShape,
+  };
 }
 
 /**

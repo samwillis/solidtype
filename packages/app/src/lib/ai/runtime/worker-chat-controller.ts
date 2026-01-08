@@ -19,6 +19,7 @@ import { executeModelingTool, isModelingTool } from "./modeling-tool-executor";
 import { createDocumentSync, type DocumentSync } from "../../yjs-sync";
 import { loadDocument, type SolidTypeDoc } from "../../../editor/document/createDocument";
 import type { AIChatWorkerEvent } from "./types";
+import type { RebuildResult } from "../../../editor/kernel";
 
 /**
  * Broadcast function type - provided by the worker
@@ -64,6 +65,14 @@ export class WorkerChatController {
 
   // Active sketch context
   private activeSketchId: string | null = null;
+
+  /**
+   * Last kernel rebuild result - used for geometry-aware tool queries.
+   * This is populated by the UI kernel worker and passed to the AI worker.
+   *
+   * @see docs/CAD-PIPELINE-REWORK.md Phase 5/7
+   */
+  private lastRebuildResult: RebuildResult | null = null;
 
   constructor(options: ChatControllerOptions) {
     this.sessionId = options.sessionId;
@@ -390,9 +399,16 @@ export class WorkerChatController {
 
       // Route to appropriate tool executor
       if (isSketchTool(toolName)) {
-        result = executeSketchTool(toolName, args, this.wrappedDoc, this.activeSketchId);
+        result = executeSketchTool(toolName, args, this.wrappedDoc, this.activeSketchId, {
+          // Phase 7: Provide rebuild result for constraint solver feedback
+          getRebuildResult: () => this.lastRebuildResult,
+        });
       } else if (isModelingTool(toolName)) {
-        result = executeModelingTool(toolName, args, { doc: this.wrappedDoc });
+        // Phase 5/7: Pass rebuild result for geometry queries
+        result = executeModelingTool(toolName, args, {
+          doc: this.wrappedDoc,
+          rebuildResult: this.lastRebuildResult ?? undefined,
+        });
       } else {
         throw new Error(`Unknown tool type: ${toolName}`);
       }
@@ -490,6 +506,31 @@ export class WorkerChatController {
    */
   setActiveSketchId(sketchId: string | null): void {
     this.activeSketchId = sketchId;
+  }
+
+  /**
+   * Update the last rebuild result from the kernel.
+   *
+   * This should be called when the kernel worker sends a rebuild-complete message.
+   * The rebuild result enables geometry-aware tool queries (findFaces, getSketchSolveReport, etc.)
+   *
+   * @see docs/CAD-PIPELINE-REWORK.md Phase 5/7
+   */
+  setRebuildResult(rebuildResult: RebuildResult | null): void {
+    this.lastRebuildResult = rebuildResult;
+    console.log(
+      "[ChatController] Rebuild result updated, sketches:",
+      rebuildResult?.sketchSolveResults.size ?? 0,
+      "bodies:",
+      rebuildResult?.bodies.length ?? 0
+    );
+  }
+
+  /**
+   * Get the last rebuild result
+   */
+  getRebuildResult(): RebuildResult | null {
+    return this.lastRebuildResult;
   }
 
   /**

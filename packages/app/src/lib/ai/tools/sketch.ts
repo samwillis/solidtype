@@ -73,6 +73,41 @@ export const getSketchStatusDef = toolDefinition({
   }),
 });
 
+/**
+ * Get detailed solver report from the actual constraint solver.
+ *
+ * This tool provides accurate DOF analysis from the kernel's constraint solver,
+ * including solved point positions and overconstrained detection.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 7
+ */
+export const getSketchSolveReportDef = toolDefinition({
+  name: "getSketchSolveReport",
+  description:
+    "Get detailed constraint solver status for a sketch. Returns accurate DOF (degrees of freedom) analysis, " +
+    "solver status, and solved point positions from the kernel rebuild. Use this to check if a sketch is " +
+    "fully constrained, underconstrained, or overconstrained before/after adding constraints.",
+  inputSchema: z.object({
+    sketchId: z.string().describe("ID of the sketch to analyze"),
+  }),
+  outputSchema: z.object({
+    sketchId: z.string(),
+    status: z.enum(["ok", "underconstrained", "overconstrained", "failed"]),
+    dof: z.number().describe("Remaining degrees of freedom (0 = fully constrained)"),
+    totalDOF: z.number().describe("Total degrees of freedom (2 per free point)"),
+    constrainedDOF: z.number().describe("DOF removed by constraints"),
+    isFullyConstrained: z.boolean(),
+    isOverConstrained: z.boolean(),
+    solvedPoints: z
+      .array(z.object({ id: z.string(), x: z.number(), y: z.number() }))
+      .describe("Solved point positions"),
+    failedConstraints: z
+      .array(z.string())
+      .describe("IDs of constraints that could not be satisfied"),
+    message: z.string().nullish().describe("Additional solver message"),
+  }),
+});
+
 // ============ Geometry Creation Tools ============
 
 export const addLineDef = toolDefinition({
@@ -485,6 +520,7 @@ export const sketchToolDefs = [
   enterSketchDef,
   exitSketchDef,
   getSketchStatusDef,
+  getSketchSolveReportDef,
   // Geometry
   addLineDef,
   addCircleDef,
