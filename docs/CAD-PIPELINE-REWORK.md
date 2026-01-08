@@ -71,6 +71,16 @@ For V1, we run **separate KernelEngine instances** in UI worker and AI worker. T
 
 We'll first eliminate drift by introducing a single commands layer and refactoring both UI tools and AI tools to use it. Next, we'll introduce a **merge-safe PersistentRef V1** format (versioned, string-encoded, CRDT-friendly) and teach the kernel rebuild to produce a **ReferenceIndex** so selections and feature parameters store stable references instead of ephemeral face/edge indices. We'll then add a resolver that can map PersistentRefs back onto current topology (found/ambiguous/not found), surfacing broken refs as non-fatal diagnostics with explicit repair commands. Finally, we'll extract the rebuild pipeline into a reusable KernelEngine used by both the UI worker and the AI worker, enabling background geometry-aware tool calls and worker-generated snapshots, and we'll expose sketch solver feedback as query tools so AI sketching can be constraint-aware. Over time, we'll progressively replace heuristic matching with OCCT history where available.
 
+### Alignment with `TOPOLOGICAL-NAMING.md` (FreeCAD-style naming)
+
+This rework plan intentionally **does not replace** the FreeCAD-style naming design. It provides a CRDT-safe storage and rebuild pipeline that the naming system plugs into:
+
+- **Yjs storage (CRDT-safe)**: store only immutable reference strings (`stref:v1:...`) or small candidate sets (`PersistentRefSet`). Never store ephemeral indices like `Face7`, `faceIndex`, `edgeIndex`, or tessellation indices.
+- **Derived rebuild outputs**: `ReferenceIndex` is a rebuild artifact (an app-facing view similar in spirit to an ElementMap) and is **recomputed every rebuild**, not persisted in Yjs.
+- **Robustness path**: when available, prefer **OCCT operation history** to generate selectors; use fingerprints only as fallback.
+
+See `docs/TOPOLOGICAL-NAMING.md` for the long-term naming algorithm (`ElementMap`/`MappedName` internally) and the CRDT-safe storage rules (RefSets, deterministic tags).
+
 ---
 
 ## Phase 0 — Baseline audit and guardrails
@@ -318,12 +328,47 @@ export interface PersistentRefV1 {
   };
 }
 
+/**
+ * PersistentRefSet — optional multi-candidate reference.
+ *
+ * Most of the time this contains exactly one candidate. It grows only when:
+ * - a merge introduces competing repairs, or
+ * - resolution is ambiguous and we record a small shortlist, or
+ * - we later learn a stronger candidate (e.g. OCCT-history-backed) and keep
+ *   the older fallback for safety.
+ */
+export interface PersistentRefSet {
+  /** Optional preferred candidate (must also exist in `candidates`) */
+  preferred?: string;
+  /** Ordered list of candidate stref strings (deduped + capped, e.g. 3–5) */
+  candidates: string[];
+}
+
 /** Encode to portable string: stref:v1:<base64url> */
 export function encodePersistentRef(ref: PersistentRefV1): string {
-  const json = JSON.stringify(ref, Object.keys(ref).sort());
+  // NOTE: Use canonical JSON (stable key ordering recursively), not vanilla JSON.stringify.
+  // This ensures deterministic `stref` strings across environments and CRDT merges.
+  const json = canonicalJsonStringify(ref);
   const base64 = btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   return `stref:v1:${base64}`;
 }
+
+/**
+ * canonicalJsonStringify (required)
+ *
+ * This helper MUST:
+ * - sort object keys recursively,
+ * - produce stable output for arrays/primitives,
+ * - avoid any locale-dependent formatting.
+ *
+ * Implementation options:
+ * - Implement a tiny local helper (preferred; no dependency), or
+ * - use a small library like `json-stable-stringify` (acceptable if already aligned with repo deps).
+ *
+ * Without this, two clients can encode the same PersistentRef into different strings, which defeats
+ * the CRDT-safe “immutable string handle” goal.
+ */
+declare function canonicalJsonStringify(value: unknown): string;
 
 /** Decode from string */
 export function decodePersistentRef(s: string): 
@@ -352,16 +397,43 @@ export function decodePersistentRef(s: string):
 
 | Kind                 | Data                                | Description                    |
 | -------------------- | ----------------------------------- | ------------------------------ |
-| `extrude.topCap`     | `{ loop: number }`                  | Top cap face of extrude        |
-| `extrude.bottomCap`  | `{ loop: number }`                  | Bottom cap face                |
-| `extrude.side`       | `{ loop: number, segment: number }` | Side face from profile segment |
-| `extrude.topEdge`    | `{ loop: number, segment: number }` | Edge on top cap                |
-| `extrude.bottomEdge` | `{ loop: number, segment: number }` | Edge on bottom cap             |
-| `extrude.sideEdge`   | `{ loop: number, vertex: number }`  | Vertical edge                  |
-| `revolve.side`       | `{ segment: number }`               | Side face from profile         |
+| `extrude.topCap`     | `{ loopId: string }`                | Top cap face of extrude        |
+| `extrude.bottomCap`  | `{ loopId: string }`                | Bottom cap face                |
+| `extrude.side`       | `{ loopId: string, segmentId: string }` | Side face from profile segment (stable IDs, not indices) |
+| `extrude.topEdge`    | `{ loopId: string, segmentId: string }` | Edge on top cap                |
+| `extrude.bottomEdge` | `{ loopId: string, segmentId: string }` | Edge on bottom cap             |
+| `extrude.sideEdge`   | `{ loopId: string, vertexId: string }`  | Vertical edge (stable vertex/entity ID) |
+| `revolve.side`       | `{ segmentId: string }`             | Side face from profile segment (stable ID) |
 | `revolve.startCap`   | `{}`                                | Start cap (if < 360°)          |
 | `revolve.endCap`     | `{}`                                | End cap (if < 360°)            |
 
+
+**CRDT requirement:** selector data must be keyed by **stable IDs**, not array positions.
+For extrude/revolve selectors this means using sketch/profile **entity UUIDs** (or deterministic IDs derived from them), not `segment: 2`.
+
+#### 2.2.1 What are `segmentId`, `vertexId`, and `loopId`?
+
+To keep refs merge-safe, these IDs must come from the Yjs document’s stable identifiers (or be deterministic functions of them):
+
+- `segmentId`: **the sketch entity UUID** (the key in `sketch.data.entitiesById`). For line/arc/circle entities this is already a UUID string.
+- `vertexId`: **the sketch point UUID** (the key in `sketch.data.pointsById`) when an edge/face can be tied to a specific point, otherwise omitted.
+- `loopId`: a **deterministic loop identifier derived from stable IDs**, not a loop index.
+  - For V1, define `loopId` as a stable hash of the set/order of segment entity IDs that form the closed profile loop.
+  - Use a canonicalization that is invariant to rotation (loop start point) and stable across clients:
+    - compute the cyclic order of segment IDs around the loop,
+    - rotate so the lexicographically smallest ID comes first,
+    - join with a delimiter, then hash (or base64url) to produce a short `loopId` string.
+
+This lets two clients who independently create the same loop (with the same entity UUIDs) compute the same `loopId` after merge, without persisting any positional indices.
+
+**Implementation note (where this lives):**
+
+- Add a small pure function in app code that computes profile loops from sketch data:
+  - suggested location: `packages/app/src/editor/sketch/profileLoops.ts`
+  - inputs: sketch `pointsById`, `entitiesById`
+  - outputs: `profileLoops: Array<{ loopId: string; entityIds: string[] }>`
+- KernelEngine uses this when rebuilding an extrude/revolve from a sketch so it can pass `SketchInfo.profileLoops`
+  into `generateFaceRef(...)`.
 
 Semantic hints (e.g., `"top" | "bottom" | "front"`) are **deferred to V2** — they require more sophisticated heuristics.
 
@@ -369,8 +441,17 @@ Semantic hints (e.g., `"top" | "bottom" | "front"`) are **deferred to V2** — t
 
 Rules for feature parameters that reference geometry:
 
-- **Single ref**: Store as `string` (PersistentRef V1 encoded).
-- **Multi-ref** (e.g., fillet edges): Store as `Y.Array<string>` for merge-friendly unions.
+- **Single ref**: Store `string` (`stref:v1:...`) in the common case.
+- **Robust ref** (recommended): Store as `PersistentRefSet` (preferred + candidates).
+- **Multi-ref** (e.g., fillet edges): Store as `Y.Array<string | PersistentRefSet>` for merge-friendly unions.
+
+CRDT rule: **never store ephemeral topology indices** (faceIndex/edgeIndex, triangle index, “Face7”).
+
+**Minimal adoption order (so we don’t draw out implementation):**
+
+1. Convert `extentRef` (extrude “to face/to vertex”) to store `string | PersistentRefSet`.
+2. Convert “sketch on face” plane refs (face references used for sketch planes) to use `string | PersistentRefSet`.
+3. Convert multi-select params (e.g. fillet edges) later as needed.
 
 Example in extrude feature:
 
@@ -378,7 +459,11 @@ Example in extrude feature:
 {
   type: "extrude",
   sketch: "uuid-of-sketch",  // sketch reference (not a PersistentRef)
-  extentRef: "stref:v1:eyJ2IjoxLC...",  // face reference for "to face" extent
+  // Face reference for "to face" extent (prefer PersistentRefSet for robustness)
+  extentRef: {
+    preferred: "stref:v1:...",
+    candidates: ["stref:v1:..."],
+  },
 }
 ```
 
@@ -392,7 +477,7 @@ test("round-trip encode/decode", () => {
     v: 1,
     expectedType: "face",
     originFeatureId: "abc-123",
-    localSelector: { kind: "extrude.topCap", data: { loop: 0 } },
+    localSelector: { kind: "extrude.topCap", data: { loopId: "loop:..." } },
   };
   const encoded = encodePersistentRef(ref);
   const decoded = decodePersistentRef(encoded);
@@ -465,7 +550,7 @@ function generateFaceRef(
   fingerprint: FaceFingerprint,
   sketchData?: SketchInfo
 ): PersistentRefV1 {
-  let localSelector: { kind: string; data: Record<string, number> };
+  let localSelector: { kind: string; data: Record<string, string | number> };
 
   if (featureType === "extrude") {
     // Use normal direction to determine cap vs side
@@ -474,17 +559,29 @@ function generateFaceRef(
     const isBottomCap = normal[2] < -0.9;  // Pointing down
     
     if (isTopCap) {
-      localSelector = { kind: "extrude.topCap", data: { loop: 0 } };
+      const loopId = sketchData?.profileLoops?.[0]?.loopId ?? "loop:unknown";
+      localSelector = { kind: "extrude.topCap", data: { loopId } };
     } else if (isBottomCap) {
-      localSelector = { kind: "extrude.bottomCap", data: { loop: 0 } };
+      const loopId = sketchData?.profileLoops?.[0]?.loopId ?? "loop:unknown";
+      localSelector = { kind: "extrude.bottomCap", data: { loopId } };
     } else {
-      // Side face — use sketch segment index if available
-      const segmentIdx = matchToSketchSegment(fingerprint, sketchData);
-      localSelector = { kind: "extrude.side", data: { loop: 0, segment: segmentIdx } };
+      // Side face — CRDT-safe selector must use stable IDs, not segment indices.
+      // Match to a generating sketch/profile entity UUID if available; otherwise keep selector coarse
+      // and rely on fingerprint fallback + later OCCT history refinement (Phase 8).
+      const match = matchToSketchEntity(fingerprint, sketchData);
+      if (match) {
+        localSelector = {
+          kind: "extrude.side",
+          data: { loopId: match.loopId, segmentId: match.entityId },
+        };
+      } else {
+        const loopId = sketchData?.profileLoops?.[0]?.loopId ?? "loop:unknown";
+        localSelector = { kind: "extrude.side", data: { loopId } };
+      }
     }
   } else {
-    // Generic fallback
-    localSelector = { kind: "face.index", data: { index: faceIdx } };
+    // Generic fallback — DO NOT store faceIdx/edgeIdx in selector data (ephemeral).
+    localSelector = { kind: "face.unknown", data: {} };
   }
 
   return {
@@ -521,6 +618,32 @@ interface RebuildCompleteMessage {
   };
 }
 ```
+
+#### 3.3.1 Deterministic selector inputs (required for CRDT)
+
+`SketchInfo` must carry deterministic, ID-based loop/segment information so selector generation never depends on iteration order:
+
+- `profileLoops: Array<{ loopId: string; entityIds: string[] }>` where `entityIds` are sketch entity UUIDs in canonical loop order.
+- Any mapping from faces/edges back to generating sketch entities must be based on these stable IDs.
+
+**Clarification: where does `SketchInfo` come from during rebuild?**
+
+- When rebuilding a sketch feature, KernelEngine already parses sketch data to construct the kernel sketch.
+- At the same time (from the same parsed sketch data), compute `profileLoops` and keep it in an in-memory
+  `SketchInfo` map keyed by `sketchId`.
+- When rebuilding an extrude/revolve that references a sketch, look up that `SketchInfo` and pass it into
+  `generateFaceRef(...)` so selectors can include `loopId/segmentId` when available.
+
+#### 3.3.2 Handling unknown loopId (avoid false matches)
+
+`loop:unknown` is allowed as an internal sentinel, but it must not produce “confident” resolution:
+
+- If a selector contains `loopId: "loop:unknown"`, treat selector matching as *coarse*:
+  - prefer OCCT history match (Phase 8),
+  - otherwise rely on fingerprint scoring and return `ambiguous` if multiple candidates are plausible.
+- Never treat two refs with `loop:unknown` as an exact selector match by itself.
+
+Add a test case in Phase 6: two side faces with `loop:unknown` should resolve to `ambiguous`, not `found`.
 
 ### 3.4 Update selection pipeline
 
@@ -874,56 +997,57 @@ export type ResolveResult =
   | { status: "not_found"; reason: string };
 
 export function resolvePersistentRef(
-  refString: string,
+  ref: string | { preferred?: string; candidates: string[] },
   referenceIndex: ReferenceIndex,
   rebuildResult: RebuildResult
 ): ResolveResult {
-  // 1. Parse the ref
-  const decoded = decodePersistentRef(refString);
-  if (!decoded.ok) {
-    return { status: "not_found", reason: decoded.error };
-  }
-  const ref = decoded.ref;
+  const candidates = typeof ref === "string" ? [ref] : ref.candidates;
+  // Try candidates in order (preferred first if present)
+  const ordered =
+    typeof ref === "string"
+      ? candidates
+      : ref.preferred
+        ? [ref.preferred, ...candidates.filter((c) => c !== ref.preferred)]
+        : candidates;
 
-  // 2. Find candidates by originFeatureId
-  const candidates: Array<{ bodyKey: string; index: number; score: number }> = [];
+  for (const refString of ordered) {
+    const decoded = decodePersistentRef(refString);
+    if (!decoded.ok) continue;
+    const parsed = decoded.ref;
 
-  for (const [bodyKey, refIndex] of Object.entries(referenceIndex)) {
-    const refs = ref.expectedType === "face" ? refIndex.faces : refIndex.edges;
+    const hits: Array<{ bodyKey: string; index: number; score: number }> = [];
+
+    for (const [bodyKey, refIndex] of Object.entries(referenceIndex)) {
+      const refs = parsed.expectedType === "face" ? refIndex.faces : refIndex.edges;
     
-    for (let i = 0; i < refs.length; i++) {
-      const candidateDecoded = decodePersistentRef(refs[i]);
-      if (!candidateDecoded.ok) continue;
+      for (let i = 0; i < refs.length; i++) {
+        const candidateDecoded = decodePersistentRef(refs[i]);
+        if (!candidateDecoded.ok) continue;
       
-      const candidate = candidateDecoded.ref;
+        const candidate = candidateDecoded.ref;
       
-      // Match by feature ID first
-      if (candidate.originFeatureId !== ref.originFeatureId) continue;
+        // Match by feature ID first
+        if (candidate.originFeatureId !== parsed.originFeatureId) continue;
       
-      // Match by selector kind
-      if (candidate.localSelector.kind !== ref.localSelector.kind) continue;
+        // Match by selector kind
+        if (candidate.localSelector.kind !== parsed.localSelector.kind) continue;
       
-      // Score by fingerprint similarity
-      const score = computeScore(ref, candidate);
-      candidates.push({ bodyKey, index: i, score });
+        // Score by selector data + fingerprint similarity
+        const score = computeScore(parsed, candidate);
+        hits.push({ bodyKey, index: i, score });
+      }
     }
+
+    if (hits.length === 0) continue;
+
+    hits.sort((a, b) => a.score - b.score);
+    if (hits.length === 1 || hits[0].score < hits[1].score * 0.5) {
+      return { status: "found", bodyKey: hits[0].bodyKey, index: hits[0].index };
+    }
+    return { status: "ambiguous", candidates: hits.slice(0, 5) };
   }
 
-  // 3. Return result
-  if (candidates.length === 0) {
-    return { status: "not_found", reason: "No matching subshape found" };
-  }
-
-  // Sort by score (lower is better)
-  candidates.sort((a, b) => a.score - b.score);
-
-  // If best candidate is significantly better, return found
-  if (candidates.length === 1 || candidates[0].score < candidates[1].score * 0.5) {
-    return { status: "found", bodyKey: candidates[0].bodyKey, index: candidates[0].index };
-  }
-
-  // Otherwise ambiguous
-  return { status: "ambiguous", candidates: candidates.slice(0, 5) };
+  return { status: "not_found", reason: "No candidate reference could be resolved" };
 }
 
 function computeScore(ref: PersistentRefV1, candidate: PersistentRefV1): number {
@@ -963,15 +1087,15 @@ In KernelEngine rebuild, after computing referenceIndex:
 ```typescript
 // Validate all refs in feature parameters
 for (const [featureId, feature] of featuresById) {
-  const extentRef = feature.get("extentRef") as string | undefined;
+  const extentRef = feature.get("extentRef") as unknown;
   if (extentRef) {
-    const result = resolvePersistentRef(extentRef, referenceIndex, rebuildResult);
+    const result = resolvePersistentRef(extentRef as any, referenceIndex, rebuildResult);
     if (result.status !== "found") {
       errors.push({
         featureId,
         code: "INVALID_REFERENCE",
         message: `Cannot resolve extentRef: ${result.status === "ambiguous" ? "ambiguous" : result.reason}`,
-        data: { paramName: "extentRef", refString: extentRef, resolution: result },
+        data: { paramName: "extentRef", ref: extentRef, resolution: result },
       });
     }
   }
@@ -1034,11 +1158,26 @@ test("resolve finds exact match", () => {
 });
 
 test("resolve returns ambiguous for multiple matches", () => {
-  const ref1 = encodePersistentRef({ v: 1, originFeatureId: "f1", localSelector: { kind: "extrude.side", data: { loop: 0, segment: 0 } }, expectedType: "face" });
-  const ref2 = encodePersistentRef({ v: 1, originFeatureId: "f1", localSelector: { kind: "extrude.side", data: { loop: 0, segment: 1 } }, expectedType: "face" });
+  const ref1 = encodePersistentRef({
+    v: 1,
+    originFeatureId: "f1",
+    localSelector: { kind: "extrude.side", data: { loopId: "loop:...", segmentId: "seg-a" } },
+    expectedType: "face",
+  });
+  const ref2 = encodePersistentRef({
+    v: 1,
+    originFeatureId: "f1",
+    localSelector: { kind: "extrude.side", data: { loopId: "loop:...", segmentId: "seg-b" } },
+    expectedType: "face",
+  });
   
   // Search for a ref that matches both (same selector kind, no disambiguation)
-  const searchRef = encodePersistentRef({ v: 1, originFeatureId: "f1", localSelector: { kind: "extrude.side", data: {} }, expectedType: "face" });
+  const searchRef = encodePersistentRef({
+    v: 1,
+    originFeatureId: "f1",
+    localSelector: { kind: "extrude.side", data: { loopId: "loop:..." } },
+    expectedType: "face",
+  });
   
   const index = { body1: { faces: [ref1, ref2], edges: [] } };
   const result = resolvePersistentRef(searchRef, index, mockRebuild);
@@ -1166,6 +1305,23 @@ export function getSketchSolveReportImpl(
 
 ## Phase 8 — Progressive OCCT history integration
 
+### 8.0 Required: mesh index ↔ kernel topology handle mapping
+
+OCCT history APIs and core naming work in terms of **kernel topology handles** (`FaceId`, `EdgeId`). The viewer/selection pipeline works in terms of **mesh indices** (`faceIndex`, `edgeIndex`) derived from tessellation.
+
+To connect these layers, KernelEngine must have (for each rebuilt body) a mapping for *this rebuild*:
+
+- `faceIndexToFaceId: FaceId[]` where `faceIndex` (as used by `mesh.faceMap`) maps to the kernel face handle
+- `edgeIndexToEdgeId: EdgeId[]` where `edgeIndex` (as used by `mesh.edgeMap`) maps to the kernel edge handle
+
+This mapping is **internal to KernelEngine** (not persisted in Yjs). It can be included in `RebuildResult` for internal use, but does not need to be posted to the main thread.
+
+If the current `SolidSession.tessellate()` API cannot provide this, add a companion API (or extend the mesh payload) to return these arrays deterministically alongside `faceMap`/`edgeMap`.
+
+**Phase dependency note:** This mapping is only strictly required once we start consuming OCCT history (Phase 8),
+but it is harmless to add earlier. If an agent is implementing Phase 3 and already has access to kernel `FaceId`/`EdgeId`
+for each tessellated face/edge, implementing the mapping in Phase 3 will simplify Phase 8 later.
+
 ### 8.1 Extend core ops to return generated shapes
 
 When OCCT operations provide history (e.g., `BRepPrimAPI_MakePrism::Generated`), capture it:
@@ -1178,7 +1334,8 @@ interface ExtrudeResult {
   generatedFaces?: {
     topCap: FaceId[];
     bottomCap: FaceId[];
-    sides: Array<{ sketchSegmentIndex: number; faceId: FaceId }>;
+    // CRDT-safe: tie sides to generating sketch/profile entity IDs (UUIDs), not positional indices
+    sides: Array<{ segmentId: string; faceId: FaceId }>;
   };
 }
 
@@ -1207,10 +1364,13 @@ function generateFaceRef(
 ): PersistentRefV1 {
   // If OCCT history available, use it for accurate selectors
   if (occtHistory && featureType === "extrude") {
-    if (occtHistory.topCap.includes(faceIdx)) {
+    // NOTE: OCCT history yields FaceId/EdgeId (kernel handles), not mesh face indices.
+    // KernelEngine must provide a mapping from mesh faceIndex -> FaceId for this rebuild.
+    const faceId = meshFaceIndexToFaceId(faceIdx);
+    if (occtHistory.topCap.includes(faceId)) {
       return { /* topCap selector */ };
     }
-    const sideMatch = occtHistory.sides.find(s => s.faceId === faceIdx);
+    const sideMatch = occtHistory.sides.find((s) => s.faceId === faceId);
     if (sideMatch) {
       return {
         v: 1,
@@ -1218,7 +1378,7 @@ function generateFaceRef(
         originFeatureId: featureId,
         localSelector: {
           kind: "extrude.side",
-          data: { loop: 0, segment: sideMatch.sketchSegmentIndex },
+          data: { loopId: "loop:...", segmentId: sideMatch.segmentId },
         },
         fingerprint: { /* ... */ },
       };
@@ -1238,9 +1398,8 @@ For extrude side faces, include the sketch entity UUID for merge-safe matching:
 localSelector: {
   kind: "extrude.side",
   data: {
-    loop: 0,
-    segment: 2,
-    sketchEntityId: "abc-123-def",  // UUID of the sketch line/arc
+    loopId: "loop:...",
+    segmentId: "abc-123-def",
   },
 }
 ```
@@ -1309,3 +1468,24 @@ packages/app/tests/
 ```
 
 All tests must pass before merging each phase's PR.
+
+Add to `fork-merge-refs.test.ts` (Phase 6):
+
+```typescript
+test("two clients compute identical loopId for same loop (CRDT merge-safe)", () => {
+  const docA = createTestDocument();
+  const docB = createTestDocument();
+
+  // Both clients create the same sketch entities (same UUIDs) and constraints.
+  // (Use a helper that builds sketch data deterministically by ID.)
+  const sketchId = addDeterministicRectangleSketch(docA, { id: "sk1", lineIds: ["l1", "l2", "l3", "l4"] });
+  addDeterministicRectangleSketch(docB, { id: "sk1", lineIds: ["l1", "l2", "l3", "l4"] });
+
+  // Both compute loopId locally during rebuild/profile extraction
+  const loopA = computeProfileLoops(getSketchData(docA, sketchId))[0].loopId;
+  const loopB = computeProfileLoops(getSketchData(docB, sketchId))[0].loopId;
+  expect(loopA).toBe(loopB);
+
+  // After merge, loopId is still stable and selectors encoded into stref strings match.
+});
+```
