@@ -109,6 +109,8 @@ export interface SketchToolsOptions {
   setSelectedLines: React.Dispatch<React.SetStateAction<Set<string>>>;
   setSelectedConstraints: React.Dispatch<React.SetStateAction<Set<string>>>;
   clearSketchSelection: () => void;
+  /** Delete selected sketch items */
+  deleteSelectedItems: () => void;
   /** Viewer state */
   autoConstraints: boolean;
   /** Callback to set mouse position in context */
@@ -152,6 +154,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     setSelectedLines,
     setSelectedConstraints,
     clearSketchSelection,
+    deleteSelectedItems,
     autoConstraints,
     setSketchMousePos,
     setPreviewLine,
@@ -1000,9 +1003,10 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
       }
     };
 
-    // Handle Escape key to cancel current drawing chain
+    // Handle keyboard shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        e.preventDefault();
         // Clear all temporary drawing state
         setTempStartPoint(null);
         setTempSecondPoint(null);
@@ -1017,6 +1021,22 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
         setPreviewArc(null);
         setPreviewRect(null);
         setPreviewPolygon(null);
+        // Also clear sketch selection
+        clearSketchSelection();
+      }
+
+      // Delete/Backspace to delete selected items
+      if (e.key === "Delete" || e.key === "Backspace") {
+        // Don't delete if typing in an input field
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement ||
+          (e.target instanceof HTMLElement && e.target.isContentEditable)
+        ) {
+          return;
+        }
+        e.preventDefault();
+        deleteSelectedItems();
       }
     };
 
@@ -1052,6 +1072,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     setSelectedLines,
     setSelectedConstraints,
     clearSketchSelection,
+    deleteSelectedItems,
     autoConstraints,
     setSketchMousePos,
     tempStartPoint,

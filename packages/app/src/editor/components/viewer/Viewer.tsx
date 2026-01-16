@@ -92,6 +92,7 @@ const Viewer: React.FC = () => {
     addConstraint,
     updatePointPosition,
     findNearbyPoint,
+    deleteSelectedItems,
   } = useSketch();
   const { doc, features, awareness } = useDocument();
 
@@ -438,6 +439,7 @@ const Viewer: React.FC = () => {
     setSelectedLines,
     setSelectedConstraints,
     clearSketchSelection,
+    deleteSelectedItems,
     autoConstraints: viewerState.autoConstraints,
     setSketchMousePos,
     setPreviewLine,

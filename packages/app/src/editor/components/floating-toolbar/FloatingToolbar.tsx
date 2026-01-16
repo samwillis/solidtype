@@ -171,14 +171,15 @@ const FloatingToolbar: React.FC = () => {
       }
 
       if (e.key === "Escape") {
-        e.preventDefault();
+        // In sketch mode, let useSketchTools handle Escape (it clears drawing chain + selection)
         if (mode.active) {
-          clearSketchSelection();
-        } else {
-          selectFeature(null);
-          clearSelection();
-          clearSketchSelection();
+          return;
         }
+        // Outside sketch mode, clear all selections
+        e.preventDefault();
+        selectFeature(null);
+        clearSelection();
+        clearSketchSelection();
         return;
       }
 

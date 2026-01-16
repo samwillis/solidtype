@@ -4,7 +4,7 @@
  * Renders sketch entities (lines, arcs, circles) and preview shapes.
  */
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
@@ -70,6 +70,15 @@ export function useSketchRenderer(options: SketchRendererOptions): void {
     sceneReady,
     needsRenderRef,
   } = options;
+
+  // Compute a key that changes when any sketch's visibility changes
+  // This ensures the effect re-runs when visibility is toggled
+  const sketchVisibilityKey = useMemo(() => {
+    return features
+      .filter((f) => f.type === "sketch")
+      .map((f) => `${f.id}:${f.visible}`)
+      .join(",");
+  }, [features]);
 
   useEffect(() => {
     const sketchGroup = sketchGroupRef.current;
@@ -569,6 +578,7 @@ export function useSketchRenderer(options: SketchRendererOptions): void {
     sketchMode.planeId,
     getActiveSketch,
     features,
+    sketchVisibilityKey,
     sceneReady,
     selectedFeatureId,
     hoveredFeatureId,
