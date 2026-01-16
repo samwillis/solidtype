@@ -62,6 +62,8 @@ export interface Selection3DOptions {
   onCursor2DBroadcast?: (x: number, y: number, visible: boolean) => void;
   /** Whether edges are visible (for edge selection) */
   showEdges: boolean;
+  /** Whether the scene is ready (used to trigger effect re-run) */
+  sceneReady: boolean;
 }
 
 /**
@@ -81,6 +83,7 @@ export function use3DSelection(options: Selection3DOptions): void {
     onCursorBroadcast,
     onCursor2DBroadcast,
     showEdges,
+    sceneReady,
   } = options;
 
   // Use refs for callbacks to avoid effect re-runs
@@ -270,5 +273,5 @@ export function use3DSelection(options: Selection3DOptions): void {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [containerRef, performEdgeRaycast]);
+  }, [containerRef, performEdgeRaycast, sceneReady]);
 }

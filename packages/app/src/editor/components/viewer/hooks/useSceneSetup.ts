@@ -79,17 +79,40 @@ export function useSceneSetup(
   const faceHighlightGroupRef = useRef<THREE.Group | null>(null);
 
   const [sceneReady, setSceneReady] = useState(false);
+  // Track container element for re-running effect when it becomes available
+  const [containerElement, setContainerElement] = useState<HTMLDivElement | null>(null);
 
   // Request a render
   const requestRender = useCallback(() => {
     needsRenderRef.current = true;
   }, []);
 
+  // Watch for containerRef.current to become available
+  // This handles client-side navigation where the ref may not be set on first render
+  useEffect(() => {
+    if (containerRef.current && !containerElement) {
+      setContainerElement(containerRef.current);
+    }
+    // Check periodically in case ref is set after mount
+    const checkInterval = setInterval(() => {
+      if (containerRef.current && !containerElement) {
+        setContainerElement(containerRef.current);
+        clearInterval(checkInterval);
+      }
+    }, 50);
+    // Clear after a reasonable time
+    const timeout = setTimeout(() => clearInterval(checkInterval), 2000);
+    return () => {
+      clearInterval(checkInterval);
+      clearTimeout(timeout);
+    };
+  }, [containerRef, containerElement]);
+
   // Scene initialization effect
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerElement) return;
 
-    const container = containerRef.current;
+    const container = containerElement;
 
     // Scene setup
     const scene = new THREE.Scene();
@@ -278,7 +301,7 @@ export function useSceneSetup(
       renderer.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run on mount
+  }, [containerElement]); // Re-run when container becomes available
 
   // Update scene background when theme changes
   useEffect(() => {

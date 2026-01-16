@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from "react";
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
 import * as THREE from "three";
 
 export type ViewPreset =
@@ -194,14 +194,12 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
   });
 
   const viewerRefsRef = useRef<ViewerRefs | null>(null);
+  // Queue for pending view changes when camera isn't ready yet
+  const [pendingView, setPendingView] = useState<ViewPreset | null>(null);
 
-  const registerRefs = useCallback((refs: ViewerRefs) => {
-    viewerRefsRef.current = refs;
-  }, []);
-
-  const setView = useCallback((preset: ViewPreset) => {
-    const refs = viewerRefsRef.current;
-    if (!refs || !refs.camera.current) return;
+  // Helper to apply a view preset
+  const applyViewPreset = useCallback((preset: ViewPreset, refs: ViewerRefs) => {
+    if (!refs.camera.current) return false;
 
     const { position, up } = getViewPosition(preset);
     const camera = refs.camera.current;
@@ -217,12 +215,66 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     cameraStateRef.current.up.copy(up);
     cameraStateRef.current.version++;
 
-    setState((prev) => ({ ...prev, currentView: preset }));
     refs.requestRender();
 
     // Broadcast camera state for collaborative features
     refs.broadcastCamera?.();
+    return true;
   }, []);
+
+  const registerRefs = useCallback((refs: ViewerRefs) => {
+    viewerRefsRef.current = refs;
+  }, []);
+
+  // Effect to apply pending view when camera becomes ready
+  // Uses polling to check when camera is available
+  useEffect(() => {
+    if (!pendingView) return;
+
+    const tryApplyView = () => {
+      const refs = viewerRefsRef.current;
+      if (refs && refs.camera.current) {
+        if (applyViewPreset(pendingView, refs)) {
+          setPendingView(null);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // Try immediately
+    if (tryApplyView()) return;
+
+    // Poll until camera is ready (check every 50ms for up to 3 seconds)
+    let attempts = 0;
+    const maxAttempts = 60;
+    const interval = setInterval(() => {
+      attempts++;
+      if (tryApplyView()) {
+        clearInterval(interval);
+      } else if (attempts >= maxAttempts) {
+        console.warn("[pendingView] Failed to apply view after max attempts");
+        clearInterval(interval);
+      }
+    }, 50);
+
+    return () => clearInterval(interval);
+  }, [pendingView, applyViewPreset]);
+
+  const setView = useCallback((preset: ViewPreset) => {
+    const refs = viewerRefsRef.current;
+    if (!refs || !refs.camera.current) {
+      // Camera not ready - queue the view change
+      setPendingView(preset);
+      // Also update state so UI reflects the intended view
+      setState((prev) => ({ ...prev, currentView: preset }));
+      return;
+    }
+
+    if (applyViewPreset(preset, refs)) {
+      setState((prev) => ({ ...prev, currentView: preset }));
+    }
+  }, [applyViewPreset]);
 
   const setViewToPlane = useCallback((transform: PlaneTransform) => {
     const refs = viewerRefsRef.current;

@@ -24,21 +24,50 @@ export interface PlaneTransform {
 }
 
 /**
+ * Standard datum plane transforms that match the kernel's coordinate systems.
+ * These MUST match the definitions in @solidtype/core/src/model/planes.ts
+ */
+const DATUM_PLANE_TRANSFORMS: Record<"xy" | "xz" | "yz", PlaneTransform> = {
+  // XY plane: normal=+Z, xDir=+X, yDir=+Y
+  xy: {
+    origin: new THREE.Vector3(0, 0, 0),
+    xDir: new THREE.Vector3(1, 0, 0),
+    yDir: new THREE.Vector3(0, 1, 0),
+    normal: new THREE.Vector3(0, 0, 1),
+  },
+  // YZ plane: normal=+X, xDir=+Y, yDir=+Z
+  yz: {
+    origin: new THREE.Vector3(0, 0, 0),
+    xDir: new THREE.Vector3(0, 1, 0),
+    yDir: new THREE.Vector3(0, 0, 1),
+    normal: new THREE.Vector3(1, 0, 0),
+  },
+  // ZX plane (called "xz" in app): normal=+Y, xDir=+Z, yDir=+X
+  xz: {
+    origin: new THREE.Vector3(0, 0, 0),
+    xDir: new THREE.Vector3(0, 0, 1),
+    yDir: new THREE.Vector3(1, 0, 0),
+    normal: new THREE.Vector3(0, 1, 0),
+  },
+};
+
+/**
  * Get plane transformation for converting sketch coordinates to world coordinates.
- * Uses kernel transform when available, falls back to built-in plane definitions.
+ * Uses kernel transform when available, falls back to standard datum plane transforms.
  *
- * @param planeId - The plane ID (e.g., "xy", "xz", "yz", or a face reference)
- * @param sketchId - Optional sketch ID for looking up kernel transforms
+ * @param sketchId - Sketch ID for looking up kernel transforms
  * @param sketchPlaneTransforms - Map of sketch IDs to kernel plane transforms
+ * @param planeRole - The plane role ("xy", "xz", "yz") for fallback when kernel transform unavailable
+ * @returns The plane transform (always returns a valid transform for standard planes)
  */
 export function getPlaneTransform(
-  planeId: string,
-  sketchId?: string,
-  sketchPlaneTransforms?: Record<string, PlaneTransformData>
-): PlaneTransform {
-  // Try to use kernel transform for accurate plane coordinates
-  if (sketchId && sketchPlaneTransforms?.[sketchId]) {
-    const t = sketchPlaneTransforms[sketchId];
+  sketchId: string,
+  sketchPlaneTransforms: Record<string, PlaneTransformData>,
+  planeRole?: "xy" | "xz" | "yz" | null
+): PlaneTransform | null {
+  // Use kernel transform if available (most accurate)
+  const t = sketchPlaneTransforms[sketchId];
+  if (t) {
     return {
       origin: new THREE.Vector3(...t.origin),
       xDir: new THREE.Vector3(...t.xDir),
@@ -47,38 +76,12 @@ export function getPlaneTransform(
     };
   }
 
-  // Fallback for built-in planes
-  switch (planeId) {
-    case "xy":
-      return {
-        origin: new THREE.Vector3(0, 0, 0),
-        xDir: new THREE.Vector3(1, 0, 0),
-        yDir: new THREE.Vector3(0, 1, 0),
-        normal: new THREE.Vector3(0, 0, 1),
-      };
-    case "xz":
-      return {
-        origin: new THREE.Vector3(0, 0, 0),
-        xDir: new THREE.Vector3(1, 0, 0),
-        yDir: new THREE.Vector3(0, 0, 1),
-        normal: new THREE.Vector3(0, 1, 0),
-      };
-    case "yz":
-      return {
-        origin: new THREE.Vector3(0, 0, 0),
-        xDir: new THREE.Vector3(0, 1, 0),
-        yDir: new THREE.Vector3(0, 0, 1),
-        normal: new THREE.Vector3(1, 0, 0),
-      };
-    default:
-      // Default fallback for unknown planes
-      return {
-        origin: new THREE.Vector3(0, 0, 0),
-        xDir: new THREE.Vector3(1, 0, 0),
-        yDir: new THREE.Vector3(0, 1, 0),
-        normal: new THREE.Vector3(0, 0, 1),
-      };
+  // Fallback to standard datum plane transforms
+  if (planeRole && DATUM_PLANE_TRANSFORMS[planeRole]) {
+    return DATUM_PLANE_TRANSFORMS[planeRole];
   }
+
+  return null;
 }
 
 /**

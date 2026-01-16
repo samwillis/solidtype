@@ -115,6 +115,8 @@ export interface SketchToolsOptions {
   setSketchMousePos: (pos: { x: number; y: number } | null) => void;
   /** Callback to set preview line in context */
   setPreviewLine: (line: { start: SketchPoint; end: SketchPoint } | null) => void;
+  /** Whether the scene is ready (used to trigger effect re-run) */
+  sceneReady: boolean;
 }
 
 /** Result of useSketchTools */
@@ -153,6 +155,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     autoConstraints,
     setSketchMousePos,
     setPreviewLine,
+    sceneReady,
   } = options;
 
   // Tool state
@@ -1061,6 +1064,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     circleCenterPoint,
     draggingEntity,
     boxSelection,
+    sceneReady,
   ]);
 
   return {

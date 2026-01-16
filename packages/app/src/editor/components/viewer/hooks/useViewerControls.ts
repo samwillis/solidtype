@@ -35,6 +35,8 @@ export interface ViewerControlsOptions {
   onCameraChange?: () => void;
   /** Whether sketch mode is active (affects control behavior) */
   sketchModeRef: React.MutableRefObject<{ active: boolean; activeTool: string }>;
+  /** Whether the scene is ready (used to trigger effect re-run) */
+  sceneReady: boolean;
 }
 
 /**
@@ -58,6 +60,7 @@ export function useViewerControls(options: ViewerControlsOptions): {
     aoEnabledRef,
     onCameraChange,
     sketchModeRef,
+    sceneReady,
   } = options;
 
   const animationFrameRef = useRef<number | null>(null);
@@ -360,6 +363,7 @@ export function useViewerControls(options: ViewerControlsOptions): {
     cameraStateRef,
     aoEnabledRef,
     sketchModeRef,
+    sceneReady,
   ]);
 
   return { updateCamera };

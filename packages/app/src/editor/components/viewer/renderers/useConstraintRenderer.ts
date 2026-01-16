@@ -41,6 +41,7 @@ export interface ConstraintRendererOptions {
     active: boolean;
     sketchId: string | null;
     planeId: string | null;
+    planeRole: "xy" | "xz" | "yz" | null;
   };
   /** Function to get current sketch data */
   getSketch: () => SketchDataArrays | null;
@@ -113,12 +114,14 @@ export function useConstraintRenderer(options: ConstraintRendererOptions): void 
       renderer.getSize(rendererSize);
     }
 
-    // Get plane transform
+    // Get plane transform (kernel or fallback using planeRole)
     const transform = getPlaneTransform(
-      sketchMode.planeId,
       sketchMode.sketchId,
-      sketchPlaneTransforms
+      sketchPlaneTransforms,
+      sketchMode.planeRole
     );
+    if (!transform) return;
+
     const toWorld = createToWorldFn(transform);
 
     // Draw dimension annotations (distance and angle)

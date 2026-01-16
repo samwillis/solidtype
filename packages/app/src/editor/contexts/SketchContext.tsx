@@ -60,6 +60,8 @@ export interface SketchModeState {
   active: boolean;
   sketchId: string | null;
   planeId: string | null;
+  /** The plane role for datum planes, used as fallback when kernel transform not yet available */
+  planeRole: "xy" | "xz" | "yz" | null;
   activeTool: SketchTool;
   tempPoints: { x: number; y: number }[];
   /** Whether this is a new sketch (should be deleted on cancel) or editing existing */
@@ -170,6 +172,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     active: false,
     sketchId: null,
     planeId: null,
+    planeRole: null,
     activeTool: "line",
     tempPoints: [],
     isNewSketch: false,
@@ -256,6 +259,31 @@ export function SketchProvider({ children }: SketchProviderProps) {
     [doc]
   );
 
+  /**
+   * Get plane role ("xy", "xz", "yz") from a plane ID or role string
+   */
+  const getPlaneRole = useCallback(
+    (planeIdOrRole: string): "xy" | "xz" | "yz" | null => {
+      if (planeIdOrRole === "xy") return "xy";
+      if (planeIdOrRole === "xz") return "xz";
+      if (planeIdOrRole === "yz") return "yz";
+
+      // Check if it's a UUID that matches a datum plane
+      const datumIds = {
+        xy: findDatumPlaneByRole(doc, "xy"),
+        xz: findDatumPlaneByRole(doc, "xz"),
+        yz: findDatumPlaneByRole(doc, "yz"),
+      };
+
+      if (planeIdOrRole === datumIds.xy) return "xy";
+      if (planeIdOrRole === datumIds.xz) return "xz";
+      if (planeIdOrRole === datumIds.yz) return "yz";
+
+      return null;
+    },
+    [doc]
+  );
+
   const startSketch = useCallback(
     (planeIdOrRole: string) => {
       // Resolve plane ID
@@ -276,10 +304,13 @@ export function SketchProvider({ children }: SketchProviderProps) {
         actions.setView(targetView);
       }
 
+      const planeRole = getPlaneRole(planeIdOrRole);
+
       setMode({
         active: true,
         sketchId,
         planeId,
+        planeRole,
         activeTool: "line",
         tempPoints: [],
         isNewSketch: true,
@@ -294,6 +325,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     },
     [
       addSketch,
+      getPlaneRole,
       resolvePlaneId,
       getViewForPlane,
       actions,
@@ -321,10 +353,13 @@ export function SketchProvider({ children }: SketchProviderProps) {
         actions.setView(targetView);
       }
 
+      const planeRole = getPlaneRole(planeId);
+
       setMode({
         active: true,
         sketchId,
         planeId,
+        planeRole,
         activeTool: "line",
         tempPoints: [],
         isNewSketch: false,
@@ -339,6 +374,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
     },
     [
       getViewForPlane,
+      getPlaneRole,
       actions,
       state.currentView,
       undoManager,
@@ -357,6 +393,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
       active: false,
       sketchId: null,
       planeId: null,
+      planeRole: null,
       activeTool: "line",
       tempPoints: [],
       isNewSketch: false,
@@ -391,6 +428,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
       active: false,
       sketchId: null,
       planeId: null,
+      planeRole: null,
       activeTool: "line",
       tempPoints: [],
       isNewSketch: false,
@@ -929,6 +967,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
                 active: true,
                 sketchId: followedSketchId,
                 planeId: planeRef.ref,
+                planeRole: getPlaneRole(planeRef.ref),
                 activeTool: "line",
                 tempPoints: [],
                 isNewSketch: false,
@@ -948,6 +987,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
               active: false,
               sketchId: null,
               planeId: null,
+              planeRole: null,
               activeTool: "line",
               tempPoints: [],
               isNewSketch: false,
@@ -972,6 +1012,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
                 active: true,
                 sketchId: followedSketchId,
                 planeId: planeRef.ref,
+                planeRole: getPlaneRole(planeRef.ref),
                 activeTool: "line",
                 tempPoints: [],
                 isNewSketch: false,

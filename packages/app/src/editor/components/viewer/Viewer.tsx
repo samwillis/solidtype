@@ -181,6 +181,7 @@ const Viewer: React.FC = () => {
     aoEnabledRef,
     onCameraChange: broadcastCamera,
     sketchModeRef,
+    sceneReady,
   });
 
   // Get sketch data
@@ -193,10 +194,49 @@ const Viewer: React.FC = () => {
 
   // Screen to sketch conversion
   const screenToSketch = useCallback(
-    (screenX: number, screenY: number, planeId: string): { x: number; y: number } | null => {
+    (screenX: number, screenY: number, _planeId: string): { x: number; y: number } | null => {
       const camera = cameraRef.current;
       const container = containerRef.current;
       if (!camera || !container) return null;
+
+      const sketchId = sketchMode.sketchId;
+      const kernelTransform = sketchId ? sketchPlaneTransforms[sketchId] : null;
+
+      let planePoint: THREE.Vector3;
+      let xDir: THREE.Vector3;
+      let yDir: THREE.Vector3;
+      let planeNormal: THREE.Vector3;
+
+      if (kernelTransform) {
+        planePoint = new THREE.Vector3(...kernelTransform.origin);
+        xDir = new THREE.Vector3(...kernelTransform.xDir);
+        yDir = new THREE.Vector3(...kernelTransform.yDir);
+        planeNormal = new THREE.Vector3(...kernelTransform.normal);
+      } else if (sketchMode.planeRole) {
+        // Fallback to standard datum plane transforms (matching kernel's coordinate system)
+        switch (sketchMode.planeRole) {
+          case "xy":
+            planePoint = new THREE.Vector3(0, 0, 0);
+            xDir = new THREE.Vector3(1, 0, 0);
+            yDir = new THREE.Vector3(0, 1, 0);
+            planeNormal = new THREE.Vector3(0, 0, 1);
+            break;
+          case "yz":
+            planePoint = new THREE.Vector3(0, 0, 0);
+            xDir = new THREE.Vector3(0, 1, 0);
+            yDir = new THREE.Vector3(0, 0, 1);
+            planeNormal = new THREE.Vector3(1, 0, 0);
+            break;
+          case "xz":
+            planePoint = new THREE.Vector3(0, 0, 0);
+            xDir = new THREE.Vector3(0, 0, 1);
+            yDir = new THREE.Vector3(1, 0, 0);
+            planeNormal = new THREE.Vector3(0, 1, 0);
+            break;
+        }
+      } else {
+        return null;
+      }
 
       const rect = container.getBoundingClientRect();
       const ndcX = ((screenX - rect.left) / rect.width) * 2 - 1;
@@ -204,44 +244,6 @@ const Viewer: React.FC = () => {
 
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
-
-      const sketchId = sketchMode.sketchId;
-      const kernelTransform = sketchId ? sketchPlaneTransforms[sketchId] : null;
-
-      let planeNormal: THREE.Vector3;
-      let planePoint: THREE.Vector3;
-      let xDir: THREE.Vector3;
-      let yDir: THREE.Vector3;
-
-      if (kernelTransform) {
-        planePoint = new THREE.Vector3(...kernelTransform.origin);
-        xDir = new THREE.Vector3(...kernelTransform.xDir);
-        yDir = new THREE.Vector3(...kernelTransform.yDir);
-        planeNormal = new THREE.Vector3(...kernelTransform.normal);
-      } else {
-        switch (planeId) {
-          case "xy":
-            planeNormal = new THREE.Vector3(0, 0, 1);
-            planePoint = new THREE.Vector3(0, 0, 0);
-            xDir = new THREE.Vector3(1, 0, 0);
-            yDir = new THREE.Vector3(0, 1, 0);
-            break;
-          case "xz":
-            planeNormal = new THREE.Vector3(0, 1, 0);
-            planePoint = new THREE.Vector3(0, 0, 0);
-            xDir = new THREE.Vector3(1, 0, 0);
-            yDir = new THREE.Vector3(0, 0, 1);
-            break;
-          case "yz":
-            planeNormal = new THREE.Vector3(1, 0, 0);
-            planePoint = new THREE.Vector3(0, 0, 0);
-            xDir = new THREE.Vector3(0, 1, 0);
-            yDir = new THREE.Vector3(0, 0, 1);
-            break;
-          default:
-            return null;
-        }
-      }
 
       const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, planePoint);
       const intersection = new THREE.Vector3();
@@ -255,7 +257,7 @@ const Viewer: React.FC = () => {
 
       return { x: sketchX, y: sketchY };
     },
-    [cameraRef, sketchMode.sketchId, sketchPlaneTransforms]
+    [cameraRef, sketchMode.sketchId, sketchMode.planeRole, sketchPlaneTransforms]
   );
 
   // Sketch to screen conversion (inverse of screenToSketch)
@@ -267,8 +269,7 @@ const Viewer: React.FC = () => {
       if (!camera || !container) return null;
 
       const sketchId = sketchMode.sketchId;
-      const planeId = sketchMode.planeId;
-      if (!sketchId || !planeId) return null;
+      if (!sketchId) return null;
 
       const kernelTransform = sketchPlaneTransforms[sketchId];
 
@@ -280,26 +281,27 @@ const Viewer: React.FC = () => {
         planePoint = new THREE.Vector3(...kernelTransform.origin);
         xDir = new THREE.Vector3(...kernelTransform.xDir);
         yDir = new THREE.Vector3(...kernelTransform.yDir);
-      } else {
-        switch (planeId) {
+      } else if (sketchMode.planeRole) {
+        // Fallback to standard datum plane transforms (matching kernel's coordinate system)
+        switch (sketchMode.planeRole) {
           case "xy":
             planePoint = new THREE.Vector3(0, 0, 0);
             xDir = new THREE.Vector3(1, 0, 0);
             yDir = new THREE.Vector3(0, 1, 0);
-            break;
-          case "xz":
-            planePoint = new THREE.Vector3(0, 0, 0);
-            xDir = new THREE.Vector3(1, 0, 0);
-            yDir = new THREE.Vector3(0, 0, 1);
             break;
           case "yz":
             planePoint = new THREE.Vector3(0, 0, 0);
             xDir = new THREE.Vector3(0, 1, 0);
             yDir = new THREE.Vector3(0, 0, 1);
             break;
-          default:
-            return null;
+          case "xz":
+            planePoint = new THREE.Vector3(0, 0, 0);
+            xDir = new THREE.Vector3(0, 0, 1);
+            yDir = new THREE.Vector3(1, 0, 0);
+            break;
         }
+      } else {
+        return null;
       }
 
       // Convert 2D sketch coords to 3D world point
@@ -318,7 +320,7 @@ const Viewer: React.FC = () => {
         y: ((-screenPos.y + 1) / 2) * rect.height,
       };
     },
-    [cameraRef, sketchMode.sketchId, sketchMode.planeId, sketchPlaneTransforms]
+    [cameraRef, sketchMode.sketchId, sketchMode.planeRole, sketchPlaneTransforms]
   );
 
   // Constraint value update
@@ -439,6 +441,7 @@ const Viewer: React.FC = () => {
     autoConstraints: viewerState.autoConstraints,
     setSketchMousePos,
     setPreviewLine,
+    sceneReady,
   });
 
   // 3D face/edge raycast for selection
@@ -583,9 +586,11 @@ const Viewer: React.FC = () => {
     onCursorBroadcast: handleCursorBroadcast,
     onCursor2DBroadcast: handleCursor2DBroadcast,
     showEdges: viewerState.showEdges,
+    sceneReady,
   });
 
   // Register refs with context
+  // Re-run when sceneReady changes to apply any pending view changes
   React.useEffect(() => {
     registerRefs({
       camera: cameraRef,
@@ -606,6 +611,7 @@ const Viewer: React.FC = () => {
     cameraRef,
     sceneRef,
     targetRef,
+    sceneReady, // Re-register when scene becomes ready to apply pending views
   ]);
 
   // Toggle edge visibility

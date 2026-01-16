@@ -34,6 +34,7 @@ export interface SketchRendererOptions {
     active: boolean;
     sketchId: string | null;
     planeId: string | null;
+    planeRole: "xy" | "xz" | "yz" | null;
     activeTool: string;
   };
   /** Function to get current sketch data */
@@ -100,12 +101,15 @@ export function useSketchRenderer(options: SketchRendererOptions): void {
     // Helper to render a sketch
     const renderSketch = (
       sketchData: SketchDataArrays,
-      planeId: string,
+      sketchId: string,
       color: number,
       pointSize: number,
-      sketchId?: string
+      planeRole?: "xy" | "xz" | "yz" | null
     ) => {
-      const transform = getPlaneTransform(planeId, sketchId, sketchPlaneTransforms);
+      // Get plane transform (kernel or fallback)
+      const transform = getPlaneTransform(sketchId, sketchPlaneTransforms, planeRole);
+      if (!transform) return; // Can't render without a transform
+
       const toWorld = createToWorldFn(transform);
 
       const pointMap = new Map<string, { x: number; y: number }>();
@@ -260,18 +264,20 @@ export function useSketchRenderer(options: SketchRendererOptions): void {
 
     // Render active sketch
     if (sketchMode.active && sketchMode.sketchId && sketchMode.planeId) {
-      const sketchData = getActiveSketch();
-      if (sketchData) {
-        renderSketch(sketchData, sketchMode.planeId, 0x00aaff, 1.5, sketchMode.sketchId);
-      }
-
-      // Get transform for preview rendering
+      // Get transform (kernel or fallback using planeRole)
       const transform = getPlaneTransform(
-        sketchMode.planeId,
         sketchMode.sketchId,
-        sketchPlaneTransforms
+        sketchPlaneTransforms,
+        sketchMode.planeRole
       );
-      const toWorld = createToWorldFn(transform);
+
+      if (transform) {
+        const sketchData = getActiveSketch();
+        if (sketchData) {
+          renderSketch(sketchData, sketchMode.sketchId, 0x00aaff, 1.5, sketchMode.planeRole);
+        }
+
+        const toWorld = createToWorldFn(transform);
 
       // Render preview line
       if (previewShapes.line && sketchMode.planeId) {
@@ -516,6 +522,7 @@ export function useSketchRenderer(options: SketchRendererOptions): void {
           sketchGroup.add(line);
         }
       }
+      } // end if (transform)
     }
 
     // Render visible (non-active) sketches in grey
@@ -540,8 +547,19 @@ export function useSketchRenderer(options: SketchRendererOptions): void {
       };
       if (sketchData.points.length === 0 && sketchData.entities.length === 0) continue;
 
-      const planeId = sketchFeature.plane.ref;
-      renderSketch(sketchData, planeId, 0x888888, 1.0, sketchFeature.id);
+      // Look up the plane role for this sketch's plane reference
+      let sketchPlaneRole: "xy" | "xz" | "yz" | null = null;
+      if (sketchFeature.plane.kind === "planeFeatureId") {
+        const planeFeature = features.find((f) => f.id === sketchFeature.plane.ref);
+        if (planeFeature && planeFeature.type === "plane") {
+          const def = (planeFeature as { definition?: { role?: string } }).definition;
+          if (def?.role === "xy" || def?.role === "xz" || def?.role === "yz") {
+            sketchPlaneRole = def.role;
+          }
+        }
+      }
+
+      renderSketch(sketchData, sketchFeature.id, 0x888888, 1.0, sketchPlaneRole);
     }
 
     needsRenderRef.current = true;

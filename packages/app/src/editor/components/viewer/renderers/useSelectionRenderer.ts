@@ -53,6 +53,7 @@ export interface SelectionRendererOptions {
     active: boolean;
     sketchId: string | null;
     planeId: string | null;
+    planeRole: "xy" | "xz" | "yz" | null;
   };
   /** Current sketch data */
   getSketch: () => SketchDataArrays | null;
@@ -351,12 +352,14 @@ export function useSelectionRenderer(options: SelectionRendererOptions): void {
       renderer.getSize(rendererSize);
     }
 
-    // Get plane transform
+    // Get plane transform (kernel or fallback using planeRole)
     const transform = getPlaneTransform(
-      sketchMode.planeId,
       sketchMode.sketchId,
-      sketchPlaneTransforms
+      sketchPlaneTransforms,
+      sketchMode.planeRole
     );
+    if (!transform) return;
+
     const toWorld = createToWorldFn(transform);
 
     // Draw selection highlights for selected entities
