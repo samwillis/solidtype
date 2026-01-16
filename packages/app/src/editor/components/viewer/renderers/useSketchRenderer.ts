@@ -71,14 +71,16 @@ export function useSketchRenderer(options: SketchRendererOptions): void {
     needsRenderRef,
   } = options;
 
-  // Compute a key that changes when any sketch's visibility changes
-  // This ensures the effect re-runs when visibility is toggled
+  // Compute a key that changes when sketch visibility or active state changes
+  // This ensures the effect re-runs when visibility is toggled or sketch mode exits
   const sketchVisibilityKey = useMemo(() => {
-    return features
+    const visibilityPart = features
       .filter((f) => f.type === "sketch")
       .map((f) => `${f.id}:${f.visible}`)
       .join(",");
-  }, [features]);
+    // Include active sketch info to trigger re-render when exiting sketch mode
+    return `${sketchMode.active}:${sketchMode.sketchId}:${visibilityPart}`;
+  }, [features, sketchMode.active, sketchMode.sketchId]);
 
   useEffect(() => {
     const sketchGroup = sketchGroupRef.current;
@@ -543,10 +545,10 @@ export function useSketchRenderer(options: SketchRendererOptions): void {
       // Skip if this is the active sketch
       if (sketchMode.active && sketchMode.sketchId === sketchFeature.id) continue;
 
-      // Show if visible OR if selected/hovered
-      const isSelected = selectedFeatureId === sketchFeature.id;
+      // Show if visible OR if hovered (for preview)
+      // Hidden sketches are not shown when selected - user must toggle visibility explicitly
       const isHovered = hoveredFeatureId === sketchFeature.id;
-      if (!sketchFeature.visible && !isSelected && !isHovered) continue;
+      if (!sketchFeature.visible && !isHovered) continue;
 
       // Convert data format to arrays
       const sketchData: SketchDataArrays = {
