@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { Collapsible } from "@base-ui/react/collapsible";
 import {
