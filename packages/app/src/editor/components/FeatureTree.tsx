@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { Collapsible } from "@base-ui/react/collapsible";
 import {
@@ -14,6 +14,7 @@ import { useDocument } from "../contexts/DocumentContext";
 import { useKernel } from "../contexts/KernelContext";
 import { useSelection } from "../contexts/SelectionContext";
 import { useSketch } from "../contexts/SketchContext";
+import { useKeyboardShortcut, ShortcutPriority } from "../contexts/KeyboardShortcutContext";
 import { ConfirmDialog } from "./ConfirmDialog";
 import type { Feature, FeatureType } from "../types/document";
 import type { FeatureStatus } from "../worker/types";
@@ -809,35 +810,45 @@ const FeatureTree: React.FC = () => {
     [features, editSketch, sketchMode.active]
   );
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Disable keyboard shortcuts in sketch mode
-      if (sketchMode.active) return;
+  // Keyboard shortcut: Delete/Backspace to delete selected feature
+  useKeyboardShortcut({
+    id: "feature-tree-delete",
+    keys: ["Delete", "Backspace"],
+    priority: ShortcutPriority.FEATURE_TREE,
+    condition: () => {
+      // Not in sketch mode and has a selected feature
+      if (sketchMode.active) return false;
+      if (!selectedFeatureId) return false;
 
-      // Delete key
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedFeatureId) {
-        const feature = features.find((f) => f.id === selectedFeatureId);
-        // Allow delete for non-origin features, but not for datum planes
-        const isSystemPlane =
-          feature?.type === "plane" &&
-          "definition" in feature &&
-          (feature.definition as { kind?: string })?.kind === "datum";
-        if (feature && feature.type !== "origin" && !isSystemPlane) {
-          e.preventDefault();
-          setDeleteConfirm({
-            open: true,
-            id: feature.id,
-            name: feature.name || feature.id,
-          });
-        }
+      const feature = features.find((f) => f.id === selectedFeatureId);
+      if (!feature) return false;
+
+      // Can't delete origin
+      if (feature.type === "origin") return false;
+
+      // Can't delete system datum planes
+      const isSystemPlane =
+        feature.type === "plane" &&
+        "definition" in feature &&
+        (feature.definition as { kind?: string })?.kind === "datum";
+      if (isSystemPlane) return false;
+
+      return true;
+    },
+    handler: () => {
+      const feature = features.find((f) => f.id === selectedFeatureId);
+      if (feature) {
+        setDeleteConfirm({
+          open: true,
+          id: feature.id,
+          name: feature.name || feature.id,
+        });
       }
-      // Removed F2 shortcut - use double-click to rename instead
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedFeatureId, features, sketchMode.active]);
+      return true;
+    },
+    description: "Delete selected feature",
+    category: "Feature Tree",
+  });
 
   return (
     <div className={`feature-tree ${isDisabled ? "disabled" : ""}`}>

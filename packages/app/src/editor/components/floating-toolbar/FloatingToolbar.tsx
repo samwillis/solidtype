@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useCallback } from "react";
+import React, { useMemo, useCallback } from "react";
 import { Tooltip } from "@base-ui/react";
 import { useSketch } from "../../contexts/SketchContext";
 import { useDocument } from "../../contexts/DocumentContext";
@@ -6,6 +6,10 @@ import { useSelection } from "../../contexts/SelectionContext";
 import { useFeatureEdit } from "../../contexts/FeatureEditContext";
 import { useKernel } from "../../contexts/KernelContext";
 import { useViewer } from "../../contexts/ViewerContext";
+import {
+  useKeyboardShortcut,
+  ShortcutPriority,
+} from "../../contexts/KeyboardShortcutContext";
 import { UndoRedoGroup } from "./UndoRedoGroup";
 import { SketchModeTools } from "./SketchModeTools";
 import { FeatureModeTools } from "./FeatureModeTools";
@@ -158,52 +162,50 @@ const FloatingToolbar: React.FC = () => {
     }
   }, [mode.sketchId, mode.planeId, sketchPlaneTransforms, viewerActions]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-      const modKey = isMac ? e.metaKey : e.ctrlKey;
+  // Keyboard shortcut: Mod+Enter to finish sketch
+  useKeyboardShortcut({
+    id: "floating-toolbar-finish-sketch",
+    keys: ["Mod+Enter"],
+    priority: ShortcutPriority.SKETCH_MODE,
+    condition: () => mode.active,
+    handler: () => {
+      finishSketch();
+      return true;
+    },
+    description: "Finish editing sketch",
+    category: "Sketch",
+  });
 
-      if (modKey && e.key === "Enter" && mode.active) {
-        e.preventDefault();
-        finishSketch();
-        return;
-      }
+  // Keyboard shortcut: Escape to clear selection (outside sketch mode)
+  // In sketch mode, useSketchTools handles Escape
+  useKeyboardShortcut({
+    id: "floating-toolbar-escape",
+    keys: ["Escape"],
+    priority: ShortcutPriority.GLOBAL,
+    condition: () => !mode.active,
+    handler: () => {
+      selectFeature(null);
+      clearSelection();
+      clearSketchSelection();
+      return true;
+    },
+    description: "Clear selection",
+    category: "General",
+  });
 
-      if (e.key === "Escape") {
-        // In sketch mode, let useSketchTools handle Escape (it clears drawing chain + selection)
-        if (mode.active) {
-          return;
-        }
-        // Outside sketch mode, clear all selections
-        e.preventDefault();
-        selectFeature(null);
-        clearSelection();
-        clearSketchSelection();
-        return;
-      }
-
-      // Toggle snap-to-grid with 'G' key (only in sketch mode)
-      if (e.key === "g" || e.key === "G") {
-        if (mode.active) {
-          e.preventDefault();
-          viewerActions.toggleSnapToGrid();
-        }
-        return;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    mode.active,
-    finishSketch,
-    cancelSketch,
-    selectFeature,
-    clearSelection,
-    clearSketchSelection,
-    viewerActions,
-  ]);
+  // Keyboard shortcut: G to toggle snap-to-grid
+  useKeyboardShortcut({
+    id: "floating-toolbar-toggle-grid",
+    keys: ["G"],
+    priority: ShortcutPriority.SKETCH_MODE,
+    condition: () => mode.active,
+    handler: () => {
+      viewerActions.toggleSnapToGrid();
+      return true;
+    },
+    description: "Toggle snap-to-grid",
+    category: "Sketch",
+  });
 
   // Tooltip texts
   const sketchTooltip = canStartSketch

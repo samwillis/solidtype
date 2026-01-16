@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as THREE from "three";
+import { useKeyboardShortcut, ShortcutPriority } from "../../../contexts/KeyboardShortcutContext";
 import type { SketchDataArrays } from "../sketch-helpers";
 
 /** Dimension editing state */
@@ -189,25 +190,35 @@ export function useDimensionEditing(options: DimensionEditingOptions): Dimension
     }
   }, [editingDimensionId]);
 
-  // Handle keyboard events for editing
-  useEffect(() => {
-    if (!editingDimensionId) return;
+  // Keyboard shortcut: Enter to submit dimension edit
+  useKeyboardShortcut({
+    id: "dimension-edit-submit",
+    keys: ["Enter"],
+    priority: ShortcutPriority.INLINE_EDIT,
+    condition: () => editingDimensionId !== null,
+    handler: () => {
+      submitEdit();
+      return true;
+    },
+    description: "Submit dimension value",
+    category: "Sketch",
+    editable: "allow", // Should work even when input is focused
+  });
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        submitEdit();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        cancelEdit();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, [editingDimensionId, submitEdit, cancelEdit]);
+  // Keyboard shortcut: Escape to cancel dimension edit
+  useKeyboardShortcut({
+    id: "dimension-edit-cancel",
+    keys: ["Escape"],
+    priority: ShortcutPriority.INLINE_EDIT,
+    condition: () => editingDimensionId !== null,
+    handler: () => {
+      cancelEdit();
+      return true;
+    },
+    description: "Cancel dimension edit",
+    category: "Sketch",
+    editable: "allow", // Should work even when input is focused
+  });
 
   // Handle dimension label dragging for repositioning
   useEffect(() => {

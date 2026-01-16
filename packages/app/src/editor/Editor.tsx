@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { FloatingToolbar } from "./components/floating-toolbar";
 import FloatingFeatureTreePanel from "./components/FloatingFeatureTreePanel";
 import ViewCube from "./components/ViewCube";
@@ -10,6 +10,11 @@ import { KernelProvider } from "./contexts/KernelContext";
 import { SketchProvider } from "./contexts/SketchContext";
 import { SelectionProvider } from "./contexts/SelectionContext";
 import { FeatureEditProvider } from "./contexts/FeatureEditContext";
+import {
+  KeyboardShortcutProvider,
+  useKeyboardShortcut,
+  ShortcutPriority,
+} from "./contexts/KeyboardShortcutContext";
 import { UserPresence } from "../components/UserPresence";
 import { useFollowing } from "../hooks/useFollowing";
 import "./Editor.css";
@@ -24,27 +29,47 @@ const EditorContent: React.FC = () => {
     awareness,
   });
 
-  // Keyboard shortcuts for undo/redo
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-      const modKey = isMac ? e.metaKey : e.ctrlKey;
+  // Keyboard shortcut: Mod+Z to undo
+  useKeyboardShortcut({
+    id: "global-undo",
+    keys: ["Mod+Z"],
+    priority: ShortcutPriority.GLOBAL,
+    condition: () => canUndo,
+    handler: () => {
+      undo();
+      return true;
+    },
+    description: "Undo",
+    category: "Edit",
+  });
 
-      if (modKey && e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        if (canUndo) undo();
-      } else if (modKey && e.key === "z" && e.shiftKey) {
-        e.preventDefault();
-        if (canRedo) redo();
-      } else if (modKey && e.key === "y") {
-        e.preventDefault();
-        if (canRedo) redo();
-      }
-    };
+  // Keyboard shortcut: Mod+Shift+Z to redo
+  useKeyboardShortcut({
+    id: "global-redo-shift-z",
+    keys: ["Mod+Shift+Z"],
+    priority: ShortcutPriority.GLOBAL,
+    condition: () => canRedo,
+    handler: () => {
+      redo();
+      return true;
+    },
+    description: "Redo",
+    category: "Edit",
+  });
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [undo, redo, canUndo, canRedo]);
+  // Keyboard shortcut: Mod+Y to redo (Windows-style)
+  useKeyboardShortcut({
+    id: "global-redo-y",
+    keys: ["Mod+Y"],
+    priority: ShortcutPriority.GLOBAL,
+    condition: () => canRedo,
+    handler: () => {
+      redo();
+      return true;
+    },
+    description: "Redo",
+    category: "Edit",
+  });
 
   return (
     <div className="app">
@@ -103,16 +128,18 @@ const EditorContent: React.FC = () => {
 // Main Editor component wraps everything with providers
 export const Editor: React.FC<{ documentId?: string }> = ({ documentId }) => {
   return (
-    <DocumentProvider documentId={documentId}>
-      <KernelProvider>
-        <SelectionProvider>
-          <SketchProvider>
-            <FeatureEditProvider>
-              <EditorContent />
-            </FeatureEditProvider>
-          </SketchProvider>
-        </SelectionProvider>
-      </KernelProvider>
-    </DocumentProvider>
+    <KeyboardShortcutProvider>
+      <DocumentProvider documentId={documentId}>
+        <KernelProvider>
+          <SelectionProvider>
+            <SketchProvider>
+              <FeatureEditProvider>
+                <EditorContent />
+              </FeatureEditProvider>
+            </SketchProvider>
+          </SelectionProvider>
+        </KernelProvider>
+      </DocumentProvider>
+    </KeyboardShortcutProvider>
   );
 };

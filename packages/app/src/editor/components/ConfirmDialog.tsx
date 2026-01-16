@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from "react";
+import React, { useRef } from "react";
 import { createPortal } from "react-dom";
+import { useKeyboardShortcut, ShortcutPriority } from "../contexts/KeyboardShortcutContext";
 import "./ConfirmDialog.css";
 
 interface ConfirmDialogProps {
@@ -25,18 +26,20 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onCancel();
-      }
-    };
-
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [open, onCancel]);
+  // Keyboard shortcut: Escape to close dialog
+  useKeyboardShortcut({
+    id: "confirm-dialog-escape",
+    keys: ["Escape"],
+    priority: ShortcutPriority.MODAL,
+    condition: () => open,
+    handler: () => {
+      onCancel();
+      return true;
+    },
+    description: "Close dialog",
+    category: "Dialog",
+    editable: "allow", // Should work even if a field inside the dialog is focused
+  });
 
   if (!open) return null;
 

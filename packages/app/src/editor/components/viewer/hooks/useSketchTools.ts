@@ -7,6 +7,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
+  useKeyboardShortcut,
+  ShortcutPriority,
+} from "../../../contexts/KeyboardShortcutContext";
+import {
   POINT_MERGE_TOLERANCE_MM,
   isNearHorizontal,
   isNearVertical,
@@ -383,6 +387,50 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     setPreviewLine,
   ]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Keyboard shortcut: Escape to cancel drawing and clear selection
+  useKeyboardShortcut({
+    id: "sketch-escape",
+    keys: ["Escape"],
+    priority: ShortcutPriority.SKETCH_MODE,
+    condition: () => sketchMode.active,
+    handler: () => {
+      // Clear all temporary drawing state
+      setTempStartPoint(null);
+      setTempSecondPoint(null);
+      setChainLastEndpoint(null);
+      setArcStartPoint(null);
+      setArcEndPoint(null);
+      setArcCenterPoint(null);
+      setCircleCenterPoint(null);
+      setTangentSource(null);
+      setPreviewLine(null);
+      setPreviewCircle(null);
+      setPreviewArc(null);
+      setPreviewRect(null);
+      setPreviewPolygon(null);
+      // Also clear sketch selection
+      clearSketchSelection();
+      return true;
+    },
+    description: "Cancel drawing / clear selection",
+    category: "Sketch",
+  });
+
+  // Keyboard shortcut: Delete/Backspace to delete selected items
+  useKeyboardShortcut({
+    id: "sketch-delete",
+    keys: ["Delete", "Backspace"],
+    priority: ShortcutPriority.SKETCH_MODE,
+    condition: () => sketchMode.active,
+    handler: () => {
+      deleteSelectedItems();
+      return true;
+    },
+    description: "Delete selected entities",
+    category: "Sketch",
+    // Default editable policy is "ignore", so this won't fire in inputs
+  });
 
   // Mouse handlers effect
   useEffect(() => {
@@ -1003,53 +1051,14 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
       }
     };
 
-    // Handle keyboard shortcuts
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        // Clear all temporary drawing state
-        setTempStartPoint(null);
-        setTempSecondPoint(null);
-        setChainLastEndpoint(null);
-        setArcStartPoint(null);
-        setArcEndPoint(null);
-        setArcCenterPoint(null);
-        setCircleCenterPoint(null);
-        setTangentSource(null);
-        setPreviewLine(null);
-        setPreviewCircle(null);
-        setPreviewArc(null);
-        setPreviewRect(null);
-        setPreviewPolygon(null);
-        // Also clear sketch selection
-        clearSketchSelection();
-      }
-
-      // Delete/Backspace to delete selected items
-      if (e.key === "Delete" || e.key === "Backspace") {
-        // Don't delete if typing in an input field
-        if (
-          e.target instanceof HTMLInputElement ||
-          e.target instanceof HTMLTextAreaElement ||
-          (e.target instanceof HTMLElement && e.target.isContentEditable)
-        ) {
-          return;
-        }
-        e.preventDefault();
-        deleteSelectedItems();
-      }
-    };
-
     container.addEventListener("mousemove", handleMouseMove);
     container.addEventListener("mousedown", handleMouseDown);
     container.addEventListener("mouseup", handleMouseUp);
-    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       container.removeEventListener("mousemove", handleMouseMove);
       container.removeEventListener("mousedown", handleMouseDown);
       container.removeEventListener("mouseup", handleMouseUp);
-      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [
     containerRef,
