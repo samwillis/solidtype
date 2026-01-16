@@ -233,3 +233,205 @@ function ShortcutHelpPanel() {
 - Use `e.stopPropagation()` sparingly - prefer priority-based dispatch
 - Consider Mac vs Windows key differences (Cmd vs Ctrl)
 - Keep shortcuts discoverable via tooltips and help panel
+
+---
+
+## Review & Refinements
+
+*The following review identifies sharp edges and suggests refinements to make the plan more robust.*
+
+### What's Already Strong
+
+* **Single dispatcher** with **priority ordering**: exactly what you want for CAD (modal > inline edit > sketch > scene > tree > global).
+* **Registration API** (with cleanup) keeps features decoupled.
+* **Condition functions** let shortcuts be contextual without hard-wiring focus logic into the dispatcher.
+* **Help panel** falls out naturally once shortcuts are centralized.
+
+### The 5 Sharp Edges to Fix Up-Front
+
+#### 1) "Skip if input focused" needs exceptions (and should include other interactive elements)
+
+If you blanket-skip inputs, you'll break useful patterns like:
+
+* **Escape** to close a modal even if a text field inside it is focused
+* **Enter/Escape** in your dimension editor (which is basically an input)
+* Possibly **Ctrl+Z/Ctrl+Y** if you ever want app-level undo while an input is focused (sometimes you do, sometimes you don't)
+
+Also: keyboard events can target buttons/links/menus, not just `<input>`/`<textarea>`; it's easy to accidentally intercept **Space/Enter** and break accessibility/expected behavior. MDN notes key events go to the currently focused element, including interactive elements, and bubble to Document/Window. ([MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/API/Element/keydown_event))
+
+**Suggestion:** replace `shouldHandleEvent()` with "is editable / is interactive" detection *plus* a per-shortcut override:
+
+```ts
+type EditablePolicy = "ignore" | "allow" | "only";
+
+interface ShortcutHandler {
+  ...
+  editable?: EditablePolicy; // default "ignore"
+}
+```
+
+Then a modal's Escape can be `editable: "allow"`.
+
+If you have Shadow DOM anywhere, use `e.composedPath()` to detect editables reliably. ([MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/API/Event/composedPath))
+
+---
+
+#### 2) Normalize to a "Mod" key and fix letter/punctuation normalization
+
+Right now you're emitting `"Ctrl"` for ctrl/meta. That's fine internally, but you'll want:
+
+* internal canonical form like **`Mod+Z`**
+* display form **Cmd+Z** on macOS and **Ctrl+Z** elsewhere (and don't lie about the key) ([MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/metaKey))
+
+Also: `e.key` for letters is typically `"g"` (lowercase) unless shift is held. Your examples use `"G"`, so you'll either miss matches or force people to register lowercase.
+
+And punctuation like `?` is commonly implemented by checking `e.key === "?"` (even though Shift is involved on many layouts). MDN documents the standard key values for `KeyboardEvent.key`. ([MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values))
+
+**Suggestion:** canonicalize:
+
+* letters → uppercase (`g` → `G`)
+* use `Mod` instead of `Ctrl`
+* include `Shift` only when it matters (usually when combined with Mod/Alt, or for non-printable keys)
+
+---
+
+#### 3) IME/composition: ignore shortcuts during composition
+
+If anyone uses an IME (Japanese/Chinese/etc), key events occur during composition. You generally don't want your CAD shortcuts firing mid-composition. `KeyboardEvent.isComposing` exists for this. ([MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/isComposing))
+
+**Suggestion:** in the dispatcher:
+
+```ts
+if (e.isComposing) return;
+```
+
+---
+
+#### 4) Key repeat: some shortcuts should ignore repeats
+
+Holding `Delete` to delete repeatedly is fine *if you're handling it intentionally*. But many single-shot actions (toggle grid, tool select) should ignore repeat. `KeyboardEvent.repeat` tells you if the key is auto-repeating. ([MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/repeat))
+
+Add `repeat?: "allow" | "ignore"` (default ignore for non-destructive toggles).
+
+---
+
+#### 5) "Customization later" will be painful unless you separate Commands from Bindings now
+
+Your current model registers **handlers keyed by key strings**. That works, but when you add remapping you'll wish you had:
+
+* **Commands**: stable IDs + descriptions + categories + enablement
+* **Bindings**: user-configurable key combos → command IDs
+
+You can still keep your `useKeyboardShortcut(...)` API, but internally treat it as registering a **command** and attaching **default bindings**.
+
+This also makes conflict detection and the help panel cleaner.
+
+### Concrete Interface Improvements
+
+#### A) Make handlers return `boolean` ("handled") and let the dispatcher own preventDefault
+
+Right now `handler: (e) => void` pushes policy into each handler. Prefer:
+
+```ts
+handler: (e: KeyboardEvent) => boolean; // true = consumed
+preventDefault?: boolean; // default true when handled
+```
+
+Then your dispatcher does:
+
+* call highest-priority eligible handler(s)
+* if it returns true → `preventDefault()` and stop
+
+This prevents accidental "handled but didn't prevent default" (Backspace navigating, etc).
+
+#### B) Add `editable` + `repeat` flags
+
+These two solve 80% of annoying edge cases without complexity.
+
+#### C) Decide on `key` vs `code`
+
+* `KeyboardEvent.key` is "what character/action the user intended" (and is what most apps use for shortcuts)
+* `KeyboardEvent.code` is "physical key position" (layout-independent) ([MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code))
+
+For CAD, I'd default to `key` (better for non-QWERTY), *but* be aware of macOS Delete weirdness: the key labeled "Delete" commonly reports as `"Backspace"` as a key value. The UI Events spec explicitly calls this out. ([W3C](https://www.w3.org/TR/uievents-key/))
+
+Your plan already allows both Delete/Backspace, so you're covered, but it's worth keeping in mind.
+
+### Dispatcher Mechanics Recommendations
+
+* Attach listener on **window** (or document) in the **capture phase** so you see events early and can consistently arbitrate.
+* Maintain a map: `combo -> handlers[]` sorted by `(priority desc, registrationOrder desc)` so "most recently mounted" wins ties (very intuitive for inline editors/modals).
+* On keydown:
+  1. ignore if composing
+  2. compute normalized combo
+  3. get candidates
+  4. iterate candidates until one returns handled
+
+### Revised Phase 1 Recommendations
+
+I'd do Phase 1/2/3 as written, but slip **"Mod key + editable policy + handler returns handled"** into Phase 1. Those are structural; everything else can evolve.
+
+### Updated Interface (incorporating review)
+
+```typescript
+type EditablePolicy = "ignore" | "allow" | "only";
+type RepeatPolicy = "ignore" | "allow";
+
+interface ShortcutHandler {
+  /** Unique ID for this handler (also serves as command ID) */
+  id: string;
+  /** Keys that trigger this handler (e.g., "Escape", "Mod+Z") */
+  keys: string[];
+  /** Priority (higher = handled first) */
+  priority: number;
+  /** Condition for when this handler is active */
+  condition: () => boolean;
+  /** The handler function - returns true if handled */
+  handler: (e: KeyboardEvent) => boolean;
+  /** Description for UI display */
+  description: string;
+  /** How to handle when focus is in an editable element (default: "ignore") */
+  editable?: EditablePolicy;
+  /** How to handle key repeat (default: "ignore") */
+  repeat?: RepeatPolicy;
+  /** Whether to call preventDefault when handled (default: true) */
+  preventDefault?: boolean;
+  /** Category for grouping in help panel */
+  category?: string;
+}
+```
+
+### Key Normalization (Updated)
+
+```typescript
+function normalizeKey(e: KeyboardEvent): string {
+  // Skip if composing (IME)
+  if (e.isComposing) return "";
+  
+  const parts: string[] = [];
+  
+  // Use "Mod" for platform-agnostic modifier
+  const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+  if (isMac ? e.metaKey : e.ctrlKey) parts.push("Mod");
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+  
+  // Normalize letter keys to uppercase
+  let key = e.key;
+  if (key.length === 1 && key >= "a" && key <= "z") {
+    key = key.toUpperCase();
+  }
+  
+  parts.push(key);
+  return parts.join("+");
+}
+
+// Display helper for showing shortcuts to users
+function displayKey(combo: string): string {
+  const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+  return combo
+    .replace("Mod", isMac ? "⌘" : "Ctrl")
+    .replace("Alt", isMac ? "⌥" : "Alt")
+    .replace("Shift", isMac ? "⇧" : "Shift");
+}
+```
