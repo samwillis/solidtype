@@ -48,7 +48,7 @@ services:
       DURABLE_STREAMS_HOST: "0.0.0.0"
     command: >
       sh -c "npm init -y >/dev/null 2>&1 &&
-             npm install @durable-streams/server@0.1.3 --save >/dev/null 2>&1 &&
+             npm install @durable-streams/server@0.1.6 --save >/dev/null 2>&1 &&
              node --input-type=module -e '
                import(\"@durable-streams/server\").then(async mod => {
                  const { DurableStreamTestServer } = mod;

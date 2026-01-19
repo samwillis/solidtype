@@ -220,8 +220,14 @@ export function loadDocument(ydoc: Y.Doc): SolidTypeDoc {
 export function findDatumPlaneByRole(doc: SolidTypeDoc, role: DatumPlaneRole): string | null {
   let foundId: string | null = null;
   doc.featuresById.forEach((featureMap, id) => {
-    if (featureMap.get("type") === "plane" && featureMap.get("role") === role) {
-      foundId = id;
+    if (featureMap.get("type") === "plane") {
+      // Check both old format (role at top level) and new format (role in definition)
+      const topLevelRole = featureMap.get("role");
+      const definition = featureMap.get("definition") as { kind?: string; role?: string } | undefined;
+      const definitionRole = definition?.kind === "datum" ? definition.role : undefined;
+      if (topLevelRole === role || definitionRole === role) {
+        foundId = id;
+      }
     }
   });
   return foundId;

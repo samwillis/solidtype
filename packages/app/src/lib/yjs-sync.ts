@@ -6,7 +6,7 @@
 
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
-import { DurableStreamsProvider } from "./vendor/y-durable-streams";
+import { DurableStreamsProvider } from "@durable-streams/y-durable-streams";
 
 /**
  * Get the API base URL

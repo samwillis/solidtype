@@ -699,11 +699,11 @@ This project is an excellent reference implementation for:
   - Reference: [Electric SQL AGENTS.md](https://electric-sql.com/AGENTS.md)
 
 - **[Durable Streams](https://github.com/durable-streams/durable-streams)** - See how to:
-  - Integrate Yjs with Durable Streams for document persistence
+  - Integrate Yjs with Durable Streams for document persistence using `@durable-streams/y-durable-streams`
   - Set up append-only streams for CRDT sync
   - Handle awareness/presence via separate streams
   - Implement reconnection and error handling
-  - Check out `packages/app/src/lib/vendor/y-durable-streams/` for the provider implementation
+  - See `packages/app/src/lib/yjs-sync.ts` for provider usage
 
 ### Learning AI Integration Architecture
 
