@@ -279,7 +279,7 @@ function findDatumPlaneByRole(
       const definition = featureMap.get("definition") as { kind?: string; role?: string } | undefined;
       const definitionRole = definition?.kind === "datum" ? definition.role : undefined;
       if (topLevelRole === role || definitionRole === role) {
-        foundId = id;
+      foundId = id;
       }
     }
   });
