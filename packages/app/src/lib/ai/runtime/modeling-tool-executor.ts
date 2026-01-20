@@ -42,6 +42,7 @@ export function isModelingTool(toolName: string): boolean {
       "measureDistance",
       "getBoundingBox",
       "measureAngle",
+      "getModelSnapshot",
     ].includes(toolName)
   ) {
     return true;
@@ -131,6 +132,9 @@ export function executeModelingTool(
       return modelingImpl.getBoundingBoxImpl(args, ctx);
     case "measureAngle":
       return modelingImpl.measureAngleImpl(args, ctx);
+    case "getModelSnapshot":
+      // getModelSnapshot is async - return the promise
+      return modelingImpl.getModelSnapshotImpl(args, ctx);
 
     // ============ Feature Tools ============
     case "createExtrude":

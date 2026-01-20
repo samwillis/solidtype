@@ -92,8 +92,8 @@ export function getModelContextImpl(
   const errors = rebuildResult?.errors ?? [];
 
   return {
-    documentName: doc.metadata.get("name") || "Untitled",
-    units: doc.metadata.get("units") || "mm",
+    documentName: doc.meta.get("name") || "Untitled",
+    units: doc.meta.get("units") || "mm",
     featureCount: features.length,
     features,
     errors,
@@ -300,6 +300,53 @@ export function measureAngleImpl(
 ): unknown {
   // TODO: Implement when OCCT angle measurement is available
   return { angleDegrees: 0, angleRadians: 0 };
+}
+
+export async function getModelSnapshotImpl(
+  args: Record<string, unknown>,
+  ctx: ModelingToolContext
+): Promise<unknown> {
+  const { rebuildResult } = ctx;
+  const { view, width, height } = args as {
+    view?: "iso" | "top" | "front" | "right" | "left" | "back" | "bottom";
+    width?: number;
+    height?: number;
+  };
+
+  if (!rebuildResult) {
+    return { error: "No rebuild result available - model not built" };
+  }
+
+  // Check if meshes are available (required for snapshot)
+  if (rebuildResult.meshes.size === 0) {
+    return { error: "No meshes available - snapshot requires mesh data" };
+  }
+
+  // Check if OffscreenCanvas is available
+  if (typeof OffscreenCanvas === "undefined") {
+    return { error: "OffscreenCanvas not available in this environment" };
+  }
+
+  try {
+    // Dynamic import to avoid loading in environments without OffscreenCanvas
+    const { renderSnapshot } = await import("../../../editor/kernel/snapshotRenderer");
+
+    const result = await renderSnapshot(rebuildResult, {
+      view: view ?? "iso",
+      width: width ?? 512,
+      height: height ?? 512,
+    });
+
+    return {
+      pngBase64: result.pngBase64,
+      width: result.width,
+      height: result.height,
+      view: result.view,
+      bodyCount: result.bodyCount,
+    };
+  } catch (err) {
+    return { error: `Snapshot rendering failed: ${err instanceof Error ? err.message : err}` };
+  }
 }
 
 // ============ Feature Tool Implementations ============

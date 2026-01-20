@@ -107,6 +107,7 @@ describe("WorkerChatController", () => {
           return vi.fn();
         }),
         onError: vi.fn(() => vi.fn()),
+        onStatus: vi.fn(() => vi.fn()),
         connect: vi.fn(),
         disconnect: vi.fn(),
       };

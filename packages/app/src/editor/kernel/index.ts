@@ -35,3 +35,13 @@ export {
   type RebuildResult,
   type SketchSolveResult,
 } from "./KernelEngine";
+
+export {
+  // Snapshot rendering
+  renderSnapshot,
+  isSnapshotRenderingAvailable,
+  // Types
+  type SnapshotView,
+  type SnapshotOptions,
+  type SnapshotResult,
+} from "./snapshotRenderer";

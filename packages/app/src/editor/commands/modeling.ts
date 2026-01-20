@@ -436,10 +436,34 @@ export function reorderFeature(doc: SolidTypeDoc, args: ReorderFeatureArgs): Com
     return err(`Feature ${args.featureId} not found`);
   }
 
+  // Count pinned features (origin + datum planes at start)
+  let pinnedCount = 0;
+  for (const id of featureOrder) {
+    const feature = doc.featuresById.get(id);
+    if (!feature) continue;
+    const type = feature.get("type") as string;
+    if (type === "origin" || type === "plane") {
+      // Check if it's a datum plane (has role at top level or in definition)
+      if (type === "origin") {
+        pinnedCount++;
+      } else {
+        const topLevelRole = feature.get("role");
+        const definition = feature.get("definition") as { kind?: string } | undefined;
+        if (topLevelRole || definition?.kind === "datum") {
+          pinnedCount++;
+        } else {
+          break; // Non-datum plane, stop counting
+        }
+      }
+    } else {
+      break; // Non-pinned feature found, stop counting
+    }
+  }
+
   let targetIndex: number;
   if (args.afterFeatureId === null) {
-    // Move to start (but after pinned features - origin + 3 planes)
-    targetIndex = 4;
+    // Move to start (but after pinned features)
+    targetIndex = pinnedCount;
   } else {
     const afterIndex = featureOrder.indexOf(args.afterFeatureId);
     if (afterIndex === -1) {
@@ -448,9 +472,9 @@ export function reorderFeature(doc: SolidTypeDoc, args: ReorderFeatureArgs): Com
     targetIndex = afterIndex + 1;
   }
 
-  // Don't allow moving into pinned region (first 4 features)
-  if (targetIndex < 4) {
-    targetIndex = 4;
+  // Don't allow moving into pinned region
+  if (targetIndex < pinnedCount) {
+    targetIndex = pinnedCount;
   }
 
   doc.ydoc.transact(() => {

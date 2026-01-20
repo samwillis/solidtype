@@ -7,6 +7,9 @@
  * - Client tool execution (sketch tools)
  * - Writing tool results back to Durable Stream
  * - Broadcasting UI updates to main thread
+ * - Running its own KernelEngine for geometry queries (Phase 5)
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 5
  */
 
 import * as Y from "yjs";
@@ -19,7 +22,9 @@ import { executeModelingTool, isModelingTool } from "./modeling-tool-executor";
 import { createDocumentSync, type DocumentSync } from "../../yjs-sync";
 import { loadDocument, type SolidTypeDoc } from "../../../editor/document/createDocument";
 import type { AIChatWorkerEvent } from "./types";
-import type { RebuildResult } from "../../../editor/kernel";
+import { KernelEngine, type RebuildResult } from "../../../editor/kernel";
+
+// Note: OCCT imports are dynamic in initKernelEngine to avoid loading WASM in test environments
 
 /**
  * Broadcast function type - provided by the worker
@@ -67,8 +72,20 @@ export class WorkerChatController {
   private activeSketchId: string | null = null;
 
   /**
+   * Local KernelEngine for geometry queries when no UI is connected.
+   * Enables AI to work even when no UI tab is open.
+   *
+   * @see docs/CAD-PIPELINE-REWORK.md Phase 5
+   */
+  private kernelEngine: KernelEngine | null = null;
+  private kernelInitialized = false;
+  private rebuildDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
    * Last kernel rebuild result - used for geometry-aware tool queries.
-   * This is populated by the UI kernel worker and passed to the AI worker.
+   * Can come from either:
+   * 1. The local KernelEngine (when running independently)
+   * 2. The UI kernel worker via setRebuildResult() (when UI is connected)
    *
    * @see docs/CAD-PIPELINE-REWORK.md Phase 5/7
    */
@@ -152,12 +169,19 @@ export class WorkerChatController {
         unsubError();
       };
 
-      const unsubSynced = sync.onSynced((synced) => {
+      const unsubSynced = sync.onSynced(async (synced) => {
         if (synced) {
           console.log("[ChatController] Document synced:", this.documentId);
           this.documentSynced = true;
           this.wrappedDoc = loadDocument(this.ydoc!);
           cleanup();
+
+          // Initialize kernel engine for geometry queries (Phase 5)
+          // This is fire-and-forget - don't block on it or reject on failure
+          this.initKernelEngine().catch(() => {
+            // Errors are already logged in initKernelEngine
+          });
+
           resolve();
         }
       });
@@ -179,6 +203,96 @@ export class WorkerChatController {
 
       sync.connect();
     });
+  }
+
+  /**
+   * Initialize the local KernelEngine for geometry queries.
+   * This enables the AI to work independently when no UI tab is open.
+   *
+   * Note: This is best-effort - OCCT initialization may fail in some environments
+   * (e.g., tests, environments without WebAssembly support). The controller
+   * will still function for document mutations, just without geometry queries.
+   *
+   * @see docs/CAD-PIPELINE-REWORK.md Phase 5
+   */
+  private async initKernelEngine(): Promise<void> {
+    if (this.kernelInitialized || !this.ydoc) return;
+
+    // Skip in test environments or when running without full browser support
+    if (typeof window === "undefined" && typeof self === "undefined") {
+      console.log("[ChatController] ⏭️ Skipping KernelEngine init (non-browser environment)");
+      return;
+    }
+
+    console.log("[ChatController] 🔧 Initializing KernelEngine...");
+
+    try {
+      // Dynamic imports to avoid loading WASM in test environments
+      const [{ initOCCTBrowser }, { setOC }] = await Promise.all([
+        import("../../../editor/worker/occt-init"),
+        import("@solidtype/core"),
+      ]);
+
+      // Initialize OCCT
+      const oc = await initOCCTBrowser();
+      setOC(oc);
+
+      // Create kernel engine (headless - no meshes needed for query-only mode)
+      this.kernelEngine = new KernelEngine({
+        computeMeshes: false,
+        oc,
+      });
+      await this.kernelEngine.init();
+      this.kernelInitialized = true;
+
+      console.log("[ChatController] ✅ KernelEngine initialized");
+
+      // Do initial rebuild
+      await this.doRebuild();
+
+      // Listen for document changes and trigger rebuilds
+      this.ydoc.on("update", () => {
+        this.scheduleRebuild();
+      });
+    } catch (err) {
+      // Non-fatal - controller still works for mutations, just without geometry queries
+      console.warn("[ChatController] ⚠️ KernelEngine init failed (geometry queries unavailable):", err);
+      // Don't rethrow - allow controller to continue without kernel
+    }
+  }
+
+  /**
+   * Schedule a rebuild after document changes (debounced)
+   */
+  private scheduleRebuild(): void {
+    if (this.rebuildDebounceTimer) {
+      clearTimeout(this.rebuildDebounceTimer);
+    }
+    this.rebuildDebounceTimer = setTimeout(() => {
+      this.doRebuild().catch((err) => {
+        console.error("[ChatController] Rebuild failed:", err);
+      });
+    }, 100);
+  }
+
+  /**
+   * Perform a kernel rebuild
+   */
+  private async doRebuild(): Promise<void> {
+    if (!this.kernelEngine || !this.ydoc) return;
+
+    try {
+      const result = await this.kernelEngine.rebuildFromYDoc(this.ydoc);
+      this.lastRebuildResult = result;
+      console.log(
+        "[ChatController] 🔨 Rebuild complete - bodies:",
+        result.bodies.length,
+        "sketches:",
+        result.sketchSolveResults.size
+      );
+    } catch (err) {
+      console.error("[ChatController] Rebuild error:", err);
+    }
   }
 
   /**
@@ -509,17 +623,19 @@ export class WorkerChatController {
   }
 
   /**
-   * Update the last rebuild result from the kernel.
+   * Update the last rebuild result from the UI kernel worker.
    *
-   * This should be called when the kernel worker sends a rebuild-complete message.
-   * The rebuild result enables geometry-aware tool queries (findFaces, getSketchSolveReport, etc.)
+   * When a UI tab is connected, it sends rebuild results here for use by AI tools.
+   * This supplements (or overrides) the local KernelEngine results.
    *
    * @see docs/CAD-PIPELINE-REWORK.md Phase 5/7
    */
   setRebuildResult(rebuildResult: RebuildResult | null): void {
+    // Only use UI results if local kernel isn't initialized
+    // or if UI results are more recent (UI has mesh data)
     this.lastRebuildResult = rebuildResult;
     console.log(
-      "[ChatController] Rebuild result updated, sketches:",
+      "[ChatController] Rebuild result updated from UI, sketches:",
       rebuildResult?.sketchSolveResults.size ?? 0,
       "bodies:",
       rebuildResult?.bodies.length ?? 0
@@ -531,6 +647,16 @@ export class WorkerChatController {
    */
   getRebuildResult(): RebuildResult | null {
     return this.lastRebuildResult;
+  }
+
+  /**
+   * Get the local KernelEngine instance.
+   * May be null if kernel initialization failed or hasn't completed.
+   *
+   * @see docs/CAD-PIPELINE-REWORK.md Phase 5
+   */
+  getKernelEngine(): KernelEngine | null {
+    return this.kernelEngine;
   }
 
   /**
@@ -564,6 +690,19 @@ export class WorkerChatController {
 
     this.stop();
 
+    // Clear rebuild timer
+    if (this.rebuildDebounceTimer) {
+      clearTimeout(this.rebuildDebounceTimer);
+      this.rebuildDebounceTimer = null;
+    }
+
+    // Dispose kernel engine
+    if (this.kernelEngine) {
+      this.kernelEngine.dispose();
+      this.kernelEngine = null;
+      this.kernelInitialized = false;
+    }
+
     if (this.docSync) {
       this.docSync.disconnect();
       this.docSync = null;
@@ -581,5 +720,6 @@ export class WorkerChatController {
 
     this.wrappedDoc = null;
     this.documentSynced = false;
+    this.lastRebuildResult = null;
   }
 }

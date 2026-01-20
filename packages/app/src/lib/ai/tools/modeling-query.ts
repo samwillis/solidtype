@@ -161,6 +161,29 @@ export const measureAngleDef = toolDefinition({
   }),
 });
 
+// ============ Snapshot Tools ============
+
+export const getModelSnapshotDef = toolDefinition({
+  name: "getModelSnapshot",
+  description:
+    "Render a 2D snapshot of the 3D model from a specified view direction. Returns a PNG image as base64. Useful for visual inspection of the model.",
+  inputSchema: z.object({
+    view: z
+      .enum(["iso", "top", "front", "right", "left", "back", "bottom"])
+      .nullish()
+      .describe("View direction. Default: iso (isometric)"),
+    width: z.number().nullish().describe("Image width in pixels. Default: 512"),
+    height: z.number().nullish().describe("Image height in pixels. Default: 512"),
+  }),
+  outputSchema: z.object({
+    pngBase64: z.string().describe("PNG image as base64-encoded string"),
+    width: z.number(),
+    height: z.number(),
+    view: z.string(),
+    bodyCount: z.number().describe("Number of bodies in the model"),
+  }),
+});
+
 // ============ Export All Query Tools ============
 
 export const modelingQueryToolDefs = {
@@ -171,4 +194,5 @@ export const modelingQueryToolDefs = {
   measureDistance: measureDistanceDef,
   getBoundingBox: getBoundingBoxDef,
   measureAngle: measureAngleDef,
+  getModelSnapshot: getModelSnapshotDef,
 };

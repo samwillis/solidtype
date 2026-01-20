@@ -14,23 +14,37 @@ import {
   executeModelingTool,
 } from "../../../../../src/lib/ai/runtime/modeling-tool-executor";
 
-// Helper to create a minimal test document
+// Helper to create a minimal test document with correct structure
 function createTestDocument(): SolidTypeDoc {
   const ydoc = new Y.Doc();
-  const metadata = ydoc.getMap("metadata");
-  const featuresById = ydoc.getMap("featuresById") as Y.Map<Y.Map<unknown>>;
-  const featureOrder = ydoc.getArray("featureOrder") as Y.Array<string>;
 
-  metadata.set("name", "Test Document");
-  metadata.set("units", "mm");
+  // Create root map with proper structure
+  const root = ydoc.getMap("root");
+
+  const meta = new Y.Map();
+  meta.set("name", "Test Document");
+  meta.set("units", "mm");
+  meta.set("schemaVersion", 2);
+  root.set("meta", meta);
+
+  const state = new Y.Map();
+  state.set("rebuildGate", null);
+  root.set("state", state);
+
+  const featuresById = new Y.Map<Y.Map<unknown>>();
+  root.set("featuresById", featuresById);
+
+  const featureOrder = new Y.Array<string>();
+  root.set("featureOrder", featureOrder);
 
   return {
     ydoc,
-    metadata,
+    root,
+    meta,
+    state,
     featuresById,
     featureOrder,
-    undoManager: new Y.UndoManager([featuresById, featureOrder]),
-  } as unknown as SolidTypeDoc;
+  } as SolidTypeDoc;
 }
 
 // Helper to create a test sketch in the document
@@ -493,6 +507,42 @@ describe("Query Tools", () => {
 
       expect(result.type).toBe("none");
       expect(result.items).toEqual([]);
+    });
+  });
+
+  describe("findFacesImpl", () => {
+    it("returns error when no rebuild result available", () => {
+      const result = modelingImpl.findFacesImpl({}, { doc }) as {
+        faces: unknown[];
+        error?: string;
+      };
+
+      expect(result.error).toContain("No rebuild result available");
+      expect(result.faces).toEqual([]);
+    });
+  });
+
+  describe("getBoundingBoxImpl", () => {
+    it("returns error when no rebuild result available", () => {
+      const result = modelingImpl.getBoundingBoxImpl({}, { doc }) as {
+        error?: string;
+        minX: number;
+        maxX: number;
+      };
+
+      expect(result.error).toContain("No rebuild result available");
+      expect(result.minX).toBe(0);
+      expect(result.maxX).toBe(0);
+    });
+  });
+
+  describe("getModelSnapshotImpl", () => {
+    it("returns error when no rebuild result available", async () => {
+      const result = (await modelingImpl.getModelSnapshotImpl({}, { doc })) as {
+        error?: string;
+      };
+
+      expect(result.error).toContain("No rebuild result available");
     });
   });
 });

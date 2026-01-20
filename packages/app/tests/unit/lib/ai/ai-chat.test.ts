@@ -480,6 +480,10 @@ describe("toModelMessages", () => {
   });
 
   it("should skip empty assistant messages (tool-call-only)", () => {
+    // Test that empty assistant messages with no content AND no tool calls are filtered out
+    // Note: Each run should have at most one assistant response.
+    // Run1: has empty assistant message (no content, no tool calls) - should be filtered
+    // Run2: has assistant message with content - should be included
     const transcript = [
       {
         id: "msg1",
@@ -494,26 +498,38 @@ describe("toModelMessages", () => {
         runId: "run1",
         role: "assistant" as const,
         status: "complete" as const,
-        content: "", // Empty - assistant only made tool calls
+        content: "", // Empty - no content AND no tool calls - will be filtered
         createdAt: "2024-01-01T00:00:01Z",
       },
       {
         id: "msg3",
-        runId: "run1",
+        runId: "run2",
+        role: "user" as const,
+        status: "complete" as const,
+        content: "What's the status?",
+        createdAt: "2024-01-01T00:00:02Z",
+      },
+      {
+        id: "msg4",
+        runId: "run2",
         role: "assistant" as const,
         status: "complete" as const,
         content: "I created the project for you!",
-        createdAt: "2024-01-01T00:00:02Z",
+        createdAt: "2024-01-01T00:00:03Z",
       },
     ];
 
     const modelMessages = toModelMessages(transcript);
 
-    // Empty assistant message is filtered out
-    expect(modelMessages).toHaveLength(2);
+    // Run1's empty assistant message is filtered out, so only user msg from run1
+    // Run2 has both user and assistant messages
+    expect(modelMessages).toHaveLength(3);
     expect(modelMessages[0].role).toBe("user");
-    expect(modelMessages[1].role).toBe("assistant");
-    expect(modelMessages[1].content).toBe("I created the project for you!");
+    expect(modelMessages[0].content).toBe("Create a project");
+    expect(modelMessages[1].role).toBe("user");
+    expect(modelMessages[1].content).toBe("What's the status?");
+    expect(modelMessages[2].role).toBe("assistant");
+    expect(modelMessages[2].content).toBe("I created the project for you!");
   });
 });
 

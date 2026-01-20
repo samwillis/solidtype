@@ -252,7 +252,10 @@ export function getDatumPlaneIds(doc: SolidTypeDoc): {
     if (type === "origin") {
       origin = id;
     } else if (type === "plane") {
-      const role = featureMap.get("role") as DatumPlaneRole | undefined;
+      // Check both old format (role at top level) and new format (role in definition)
+      const topLevelRole = featureMap.get("role") as DatumPlaneRole | undefined;
+      const definition = featureMap.get("definition") as { kind?: string; role?: string } | undefined;
+      const role = topLevelRole ?? (definition?.kind === "datum" ? definition.role : undefined);
       if (role === "xy") xy = id;
       else if (role === "xz") xz = id;
       else if (role === "yz") yz = id;

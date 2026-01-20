@@ -57,25 +57,28 @@ describe("Document Creation", () => {
     expect(origin).not.toBeNull();
     expect(origin?.get("type")).toBe("origin");
 
-    // Verify XY plane
+    // Verify XY plane (role is now in definition.role, not at top level)
     const xyPlane = doc.featuresById.get(datumIds.xy!);
     expect(xyPlane).not.toBeNull();
     expect(xyPlane?.get("type")).toBe("plane");
-    expect(xyPlane?.get("role")).toBe("xy");
+    const xyDef = xyPlane?.get("definition") as { kind: string; role: string };
+    expect(xyDef?.role).toBe("xy");
     expect(xyPlane?.get("normal")).toEqual([0, 0, 1]);
 
     // Verify XZ plane
     const xzPlane = doc.featuresById.get(datumIds.xz!);
     expect(xzPlane).not.toBeNull();
     expect(xzPlane?.get("type")).toBe("plane");
-    expect(xzPlane?.get("role")).toBe("xz");
+    const xzDef = xzPlane?.get("definition") as { kind: string; role: string };
+    expect(xzDef?.role).toBe("xz");
     expect(xzPlane?.get("normal")).toEqual([0, 1, 0]);
 
     // Verify YZ plane
     const yzPlane = doc.featuresById.get(datumIds.yz!);
     expect(yzPlane).not.toBeNull();
     expect(yzPlane?.get("type")).toBe("plane");
-    expect(yzPlane?.get("role")).toBe("yz");
+    const yzDef = yzPlane?.get("definition") as { kind: string; role: string };
+    expect(yzDef?.role).toBe("yz");
     expect(yzPlane?.get("normal")).toEqual([1, 0, 0]);
   });
 
