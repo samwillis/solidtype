@@ -1,6 +1,6 @@
 # SolidType Status
 
-**Last Updated:** 2026-01-05
+**Last Updated:** 2026-01-20
 
 This document tracks the current implementation status of SolidType.
 
@@ -8,7 +8,7 @@ This document tracks the current implementation status of SolidType.
 
 ## Current Phase
 
-**Phase 27: User System & Persistence** – ✅ Complete
+**CAD Pipeline Rework** – ✅ Phases 0-7 Complete (Phase 8 deferred)
 
 ---
 
@@ -43,6 +43,50 @@ This document tracks the current implementation status of SolidType.
 | 25    | AI Sketch                 | ⚠️ In Progress     | Tool defs & impls complete   |
 | 26    | AI Modeling               | ⏳ Planned         |                              |
 | 27    | User System & Persistence | ✅ Complete        |                              |
+
+---
+
+## CAD Pipeline Rework Summary
+
+The CAD Pipeline Rework (documented in `CAD-PIPELINE-REWORK.md`) delivers a unified architecture for UI and AI mutations with merge-safe topological naming.
+
+### Phase 0: Regression Tests ✅
+- `commands-invariants.test.ts` ensuring UI/AI produce identical Yjs state
+
+### Phase 1: Commands Layer ✅
+- Unified command API in `editor/commands/`
+- All mutations go through `createSketch`, `createExtrude`, etc.
+- Both UI tools and AI tools use the same commands
+
+### Phase 2: PersistentRef V1 ✅
+- CRDT-safe reference format (`stref:v1:...`)
+- `editor/naming/persistentRef.ts` with encoding/decoding
+
+### Phase 3: ReferenceIndex ✅
+- Rebuild-time mapping of mesh indices to PersistentRefs
+- `editor/kernel/referenceIndex.ts` with fingerprint computation
+
+### Phase 4: KernelEngine Extraction ✅
+- Reusable `KernelEngine` class in `editor/kernel/KernelEngine.ts`
+- No worker-specific APIs, works in UI worker and AI worker
+
+### Phase 5: KernelEngine in AI Worker ✅
+- Local KernelEngine in `WorkerChatController`
+- Auto-rebuild on Yjs changes (debounced)
+- `getModelSnapshot` tool with `snapshotRenderer.ts`
+- Geometry query tools: `findFaces`, `getBoundingBox`, `getModelSnapshot`
+
+### Phase 6: PersistentRef Resolution & Repair ✅
+- `resolvePersistentRef.ts` with found/ambiguous/notFound states
+- `commands/repair.ts` for reference repair
+
+### Phase 7: Constraint Solver Feedback ✅
+- `getSketchSolveReport` tool exposes solver DOF and status
+- AI can check if sketch is over-constrained
+
+### Phase 8: OCCT History (Deferred)
+- Progressive optimization for later
+- Will improve ref accuracy using OCCT operation history
 
 ---
 
@@ -103,11 +147,24 @@ Phase 27 delivered the complete user system and persistence infrastructure:
 ### Blocks Future Features
 
 - **Edge selection** → Required for Fillet/Chamfer UI (Phase 20)
-- **Topological naming** → Required for robust face/edge references
+- ~~**Topological naming**~~ → ✅ Implemented (CAD Pipeline Rework Phases 2-3, 6)
 
 ---
 
 ## Recent Changes
+
+### 2026-01-20: CAD Pipeline Rework (Phases 0-7)
+
+| Change                     | Impact                                            |
+| -------------------------- | ------------------------------------------------- |
+| Unified commands layer     | UI and AI mutations use identical code paths      |
+| PersistentRef V1           | Merge-safe topological references (stref:v1:...)  |
+| ReferenceIndex             | Rebuild-time face/edge fingerprinting             |
+| KernelEngine extraction    | Reusable kernel rebuild logic                     |
+| AI worker kernel           | Geometry queries work without UI tab              |
+| getModelSnapshot tool      | AI can "see" the model via rendered snapshots     |
+| Resolver + repair commands | References can be resolved and repaired           |
+| Solver feedback tools      | AI can check constraint DOF and solve status      |
 
 ### 2026-01-05: Phase 25 AI Sketch Tools
 
@@ -152,7 +209,7 @@ Phase 27 delivered the complete user system and persistence infrastructure:
 
 ### Future
 
-1. Topological naming implementation
+1. OCCT history for improved naming (Phase 8 of CAD Pipeline Rework)
 2. Assemblies and mates
 3. NURBS/spline surfaces
 
