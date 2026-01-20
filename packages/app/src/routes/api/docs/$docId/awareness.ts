@@ -46,7 +46,7 @@ export const Route = createFileRoute("/api/docs/$docId/awareness")({
 
           const awarenessStreamId = await getAwarenessStreamId(docId);
           const response = await proxyToDurableStream(request, awarenessStreamId, {
-            defaultContentType: "application/json",
+            defaultContentType: "application/octet-stream",
           });
           return withCors(response);
         } catch (err) {
@@ -64,7 +64,7 @@ export const Route = createFileRoute("/api/docs/$docId/awareness")({
 
           const awarenessStreamId = await getAwarenessStreamId(docId);
           const response = await proxyToDurableStream(request, awarenessStreamId, {
-            defaultContentType: "application/json",
+            defaultContentType: "application/octet-stream",
           });
           return withCors(response);
         } catch (err) {
@@ -82,7 +82,7 @@ export const Route = createFileRoute("/api/docs/$docId/awareness")({
 
           const awarenessStreamId = await getAwarenessStreamId(docId);
           const response = await proxyToDurableStream(request, awarenessStreamId, {
-            defaultContentType: "application/json",
+            defaultContentType: "application/octet-stream",
           });
           return withCors(response);
         } catch (err) {

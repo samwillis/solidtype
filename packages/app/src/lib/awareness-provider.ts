@@ -184,11 +184,17 @@ export class SolidTypeAwareness {
     this.awareness.setLocalState(this.localState);
   }
 
+  // Track if we previously had followers to detect when we gain them
+  private hadFollowers = false;
+
   /**
    * Check if we have followers and update broadcast state accordingly
    */
   private updateBroadcastState() {
-    const hasFollowers = this.getFollowers().length > 0;
+    const followers = this.getFollowers();
+    const hasFollowers = followers.length > 0;
+    const justGainedFollowers = hasFollowers && !this.hadFollowers;
+    this.hadFollowers = hasFollowers;
 
     if (hasFollowers) {
       // Always broadcast pending state when we have followers
@@ -202,6 +208,12 @@ export class SolidTypeAwareness {
       }
       if (this.pendingCursor3D) {
         this.localState.cursor3D = this.pendingCursor3D;
+        needsUpdate = true;
+      }
+
+      // If we just gained followers, force a broadcast even if nothing changed
+      // This ensures the new follower gets our current state immediately
+      if (justGainedFollowers) {
         needsUpdate = true;
       }
 
@@ -262,14 +274,11 @@ export class SolidTypeAwareness {
    * Get all connected users (excluding self by user ID, deduplicated)
    *
    * Each browser tab has a unique clientId, but the same user may have
-   * multiple tabs open. We filter by user.id and deduplicate.
+   * multiple tabs open (or stale sessions). We filter by user.id and keep
+   * the NEWEST entry for each user (by lastUpdated timestamp).
    */
   getConnectedUsers(): UserAwarenessState[] {
-    const seenUserIds = new Set<string>();
-    const states: UserAwarenessState[] = [];
-
-    // Add our own user ID to the "seen" set so we exclude ourselves
-    seenUserIds.add(this.userId);
+    const userStates = new Map<string, UserAwarenessState>();
 
     this.awareness.getStates().forEach((state) => {
       if (!state) return;
@@ -277,16 +286,19 @@ export class SolidTypeAwareness {
       const userState = state as UserAwarenessState;
       const stateUserId = userState.user?.id;
 
-      // Skip if no user ID or if we've already seen this user
-      if (!stateUserId || seenUserIds.has(stateUserId)) {
+      // Skip if no user ID or if it's ourselves
+      if (!stateUserId || stateUserId === this.userId) {
         return;
       }
 
-      seenUserIds.add(stateUserId);
-      states.push(userState);
+      // Keep the newest entry for each user (by lastUpdated)
+      const existing = userStates.get(stateUserId);
+      if (!existing || (userState.lastUpdated ?? 0) > (existing.lastUpdated ?? 0)) {
+        userStates.set(stateUserId, userState);
+      }
     });
 
-    return states;
+    return Array.from(userStates.values());
   }
 
   /**

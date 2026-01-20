@@ -153,15 +153,33 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
   // The active document (either local or cloud)
   const doc = localDoc || cloudDoc;
 
+  // Track the document ID that the current sync is for
+  // This helps us detect actual unmount vs React Strict Mode remount
+  const syncDocIdRef = useRef<string | null>(null);
+
   // Connect to Durable Streams for cloud documents
   useEffect(() => {
     if (!isCloudDocument || !documentId || !ydoc) {
       return;
     }
 
+    // If we already have a sync for this document, don't recreate
+    // This handles React Strict Mode which mounts/unmounts/mounts
+    if (syncRef.current && syncDocIdRef.current === documentId) {
+      return;
+    }
+
+    // If we have a sync for a DIFFERENT document, destroy it first
+    if (syncRef.current && syncDocIdRef.current !== documentId) {
+      syncRef.current.destroy();
+      syncRef.current = null;
+      syncDocIdRef.current = null;
+    }
+
     // Create sync provider
     const sync = createDocumentSync(documentId, ydoc);
     syncRef.current = sync;
+    syncDocIdRef.current = documentId;
 
     // Set up status listeners
     const unsubStatus = sync.onStatus((status) => {
@@ -245,22 +263,55 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
     sync.connect();
 
     // Cleanup on unmount
+    // Note: We DON'T destroy the sync here because React Strict Mode
+    // will remount immediately. The sync is only destroyed when:
+    // 1. The documentId changes (handled above)
+    // 2. The component truly unmounts (handled by the ref cleanup below)
     return () => {
       unsubStatus();
       unsubSynced();
       unsubError();
-      sync.destroy();
-      syncRef.current = null;
-      setCloudDoc(null);
+      // Don't destroy sync or clear refs - they'll be reused on Strict Mode remount
     };
   }, [isCloudDocument, documentId, ydoc]);
+
+  // Cleanup sync and awareness when component truly unmounts (not just Strict Mode remount)
+  useEffect(() => {
+    return () => {
+      // This runs when the component is removed from the tree entirely
+      if (awarenessRef.current) {
+        console.log("[DocumentContext] Component unmounting, disconnecting awareness");
+        awarenessRef.current.disconnect();
+        awarenessRef.current = null;
+        awarenessKeyRef.current = null;
+      }
+      if (syncRef.current) {
+        syncRef.current.destroy();
+        syncRef.current = null;
+        syncDocIdRef.current = null;
+      }
+    };
+  }, []); // Empty deps = only runs on true unmount
+
+  // Track awareness wrapper to prevent recreation in Strict Mode
+  const awarenessRef = useRef<SolidTypeAwareness | null>(null);
+  const awarenessKeyRef = useRef<string | null>(null);
 
   // Create awareness wrapper for cloud documents (needs session for user info)
   // This wraps the awareness from the document sync provider - NOT a separate connection
   /* eslint-disable react-hooks/set-state-in-effect -- sync awareness state with provider */
   useEffect(() => {
+    const awarenessKey = `${documentId}:${session?.user?.id}`;
+
     if (!isCloudDocument || !documentId || !session?.user || !syncRef.current) {
       setAwareness(null);
+      return;
+    }
+
+    // If we already have an awareness wrapper for the same doc/user, reuse it
+    // This handles React Strict Mode which mounts/unmounts/mounts
+    if (awarenessRef.current && awarenessKeyRef.current === awarenessKey) {
+      setAwareness(awarenessRef.current);
       return;
     }
 
@@ -278,15 +329,18 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
       }
     );
 
+    // Store refs for reuse
+    awarenessRef.current = awarenessProvider;
+    awarenessKeyRef.current = awarenessKey;
+
     // Connect is now a no-op since the document sync provider handles the connection
     awarenessProvider.connect();
 
     setAwareness(awarenessProvider);
 
-    // Cleanup on unmount
+    // Cleanup on unmount - don't disconnect, will be reused on Strict Mode remount
     return () => {
-      awarenessProvider.disconnect();
-      setAwareness(null);
+      // Don't disconnect or clear - will be reused
     };
   }, [isCloudDocument, documentId, session?.user, syncStatus]); // Use syncStatus to re-run when connected
   /* eslint-enable react-hooks/set-state-in-effect */

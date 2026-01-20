@@ -16,7 +16,7 @@
  * and ./renderers directories.
  */
 
-import React, { useRef, useCallback, useMemo } from "react";
+import React, { useRef, useCallback, useMemo, useEffect } from "react";
 import * as THREE from "three";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useViewer, type ProjectionMode } from "../../contexts/ViewerContext";
@@ -165,6 +165,14 @@ const Viewer: React.FC = () => {
       zoom: camera.position.distanceTo(target),
     });
   }, [awareness, cameraRef, targetRef]);
+
+  // Broadcast initial camera position when scene is ready
+  // This ensures pendingViewerState is set before anyone starts following
+  useEffect(() => {
+    if (sceneReady && awareness && cameraRef.current) {
+      broadcastCamera();
+    }
+  }, [sceneReady, awareness, broadcastCamera]);
 
   // Viewer controls
   const { updateCamera } = useViewerControls({

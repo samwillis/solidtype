@@ -42,6 +42,13 @@ export interface ProxyOptions {
    * Defaults to true for backwards compatibility.
    */
   autoCreate?: boolean;
+
+  /**
+   * Time-to-live in seconds for the stream.
+   * Only used when auto-creating streams (on 404 GET) or explicit PUT creation.
+   * Useful for ephemeral streams like awareness/presence.
+   */
+  ttlSeconds?: number;
 }
 
 /**
@@ -129,12 +136,19 @@ export async function proxyToDurableStream(
     // Handle 404 for GET requests - stream doesn't exist yet
     // Create the stream with PUT, then retry the GET
     if (response.status === 404 && request.method === "GET" && autoCreate) {
+      // Build headers for stream creation
+      const createHeaders: Record<string, string> = {
+        "Content-Type": options.defaultContentType || "application/json",
+      };
+      // Add TTL header if specified (for ephemeral streams like awareness)
+      if (options.ttlSeconds !== undefined) {
+        createHeaders["Stream-TTL"] = String(options.ttlSeconds);
+      }
+
       // Create the stream with PUT (this is the Durable Streams protocol)
       const createResponse = await fetch(durableUrl.toString().split("?")[0], {
         method: "PUT",
-        headers: {
-          "Content-Type": options.defaultContentType || "application/json",
-        },
+        headers: createHeaders,
       });
 
       if (createResponse.ok) {
