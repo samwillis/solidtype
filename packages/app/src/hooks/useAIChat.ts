@@ -73,7 +73,9 @@ interface ToolApprovalRequest {
  */
 export function useAIChatSessions(options: { context?: "dashboard" | "editor" }) {
   // Query sessions from TanStack DB collection (synced via Electric)
-  const sessionsQuery = useLiveQuery(() => aiChatSessionsCollection as any);
+  // useLiveQuery requires (q) => ... callback signature per TanStack DB docs
+  // The _q parameter is unused when returning a collection directly, but required by the API
+  const sessionsQuery = useLiveQuery((_q) => aiChatSessionsCollection as any);
 
   // Get all sessions - don't filter by context so sessions are visible everywhere
   const allSessions = sessionsQuery.data || [];
@@ -214,16 +216,18 @@ export function useAIChat(options: UseAIChatOptions) {
   // Live query on StreamDB collections - automatically updates when data changes
   // IMPORTANT: Include streamDb in dependency array so useLiveQuery re-subscribes on session change
   // Without the dependency array, useLiveQuery doesn't know when the collection changes
+  // useLiveQuery requires (_q) => ... callback signature per TanStack DB docs
+  // The _q parameter is unused when returning a collection directly, but required by the API
   const { data: rawMessagesData } = useLiveQuery(
-    () => (streamDb ? streamDb.collections.messages : null),
+    (_q) => (streamDb ? streamDb.collections.messages : null),
     [streamDb]
   );
   const { data: rawChunksData } = useLiveQuery(
-    () => (streamDb ? streamDb.collections.chunks : null),
+    (_q) => (streamDb ? streamDb.collections.chunks : null),
     [streamDb]
   );
   const { data: rawRunsData } = useLiveQuery(
-    () => (streamDb ? streamDb.collections.runs : null),
+    (_q) => (streamDb ? streamDb.collections.runs : null),
     [streamDb]
   );
 
