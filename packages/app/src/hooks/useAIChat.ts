@@ -73,35 +73,29 @@ interface ToolApprovalRequest {
  */
 export function useAIChatSessions(options: { context?: "dashboard" | "editor" }) {
   // Query sessions from TanStack DB collection (synced via Electric)
-  // useLiveQuery requires (q) => ... callback signature per TanStack DB docs
-  // The _q parameter is unused when returning a collection directly, but required by the API
-  const sessionsQuery = useLiveQuery((_q) => aiChatSessionsCollection as any);
-
-  // Get all sessions - don't filter by context so sessions are visible everywhere
-  const allSessions = sessionsQuery.data || [];
-  // All sessions are visible in both dashboard and editor
-  const filteredSessions = allSessions;
-
-  // Sort by updated_at descending
-  const sortedSessions = [...filteredSessions].sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  // Uses live query with orderBy for sorting and select for field transformation
+  const sessionsQuery = useLiveQuery((q) =>
+    q
+      .from({ s: aiChatSessionsCollection as any })
+      .orderBy(({ s }) => s.updated_at, "desc")
+      .select(({ s }) => ({
+        id: s.id,
+        userId: s.user_id,
+        context: s.context,
+        documentId: s.document_id,
+        projectId: s.project_id,
+        status: s.status,
+        title: s.title,
+        messageCount: s.message_count,
+        lastMessageAt: s.last_message_at,
+        durableStreamId: s.durable_stream_id,
+        createdAt: s.created_at,
+        updatedAt: s.updated_at,
+      }))
   );
 
-  // Transform to camelCase for compatibility
-  const sessions: CamelCaseSession[] = sortedSessions.map((row) => ({
-    id: row.id,
-    userId: row.user_id,
-    context: row.context,
-    documentId: row.document_id,
-    projectId: row.project_id,
-    status: row.status,
-    title: row.title,
-    messageCount: row.message_count,
-    lastMessageAt: row.last_message_at,
-    durableStreamId: row.durable_stream_id,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+  // Sessions are now sorted and transformed by the live query
+  const sessions: CamelCaseSession[] = (sessionsQuery.data || []) as CamelCaseSession[];
 
   const createSession = useCallback(
     async (data: { title?: string; documentId?: string; projectId?: string }) => {
@@ -216,8 +210,21 @@ export function useAIChat(options: UseAIChatOptions) {
   // Live query on StreamDB collections - automatically updates when data changes
   // IMPORTANT: Include streamDb in dependency array so useLiveQuery re-subscribes on session change
   // Without the dependency array, useLiveQuery doesn't know when the collection changes
-  // useLiveQuery requires (_q) => ... callback signature per TanStack DB docs
-  // The _q parameter is unused when returning a collection directly, but required by the API
+  //
+  // TODO(agent): Consider using TanStack DB joins once @durable-streams/state collections are
+  // fully compatible with TanStack DB's query builder. Currently we fetch messages and chunks
+  // separately and join them in hydrateFromArrays() because:
+  //
+  // 1. StreamDB collections may not be fully compatible with q.from({...}).leftJoin({...})
+  // 2. TanStack DB lacks a string aggregation function (like SQL's string_agg or group_concat)
+  //    needed to concatenate chunk.delta values sorted by seq for each message
+  //
+  // If TanStack DB adds collect() or stringAgg() aggregate functions, we could potentially:
+  //   q.from({ m: messagesCollection })
+  //    .leftJoin({ c: chunksCollection }, ({ m, c }) => eq(m.id, c.messageId))
+  //    .groupBy(({ m }) => m.id)
+  //    .select(({ m, c }) => ({ ...m, content: stringAgg(c.delta, orderBy(c.seq)) }))
+  //
   const { data: rawMessagesData } = useLiveQuery(
     (_q) => (streamDb ? streamDb.collections.messages : null),
     [streamDb]
