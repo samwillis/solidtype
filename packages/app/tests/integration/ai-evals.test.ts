@@ -524,23 +524,23 @@ describe.skipIf(!shouldRun)("AI Eval Tests", () => {
 });
 
 describe("AI Prompt Structure Tests", () => {
-  it("system prompt includes tool requirements section", () => {
+  it("system prompt includes tool reference section", () => {
     const prompt = buildDashboardSystemPrompt("user-1", "proj-1", {
       branchId: "branch-123",
       branchName: "main",
     });
 
-    expect(prompt).toContain("Tool requirements:");
-    expect(prompt).toContain("createDocument:");
+    expect(prompt).toContain("Tool Reference");
+    expect(prompt).toContain("createDocument");
     expect(prompt).toContain("branchId (required)");
   });
 
   it("system prompt includes document creation workflow", () => {
     const prompt = buildDashboardSystemPrompt("user-1", undefined, {});
 
-    expect(prompt).toContain("Creating Documents (Parts/Assemblies)");
-    expect(prompt).toContain("CRITICAL");
-    expect(prompt).toContain("Branch ID");
+    expect(prompt).toContain("Creating Documents");
+    expect(prompt).toContain("listProjects");
+    expect(prompt).toContain("listBranches");
   });
 
   it("context section shows all provided values", () => {

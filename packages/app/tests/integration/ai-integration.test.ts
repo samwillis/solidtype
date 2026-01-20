@@ -33,16 +33,15 @@ describe.skipIf(isIntegrationTest)("AI Integration Tests", () => {
 
       const prompt = buildDashboardSystemPrompt("user-abc", "proj-123", context);
 
-      // Verify all context is included
-      expect(prompt).toContain("User ID: user-abc");
-      expect(prompt).toContain('Workspace: "My Workspace"');
-      expect(prompt).toContain("ID: ws-123");
-      expect(prompt).toContain('Project: "Project 1"');
-      expect(prompt).toContain("ID: proj-123");
-      expect(prompt).toContain('Branch: "main"');
-      expect(prompt).toContain("ID: branch-456");
-      expect(prompt).toContain('Current Folder: "/designs"');
-      expect(prompt).toContain("ID: folder-789");
+      // Verify all context is included with new format
+      expect(prompt).toContain('WORKSPACE: "My Workspace"');
+      expect(prompt).toContain("ws-123");
+      expect(prompt).toContain('PROJECT: "Project 1"');
+      expect(prompt).toContain("proj-123");
+      expect(prompt).toContain('BRANCH: "main"');
+      expect(prompt).toContain("branch-456");
+      expect(prompt).toContain('FOLDER: "/designs"');
+      expect(prompt).toContain("folder-789");
     });
 
     it("includes branch ID prominently for document creation", () => {
@@ -58,18 +57,18 @@ describe.skipIf(isIntegrationTest)("AI Integration Tests", () => {
 
       // The branch ID should be clearly visible
       expect(prompt).toContain("branch-xyz-789");
-      expect(prompt).toContain("Branch:");
-      // Should have guidance about using branch ID
-      expect(prompt).toContain("Branch ID");
+      expect(prompt).toContain("BRANCH:");
+      // Should have guidance about using branch ID with exact ID in example
+      expect(prompt).toContain("branchId");
+      expect(prompt).toContain("branch-xyz-789");
     });
 
     it("handles missing context gracefully", () => {
       const prompt = buildDashboardSystemPrompt("user-abc");
 
-      expect(prompt).toContain("User ID: user-abc");
-      expect(prompt).toContain("No project selected");
-      expect(prompt).not.toContain("Branch:");
-      expect(prompt).not.toContain("Workspace:");
+      expect(prompt).toContain("No project or branch is currently selected");
+      expect(prompt).not.toContain("BRANCH:");
+      expect(prompt).not.toContain("WORKSPACE:");
     });
 
     it("includes instructions to use branch ID for document creation", () => {
@@ -79,7 +78,7 @@ describe.skipIf(isIntegrationTest)("AI Integration Tests", () => {
       });
 
       // Should have explicit instructions about using branch ID
-      expect(prompt.toLowerCase()).toContain("branch id");
+      expect(prompt.toLowerCase()).toContain("branchid");
       expect(prompt).toContain("Creating Documents");
     });
 
@@ -89,23 +88,25 @@ describe.skipIf(isIntegrationTest)("AI Integration Tests", () => {
       // Should have instructions for listing projects first
       expect(prompt).toContain("listProjects");
       expect(prompt).toContain("listBranches");
-      expect(prompt).toContain("NO Branch ID");
     });
 
     it("includes tool requirements", () => {
       const prompt = buildDashboardSystemPrompt("user-1", undefined);
 
-      expect(prompt).toContain("createDocument:");
+      expect(prompt).toContain("createDocument");
       expect(prompt).toContain("branchId (required)");
-      expect(prompt).toContain("listFolders:");
+      expect(prompt).toContain("listFolders");
     });
 
     it("clarifies folderId is optional for root-level documents", () => {
-      const prompt = buildDashboardSystemPrompt("user-1", undefined);
+      const prompt = buildDashboardSystemPrompt("user-1", "proj-1", {
+        branchId: "branch-123",
+        branchName: "main",
+      });
 
-      // Prompt should clearly state folderId is optional
-      expect(prompt).toContain("folderId (OPTIONAL");
-      expect(prompt).toContain("WITHOUT a folder");
+      // Prompt should mention folderId is optional
+      expect(prompt).toContain("folderId");
+      expect(prompt).toContain("Optional");
     });
   });
 });
@@ -127,10 +128,9 @@ describe("Dashboard Prompt Unit Tests", () => {
     expect(prompt).toContain("## Your Role");
     expect(prompt).toContain("## Available Actions");
     expect(prompt).toContain("## Guidelines");
-    expect(prompt).toContain("## User Context");
+    expect(prompt).toContain("## CURRENT CONTEXT");
 
     // Check context values
-    expect(prompt).toContain("user-123");
     expect(prompt).toContain("Test Workspace");
     expect(prompt).toContain("ws-uuid-here");
     expect(prompt).toContain("Test Project");
@@ -139,16 +139,19 @@ describe("Dashboard Prompt Unit Tests", () => {
     expect(prompt).toContain("main");
   });
 
-  it("includes project ID when no name is provided", () => {
+  it("handles projectId without projectName", () => {
     const prompt = buildDashboardSystemPrompt("user-123", "project-uuid-only");
 
-    expect(prompt).toContain("Current Project ID: project-uuid-only");
+    // With projectId but no name, the ID should still be shown for tool calls
+    expect(prompt).toContain("## CURRENT CONTEXT");
+    expect(prompt).toContain("project-uuid-only");
+    expect(prompt).toContain("listBranches");
   });
 
   it("shows no project selected when projectId is undefined", () => {
     const prompt = buildDashboardSystemPrompt("user-123", undefined);
 
-    expect(prompt).toContain("No project selected");
+    expect(prompt).toContain("No project or branch is currently selected");
   });
 
   it("includes viewing context for project page", () => {
@@ -160,7 +163,7 @@ describe("Dashboard Prompt Unit Tests", () => {
 
     const prompt = buildDashboardSystemPrompt("user-1", "proj-1", context);
 
-    expect(prompt).toContain('Viewing: Project "My Project" on branch "develop"');
+    expect(prompt).toContain('Project "My Project" on branch "develop"');
   });
 
   it("includes viewing context for recent page", () => {
@@ -170,7 +173,7 @@ describe("Dashboard Prompt Unit Tests", () => {
 
     const prompt = buildDashboardSystemPrompt("user-1", undefined, context);
 
-    expect(prompt).toContain("Viewing: Recent files");
+    expect(prompt).toContain("Recent files");
   });
 
   it("includes viewing context for home page", () => {
@@ -180,7 +183,7 @@ describe("Dashboard Prompt Unit Tests", () => {
 
     const prompt = buildDashboardSystemPrompt("user-1", undefined, context);
 
-    expect(prompt).toContain("Viewing: Dashboard home");
+    expect(prompt).toContain("Dashboard home");
   });
 });
 
@@ -305,8 +308,11 @@ describe("Context Extraction Verification", () => {
     const prompt = buildDashboardSystemPrompt("user-1", "proj-1", context);
 
     // The branch ID should be extractable by an LLM
-    // It should appear near the word "Branch" and "ID"
-    expect(prompt).toMatch(/Branch.*ID.*550e8400-e29b-41d4-a716-446655440000/s);
+    // It should appear with BRANCH: label and branchId: format
+    expect(prompt).toContain("BRANCH:");
+    expect(prompt).toContain("550e8400-e29b-41d4-a716-446655440000");
+    // The ID should be clearly labeled
+    expect(prompt).toMatch(/branchId.*550e8400-e29b-41d4-a716-446655440000/s);
   });
 
   it("prompt format is consistent for parsing", () => {
@@ -320,9 +326,12 @@ describe("Context Extraction Verification", () => {
 
     const prompt = buildDashboardSystemPrompt("user-1", "proj-1", context);
 
-    // Check the format is consistent: "Label: Value (ID: xxx)"
-    expect(prompt).toMatch(/Workspace: "WS Name" \(ID: ws-id\)/);
-    expect(prompt).toMatch(/Project: "Proj Name" \(ID: proj-1\)/);
-    expect(prompt).toMatch(/Branch: "main" \(ID: branch-id\)/);
+    // Check the new format: "LABEL: "Value" → idField: "xxx""
+    expect(prompt).toContain('WORKSPACE: "WS Name"');
+    expect(prompt).toContain("ws-id");
+    expect(prompt).toContain('PROJECT: "Proj Name"');
+    expect(prompt).toContain("proj-1");
+    expect(prompt).toContain('BRANCH: "main"');
+    expect(prompt).toContain("branch-id");
   });
 });

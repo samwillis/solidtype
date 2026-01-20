@@ -261,13 +261,38 @@ export async function getDashboardTools(userId: string): Promise<ServerTool[]> {
       const branch = await db.query.branches.findFirst({
         where: eq(branches.id, branchId),
       });
-      if (!branch) throw new Error("Branch not found");
+      if (!branch) throw new Error("Branch not found. Use listBranches to get valid branch IDs.");
 
       const docId = crypto.randomUUID();
       const durableStreamId = `project/${branch.projectId}/doc/${docId}/branch/${branchId}`;
 
-      // Normalize folderId: treat empty string as null (root level)
-      const normalizedFolderId = folderId && folderId.trim() !== "" ? folderId : null;
+      // Normalize folderId: treat null, undefined, empty string, and common placeholders as "root"
+      let normalizedFolderId: string | null = null;
+      if (folderId != null && typeof folderId === "string" && folderId.trim() !== "") {
+        const trimmed = folderId.trim().toLowerCase();
+        // Treat common invalid placeholder values as "root"
+        if (
+          trimmed === "root" ||
+          trimmed === "null" ||
+          trimmed === "undefined" ||
+          trimmed === "none" ||
+          trimmed === "project root" ||
+          trimmed === "project-root"
+        ) {
+          normalizedFolderId = null;
+        } else {
+          // Verify the folder exists
+          const folder = await db.query.folders.findFirst({
+            where: eq(folders.id, folderId),
+          });
+          if (!folder) {
+            throw new Error(
+              `Folder not found: "${folderId}". To create at project root, omit folderId entirely. To place in a folder, use listFolders to get valid folder IDs.`
+            );
+          }
+          normalizedFolderId = folderId;
+        }
+      }
 
       const [doc] = await db
         .insert(documents)
@@ -611,9 +636,11 @@ export async function getDashboardTools(userId: string): Promise<ServerTool[]> {
       });
       if (!branch) throw new Error("Branch not found");
 
-      // Normalize parentFolderId: treat empty string as null (root level)
+      // Normalize parentFolderId: treat null, undefined, empty string as "root level"
       const normalizedParentId =
-        parentFolderId && parentFolderId.trim() !== "" ? parentFolderId : null;
+        parentFolderId != null && typeof parentFolderId === "string" && parentFolderId.trim() !== ""
+          ? parentFolderId
+          : null;
 
       const [folder] = await db
         .insert(folders)

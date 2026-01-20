@@ -125,11 +125,11 @@ export const getProjectDef = toolDefinition({
 
 export const listDocumentsDef = toolDefinition({
   name: "listDocuments",
-  description: "List documents in a project branch",
+  description: "List documents in a project. Only projectId is required.",
   inputSchema: z.object({
-    projectId: z.string(),
-    branchId: z.string().optional(),
-    folderId: z.string().optional(),
+    projectId: z.string().describe("The project ID"),
+    branchId: z.string().nullish().describe("Optional - defaults to main branch"),
+    folderId: z.string().nullish().describe("Optional - omit to list root documents"),
   }),
   outputSchema: z.array(
     z.object({
@@ -144,12 +144,19 @@ export const listDocumentsDef = toolDefinition({
 
 export const createDocumentDef = toolDefinition({
   name: "createDocument",
-  description: "Create a new CAD document (part or assembly)",
+  description:
+    "Create a new CAD document (part or assembly) at the project root. Only 2 parameters needed: branchId and name.",
   inputSchema: z.object({
-    branchId: z.string(),
-    name: z.string().min(1).max(100),
-    type: z.enum(["part", "assembly"]).default("part"),
-    folderId: z.string().optional(),
+    branchId: z.string().describe("The branch ID - get from context or listBranches"),
+    name: z.string().min(1).max(100).describe("Document name"),
+    type: z
+      .enum(["part", "assembly"])
+      .default("part")
+      .describe("'part' (default) or 'assembly'"),
+    folderId: z
+      .string()
+      .nullish() // Accept string, null, or undefined
+      .describe("DO NOT USE - leave empty to create at project root"),
   }),
   outputSchema: z.object({
     documentId: z.string(),
@@ -319,10 +326,10 @@ export const getBranchDiffDef = toolDefinition({
 
 export const listFoldersDef = toolDefinition({
   name: "listFolders",
-  description: "List folders in a branch",
+  description: "List folders in a branch. Only branchId is required.",
   inputSchema: z.object({
-    branchId: z.string(),
-    parentFolderId: z.string().optional(),
+    branchId: z.string().describe("The branch ID"),
+    parentFolderId: z.string().nullish().describe("Optional - omit to list root folders"),
   }),
   outputSchema: z.array(
     z.object({
@@ -335,11 +342,11 @@ export const listFoldersDef = toolDefinition({
 
 export const createFolderDef = toolDefinition({
   name: "createFolder",
-  description: "Create a folder to organize documents",
+  description: "Create a folder to organize documents at project root. Only 2 parameters needed: branchId and name.",
   inputSchema: z.object({
-    branchId: z.string(),
-    name: z.string().min(1).max(100),
-    parentFolderId: z.string().optional(),
+    branchId: z.string().describe("The branch ID"),
+    name: z.string().min(1).max(100).describe("Folder name"),
+    parentFolderId: z.string().nullish().describe("DO NOT USE - leave empty to create at root"),
   }),
   outputSchema: z.object({
     folderId: z.string(),
