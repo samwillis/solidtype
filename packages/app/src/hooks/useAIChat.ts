@@ -142,7 +142,7 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
 
   const archiveSession = useCallback(
     async (sessionId: string) => {
-      const session = sortedSessions.find((s) => s.id === sessionId);
+      const session = sessions.find((s) => s.id === sessionId);
       if (!session) return;
       // Update via collection - mutation handler will call server function
       await aiChatSessionsCollection.update(sessionId, (draft) => {
@@ -150,12 +150,12 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
         draft.updated_at = new Date().toISOString();
       });
     },
-    [sortedSessions]
+    [sessions]
   );
 
   const unarchiveSession = useCallback(
     async (sessionId: string) => {
-      const session = sortedSessions.find((s) => s.id === sessionId);
+      const session = sessions.find((s) => s.id === sessionId);
       if (!session) return;
       // Update via collection - mutation handler will call server function
       await aiChatSessionsCollection.update(sessionId, (draft) => {
@@ -163,7 +163,7 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
         draft.updated_at = new Date().toISOString();
       });
     },
-    [sortedSessions]
+    [sessions]
   );
 
   const deleteSession = useCallback(async (sessionId: string) => {
