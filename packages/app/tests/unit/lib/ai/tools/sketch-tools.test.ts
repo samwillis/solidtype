@@ -446,8 +446,8 @@ describe("Sketch Helper Tool Definitions", () => {
 
 describe("Tool Definition Count", () => {
   it("should have correct number of sketch tools", () => {
-    // 4 lifecycle + 6 geometry + 3 point + 3 constraint + 2 deletion + 1 construction = 19
-    expect(sketchToolDefs.length).toBe(19);
+    // 5 lifecycle + 6 geometry + 3 point + 3 constraint + 2 deletion + 1 construction = 20
+    expect(sketchToolDefs.length).toBe(20);
   });
 
   it("should have correct number of helper tools", () => {

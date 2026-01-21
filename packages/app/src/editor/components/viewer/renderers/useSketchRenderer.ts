@@ -290,223 +290,10 @@ export function useSketchRenderer(options: SketchRendererOptions): void {
 
         const toWorld = createToWorldFn(transform);
 
-      // Render preview line
-      if (previewShapes.line && sketchMode.planeId) {
-        const startWorld = toWorld(previewShapes.line.start.x, previewShapes.line.start.y);
-        const endWorld = toWorld(previewShapes.line.end.x, previewShapes.line.end.y);
-
-        const geometry = new LineGeometry();
-        geometry.setPositions([
-          startWorld.x,
-          startWorld.y,
-          startWorld.z,
-          endWorld.x,
-          endWorld.y,
-          endWorld.z,
-        ]);
-        const material = new LineMaterial({
-          color: 0x00ff00,
-          linewidth: 2,
-          resolution: rendererSize || new THREE.Vector2(800, 600),
-          depthTest: false,
-          dashed: true,
-          dashScale: 10,
-          dashSize: 3,
-          gapSize: 3,
-        });
-        const line = new Line2(geometry, material);
-        line.computeLineDistances();
-        line.renderOrder = 3;
-        sketchGroup.add(line);
-      }
-
-      // Render preview circle
-      if (previewShapes.circle && sketchMode.planeId && previewShapes.circle.radius > 0.01) {
-        const segments = 64;
-        const positions: number[] = [];
-
-        for (let i = 0; i <= segments; i++) {
-          const angle = (i / segments) * Math.PI * 2;
-          const x = previewShapes.circle.center.x + previewShapes.circle.radius * Math.cos(angle);
-          const y = previewShapes.circle.center.y + previewShapes.circle.radius * Math.sin(angle);
-          const pt = toWorld(x, y);
-          positions.push(pt.x, pt.y, pt.z);
-        }
-
-        const geometry = new LineGeometry();
-        geometry.setPositions(positions);
-        const material = new LineMaterial({
-          color: 0x00ff00,
-          linewidth: 2,
-          resolution: rendererSize || new THREE.Vector2(800, 600),
-          depthTest: false,
-          dashed: true,
-          dashScale: 10,
-          dashSize: 3,
-          gapSize: 3,
-        });
-        const circle = new Line2(geometry, material);
-        circle.computeLineDistances();
-        circle.renderOrder = 3;
-        sketchGroup.add(circle);
-      }
-
-      // Render preview rectangle
-      if (previewShapes.rect && sketchMode.planeId) {
-        const { corner1, corner2 } = previewShapes.rect;
-        const minX = Math.min(corner1.x, corner2.x);
-        const minY = Math.min(corner1.y, corner2.y);
-        const maxX = Math.max(corner1.x, corner2.x);
-        const maxY = Math.max(corner1.y, corner2.y);
-
-        const p1 = toWorld(minX, minY);
-        const p2 = toWorld(maxX, minY);
-        const p3 = toWorld(maxX, maxY);
-        const p4 = toWorld(minX, maxY);
-
-        const positions = [
-          p1.x,
-          p1.y,
-          p1.z,
-          p2.x,
-          p2.y,
-          p2.z,
-          p3.x,
-          p3.y,
-          p3.z,
-          p4.x,
-          p4.y,
-          p4.z,
-          p1.x,
-          p1.y,
-          p1.z,
-        ];
-
-        const geometry = new LineGeometry();
-        geometry.setPositions(positions);
-        const material = new LineMaterial({
-          color: 0x00ff00,
-          linewidth: 2,
-          resolution: rendererSize || new THREE.Vector2(800, 600),
-          depthTest: false,
-          dashed: true,
-          dashScale: 10,
-          dashSize: 3,
-          gapSize: 3,
-        });
-        const rect = new Line2(geometry, material);
-        rect.computeLineDistances();
-        rect.renderOrder = 3;
-        sketchGroup.add(rect);
-      }
-
-      // Render preview polygon
-      if (previewShapes.polygon && previewShapes.polygon.length >= 3 && sketchMode.planeId) {
-        const positions: number[] = [];
-        for (const pt of previewShapes.polygon) {
-          const worldPt = toWorld(pt.x, pt.y);
-          positions.push(worldPt.x, worldPt.y, worldPt.z);
-        }
-
-        const geometry = new LineGeometry();
-        geometry.setPositions(positions);
-        const material = new LineMaterial({
-          color: 0x00ff00,
-          linewidth: 2,
-          resolution: rendererSize || new THREE.Vector2(800, 600),
-          depthTest: false,
-          dashed: true,
-          dashScale: 10,
-          dashSize: 3,
-          gapSize: 3,
-        });
-        const polygon = new Line2(geometry, material);
-        polygon.computeLineDistances();
-        polygon.renderOrder = 3;
-        sketchGroup.add(polygon);
-      }
-
-      // Render preview arc
-      if (previewShapes.arc && sketchMode.planeId) {
-        const { start, end, bulge } = previewShapes.arc;
-
-        const ax = start.x,
-          ay = start.y;
-        const bx = bulge.x,
-          by = bulge.y;
-        const cx = end.x,
-          cy = end.y;
-
-        const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-
-        if (Math.abs(d) > 1e-10) {
-          const aSq = ax * ax + ay * ay;
-          const bSq = bx * bx + by * by;
-          const cSq = cx * cx + cy * cy;
-
-          const centerX = (aSq * (by - cy) + bSq * (cy - ay) + cSq * (ay - by)) / d;
-          const centerY = (aSq * (cx - bx) + bSq * (ax - cx) + cSq * (bx - ax)) / d;
-          const radius = Math.sqrt((ax - centerX) ** 2 + (ay - centerY) ** 2);
-
-          const startAngle = Math.atan2(ay - centerY, ax - centerX);
-          const endAngle = Math.atan2(cy - centerY, cx - centerX);
-          const bulgeAngle = Math.atan2(by - centerY, bx - centerX);
-
-          const normalizeAngle = (a: number) => (a + Math.PI * 2) % (Math.PI * 2);
-          const startNorm = normalizeAngle(startAngle);
-          const endNorm = normalizeAngle(endAngle);
-          const bulgeNorm = normalizeAngle(bulgeAngle);
-
-          let ccw: boolean;
-          if (startNorm < endNorm) {
-            ccw = bulgeNorm > startNorm && bulgeNorm < endNorm;
-          } else {
-            ccw = bulgeNorm > startNorm || bulgeNorm < endNorm;
-          }
-
-          const segments = 32;
-          const positions: number[] = [];
-
-          let angleDiff: number;
-          if (ccw) {
-            angleDiff = endAngle - startAngle;
-            if (angleDiff < 0) angleDiff += Math.PI * 2;
-          } else {
-            angleDiff = endAngle - startAngle;
-            if (angleDiff > 0) angleDiff -= Math.PI * 2;
-          }
-
-          for (let i = 0; i <= segments; i++) {
-            const t = i / segments;
-            const angle = startAngle + t * angleDiff;
-            const x = centerX + radius * Math.cos(angle);
-            const y = centerY + radius * Math.sin(angle);
-            const pt = toWorld(x, y);
-            positions.push(pt.x, pt.y, pt.z);
-          }
-
-          if (positions.length >= 6) {
-            const geometry = new LineGeometry();
-            geometry.setPositions(positions);
-            const material = new LineMaterial({
-              color: 0x00ff00,
-              linewidth: 2,
-              resolution: rendererSize || new THREE.Vector2(800, 600),
-              depthTest: false,
-              dashed: true,
-              dashScale: 10,
-              dashSize: 3,
-              gapSize: 3,
-            });
-            const arc = new Line2(geometry, material);
-            arc.computeLineDistances();
-            arc.renderOrder = 3;
-            sketchGroup.add(arc);
-          }
-        } else {
-          // Collinear - draw line
-          const startWorld = toWorld(start.x, start.y);
-          const endWorld = toWorld(end.x, end.y);
+        // Render preview line
+        if (previewShapes.line && sketchMode.planeId) {
+          const startWorld = toWorld(previewShapes.line.start.x, previewShapes.line.start.y);
+          const endWorld = toWorld(previewShapes.line.end.x, previewShapes.line.end.y);
 
           const geometry = new LineGeometry();
           geometry.setPositions([
@@ -532,7 +319,220 @@ export function useSketchRenderer(options: SketchRendererOptions): void {
           line.renderOrder = 3;
           sketchGroup.add(line);
         }
-      }
+
+        // Render preview circle
+        if (previewShapes.circle && sketchMode.planeId && previewShapes.circle.radius > 0.01) {
+          const segments = 64;
+          const positions: number[] = [];
+
+          for (let i = 0; i <= segments; i++) {
+            const angle = (i / segments) * Math.PI * 2;
+            const x = previewShapes.circle.center.x + previewShapes.circle.radius * Math.cos(angle);
+            const y = previewShapes.circle.center.y + previewShapes.circle.radius * Math.sin(angle);
+            const pt = toWorld(x, y);
+            positions.push(pt.x, pt.y, pt.z);
+          }
+
+          const geometry = new LineGeometry();
+          geometry.setPositions(positions);
+          const material = new LineMaterial({
+            color: 0x00ff00,
+            linewidth: 2,
+            resolution: rendererSize || new THREE.Vector2(800, 600),
+            depthTest: false,
+            dashed: true,
+            dashScale: 10,
+            dashSize: 3,
+            gapSize: 3,
+          });
+          const circle = new Line2(geometry, material);
+          circle.computeLineDistances();
+          circle.renderOrder = 3;
+          sketchGroup.add(circle);
+        }
+
+        // Render preview rectangle
+        if (previewShapes.rect && sketchMode.planeId) {
+          const { corner1, corner2 } = previewShapes.rect;
+          const minX = Math.min(corner1.x, corner2.x);
+          const minY = Math.min(corner1.y, corner2.y);
+          const maxX = Math.max(corner1.x, corner2.x);
+          const maxY = Math.max(corner1.y, corner2.y);
+
+          const p1 = toWorld(minX, minY);
+          const p2 = toWorld(maxX, minY);
+          const p3 = toWorld(maxX, maxY);
+          const p4 = toWorld(minX, maxY);
+
+          const positions = [
+            p1.x,
+            p1.y,
+            p1.z,
+            p2.x,
+            p2.y,
+            p2.z,
+            p3.x,
+            p3.y,
+            p3.z,
+            p4.x,
+            p4.y,
+            p4.z,
+            p1.x,
+            p1.y,
+            p1.z,
+          ];
+
+          const geometry = new LineGeometry();
+          geometry.setPositions(positions);
+          const material = new LineMaterial({
+            color: 0x00ff00,
+            linewidth: 2,
+            resolution: rendererSize || new THREE.Vector2(800, 600),
+            depthTest: false,
+            dashed: true,
+            dashScale: 10,
+            dashSize: 3,
+            gapSize: 3,
+          });
+          const rect = new Line2(geometry, material);
+          rect.computeLineDistances();
+          rect.renderOrder = 3;
+          sketchGroup.add(rect);
+        }
+
+        // Render preview polygon
+        if (previewShapes.polygon && previewShapes.polygon.length >= 3 && sketchMode.planeId) {
+          const positions: number[] = [];
+          for (const pt of previewShapes.polygon) {
+            const worldPt = toWorld(pt.x, pt.y);
+            positions.push(worldPt.x, worldPt.y, worldPt.z);
+          }
+
+          const geometry = new LineGeometry();
+          geometry.setPositions(positions);
+          const material = new LineMaterial({
+            color: 0x00ff00,
+            linewidth: 2,
+            resolution: rendererSize || new THREE.Vector2(800, 600),
+            depthTest: false,
+            dashed: true,
+            dashScale: 10,
+            dashSize: 3,
+            gapSize: 3,
+          });
+          const polygon = new Line2(geometry, material);
+          polygon.computeLineDistances();
+          polygon.renderOrder = 3;
+          sketchGroup.add(polygon);
+        }
+
+        // Render preview arc
+        if (previewShapes.arc && sketchMode.planeId) {
+          const { start, end, bulge } = previewShapes.arc;
+
+          const ax = start.x,
+            ay = start.y;
+          const bx = bulge.x,
+            by = bulge.y;
+          const cx = end.x,
+            cy = end.y;
+
+          const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+
+          if (Math.abs(d) > 1e-10) {
+            const aSq = ax * ax + ay * ay;
+            const bSq = bx * bx + by * by;
+            const cSq = cx * cx + cy * cy;
+
+            const centerX = (aSq * (by - cy) + bSq * (cy - ay) + cSq * (ay - by)) / d;
+            const centerY = (aSq * (cx - bx) + bSq * (ax - cx) + cSq * (bx - ax)) / d;
+            const radius = Math.sqrt((ax - centerX) ** 2 + (ay - centerY) ** 2);
+
+            const startAngle = Math.atan2(ay - centerY, ax - centerX);
+            const endAngle = Math.atan2(cy - centerY, cx - centerX);
+            const bulgeAngle = Math.atan2(by - centerY, bx - centerX);
+
+            const normalizeAngle = (a: number) => (a + Math.PI * 2) % (Math.PI * 2);
+            const startNorm = normalizeAngle(startAngle);
+            const endNorm = normalizeAngle(endAngle);
+            const bulgeNorm = normalizeAngle(bulgeAngle);
+
+            let ccw: boolean;
+            if (startNorm < endNorm) {
+              ccw = bulgeNorm > startNorm && bulgeNorm < endNorm;
+            } else {
+              ccw = bulgeNorm > startNorm || bulgeNorm < endNorm;
+            }
+
+            const segments = 32;
+            const positions: number[] = [];
+
+            let angleDiff: number;
+            if (ccw) {
+              angleDiff = endAngle - startAngle;
+              if (angleDiff < 0) angleDiff += Math.PI * 2;
+            } else {
+              angleDiff = endAngle - startAngle;
+              if (angleDiff > 0) angleDiff -= Math.PI * 2;
+            }
+
+            for (let i = 0; i <= segments; i++) {
+              const t = i / segments;
+              const angle = startAngle + t * angleDiff;
+              const x = centerX + radius * Math.cos(angle);
+              const y = centerY + radius * Math.sin(angle);
+              const pt = toWorld(x, y);
+              positions.push(pt.x, pt.y, pt.z);
+            }
+
+            if (positions.length >= 6) {
+              const geometry = new LineGeometry();
+              geometry.setPositions(positions);
+              const material = new LineMaterial({
+                color: 0x00ff00,
+                linewidth: 2,
+                resolution: rendererSize || new THREE.Vector2(800, 600),
+                depthTest: false,
+                dashed: true,
+                dashScale: 10,
+                dashSize: 3,
+                gapSize: 3,
+              });
+              const arc = new Line2(geometry, material);
+              arc.computeLineDistances();
+              arc.renderOrder = 3;
+              sketchGroup.add(arc);
+            }
+          } else {
+            // Collinear - draw line
+            const startWorld = toWorld(start.x, start.y);
+            const endWorld = toWorld(end.x, end.y);
+
+            const geometry = new LineGeometry();
+            geometry.setPositions([
+              startWorld.x,
+              startWorld.y,
+              startWorld.z,
+              endWorld.x,
+              endWorld.y,
+              endWorld.z,
+            ]);
+            const material = new LineMaterial({
+              color: 0x00ff00,
+              linewidth: 2,
+              resolution: rendererSize || new THREE.Vector2(800, 600),
+              depthTest: false,
+              dashed: true,
+              dashScale: 10,
+              dashSize: 3,
+              gapSize: 3,
+            });
+            const line = new Line2(geometry, material);
+            line.computeLineDistances();
+            line.renderOrder = 3;
+            sketchGroup.add(line);
+          }
+        }
       } // end if (transform)
     }
 

@@ -22,6 +22,7 @@ export { makeBox, makeCylinder, makeSphere, makeCone, makeTorus } from "./primit
 // Operations
 export {
   booleanOp,
+  booleanOpWithHistory,
   extrude,
   extrudeSymmetric,
   revolve,
@@ -30,8 +31,16 @@ export {
   chamferAllEdges,
   translate,
   rotate,
+  // Phase 8: Extended operations with OCCT history
+  extrudeWithHistory,
+  revolveWithHistory,
   type BooleanOp,
   type BooleanResult,
+  type BooleanWithHistoryResult,
+  type FaceHistoryMapping,
+  type ExtrudeWithHistoryResult,
+  type RevolveWithHistoryResult,
+  type ProfileEdgeToFaceMapping,
 } from "./operations.js";
 
 // Sketch conversion
@@ -47,9 +56,11 @@ export {
 export {
   tessellate,
   tessellateWithParams,
+  tessellateWithHashes,
   getBoundingBox,
   getFacePlane,
   type TessellatedMesh,
+  type TessellatedMeshWithHashes,
   type TessellationQuality,
   type FacePlaneData,
 } from "./tessellate.js";

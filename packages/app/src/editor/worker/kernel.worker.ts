@@ -62,6 +62,12 @@ import {
   getSortedKeys as _getSortedKeys,
 } from "../document/yjs";
 import type { SketchPlaneRef, DatumPlaneRole } from "../document/schema";
+import {
+  buildBodyReferenceIndex,
+  computeProfileLoops,
+  type ReferenceIndex,
+  type SketchInfo as ReferenceSketchInfo,
+} from "../kernel/referenceIndex";
 
 // Declare self as a worker global scope
 declare const self: DedicatedWorkerGlobalScope;
@@ -270,10 +276,12 @@ function findDatumPlaneByRole(
     if (featureMap.get("type") === "plane") {
       // Check both old format (role at top level) and new format (role in definition)
       const topLevelRole = featureMap.get("role");
-      const definition = featureMap.get("definition") as { kind?: string; role?: string } | undefined;
+      const definition = featureMap.get("definition") as
+        | { kind?: string; role?: string }
+        | undefined;
       const definitionRole = definition?.kind === "datum" ? definition.role : undefined;
       if (topLevelRole === role || definitionRole === role) {
-      foundId = id;
+        foundId = id;
       }
     }
   });
@@ -451,10 +459,15 @@ interface SketchInfo {
   planeRef: SketchPlaneRef;
   plane: DatumPlane;
   data: SketchData;
+  /** Profile loops for PersistentRef generation (Phase 3) */
+  referenceInfo?: ReferenceSketchInfo;
 }
 
 // Map of sketch IDs to their parsed data
 const sketchCache = new Map<string, SketchInfo>();
+
+/** Map from feature ID to its source sketch info (for reference index generation) */
+const featureToSketchInfo = new Map<string, ReferenceSketchInfo>();
 
 /**
  * Calculate extrude distance based on extent type (Phase 14)
@@ -741,8 +754,12 @@ function interpretSketch(
     dof,
   } as WorkerToMainMessage);
 
+  // Compute profile loops for PersistentRef generation (Phase 3)
+  const profileLoops = computeProfileLoops(data.entitiesById, data.pointsById);
+  const referenceInfo: ReferenceSketchInfo = { profileLoops };
+
   // Store for downstream features
-  sketchCache.set(id, { planeRef, plane, data });
+  sketchCache.set(id, { planeRef, plane, data, referenceInfo });
 }
 
 /**
@@ -836,6 +853,11 @@ function interpretExtrude(
   }
 
   const extrudedBodyId = result.value;
+
+  // Store sketch info for reference index generation (Phase 3)
+  if (sketchInfo.referenceInfo) {
+    featureToSketchInfo.set(featureId, sketchInfo.referenceInfo);
+  }
 
   // Handle cut operation
   if (op === "cut") {
@@ -1082,6 +1104,11 @@ function interpretRevolve(
 
   const revolvedBodyId = result.value;
 
+  // Store sketch info for reference index generation (Phase 3)
+  if (sketchInfo.referenceInfo) {
+    featureToSketchInfo.set(featureId, sketchInfo.referenceInfo);
+  }
+
   // Handle cut operation
   if (op === "cut") {
     for (const [existingId, entry] of bodyMap) {
@@ -1271,6 +1298,7 @@ async function performRebuild(): Promise<void> {
 
     bodyMap.clear();
     sketchCache.clear();
+    featureToSketchInfo.clear();
     resetBodyColorIndex();
 
     // Build datum plane cache
@@ -1381,11 +1409,50 @@ async function performRebuild(): Promise<void> {
       });
     }
 
+    // Build ReferenceIndex for all bodies (Phase 3)
+    const referenceIndex: ReferenceIndex = {};
+    for (const [featureId, entry] of bodyMap) {
+      try {
+        const mesh = session!.tessellate(entry.bodyId);
+        const positions = new Float32Array(mesh.positions);
+        const normals = new Float32Array(mesh.normals);
+        const indices = new Uint32Array(mesh.indices);
+        const faceMap = mesh.faceMap ? new Uint32Array(mesh.faceMap) : undefined;
+        const edges = mesh.edges ? new Float32Array(mesh.edges) : undefined;
+        const edgeMap = mesh.edgeMap ? new Uint32Array(mesh.edgeMap) : undefined;
+
+        // Get the feature type for this body
+        const featureMap = featuresById.get(entry.sourceFeatureId);
+        const featureType = (featureMap?.get("type") as string) || "unknown";
+
+        // Get sketch info if available
+        const sketchInfo = featureToSketchInfo.get(entry.sourceFeatureId);
+
+        const bodyRefIndex = buildBodyReferenceIndex(
+          featureId,
+          entry.sourceFeatureId,
+          featureType,
+          positions,
+          normals,
+          indices,
+          faceMap,
+          edges,
+          edgeMap,
+          sketchInfo
+        );
+
+        referenceIndex[featureId] = bodyRefIndex;
+      } catch (err) {
+        console.error(`[Worker] Failed to build reference index for body ${featureId}:`, err);
+      }
+    }
+
     self.postMessage({
       type: "rebuild-complete",
       bodies,
       featureStatus,
       errors,
+      referenceIndex,
     } as WorkerToMainMessage);
 
     // Send meshes for all bodies

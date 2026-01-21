@@ -733,10 +733,13 @@ export function deleteFeature(doc: SolidTypeDoc, id: string): boolean {
   if (!feature) return false;
 
   const type = feature.get("type");
-  const role = feature.get("role");
+  // Check both old format (role at top level) and new format (role in definition)
+  const topLevelRole = feature.get("role");
+  const definition = feature.get("definition") as { kind?: string; role?: string } | undefined;
+  const isDatumPlane = topLevelRole || definition?.kind === "datum";
 
   // Don't allow deleting origin or datum planes
-  if (type === "origin" || (type === "plane" && role)) {
+  if (type === "origin" || (type === "plane" && isDatumPlane)) {
     return false;
   }
 

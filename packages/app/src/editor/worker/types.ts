@@ -84,6 +84,18 @@ export interface RebuildCompleteMessage {
   bodies: BodyInfo[];
   featureStatus: Record<string, FeatureStatus>;
   errors: BuildError[];
+  /**
+   * Map from bodyKey to arrays of encoded PersistentRef strings
+   * @see docs/CAD-PIPELINE-REWORK.md Phase 3
+   */
+  referenceIndex?: {
+    [bodyKey: string]: {
+      /** Encoded PersistentRef strings, indexed by faceIndex */
+      faces: string[];
+      /** Encoded PersistentRef strings, indexed by edgeIndex */
+      edges: string[];
+    };
+  };
 }
 
 export interface MeshMessage {
@@ -200,6 +212,16 @@ export interface TransferableMesh {
   edges?: Float32Array;
   /** Maps each edge segment to its edge index for 3D edge selection */
   edgeMap?: Uint32Array;
+  /**
+   * Phase 8: OCCT face hash codes for history matching.
+   * One hash per face, indexed by faceIndex.
+   */
+  faceHashes?: Uint32Array;
+  /**
+   * Phase 8: OCCT edge hash codes for history matching.
+   * One hash per edge, indexed by edgeIndex.
+   */
+  edgeHashes?: Uint32Array;
 }
 
 /** Request to resolve a persistent reference */

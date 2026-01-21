@@ -162,4 +162,3 @@ Help users manage their workspaces, projects, documents, and branches through na
 - \`createFolder\`: branchId (required), name (required)
 `;
 }
-

@@ -35,12 +35,18 @@ This section documents explicit design decisions made to align the FreeCAD-style
 
 | Aspect                      | Decision                                                                                    |
 | --------------------------- | ------------------------------------------------------------------------------------------- |
-| **External storage format** | `PersistentRef` in pinned format `type:featureId:selector` (stored in Yjs)                  |
+| **External storage format** | `PersistentRef` stored in Yjs as an **opaque, immutable string** (CRDT-safe)                |
 | **Internal representation** | `MappedName` (FreeCAD-style strings like `Face1;:M;XTR;:T5`)                                |
 | **Translation**             | Naming service translates between formats at read/write time                                |
 | **Rationale**               | Maintains backward compatibility with pinned schema while gaining FreeCAD's algorithm power |
 
 **MappedName is INTERNAL ONLY** — never stored in documents, never exposed to app layer.
+
+**Canonical encoding (CRDT-safe):**
+
+- Persistent references are stored as versioned strings: `stref:v1:<base64url(canonical-json)>`
+- The decoded payload contains the pinned _semantic fields_ (type + origin feature UUID + local selector + optional fingerprint).
+- For migration/debugging we may also accept a legacy human-readable rendering (e.g. `face:<uuid>:top`), but **the document should canonicalize to `stref:v1` on write**.
 
 ### 0.2 API Boundary (App ↔ Core)
 
@@ -85,10 +91,12 @@ face:<displayName>:top   ← WRONG: face:Extrude1:top (breaks if user renames)
 
 | Aspect             | Decision                                                                   |
 | ------------------ | -------------------------------------------------------------------------- |
-| **Tag allocation** | `FeatureTagRegistry` maps `FeatureId` (UUID) → `Tag`                       |
+| **Tag allocation** | `FeatureTagRegistry` maps `FeatureId` (UUID) → `Tag` (deterministic)       |
 | **Persistence**    | Registry is serialized with document, tags never reset                     |
 | **Tag reuse**      | Tags are NEVER reused, even after feature deletion                         |
 | **Rationale**      | Ensures MappedName strings with embedded tags remain valid across sessions |
+
+**CRDT note:** Tag allocation must be fork/merge safe. Do **not** allocate tags via shared incrementing counters. Prefer deriving `Tag` deterministically from `FeatureId` (UUID → stable integer) and caching the mapping for performance.
 
 ### 0.5 Fallback Behavior
 
@@ -97,6 +105,21 @@ face:<displayName>:top   ← WRONG: face:Extrude1:top (breaks if user renames)
 | **No mapped name found**      | Construct `PersistentRef` from origin feature UUID + local selector              |
 | **Never store indexed names** | IndexedName (Face7) is NEVER stored, always converted to PersistentRef           |
 | **Resolution failure**        | Return structured error with hints (using display name), never return stale data |
+
+### 0.6 CRDT/Yjs-Safe Reference Storage (RefSets)
+
+SolidType’s document is a CRDT (Yjs). That changes what “safe to persist” means:
+
+- **Persist only merge-stable identifiers.** Never store `Face7`, `Edge12`, `faceIndex`, tessellation indices, or “nth face”.
+- **Persist references as immutable strings.** Do not store a mutable nested Yjs object for a reference.
+- **Prefer stable IDs in selectors.** Selector data must be keyed by stable identifiers (UUIDs of sketch entities / profile segments), not positional indices in an array.
+
+To reach FreeCAD-style robustness while staying CRDT-safe, the document may store a _small set of candidate references_ (“RefSet”), not just a single ref:
+
+- In the common case, a RefSet has exactly **one** candidate.
+- The set grows only when we learn better naming signals (e.g. history-backed name), when merge creates competing repairs, or when resolution is ambiguous.
+
+The resolver tries candidates in order and returns **found / ambiguous / not_found** without silently rebinding to unrelated geometry.
 
 ---
 
@@ -1291,10 +1314,40 @@ export function extrude(
 
 ### 7.1 Storing References in Features
 
-Features store `PersistentRef` strings in the pinned format `type:featureId:selector`, NOT raw MappedName strings. MappedName is an internal representation used only within the naming service.
+Features store `PersistentRef` strings in the document, NOT raw `MappedName` strings. `MappedName` remains internal to the naming service.
+
+**CRDT-safe canonical format:**
+
+- `stref:v1:<base64url(canonical-json)>`
+- Encodes the pinned semantic fields:
+  - `expectedType`: `face|edge|vertex`
+  - `originFeatureId`: UUID string
+  - `localSelector`: `{ kind, data }` where `data` uses stable IDs (UUIDs), not array positions
+  - optional `fingerprint` (geometry hints for disambiguation)
+
+**RefSets (recommended):**
+
+- For references that must survive merges/repairs, store a **candidate set**:
+  - a preferred candidate (optional), plus
+  - a small ordered list of candidates (deduped + capped).
 
 ```typescript
-// In document model (Yjs) - uses PINNED PersistentRef format
+// In document model (Yjs) - CRDT-safe persistent reference storage
+
+/** Opaque, immutable encoded persistent ref string (canonical: stref:v1:...) */
+type PersistentRefString = string;
+
+/**
+ * PersistentRefSet - optional multi-candidate reference.
+ * Most of the time candidates.length === 1.
+ */
+interface PersistentRefSet {
+  /** Optional preferred candidate (must also exist in candidates). */
+  preferred?: PersistentRefString;
+  /** Ordered candidate list (deduped, capped to small N). */
+  candidates: PersistentRefString[];
+}
+
 interface ExtrudeFeature {
   type: "extrude";
   id: string; // UUID: "f7a8b3c2-1234-5678-9abc-def012345678"
@@ -1304,10 +1357,7 @@ interface ExtrudeFeature {
   sketchRef: string; // UUID of sketch feature
 
   /** For "up to face" extent - stored as PersistentRef */
-  extentFaceRef?: string; // "face:<uuid>:top" (NOT MappedName!)
-
-  /** Optional fingerprint stored separately (NOT in PersistentRef string) */
-  extentFaceFingerprint?: GeometryFingerprint;
+  extentFaceRef?: PersistentRefString | PersistentRefSet;
 
   direction: "normal" | "reverse" | "both";
   distance: number;
@@ -1319,32 +1369,25 @@ interface FilletFeature {
   name: string; // Display name
 
   /** Edges to fillet - stored as PersistentRef strings */
-  edgeRefs: string[]; // ["edge:<uuid>:lateral:0", "edge:<uuid>:lateral:1"]
-
-  /** Optional fingerprints for robustness (stored separately) */
-  edgeFingerprints?: GeometryFingerprint[];
+  edgeRefs: Array<PersistentRefString | PersistentRefSet>;
 
   radius: number;
 }
 ```
 
-**PersistentRef Format (Pinned)**
+**PersistentRef (Semantic Fields)**
 
 ```
-type:featureId:selector
-     ^^^^^^^^^
-     This is the internal UUID, NOT the display name!
+expectedType + originFeatureId (UUID) + localSelector (+ optional fingerprint)
 ```
 
-> **Note on Fingerprints**: Fingerprints are stored in a **separate field** (e.g., `extentFaceFingerprint`), NOT embedded in the PersistentRef string. This keeps the pinned format unchanged while allowing optional fingerprint-based fallback resolution.
+> **Note on fingerprints:** Fingerprints are optional and may be embedded in `stref:v1` as non-authoritative hints. The primary identity comes from the history/name mapping, not from geometry alone.
 
 **Examples:**
 
 ```
-face:f7a8b3c2-1234-5678-9abc-def012345678:top        ← top face
-face:f7a8b3c2-1234-5678-9abc-def012345678:side:0     ← first side face
-edge:f7a8b3c2-1234-5678-9abc-def012345678:lateral:2  ← third lateral edge
-edge:a1b2c3d4-5678-90ab-cdef-1234567890ab:fillet:0   ← first fillet edge
+stref:v1:...  ← canonical stored form (opaque)
+(debug) face:<uuid>:top, edge:<uuid>:lateral:<id>    ← human-readable renderings
 ```
 
 **NEVER use display names in PersistentRef:**
@@ -1357,7 +1400,7 @@ The naming service translates between this format and internal MappedName repres
 
 ### 7.2 Reference Resolution
 
-At rebuild time, we resolve stored `PersistentRef` to current geometry. This happens entirely within the core, returning opaque handles (not OCCT types).
+At rebuild time, we resolve stored persistent references to current geometry. This happens entirely within the core, returning opaque handles (not OCCT types).
 
 ```typescript
 /**
@@ -1380,42 +1423,42 @@ type ResolveResult =
  * The app calls SolidSession.resolveRef() which wraps this.
  */
 function resolveReference(
-  persistentRef: string,
+  persistentRefOrSet: PersistentRefString | PersistentRefSet,
   bodyId: BodyId,
   session: SolidSession // Uses session to access internal shape data
 ): ResolveResult {
-  // Parse the PersistentRef format: type:featureId:selector[:fingerprint]
-  const parsed = parsePersistentRef(persistentRef);
-  if (!parsed) {
-    return { status: "not_found", reason: "Invalid PersistentRef format" };
+  const candidates = normalizeToCandidates(persistentRefOrSet);
+
+  // Try candidates in order. Prefer history-backed / element-map resolvable refs.
+  for (const persistentRef of candidates) {
+    const parsed = parsePersistentRef(persistentRef);
+    if (!parsed) continue;
+
+    const topoShape = session._getInternalShape(bodyId);
+    if (!topoShape) return { status: "not_found", reason: "Body not found" };
+
+    const mappedName = persistentRefToMappedName(parsed, session._getTagRegistry());
+    const indexed = topoShape.elementMap.getIndexedName(mappedName);
+
+    if (!indexed) {
+      const fallback = attemptFallbackResolution(parsed, topoShape, session);
+      if (fallback.status === "found" || fallback.status === "ambiguous") return fallback;
+      continue;
+    }
+
+    switch (indexed.type) {
+      case "Face":
+        return { status: "found", faceId: makeFaceId(bodyId, indexed.index) };
+      case "Edge":
+        return { status: "found", edgeId: makeEdgeId(bodyId, indexed.index) };
+      case "Vertex":
+        return { status: "found", vertexId: makeVertexId(bodyId, indexed.index) };
+      default:
+        return { status: "not_found", reason: `Unsupported type: ${indexed.type}` };
+    }
   }
 
-  // Get the internal TopoShape (never exposed to app)
-  const topoShape = session._getInternalShape(bodyId);
-  if (!topoShape) {
-    return { status: "not_found", reason: "Body not found" };
-  }
-
-  // Convert PersistentRef to MappedName for internal lookup
-  const mappedName = persistentRefToMappedName(parsed, session._getTagRegistry());
-  const indexed = topoShape.elementMap.getIndexedName(mappedName);
-
-  if (!indexed) {
-    // Try fallback strategies
-    return attemptFallbackResolution(parsed, topoShape, session);
-  }
-
-  // Return opaque handle based on type
-  switch (indexed.type) {
-    case "Face":
-      return { status: "found", faceId: makeFaceId(bodyId, indexed.index) };
-    case "Edge":
-      return { status: "found", edgeId: makeEdgeId(bodyId, indexed.index) };
-    case "Vertex":
-      return { status: "found", vertexId: makeVertexId(bodyId, indexed.index) };
-    default:
-      return { status: "not_found", reason: `Unsupported type: ${indexed.type}` };
-  }
+  return { status: "not_found", reason: "No candidate reference could be resolved" };
 }
 
 /**
@@ -1587,7 +1630,8 @@ class ElementMap {
 ### 8.2 Integration with Document Model
 
 ```typescript
-// In worker rebuild, we persist element maps alongside meshes
+// In worker rebuild, element maps / reference indices are derived outputs.
+// They are NOT persisted in Yjs (CRDT state). Recompute them on rebuild.
 
 interface BodyInfo {
   id: BodyId;
@@ -1596,7 +1640,7 @@ interface BodyInfo {
   featureId: string;
 
   // NOTE: Element maps are INTERNAL to the worker/core.
-  // They are NOT exposed to the app via KernelContext.
+  // They are NOT exposed to the app via KernelContext and are not stored in Yjs.
   // Resolution happens via SolidSession.resolveRef() API.
 }
 

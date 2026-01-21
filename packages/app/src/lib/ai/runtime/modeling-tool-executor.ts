@@ -3,17 +3,29 @@
  *
  * Executes 3D modeling AI tools against a Yjs document and OCCT kernel.
  * Used by the SharedWorker to process local tool calls.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 5
  */
 
 import type { SolidTypeDoc } from "../../../editor/document";
+import type { RebuildResult } from "../../../editor/kernel";
 import * as modelingImpl from "../tools/modeling-impl";
 
 /**
  * Context for modeling tool execution
+ *
+ * Extended in Phase 5 to support geometry queries via RebuildResult.
  */
 export interface ModelingToolContext {
   doc: SolidTypeDoc;
-  // Future: kernel state, selection, etc.
+
+  /**
+   * Optional RebuildResult from the last kernel rebuild.
+   * When available, enables geometry queries (findFaces, getBoundingBox, etc.)
+   *
+   * @see docs/CAD-PIPELINE-REWORK.md Phase 5
+   */
+  rebuildResult?: RebuildResult;
 }
 
 /**
@@ -30,6 +42,7 @@ export function isModelingTool(toolName: string): boolean {
       "measureDistance",
       "getBoundingBox",
       "measureAngle",
+      "getModelSnapshot",
     ].includes(toolName)
   ) {
     return true;
@@ -119,6 +132,9 @@ export function executeModelingTool(
       return modelingImpl.getBoundingBoxImpl(args, ctx);
     case "measureAngle":
       return modelingImpl.measureAngleImpl(args, ctx);
+    case "getModelSnapshot":
+      // getModelSnapshot is async - return the promise
+      return modelingImpl.getModelSnapshotImpl(args, ctx);
 
     // ============ Feature Tools ============
     case "createExtrude":

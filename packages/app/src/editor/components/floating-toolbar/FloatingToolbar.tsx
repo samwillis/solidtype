@@ -6,10 +6,7 @@ import { useSelection } from "../../contexts/SelectionContext";
 import { useFeatureEdit } from "../../contexts/FeatureEditContext";
 import { useKernel } from "../../contexts/KernelContext";
 import { useViewer } from "../../contexts/ViewerContext";
-import {
-  useKeyboardShortcut,
-  ShortcutPriority,
-} from "../../contexts/KeyboardShortcutContext";
+import { useKeyboardShortcut, ShortcutPriority } from "../../contexts/KeyboardShortcutContext";
 import { UndoRedoGroup } from "./UndoRedoGroup";
 import { SketchModeTools } from "./SketchModeTools";
 import { FeatureModeTools } from "./FeatureModeTools";

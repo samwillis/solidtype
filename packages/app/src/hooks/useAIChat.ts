@@ -75,9 +75,7 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
   // Query sessions from TanStack DB collection (synced via Electric)
   // Uses live query with orderBy for sorting
   const sessionsQuery = useLiveQuery((q) =>
-    q
-      .from({ s: aiChatSessionsCollection })
-      .orderBy(({ s }) => s.updated_at, "desc")
+    q.from({ s: aiChatSessionsCollection }).orderBy(({ s }) => s.updated_at, "desc")
   );
 
   // Transform to camelCase for compatibility
