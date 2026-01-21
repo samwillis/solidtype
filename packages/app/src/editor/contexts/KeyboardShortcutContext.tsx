@@ -5,14 +5,7 @@
  * with priority-based dispatch, editable element handling, and IME support.
  */
 
-import React, {
-  createContext,
-  useContext,
-  useCallback,
-  useRef,
-  useEffect,
-  useMemo,
-} from "react";
+import React, { createContext, useContext, useCallback, useRef, useEffect, useMemo } from "react";
 
 // ============================================================================
 // Types
@@ -79,8 +72,7 @@ export interface KeyboardShortcutContextValue {
 // ============================================================================
 
 const isMac =
-  typeof navigator !== "undefined" &&
-  navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+  typeof navigator !== "undefined" && navigator.platform.toUpperCase().indexOf("MAC") >= 0;
 
 /**
  * Normalize a KeyboardEvent to a canonical key combo string.
@@ -315,9 +307,7 @@ export function KeyboardShortcutProvider({ children }: KeyboardShortcutProviderP
   );
 
   return (
-    <KeyboardShortcutContext.Provider value={value}>
-      {children}
-    </KeyboardShortcutContext.Provider>
+    <KeyboardShortcutContext.Provider value={value}>{children}</KeyboardShortcutContext.Provider>
   );
 }
 

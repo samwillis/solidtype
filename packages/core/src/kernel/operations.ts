@@ -8,37 +8,42 @@
 
 import { getOC } from "./init.js";
 import { Shape } from "./Shape.js";
-import type { TopoDS_Shape, TopoDS_Edge, TopoDS_Face } from "opencascade.js";
+import type { TopoDS_Shape, TopoDS_Edge } from "opencascade.js";
 // Type declarations are in ./opencascade.d.ts
 
 export type BooleanOp = `union` | `subtract` | `intersect`;
 
 /**
- * Generated face info from OCCT operation history.
- * Captures the relationship between input profile edges and generated solid faces.
+ * Mapping from profile edge to generated side face.
+ * Used to associate sketch entity UUIDs with result faces.
  *
  * @see docs/CAD-PIPELINE-REWORK.md Phase 8.1
  */
-export interface GeneratedFaceInfo {
-  /** The generated face as a TopoDS_Shape reference (caller must not dispose) */
-  face: TopoDS_Face;
-  /** Index of the face in the result shape (for mesh mapping) */
-  faceIndex: number;
-  /** Which part of the extrude this face is: topCap, bottomCap, or side */
-  role: "topCap" | "bottomCap" | "side";
+export interface ProfileEdgeToFaceMapping {
+  /** Hash code of the profile edge that generated this face */
+  profileEdgeHash: number;
+  /** Hash code of the generated side face */
+  generatedFaceHash: number;
+  /** Index of the profile edge (0-based, in exploration order) */
+  profileEdgeIndex: number;
 }
 
 /**
  * Extended extrusion result with OCCT history info.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 8.1
  */
 export interface ExtrudeWithHistoryResult {
   shape: Shape;
-  /** First shape (bottom cap of extrude) */
-  firstShape?: Shape;
-  /** Last shape (top cap of extrude) */
-  lastShape?: Shape;
-  /** Generated faces with their roles */
-  generatedFaces?: GeneratedFaceInfo[];
+  /** First shape (bottom cap of extrude) - hash code for matching */
+  firstShapeHash?: number;
+  /** Last shape (top cap of extrude) - hash code for matching */
+  lastShapeHash?: number;
+  /**
+   * Mappings from profile edges to generated side faces.
+   * Each profile edge generates one side face during extrusion.
+   */
+  sideFaceMappings: ProfileEdgeToFaceMapping[];
 }
 
 /**
@@ -130,6 +135,9 @@ export function extrude(
  * Returns the extruded shape along with metadata about generated faces
  * (top cap, bottom cap, sides) that can be used for persistent naming.
  *
+ * Uses OCCT's Generated() API to map each profile edge to its generated side face,
+ * enabling stable references even when sketch geometry is reordered.
+ *
  * @see docs/CAD-PIPELINE-REWORK.md Phase 8.1
  */
 export function extrudeWithHistory(
@@ -145,31 +153,93 @@ export function extrudeWithHistory(
     direction[2] * distance
   );
 
+  // Use Copy=false to preserve the relationship between input and output shapes
   const prism = new oc.BRepPrimAPI_MakePrism_1(profile.raw, vec, false, true);
-  const shape = new Shape(prism.Shape());
+  const resultShape = prism.Shape();
+  const shape = new Shape(resultShape);
 
-  // Extract OCCT history - FirstShape and LastShape
-  let firstShape: Shape | undefined;
-  let lastShape: Shape | undefined;
+  // Extract cap face hashes
+  let firstShapeHash: number | undefined;
+  let lastShapeHash: number | undefined;
 
   try {
-    // FirstShape() returns the bottom cap (original profile location)
     const first = prism.FirstShape();
     if (first && !first.IsNull()) {
-      firstShape = new Shape(first);
+      firstShapeHash = first.HashCode(0x7fffffff);
     }
   } catch {
-    // FirstShape might not be available for some profiles
+    // FirstShape might not be available
   }
 
   try {
-    // LastShape() returns the top cap (extruded profile location)
     const last = prism.LastShape();
     if (last && !last.IsNull()) {
-      lastShape = new Shape(last);
+      lastShapeHash = last.HashCode(0x7fffffff);
     }
   } catch {
-    // LastShape might not be available for some profiles
+    // LastShape might not be available
+  }
+
+  // Extract side face mappings using Generated()
+  // For each edge in the profile, Generated() returns the face(s) that were swept from it
+  const sideFaceMappings: ProfileEdgeToFaceMapping[] = [];
+
+  try {
+    // Explore edges in the input profile
+    const edgeExplorer = new oc.TopExp_Explorer_2(
+      profile.raw,
+      oc.TopAbs_ShapeEnum.TopAbs_EDGE,
+      oc.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+
+    const processedEdges = new Set<number>();
+    let profileEdgeIndex = 0;
+
+    while (edgeExplorer.More()) {
+      const edge = edgeExplorer.Current();
+      const edgeHash = edge.HashCode(0x7fffffff);
+
+      // Skip duplicate edges (edges can be shared)
+      if (!processedEdges.has(edgeHash)) {
+        processedEdges.add(edgeHash);
+
+        try {
+          // Generated() returns the shapes generated from this input shape
+          // In OpenCascade.js, this returns a TopTools_ListOfShape
+          const generatedShapes = prism.Generated(edge);
+
+          // Use Size() method (not Extent) for OpenCascade.js lists
+          const numGenerated = generatedShapes.Size();
+
+          if (numGenerated > 0) {
+            // For extrude, each edge generates exactly 1 face
+            // Use First_1() to access it (OpenCascade.js binding)
+            const generatedShape = generatedShapes.First_1();
+
+            // Check if it's a face (Generated from an edge should produce a face)
+            if (generatedShape.ShapeType() === oc.TopAbs_ShapeEnum.TopAbs_FACE) {
+              const faceHash = generatedShape.HashCode(0x7fffffff);
+
+              sideFaceMappings.push({
+                profileEdgeHash: edgeHash,
+                generatedFaceHash: faceHash,
+                profileEdgeIndex,
+              });
+            }
+          }
+        } catch {
+          // Generated() might fail for some edge types
+        }
+
+        profileEdgeIndex++;
+      }
+
+      edgeExplorer.Next();
+    }
+
+    edgeExplorer.delete();
+  } catch {
+    // Edge exploration might fail
   }
 
   vec.delete();
@@ -177,8 +247,9 @@ export function extrudeWithHistory(
 
   return {
     shape,
-    firstShape,
-    lastShape,
+    firstShapeHash,
+    lastShapeHash,
+    sideFaceMappings,
   };
 }
 
@@ -238,20 +309,30 @@ export function revolve(
 
 /**
  * Extended revolve result with OCCT history info.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 8.1
  */
 export interface RevolveWithHistoryResult {
   shape: Shape;
-  /** First shape (start cap for partial revolve) */
-  firstShape?: Shape;
-  /** Last shape (end cap for partial revolve) */
-  lastShape?: Shape;
+  /** Start cap face hash (for partial revolve < 360°) */
+  firstShapeHash?: number;
+  /** End cap face hash (for partial revolve < 360°) */
+  lastShapeHash?: number;
+  /**
+   * Mappings from profile edges to generated side faces.
+   * Each profile edge generates one side surface during revolution.
+   */
+  sideFaceMappings: ProfileEdgeToFaceMapping[];
 }
 
 /**
  * Revolve a face or wire with OCCT history information.
  *
  * Returns the revolved shape along with metadata about generated faces
- * (start cap, end cap for partial revolves) that can be used for persistent naming.
+ * (start cap, end cap for partial revolves, and side faces) that can be
+ * used for persistent naming.
+ *
+ * Uses OCCT's Generated() API to map each profile edge to its generated side face.
  *
  * @see docs/CAD-PIPELINE-REWORK.md Phase 8.1
  */
@@ -269,18 +350,18 @@ export function revolveWithHistory(
 
   const angleRad = (angleDegrees * Math.PI) / 180;
   const revol = new oc.BRepPrimAPI_MakeRevol_1(profile.raw, axis, angleRad, true);
-  const shape = new Shape(revol.Shape());
+  const resultShape = revol.Shape();
+  const shape = new Shape(resultShape);
 
-  // Extract OCCT history - FirstShape and LastShape
-  // For full 360° revolve, there are no end caps
-  let firstShape: Shape | undefined;
-  let lastShape: Shape | undefined;
+  // Extract cap face hashes (only for partial revolves)
+  let firstShapeHash: number | undefined;
+  let lastShapeHash: number | undefined;
 
   if (angleDegrees < 360) {
     try {
       const first = revol.FirstShape();
       if (first && !first.IsNull()) {
-        firstShape = new Shape(first);
+        firstShapeHash = first.HashCode(0x7fffffff);
       }
     } catch {
       // FirstShape might not be available
@@ -289,11 +370,66 @@ export function revolveWithHistory(
     try {
       const last = revol.LastShape();
       if (last && !last.IsNull()) {
-        lastShape = new Shape(last);
+        lastShapeHash = last.HashCode(0x7fffffff);
       }
     } catch {
       // LastShape might not be available
     }
+  }
+
+  // Extract side face mappings using Generated()
+  const sideFaceMappings: ProfileEdgeToFaceMapping[] = [];
+
+  try {
+    const edgeExplorer = new oc.TopExp_Explorer_2(
+      profile.raw,
+      oc.TopAbs_ShapeEnum.TopAbs_EDGE,
+      oc.TopAbs_ShapeEnum.TopAbs_SHAPE
+    );
+
+    const processedEdges = new Set<number>();
+    let profileEdgeIndex = 0;
+
+    while (edgeExplorer.More()) {
+      const edge = edgeExplorer.Current();
+      const edgeHash = edge.HashCode(0x7fffffff);
+
+      if (!processedEdges.has(edgeHash)) {
+        processedEdges.add(edgeHash);
+
+        try {
+          const generatedShapes = revol.Generated(edge);
+
+          // Use Size() method (not Extent) for OpenCascade.js lists
+          const numGenerated = generatedShapes.Size();
+
+          if (numGenerated > 0) {
+            // For revolve, each edge generates exactly 1 face
+            const generatedShape = generatedShapes.First_1();
+
+            if (generatedShape.ShapeType() === oc.TopAbs_ShapeEnum.TopAbs_FACE) {
+              const faceHash = generatedShape.HashCode(0x7fffffff);
+
+              sideFaceMappings.push({
+                profileEdgeHash: edgeHash,
+                generatedFaceHash: faceHash,
+                profileEdgeIndex,
+              });
+            }
+          }
+        } catch {
+          // Generated() might fail for some edge types
+        }
+
+        profileEdgeIndex++;
+      }
+
+      edgeExplorer.Next();
+    }
+
+    edgeExplorer.delete();
+  } catch {
+    // Edge exploration might fail
   }
 
   origin.delete();
@@ -303,8 +439,9 @@ export function revolveWithHistory(
 
   return {
     shape,
-    firstShape,
-    lastShape,
+    firstShapeHash,
+    lastShapeHash,
+    sideFaceMappings,
   };
 }
 

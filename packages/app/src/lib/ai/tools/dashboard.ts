@@ -149,10 +149,7 @@ export const createDocumentDef = toolDefinition({
   inputSchema: z.object({
     branchId: z.string().describe("The branch ID - get from context or listBranches"),
     name: z.string().min(1).max(100).describe("Document name"),
-    type: z
-      .enum(["part", "assembly"])
-      .default("part")
-      .describe("'part' (default) or 'assembly'"),
+    type: z.enum(["part", "assembly"]).default("part").describe("'part' (default) or 'assembly'"),
     folderId: z
       .string()
       .nullish() // Accept string, null, or undefined
@@ -342,7 +339,8 @@ export const listFoldersDef = toolDefinition({
 
 export const createFolderDef = toolDefinition({
   name: "createFolder",
-  description: "Create a folder to organize documents at project root. Only 2 parameters needed: branchId and name.",
+  description:
+    "Create a folder to organize documents at project root. Only 2 parameters needed: branchId and name.",
   inputSchema: z.object({
     branchId: z.string().describe("The branch ID"),
     name: z.string().min(1).max(100).describe("Folder name"),

@@ -184,6 +184,202 @@ interface EdgeExtractionResult {
 }
 
 /**
+ * Extended tessellation result with topology hashes for OCCT history matching.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 8.0
+ */
+export interface TessellatedMeshWithHashes extends TessellatedMesh {
+  /**
+   * Hash codes for each face, indexed by faceIndex.
+   * These can be used to match mesh faces with OCCT Generated() results.
+   */
+  faceHashes: Uint32Array;
+  /**
+   * Hash codes for each edge, indexed by edgeIndex.
+   */
+  edgeHashes: Uint32Array;
+}
+
+/**
+ * Tessellate a shape with topology hash mapping for OCCT history matching.
+ *
+ * This extended version returns hash codes for each face and edge that can be
+ * compared with OCCT Generated() results to determine which profile edges
+ * generated which result faces.
+ *
+ * @param shape - The shape to tessellate
+ * @param quality - Quality preset
+ * @returns Mesh with face/edge hashes for history matching
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 8.0
+ */
+export function tessellateWithHashes(
+  shape: Shape,
+  quality: TessellationQuality = `medium`
+): TessellatedMeshWithHashes {
+  const oc = getOC();
+  const linearDeflection = getLinearDeflection(quality);
+  const angularDeflection = getAngularDeflection(quality);
+
+  // Perform tessellation
+  const mesher = new oc.BRepMesh_IncrementalMesh_2(
+    shape.raw,
+    linearDeflection,
+    false,
+    angularDeflection,
+    false
+  );
+  mesher.Perform_1();
+
+  const vertices: number[] = [];
+  const indices: number[] = [];
+  const faceMap: number[] = [];
+  const faceHashes: number[] = [];
+
+  // Iterate over all faces
+  const faceExplorer = new oc.TopExp_Explorer_2(
+    shape.raw,
+    oc.TopAbs_ShapeEnum.TopAbs_FACE,
+    oc.TopAbs_ShapeEnum.TopAbs_SHAPE
+  );
+
+  let faceIndex = 0;
+  while (faceExplorer.More()) {
+    const face = oc.TopoDS.Face_1(faceExplorer.Current());
+
+    // Store hash code for this face (can be compared with OCCT Generated() results)
+    const faceHash = face.HashCode(0x7fffffff);
+    faceHashes.push(faceHash);
+
+    const location = new oc.TopLoc_Location_1();
+    const triangulation = oc.BRep_Tool.Triangulation(face, location);
+
+    if (!triangulation.IsNull()) {
+      const transform = location.Transformation();
+      const isReversed = face.Orientation_1() === oc.TopAbs_Orientation.TopAbs_REVERSED;
+      const nodeStart = vertices.length / 3;
+      const tri = triangulation.get();
+      const numNodes = tri.NbNodes();
+      const numTriangles = tri.NbTriangles();
+
+      for (let i = 1; i <= numNodes; i++) {
+        const node = tri.Node(i);
+        const transformed = node.Transformed(transform);
+        vertices.push(transformed.X(), transformed.Y(), transformed.Z());
+      }
+
+      for (let i = 1; i <= numTriangles; i++) {
+        const triangle = tri.Triangle(i);
+        const n1 = triangle.Value(1) - 1 + nodeStart;
+        let n2 = triangle.Value(2) - 1 + nodeStart;
+        let n3 = triangle.Value(3) - 1 + nodeStart;
+
+        if (isReversed) {
+          [n2, n3] = [n3, n2];
+        }
+
+        indices.push(n1, n2, n3);
+        faceMap.push(faceIndex);
+      }
+    }
+
+    location.delete();
+    faceExplorer.Next();
+    faceIndex++;
+  }
+
+  faceExplorer.delete();
+  mesher.delete();
+
+  const computedNormals = computeNormals(vertices, indices);
+  const edgeResult = extractEdgesWithHashes(shape);
+
+  return {
+    vertices: new Float32Array(vertices),
+    normals: new Float32Array(computedNormals),
+    indices: new Uint32Array(indices),
+    faceMap: new Uint32Array(faceMap),
+    edges: edgeResult.positions,
+    edgeMap: edgeResult.edgeMap,
+    faceHashes: new Uint32Array(faceHashes),
+    edgeHashes: edgeResult.edgeHashes,
+  };
+}
+
+/**
+ * Extract B-Rep edges with hash codes for OCCT history matching.
+ */
+function extractEdgesWithHashes(
+  shape: Shape,
+  numSamples = 32
+): EdgeExtractionResult & { edgeHashes: Uint32Array } {
+  const oc = getOC();
+  const edgePoints: number[] = [];
+  const edgeIndices: number[] = [];
+  const edgeHashes: number[] = [];
+  const processedEdges = new Set<number>();
+  let edgeIndex = 0;
+
+  const edgeExplorer = new oc.TopExp_Explorer_2(
+    shape.raw,
+    oc.TopAbs_ShapeEnum.TopAbs_EDGE,
+    oc.TopAbs_ShapeEnum.TopAbs_SHAPE
+  );
+
+  while (edgeExplorer.More()) {
+    const edge = oc.TopoDS.Edge_1(edgeExplorer.Current());
+    const edgeHash = edge.HashCode(0x7fffffff);
+
+    if (processedEdges.has(edgeHash)) {
+      edgeExplorer.Next();
+      continue;
+    }
+    processedEdges.add(edgeHash);
+    edgeHashes.push(edgeHash);
+
+    try {
+      const adaptor = new oc.BRepAdaptor_Curve_2(edge);
+      const paramStart = adaptor.FirstParameter();
+      const paramEnd = adaptor.LastParameter();
+      const curveType = adaptor.GetType();
+      const isLine = curveType === oc.GeomAbs_CurveType.GeomAbs_Line;
+      const samples = isLine ? 2 : numSamples;
+
+      const points: { x: number; y: number; z: number }[] = [];
+      for (let i = 0; i < samples; i++) {
+        const t = paramStart + (paramEnd - paramStart) * (i / (samples - 1));
+        const pnt = adaptor.Value(t);
+        points.push({ x: pnt.X(), y: pnt.Y(), z: pnt.Z() });
+        pnt.delete();
+      }
+
+      for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        edgePoints.push(p1.x, p1.y, p1.z);
+        edgePoints.push(p2.x, p2.y, p2.z);
+        edgeIndices.push(edgeIndex);
+      }
+
+      adaptor.delete();
+      edgeIndex++;
+    } catch {
+      // Skip edges that fail to extract
+    }
+
+    edgeExplorer.Next();
+  }
+
+  edgeExplorer.delete();
+
+  return {
+    positions: new Float32Array(edgePoints),
+    edgeMap: new Uint32Array(edgeIndices),
+    edgeHashes: new Uint32Array(edgeHashes),
+  };
+}
+
+/**
  * Extract B-Rep edges from a shape by sampling the 3D curves.
  *
  * @param shape - The shape to extract edges from

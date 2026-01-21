@@ -256,7 +256,10 @@ export class WorkerChatController {
       });
     } catch (err) {
       // Non-fatal - controller still works for mutations, just without geometry queries
-      console.warn("[ChatController] ⚠️ KernelEngine init failed (geometry queries unavailable):", err);
+      console.warn(
+        "[ChatController] ⚠️ KernelEngine init failed (geometry queries unavailable):",
+        err
+      );
       // Don't rethrow - allow controller to continue without kernel
     }
   }

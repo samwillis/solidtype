@@ -212,6 +212,16 @@ export interface TransferableMesh {
   edges?: Float32Array;
   /** Maps each edge segment to its edge index for 3D edge selection */
   edgeMap?: Uint32Array;
+  /**
+   * Phase 8: OCCT face hash codes for history matching.
+   * One hash per face, indexed by faceIndex.
+   */
+  faceHashes?: Uint32Array;
+  /**
+   * Phase 8: OCCT edge hash codes for history matching.
+   * One hash per edge, indexed by edgeIndex.
+   */
+  edgeHashes?: Uint32Array;
 }
 
 /** Request to resolve a persistent reference */

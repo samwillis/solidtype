@@ -25,12 +25,13 @@ import {
   makeCylinder,
   makeSphere,
   booleanOp,
-  extrude,
   extrudeSymmetric,
-  revolve,
+  extrudeWithHistory,
+  revolveWithHistory,
   filletAllEdges,
   chamferAllEdges,
   tessellate,
+  tessellateWithHashes,
   getBoundingBox,
   getFacePlane as kernelGetFacePlane,
   sketchProfileToFace,
@@ -38,6 +39,7 @@ import {
   exportSTEP,
   importSTEP,
   type TessellationQuality,
+  type TessellatedMeshWithHashes,
   type FacePlaneData,
 } from "../kernel/index.js";
 
@@ -105,6 +107,34 @@ export interface RevolveOptions {
   targetBody?: BodyId;
 }
 
+/**
+ * OCCT history mapping from profile edges to generated faces.
+ * Used for Phase 8 persistent naming.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 8
+ */
+export interface ProfileEdgeMapping {
+  /** Hash of the profile edge that generated this face */
+  profileEdgeHash: number;
+  /** Hash of the generated face */
+  generatedFaceHash: number;
+  /** Index of the profile edge in exploration order */
+  profileEdgeIndex: number;
+}
+
+/**
+ * OCCT operation history for extrude/revolve.
+ * Captures the relationship between input profile and generated faces.
+ */
+export interface OperationHistory {
+  /** Hash of the bottom/start cap face */
+  bottomCapHash?: number;
+  /** Hash of the top/end cap face */
+  topCapHash?: number;
+  /** Mappings from profile edges to generated side faces */
+  sideFaceMappings: ProfileEdgeMapping[];
+}
+
 export interface FilletOptions {
   radius: number;
   edges?: EdgeId[]; // If omitted, fillet all edges
@@ -136,6 +166,14 @@ export class SolidSession {
   private bodies: Map<number, Shape> = new Map();
   private nextBodyId = 0;
   private initialized = false;
+
+  /**
+   * Operation history for each body.
+   * Maps bodyId to the OCCT history from the operation that created it.
+   *
+   * @see docs/CAD-PIPELINE-REWORK.md Phase 8
+   */
+  private operationHistory: Map<number, OperationHistory> = new Map();
 
   /**
    * Initialize the session. Must be called before any operations.
@@ -311,6 +349,9 @@ export class SolidSession {
 
   /**
    * Extrude a sketch profile
+   *
+   * This method now captures OCCT history for persistent naming (Phase 8).
+   * Use getOperationHistory(bodyId) to retrieve the generated face mappings.
    */
   extrude(profile: SketchProfile, options: ExtrudeOptions): OperationResult<BodyId> {
     this.ensureInitialized();
@@ -322,12 +363,28 @@ export class SolidSession {
       // Get extrusion direction
       const direction = options.direction ?? getPlaneNormal(profile.plane);
 
-      // Create extruded solid
+      // Create extruded solid with history tracking
       let extrudedShape: Shape;
+      let history: OperationHistory | undefined;
+
       if (options.symmetric) {
+        // Symmetric extrude doesn't have simple first/last shape semantics
         extrudedShape = extrudeSymmetric(face, direction, options.distance);
       } else {
-        extrudedShape = extrude(face, direction, options.distance);
+        // Use history-enabled extrude for Phase 8 persistent naming
+        const result = extrudeWithHistory(face, direction, options.distance);
+        extrudedShape = result.shape;
+
+        // Capture the history for later use in referenceIndex
+        history = {
+          bottomCapHash: result.firstShapeHash,
+          topCapHash: result.lastShapeHash,
+          sideFaceMappings: result.sideFaceMappings.map((m) => ({
+            profileEdgeHash: m.profileEdgeHash,
+            generatedFaceHash: m.generatedFaceHash,
+            profileEdgeIndex: m.profileEdgeIndex,
+          })),
+        };
       }
       face.dispose();
 
@@ -355,6 +412,7 @@ export class SolidSession {
         }
 
         this.bodies.set(options.targetBody, result.shape);
+        // Note: History is lost for add operations since faces merge
         return { success: true, value: options.targetBody };
       } else if (options.operation === `cut` && options.targetBody !== undefined) {
         // Subtract from existing body
@@ -379,11 +437,18 @@ export class SolidSession {
         }
 
         this.bodies.set(options.targetBody, result.shape);
+        // Note: History is lost for cut operations since faces merge
         return { success: true, value: options.targetBody };
       } else {
         // Create new body
         const id = this.allocateBodyId();
         this.bodies.set(id, extrudedShape);
+
+        // Store the operation history for this new body
+        if (history) {
+          this.operationHistory.set(id, history);
+        }
+
         return { success: true, value: id };
       }
     } catch (e) {
@@ -399,6 +464,9 @@ export class SolidSession {
 
   /**
    * Revolve a sketch profile around an axis
+   *
+   * This method now captures OCCT history for persistent naming (Phase 8).
+   * Use getOperationHistory(bodyId) to retrieve the generated face mappings.
    */
   revolve(profile: SketchProfile, options: RevolveOptions): OperationResult<BodyId> {
     this.ensureInitialized();
@@ -407,13 +475,26 @@ export class SolidSession {
       // Convert profile to OCCT face
       const face = sketchProfileToFace(profile);
 
-      // Revolve
-      const revolvedShape = revolve(
+      // Use history-enabled revolve for Phase 8 persistent naming
+      const revolveResult = revolveWithHistory(
         face,
         options.axis.origin,
         options.axis.direction,
         options.angleDegrees
       );
+      const revolvedShape = revolveResult.shape;
+
+      // Capture the history for later use in referenceIndex
+      const history: OperationHistory = {
+        bottomCapHash: revolveResult.firstShapeHash,
+        topCapHash: revolveResult.lastShapeHash,
+        sideFaceMappings: revolveResult.sideFaceMappings.map((m) => ({
+          profileEdgeHash: m.profileEdgeHash,
+          generatedFaceHash: m.generatedFaceHash,
+          profileEdgeIndex: m.profileEdgeIndex,
+        })),
+      };
+
       face.dispose();
 
       const operation = options.operation ?? `new`;
@@ -468,6 +549,10 @@ export class SolidSession {
       } else {
         const id = this.allocateBodyId();
         this.bodies.set(id, revolvedShape);
+
+        // Store the operation history for this new body
+        this.operationHistory.set(id, history);
+
         return { success: true, value: id };
       }
     } catch (e) {
@@ -620,6 +705,60 @@ export class SolidSession {
   }
 
   /**
+   * Extended tessellation interface for Phase 8.
+   * Same as tessellate() but includes face/edge hash codes for OCCT history matching.
+   */
+  tessellateWithHashes: TessellatedMeshWithHashes | undefined;
+
+  /**
+   * Get tessellated mesh with topology hashes for OCCT history matching.
+   *
+   * This extended version returns hash codes that can be matched with
+   * getOperationHistory() to determine which profile edges generated
+   * which result faces.
+   *
+   * @see docs/CAD-PIPELINE-REWORK.md Phase 8
+   */
+  tessellateWithTopologyHashes(
+    bodyId: BodyId,
+    quality: TessellationQuality = `medium`
+  ): Mesh & { faceHashes: Uint32Array; edgeHashes: Uint32Array } {
+    this.ensureInitialized();
+
+    const body = this.bodies.get(bodyId);
+    if (!body) {
+      throw new Error(`Body ${bodyId} not found`);
+    }
+
+    const result = tessellateWithHashes(body, quality);
+    return {
+      positions: result.vertices,
+      normals: result.normals,
+      indices: result.indices,
+      faceMap: result.faceMap,
+      edges: result.edges,
+      edgeMap: result.edgeMap,
+      faceHashes: result.faceHashes,
+      edgeHashes: result.edgeHashes,
+    };
+  }
+
+  /**
+   * Get the OCCT operation history for a body.
+   *
+   * Returns the mapping from profile edges to generated faces,
+   * enabling stable persistent references that survive sketch edits.
+   *
+   * @param bodyId - The body to get history for
+   * @returns Operation history or undefined if no history is available
+   *
+   * @see docs/CAD-PIPELINE-REWORK.md Phase 8
+   */
+  getOperationHistory(bodyId: BodyId): OperationHistory | undefined {
+    return this.operationHistory.get(bodyId);
+  }
+
+  /**
    * Get bounding box of a body
    */
   getBoundingBox(bodyId: BodyId): BoundingBox {
@@ -719,5 +858,6 @@ export class SolidSession {
       body.dispose();
     }
     this.bodies.clear();
+    this.operationHistory.clear();
   }
 }

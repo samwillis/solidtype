@@ -37,7 +37,7 @@ export {
   type BooleanResult,
   type ExtrudeWithHistoryResult,
   type RevolveWithHistoryResult,
-  type GeneratedFaceInfo,
+  type ProfileEdgeToFaceMapping,
 } from "./operations.js";
 
 // Sketch conversion
@@ -53,9 +53,11 @@ export {
 export {
   tessellate,
   tessellateWithParams,
+  tessellateWithHashes,
   getBoundingBox,
   getFacePlane,
   type TessellatedMesh,
+  type TessellatedMeshWithHashes,
   type TessellationQuality,
   type FacePlaneData,
 } from "./tessellate.js";

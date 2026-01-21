@@ -6,10 +6,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import {
-  useKeyboardShortcut,
-  ShortcutPriority,
-} from "../../../contexts/KeyboardShortcutContext";
+import { useKeyboardShortcut, ShortcutPriority } from "../../../contexts/KeyboardShortcutContext";
 import {
   POINT_MERGE_TOLERANCE_MM,
   isNearHorizontal,

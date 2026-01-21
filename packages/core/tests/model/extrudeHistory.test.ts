@@ -4,6 +4,12 @@
  * Tests the extended extrude/revolve operations that capture OCCT history
  * for persistent naming.
  *
+ * Key findings:
+ * - OpenCascade.js uses Size() instead of Extent() for lists
+ * - Use First_1() to access list elements (not Value(i))
+ * - firstShapeHash/lastShapeHash identify cap faces
+ * - sideFaceMappings maps profile edges to generated side faces
+ *
  * @see docs/CAD-PIPELINE-REWORK.md Phase 8
  */
 
@@ -11,7 +17,6 @@ import { describe, it, expect, beforeAll } from "vitest";
 import {
   initOCCT,
   setOC,
-  makeBox,
   extrudeWithHistory,
   revolveWithHistory,
   sketchProfileToFace,
@@ -27,73 +32,98 @@ describe("OCCT History Integration (Phase 8)", () => {
   });
 
   describe("extrudeWithHistory", () => {
-    it("returns shape with firstShape and lastShape", () => {
-      // Create a simple rectangle profile on XY plane
+    it("returns shape with firstShapeHash and lastShapeHash", () => {
       const profile = createRectangleProfile(XY_PLANE, 10, 10, 0, 0);
       const face = sketchProfileToFace(profile);
       const direction = getPlaneNormal(profile.plane);
 
-      // Extrude with history
       const result = extrudeWithHistory(face, direction, 20);
 
       // Should have the extruded shape
       expect(result.shape).toBeDefined();
       expect(result.shape.raw).not.toBeNull();
 
-      // Should have first and last shapes (bottom and top caps)
-      expect(result.firstShape).toBeDefined();
-      expect(result.lastShape).toBeDefined();
+      // Should have first and last shape hashes (bottom and top caps)
+      expect(result.firstShapeHash).toBeDefined();
+      expect(result.lastShapeHash).toBeDefined();
+      expect(typeof result.firstShapeHash).toBe("number");
+      expect(typeof result.lastShapeHash).toBe("number");
 
-      // Clean up
+      // Hashes should be different (bottom and top are different faces)
+      expect(result.firstShapeHash).not.toBe(result.lastShapeHash);
+
       result.shape.dispose();
-      result.firstShape?.dispose();
-      result.lastShape?.dispose();
       face.dispose();
     });
 
-    it("first and last shapes are different from main shape", () => {
+    it("returns sideFaceMappings for each profile edge", () => {
+      const profile = createRectangleProfile(XY_PLANE, 10, 20, 0, 0);
+      const face = sketchProfileToFace(profile);
+      const direction = getPlaneNormal(profile.plane);
+
+      const result = extrudeWithHistory(face, direction, 15);
+
+      // Should have 4 side face mappings (one for each edge of the rectangle)
+      expect(result.sideFaceMappings).toBeDefined();
+      expect(Array.isArray(result.sideFaceMappings)).toBe(true);
+      expect(result.sideFaceMappings.length).toBe(4);
+
+      // Each mapping should have required fields
+      for (const mapping of result.sideFaceMappings) {
+        expect(typeof mapping.profileEdgeHash).toBe("number");
+        expect(typeof mapping.generatedFaceHash).toBe("number");
+        expect(typeof mapping.profileEdgeIndex).toBe("number");
+      }
+
+      // All generated face hashes should be unique
+      const faceHashes = result.sideFaceMappings.map((m) => m.generatedFaceHash);
+      const uniqueHashes = new Set(faceHashes);
+      expect(uniqueHashes.size).toBe(faceHashes.length);
+
+      // Profile edge indices should be sequential
+      const indices = result.sideFaceMappings.map((m) => m.profileEdgeIndex).sort((a, b) => a - b);
+      expect(indices).toEqual([0, 1, 2, 3]);
+
+      result.shape.dispose();
+      face.dispose();
+    });
+
+    it("cap hashes can be matched with tessellation", () => {
       const profile = createRectangleProfile(XY_PLANE, 10, 10, 0, 0);
       const face = sketchProfileToFace(profile);
       const direction = getPlaneNormal(profile.plane);
 
       const result = extrudeWithHistory(face, direction, 20);
 
-      // First and last shapes should exist and be distinct
-      if (result.firstShape && result.lastShape) {
-        // They should be faces (2D), not solids
-        // The raw shapes should be different objects
-        expect(result.firstShape.raw).not.toBe(result.shape.raw);
-        expect(result.lastShape.raw).not.toBe(result.shape.raw);
-      }
+      // The cap hashes should not match any side face hashes
+      const sideFaceHashes = new Set(result.sideFaceMappings.map((m) => m.generatedFaceHash));
+      expect(sideFaceHashes.has(result.firstShapeHash!)).toBe(false);
+      expect(sideFaceHashes.has(result.lastShapeHash!)).toBe(false);
 
-      // Clean up
       result.shape.dispose();
-      result.firstShape?.dispose();
-      result.lastShape?.dispose();
       face.dispose();
     });
   });
 
   describe("revolveWithHistory", () => {
     it("returns shape with caps for partial revolve", () => {
-      // Create a profile for revolving (offset from axis)
       const profile = createRectangleProfile(XY_PLANE, 5, 10, 15, 0);
       const face = sketchProfileToFace(profile);
 
-      // Revolve 180 degrees around Y axis (partial revolve has end caps)
       const result = revolveWithHistory(face, [0, 0, 0], [0, 1, 0], 180);
 
       expect(result.shape).toBeDefined();
       expect(result.shape.raw).not.toBeNull();
 
-      // For partial revolve, should have first and last shapes (end caps)
-      // Note: depending on OCCT version, these may or may not be available
-      // The key is that the function doesn't crash
+      // For partial revolve, should have cap hashes
+      expect(result.firstShapeHash).toBeDefined();
+      expect(result.lastShapeHash).toBeDefined();
 
-      // Clean up
+      // Should have side face mappings (4 edges = 4 side surfaces)
+      expect(result.sideFaceMappings).toBeDefined();
+      expect(result.sideFaceMappings.length).toBe(4);
+
       result.shape.dispose();
-      result.firstShape?.dispose();
-      result.lastShape?.dispose();
       face.dispose();
     });
 
@@ -101,16 +131,18 @@ describe("OCCT History Integration (Phase 8)", () => {
       const profile = createRectangleProfile(XY_PLANE, 5, 10, 15, 0);
       const face = sketchProfileToFace(profile);
 
-      // Full 360 degree revolve
       const result = revolveWithHistory(face, [0, 0, 0], [0, 1, 0], 360);
 
       expect(result.shape).toBeDefined();
 
-      // Full revolve should not have end caps
-      expect(result.firstShape).toBeUndefined();
-      expect(result.lastShape).toBeUndefined();
+      // Full revolve should not have end cap hashes
+      expect(result.firstShapeHash).toBeUndefined();
+      expect(result.lastShapeHash).toBeUndefined();
 
-      // Clean up
+      // Should still have side face mappings
+      expect(result.sideFaceMappings).toBeDefined();
+      expect(result.sideFaceMappings.length).toBe(4);
+
       result.shape.dispose();
       face.dispose();
     });

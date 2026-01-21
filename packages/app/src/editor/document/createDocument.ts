@@ -223,10 +223,12 @@ export function findDatumPlaneByRole(doc: SolidTypeDoc, role: DatumPlaneRole): s
     if (featureMap.get("type") === "plane") {
       // Check both old format (role at top level) and new format (role in definition)
       const topLevelRole = featureMap.get("role");
-      const definition = featureMap.get("definition") as { kind?: string; role?: string } | undefined;
+      const definition = featureMap.get("definition") as
+        | { kind?: string; role?: string }
+        | undefined;
       const definitionRole = definition?.kind === "datum" ? definition.role : undefined;
       if (topLevelRole === role || definitionRole === role) {
-      foundId = id;
+        foundId = id;
       }
     }
   });
@@ -254,7 +256,9 @@ export function getDatumPlaneIds(doc: SolidTypeDoc): {
     } else if (type === "plane") {
       // Check both old format (role at top level) and new format (role in definition)
       const topLevelRole = featureMap.get("role") as DatumPlaneRole | undefined;
-      const definition = featureMap.get("definition") as { kind?: string; role?: string } | undefined;
+      const definition = featureMap.get("definition") as
+        | { kind?: string; role?: string }
+        | undefined;
       const role = topLevelRole ?? (definition?.kind === "datum" ? definition.role : undefined);
       if (role === "xy") xy = id;
       else if (role === "xz") xz = id;

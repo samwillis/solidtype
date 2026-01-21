@@ -35,5 +35,8 @@ export type {
   FilletOptions,
 } from "./types.js";
 
+// Phase 8: Operation history types for persistent naming
+export type { ProfileEdgeMapping, OperationHistory } from "./SolidSession.js";
+
 // Re-export tessellation quality and face plane data for convenience
 export type { TessellationQuality, FacePlaneData } from "../kernel/tessellate.js";

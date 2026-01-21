@@ -59,6 +59,36 @@ export interface SketchInfo {
 }
 
 /**
+ * OCCT operation history for Phase 8 persistent naming.
+ * Maps profile edges to generated faces using OCCT's Generated() API.
+ *
+ * @see docs/CAD-PIPELINE-REWORK.md Phase 8
+ */
+export interface OCCTHistory {
+  /** Hash of the bottom cap face (from FirstShape) */
+  bottomCapHash?: number;
+  /** Hash of the top cap face (from LastShape) */
+  topCapHash?: number;
+  /**
+   * Mappings from profile edge index to generated face hash.
+   * Used to associate sketch entity UUIDs with result faces.
+   */
+  sideFaceMappings: Array<{
+    profileEdgeIndex: number;
+    generatedFaceHash: number;
+  }>;
+}
+
+/**
+ * Extended tessellation data for Phase 8.
+ * Includes face/edge hashes for OCCT history matching.
+ */
+export interface TessellationWithHashes {
+  faceHashes: Uint32Array;
+  edgeHashes: Uint32Array;
+}
+
+/**
  * ReferenceIndex for a single body
  */
 export interface BodyReferenceIndex {
@@ -284,16 +314,37 @@ export function computeEdgeFingerprints(
 // ============================================================================
 
 /**
+ * Options for generateFaceRef with Phase 8 OCCT history support.
+ */
+export interface GenerateFaceRefOptions {
+  featureId: string;
+  featureType: string;
+  faceIdx: number;
+  fingerprint: FaceFingerprint;
+  sketchInfo?: SketchInfo;
+  /** Phase 8: OCCT history for accurate side face matching */
+  occtHistory?: OCCTHistory;
+  /** Phase 8: Face hash from tessellateWithHashes for history lookup */
+  faceHash?: number;
+  /** Phase 8: Mapping from profile edge index to sketch entity ID */
+  profileEdgeToEntityId?: Map<number, string>;
+}
+
+/**
  * Generate a PersistentRef for a face
  *
  * Uses the feature type to determine the appropriate localSelector kind.
- * Falls back to fingerprint-based matching when semantic selectors aren't available.
+ * When OCCT history is available (Phase 8), uses it to accurately map
+ * side faces to their generating sketch entities.
  *
  * @param featureId - UUID of the originating feature
  * @param featureType - Type of the feature (extrude, revolve, etc.)
  * @param faceIdx - Index of the face in the tessellation
  * @param fingerprint - Computed fingerprint for this face
  * @param sketchInfo - Optional sketch info for semantic selectors
+ * @param occtHistory - Optional OCCT history for Phase 8 accurate matching
+ * @param faceHash - Optional face hash for OCCT history lookup
+ * @param profileEdgeToEntityId - Optional mapping from edge index to entity UUID
  * @returns Encoded PersistentRef string
  */
 export function generateFaceRef(
@@ -301,40 +352,108 @@ export function generateFaceRef(
   featureType: string,
   faceIdx: number,
   fingerprint: FaceFingerprint,
-  sketchInfo?: SketchInfo
+  sketchInfo?: SketchInfo,
+  occtHistory?: OCCTHistory,
+  faceHash?: number,
+  profileEdgeToEntityId?: Map<number, string>
 ): string {
   let localSelector: { kind: string; data: Record<string, string | number> };
 
   if (featureType === "extrude") {
-    // Use normal direction to determine cap vs side
-    const [, , nz] = fingerprint.normal;
-    const isTopCap = nz > 0.9;
-    const isBottomCap = nz < -0.9;
+    const loopId = sketchInfo?.profileLoops?.[0]?.loopId ?? "loop:unknown";
 
-    if (isTopCap) {
-      const loopId = sketchInfo?.profileLoops?.[0]?.loopId ?? "loop:unknown";
-      localSelector = { kind: "extrude.topCap", data: { loopId } };
-    } else if (isBottomCap) {
-      const loopId = sketchInfo?.profileLoops?.[0]?.loopId ?? "loop:unknown";
-      localSelector = { kind: "extrude.bottomCap", data: { loopId } };
+    // Phase 8: Use OCCT history for accurate cap/side detection
+    if (occtHistory && faceHash !== undefined) {
+      // Check if this is the top cap
+      if (occtHistory.topCapHash === faceHash) {
+        localSelector = { kind: "extrude.topCap", data: { loopId } };
+      }
+      // Check if this is the bottom cap
+      else if (occtHistory.bottomCapHash === faceHash) {
+        localSelector = { kind: "extrude.bottomCap", data: { loopId } };
+      }
+      // Check side face mappings
+      else {
+        const sideMapping = occtHistory.sideFaceMappings.find(
+          (m) => m.generatedFaceHash === faceHash
+        );
+
+        if (sideMapping && profileEdgeToEntityId) {
+          // Found the profile edge that generated this face - use entity UUID
+          const entityId = profileEdgeToEntityId.get(sideMapping.profileEdgeIndex);
+          if (entityId) {
+            localSelector = { kind: "extrude.side", data: { loopId, segmentId: entityId } };
+          } else {
+            // Edge index known but no entity mapping
+            localSelector = {
+              kind: "extrude.side",
+              data: { loopId, profileEdgeIndex: sideMapping.profileEdgeIndex },
+            };
+          }
+        } else if (sideMapping) {
+          // Have OCCT mapping but no entity UUID mapping
+          localSelector = {
+            kind: "extrude.side",
+            data: { loopId, profileEdgeIndex: sideMapping.profileEdgeIndex },
+          };
+        } else {
+          // No OCCT match - fall back to fingerprint-based heuristics
+          localSelector = generateFallbackExtrudeSideSelector(fingerprint, loopId, faceIdx);
+        }
+      }
     } else {
-      // Side face - try to match to sketch entity
-      const loopId = sketchInfo?.profileLoops?.[0]?.loopId ?? "loop:unknown";
-      // TODO: Match to specific segment when OCCT history is available (Phase 8)
-      localSelector = { kind: "extrude.side", data: { loopId, faceIndex: faceIdx } };
+      // No OCCT history - use original heuristic approach
+      const [, , nz] = fingerprint.normal;
+      const isTopCap = nz > 0.9;
+      const isBottomCap = nz < -0.9;
+
+      if (isTopCap) {
+        localSelector = { kind: "extrude.topCap", data: { loopId } };
+      } else if (isBottomCap) {
+        localSelector = { kind: "extrude.bottomCap", data: { loopId } };
+      } else {
+        localSelector = { kind: "extrude.side", data: { loopId, faceIndex: faceIdx } };
+      }
     }
   } else if (featureType === "revolve") {
-    // Revolve faces: side surface or caps
-    const [, , nz] = fingerprint.normal;
-    const isStartCap = Math.abs(nz - 1) < 0.1;
-    const isEndCap = Math.abs(nz + 1) < 0.1;
+    // Phase 8: Use OCCT history for revolve caps
+    if (occtHistory && faceHash !== undefined) {
+      if (occtHistory.bottomCapHash === faceHash) {
+        localSelector = { kind: "revolve.startCap", data: {} };
+      } else if (occtHistory.topCapHash === faceHash) {
+        localSelector = { kind: "revolve.endCap", data: {} };
+      } else {
+        const sideMapping = occtHistory.sideFaceMappings.find(
+          (m) => m.generatedFaceHash === faceHash
+        );
 
-    if (isStartCap) {
-      localSelector = { kind: "revolve.startCap", data: {} };
-    } else if (isEndCap) {
-      localSelector = { kind: "revolve.endCap", data: {} };
+        if (sideMapping && profileEdgeToEntityId) {
+          const entityId = profileEdgeToEntityId.get(sideMapping.profileEdgeIndex);
+          if (entityId) {
+            localSelector = { kind: "revolve.side", data: { segmentId: entityId } };
+          } else {
+            localSelector = {
+              kind: "revolve.side",
+              data: { profileEdgeIndex: sideMapping.profileEdgeIndex },
+            };
+          }
+        } else {
+          localSelector = { kind: "revolve.side", data: { faceIndex: faceIdx } };
+        }
+      }
     } else {
-      localSelector = { kind: "revolve.side", data: { faceIndex: faceIdx } };
+      // Fallback: heuristic approach
+      const [, , nz] = fingerprint.normal;
+      const isStartCap = Math.abs(nz - 1) < 0.1;
+      const isEndCap = Math.abs(nz + 1) < 0.1;
+
+      if (isStartCap) {
+        localSelector = { kind: "revolve.startCap", data: {} };
+      } else if (isEndCap) {
+        localSelector = { kind: "revolve.endCap", data: {} };
+      } else {
+        localSelector = { kind: "revolve.side", data: { faceIndex: faceIdx } };
+      }
     }
   } else {
     // Generic fallback - use fingerprint for matching
@@ -354,6 +473,18 @@ export function generateFaceRef(
   };
 
   return encodePersistentRef(ref);
+}
+
+/**
+ * Generate fallback selector for extrude side faces when OCCT history doesn't match.
+ */
+function generateFallbackExtrudeSideSelector(
+  fingerprint: FaceFingerprint,
+  loopId: string,
+  faceIdx: number
+): { kind: string; data: Record<string, string | number> } {
+  // Use faceIndex as fallback
+  return { kind: "extrude.side", data: { loopId, faceIndex: faceIdx } };
 }
 
 /**
@@ -405,6 +536,30 @@ export function generateEdgeRef(
 // ============================================================================
 
 /**
+ * Options for buildBodyReferenceIndex with Phase 8 support.
+ */
+export interface BuildReferenceIndexOptions {
+  bodyKey: string;
+  featureId: string;
+  featureType: string;
+  positions: Float32Array;
+  normals: Float32Array;
+  indices: Uint32Array;
+  faceMap?: Uint32Array;
+  edges?: Float32Array;
+  edgeMap?: Uint32Array;
+  sketchInfo?: SketchInfo;
+  /** Phase 8: OCCT operation history */
+  occtHistory?: OCCTHistory;
+  /** Phase 8: Face hashes from tessellateWithHashes */
+  faceHashes?: Uint32Array;
+  /** Phase 8: Edge hashes from tessellateWithHashes */
+  edgeHashes?: Uint32Array;
+  /** Phase 8: Mapping from profile edge index to sketch entity UUID */
+  profileEdgeToEntityId?: Map<number, string>;
+}
+
+/**
  * Build a ReferenceIndex for a body from mesh data
  *
  * @param bodyKey - Identifier for this body
@@ -417,6 +572,10 @@ export function generateEdgeRef(
  * @param edges - Edge line segments
  * @param edgeMap - Segment to edge mapping
  * @param sketchInfo - Optional sketch info
+ * @param occtHistory - Optional OCCT history for Phase 8
+ * @param faceHashes - Optional face hashes for Phase 8
+ * @param edgeHashes - Optional edge hashes for Phase 8
+ * @param profileEdgeToEntityId - Optional edge-to-entity mapping for Phase 8
  * @returns BodyReferenceIndex for this body
  */
 export function buildBodyReferenceIndex(
@@ -429,7 +588,11 @@ export function buildBodyReferenceIndex(
   faceMap?: Uint32Array,
   edges?: Float32Array,
   edgeMap?: Uint32Array,
-  sketchInfo?: SketchInfo
+  sketchInfo?: SketchInfo,
+  occtHistory?: OCCTHistory,
+  faceHashes?: Uint32Array,
+  _edgeHashes?: Uint32Array,
+  profileEdgeToEntityId?: Map<number, string>
 ): BodyReferenceIndex {
   const result: BodyReferenceIndex = {
     faces: [],
@@ -440,9 +603,19 @@ export function buildBodyReferenceIndex(
   if (faceMap && faceMap.length > 0) {
     const faceFingerprints = computeFaceFingerprints(positions, normals, indices, faceMap);
 
-    result.faces = faceFingerprints.map((fp, idx) =>
-      generateFaceRef(featureId, featureType, idx, fp, sketchInfo)
-    );
+    result.faces = faceFingerprints.map((fp, idx) => {
+      const faceHash = faceHashes ? faceHashes[idx] : undefined;
+      return generateFaceRef(
+        featureId,
+        featureType,
+        idx,
+        fp,
+        sketchInfo,
+        occtHistory,
+        faceHash,
+        profileEdgeToEntityId
+      );
+    });
   }
 
   // Compute edge refs

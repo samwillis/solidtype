@@ -276,10 +276,12 @@ function findDatumPlaneByRole(
     if (featureMap.get("type") === "plane") {
       // Check both old format (role at top level) and new format (role in definition)
       const topLevelRole = featureMap.get("role");
-      const definition = featureMap.get("definition") as { kind?: string; role?: string } | undefined;
+      const definition = featureMap.get("definition") as
+        | { kind?: string; role?: string }
+        | undefined;
       const definitionRole = definition?.kind === "datum" ? definition.role : undefined;
       if (topLevelRole === role || definitionRole === role) {
-      foundId = id;
+        foundId = id;
       }
     }
   });

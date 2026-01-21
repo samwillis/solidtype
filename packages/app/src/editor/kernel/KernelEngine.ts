@@ -94,6 +94,20 @@ export interface RebuildResult {
   sketchSolveResults: Map<string, SketchSolveResult>;
 }
 
+/**
+ * OCCT operation history stored per body for Phase 8 persistent naming.
+ */
+interface StoredOCCTHistory {
+  bottomCapHash?: number;
+  topCapHash?: number;
+  sideFaceMappings: Array<{
+    profileEdgeIndex: number;
+    generatedFaceHash: number;
+  }>;
+  /** Mapping from profile edge index to sketch entity UUID */
+  profileEdgeToEntityId: Map<number, string>;
+}
+
 /** Body entry in the bodyMap - stores body ID with metadata */
 interface BodyEntry {
   bodyId: BodyId;
@@ -101,6 +115,8 @@ interface BodyEntry {
   color: string;
   /** Feature ID that created this body (for reference tracking) */
   sourceFeatureId: string;
+  /** Phase 8: OCCT operation history for persistent naming */
+  occtHistory?: StoredOCCTHistory;
 }
 
 interface SketchData {
@@ -142,6 +158,8 @@ interface FeatureInterpretResult {
   bodyEntryId: string | null;
   bodyName?: string;
   bodyColor?: string;
+  /** Phase 8: OCCT operation history for persistent naming */
+  occtHistory?: StoredOCCTHistory;
 }
 
 /** Default body colors - cycle through these for new bodies */
@@ -297,6 +315,7 @@ export class KernelEngine {
                 name: result.bodyName || `Body${this.bodyMap.size + 1}`,
                 color: result.bodyColor || this.getNextBodyColor(),
                 sourceFeatureId: id,
+                occtHistory: result.occtHistory,
               };
               this.bodyMap.set(result.bodyEntryId, entry);
             }
@@ -312,6 +331,7 @@ export class KernelEngine {
                 name: result.bodyName || `Body${this.bodyMap.size + 1}`,
                 color: result.bodyColor || this.getNextBodyColor(),
                 sourceFeatureId: id,
+                occtHistory: result.occtHistory,
               };
               this.bodyMap.set(result.bodyEntryId, entry);
             }
@@ -347,14 +367,24 @@ export class KernelEngine {
     if (this.options.computeMeshes) {
       for (const [featureId, entry] of this.bodyMap) {
         try {
-          const mesh = this.session.tessellate(entry.bodyId);
-          const transferableMesh = this.toTransferableMesh(mesh);
+          // Phase 8: Use tessellateWithTopologyHashes for OCCT history matching
+          const mesh = this.session.tessellateWithTopologyHashes(entry.bodyId);
+          const transferableMesh = this.toTransferableMeshWithHashes(mesh);
           meshes.set(featureId, transferableMesh);
 
-          // Build reference index
+          // Build reference index with Phase 8 OCCT history
           const featureMap = featuresById.get(entry.sourceFeatureId);
           const featureType = (featureMap?.get("type") as string) || "unknown";
           const sketchInfo = this.featureToSketchInfo.get(entry.sourceFeatureId);
+
+          // Extract OCCT history if available
+          const occtHistory = entry.occtHistory
+            ? {
+                bottomCapHash: entry.occtHistory.bottomCapHash,
+                topCapHash: entry.occtHistory.topCapHash,
+                sideFaceMappings: entry.occtHistory.sideFaceMappings,
+              }
+            : undefined;
 
           const bodyRefIndex = buildBodyReferenceIndex(
             featureId,
@@ -366,7 +396,11 @@ export class KernelEngine {
             transferableMesh.faceMap,
             transferableMesh.edges,
             transferableMesh.edgeMap,
-            sketchInfo
+            sketchInfo,
+            occtHistory,
+            transferableMesh.faceHashes,
+            transferableMesh.edgeHashes,
+            entry.occtHistory?.profileEdgeToEntityId
           );
           referenceIndex[featureId] = bodyRefIndex;
         } catch (err) {
@@ -429,6 +463,24 @@ export class KernelEngine {
       faceMap: mesh.faceMap ? new Uint32Array(mesh.faceMap) : undefined,
       edges: mesh.edges ? new Float32Array(mesh.edges) : undefined,
       edgeMap: mesh.edgeMap ? new Uint32Array(mesh.edgeMap) : undefined,
+    };
+  }
+
+  /**
+   * Phase 8: Convert mesh with topology hashes to transferable format.
+   */
+  private toTransferableMeshWithHashes(
+    mesh: Mesh & { faceHashes: Uint32Array; edgeHashes: Uint32Array }
+  ): TransferableMesh {
+    return {
+      positions: new Float32Array(mesh.positions),
+      normals: new Float32Array(mesh.normals),
+      indices: new Uint32Array(mesh.indices),
+      faceMap: mesh.faceMap ? new Uint32Array(mesh.faceMap) : undefined,
+      edges: mesh.edges ? new Float32Array(mesh.edges) : undefined,
+      edgeMap: mesh.edgeMap ? new Uint32Array(mesh.edgeMap) : undefined,
+      faceHashes: new Uint32Array(mesh.faceHashes),
+      edgeHashes: new Uint32Array(mesh.edgeHashes),
     };
   }
 
@@ -863,6 +915,7 @@ export class KernelEngine {
     }
 
     // Create sketch and add entities
+    // Phase 8: Track entity order for profile edge mapping
     const sketch = this.session!.createSketch(sketchInfo.plane);
     const pointIdMap = new Map<string, any>();
 
@@ -873,6 +926,11 @@ export class KernelEngine {
       pointIdMap.set(point.id, kernelPid);
     }
 
+    // Phase 8: Track entity UUIDs in the order they're added to the profile
+    // This maps profile edge index to sketch entity UUID
+    const profileEdgeToEntityId = new Map<number, string>();
+    let profileEdgeIndex = 0;
+
     const sortedEntityIds = Object.keys(sketchInfo.data.entitiesById).sort();
     for (const eid of sortedEntityIds) {
       const entity = sketchInfo.data.entitiesById[eid];
@@ -881,6 +939,8 @@ export class KernelEngine {
         const endId = pointIdMap.get(entity.end);
         if (startId !== undefined && endId !== undefined) {
           sketch.addLine(startId, endId);
+          // Track this entity's position in the profile
+          profileEdgeToEntityId.set(profileEdgeIndex++, entity.id);
         }
       } else if (entity.type === "arc" && entity.start && entity.end && entity.center) {
         const startId = pointIdMap.get(entity.start);
@@ -888,11 +948,13 @@ export class KernelEngine {
         const centerId = pointIdMap.get(entity.center);
         if (startId !== undefined && endId !== undefined && centerId !== undefined) {
           sketch.addArc(startId, endId, centerId, entity.ccw ?? true);
+          profileEdgeToEntityId.set(profileEdgeIndex++, entity.id);
         }
       } else if (entity.type === "circle" && entity.center && entity.radius) {
         const centerPoint = sketchInfo.data.pointsById[entity.center];
         if (centerPoint) {
           sketch.addCircle(centerPoint.x, centerPoint.y, entity.radius);
+          profileEdgeToEntityId.set(profileEdgeIndex++, entity.id);
         }
       }
     }
@@ -919,6 +981,20 @@ export class KernelEngine {
     }
 
     const extrudedBodyId = result.value;
+
+    // Phase 8: Capture OCCT operation history
+    const occtHistory = this.session!.getOperationHistory(extrudedBodyId);
+    const storedHistory: StoredOCCTHistory | undefined = occtHistory
+      ? {
+          bottomCapHash: occtHistory.bottomCapHash,
+          topCapHash: occtHistory.topCapHash,
+          sideFaceMappings: occtHistory.sideFaceMappings.map((m) => ({
+            profileEdgeIndex: m.profileEdgeIndex,
+            generatedFaceHash: m.generatedFaceHash,
+          })),
+          profileEdgeToEntityId,
+        }
+      : undefined;
 
     // Store sketch info for reference index generation
     if (sketchInfo.referenceInfo) {
@@ -957,10 +1033,12 @@ export class KernelEngine {
         bodyEntryId: featureId,
         bodyName: finalBodyName,
         bodyColor: finalBodyColor,
+        occtHistory: storedHistory,
       };
     }
 
     // Handle specific merge targets or auto merge
+    // Note: OCCT history is lost when merging (boolean operations change topology)
     return this.handleMerge(
       extrudedBodyId,
       featureId,
@@ -1012,6 +1090,10 @@ export class KernelEngine {
     const pointIdMap = new Map<string, any>();
     const entityIdMap = new Map<string, any>();
 
+    // Phase 8: Track entity order for profile edge mapping
+    const profileEdgeToEntityId = new Map<number, string>();
+    let profileEdgeIndex = 0;
+
     const sortedPointIds = Object.keys(sketchInfo.data.pointsById).sort();
     for (const pid of sortedPointIds) {
       const point = sketchInfo.data.pointsById[pid];
@@ -1029,6 +1111,10 @@ export class KernelEngine {
           const isAxis = entity.id === axisId;
           const kernelEid = sketch.addLine(startId, endId, { construction: isAxis });
           entityIdMap.set(entity.id, kernelEid);
+          // Phase 8: Track profile edge mapping (excluding axis)
+          if (!isAxis) {
+            profileEdgeToEntityId.set(profileEdgeIndex++, entity.id);
+          }
         }
       }
       if (entity.type === "arc" && entity.start && entity.end && entity.center) {
@@ -1038,6 +1124,7 @@ export class KernelEngine {
         if (startId !== undefined && endId !== undefined && centerId !== undefined) {
           const kernelEid = sketch.addArc(startId, endId, centerId, entity.ccw ?? true);
           entityIdMap.set(entity.id, kernelEid);
+          profileEdgeToEntityId.set(profileEdgeIndex++, entity.id);
         }
       }
     }
@@ -1070,6 +1157,20 @@ export class KernelEngine {
 
     const revolvedBodyId = result.value;
 
+    // Phase 8: Capture OCCT operation history
+    const occtHistory = this.session!.getOperationHistory(revolvedBodyId);
+    const storedHistory: StoredOCCTHistory | undefined = occtHistory
+      ? {
+          bottomCapHash: occtHistory.bottomCapHash,
+          topCapHash: occtHistory.topCapHash,
+          sideFaceMappings: occtHistory.sideFaceMappings.map((m) => ({
+            profileEdgeIndex: m.profileEdgeIndex,
+            generatedFaceHash: m.generatedFaceHash,
+          })),
+          profileEdgeToEntityId,
+        }
+      : undefined;
+
     // Store sketch info for reference index generation
     if (sketchInfo.referenceInfo) {
       this.featureToSketchInfo.set(featureId, sketchInfo.referenceInfo);
@@ -1097,9 +1198,11 @@ export class KernelEngine {
         bodyEntryId: featureId,
         bodyName: finalBodyName,
         bodyColor: finalBodyColor,
+        occtHistory: storedHistory,
       };
     }
 
+    // Note: OCCT history is lost when merging (boolean operations change topology)
     return this.handleMerge(
       revolvedBodyId,
       featureId,

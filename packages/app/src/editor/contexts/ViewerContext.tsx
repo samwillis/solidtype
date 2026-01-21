@@ -261,20 +261,23 @@ export const ViewerProvider: React.FC<ViewerProviderProps> = ({ children }) => {
     return () => clearInterval(interval);
   }, [pendingView, applyViewPreset]);
 
-  const setView = useCallback((preset: ViewPreset) => {
-    const refs = viewerRefsRef.current;
-    if (!refs || !refs.camera.current) {
-      // Camera not ready - queue the view change
-      setPendingView(preset);
-      // Also update state so UI reflects the intended view
-      setState((prev) => ({ ...prev, currentView: preset }));
-      return;
-    }
+  const setView = useCallback(
+    (preset: ViewPreset) => {
+      const refs = viewerRefsRef.current;
+      if (!refs || !refs.camera.current) {
+        // Camera not ready - queue the view change
+        setPendingView(preset);
+        // Also update state so UI reflects the intended view
+        setState((prev) => ({ ...prev, currentView: preset }));
+        return;
+      }
 
-    if (applyViewPreset(preset, refs)) {
-      setState((prev) => ({ ...prev, currentView: preset }));
-    }
-  }, [applyViewPreset]);
+      if (applyViewPreset(preset, refs)) {
+        setState((prev) => ({ ...prev, currentView: preset }));
+      }
+    },
+    [applyViewPreset]
+  );
 
   const setViewToPlane = useCallback((transform: PlaneTransform) => {
     const refs = viewerRefsRef.current;

@@ -71,11 +71,7 @@ function getCameraForView(
     (bbox.min[2] + bbox.max[2]) / 2,
   ];
 
-  const size = [
-    bbox.max[0] - bbox.min[0],
-    bbox.max[1] - bbox.min[1],
-    bbox.max[2] - bbox.min[2],
-  ];
+  const size = [bbox.max[0] - bbox.min[0], bbox.max[1] - bbox.min[1], bbox.max[2] - bbox.min[2]];
 
   // View matrices (simple orthographic projections)
   // Format: [right_x, right_y, right_z, up_x, up_y, up_z, forward_x, forward_y, forward_z]

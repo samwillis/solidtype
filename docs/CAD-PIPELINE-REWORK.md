@@ -1440,21 +1440,62 @@ This makes selectors robust to sketch entity reordering.
 - Fallback to heuristics works when history unavailable
 - Sketch entity IDs survive sketch reordering
 
+### 8.5 Implementation status
+
+**Phase 8 OCCT history extraction is now working.**
+
+#### OpenCascade.js API notes
+
+The OpenCascade.js WASM bindings use different method names than the C++ API:
+- Use `list.Size()` instead of `list.Extent()`
+- Use `list.First_1()` to access elements (not `list.Value(i)`)
+- Iterator methods (`begin()`/`end()`) have binding issues, but `First_1()`/`Last_1()` work
+
+#### What works
+
+1. **Cap face identification**:
+   - `firstShapeHash` - hash of the bottom cap face (from `FirstShape()`)
+   - `lastShapeHash` - hash of the top cap face (from `LastShape()`)
+
+2. **Side face mappings**:
+   - `sideFaceMappings` - maps each profile edge to its generated side face
+   - For a rectangle extrude: 4 edges → 4 side face mappings
+   - Each mapping contains `profileEdgeHash`, `generatedFaceHash`, `profileEdgeIndex`
+
+3. **Tessellation with hashes**:
+   - `tessellateWithHashes()` returns face/edge hash codes
+   - These can be matched with the OCCT history to identify faces
+
+#### Remaining limitation: history through boolean operations
+
+History is only preserved when creating standalone new bodies:
+- First extrude in an empty model ✓
+- Extrude with `mergeScope: "new"` ✓
+
+For add/cut operations that merge with existing bodies, the history is lost because boolean operations create new topology.
+
+**Addressing this limitation** would require:
+1. Track through booleans using `BRepAlgoAPI_BooleanOperation::Modified()` and `Generated()`
+2. Maintain a chain of topology modifications
+3. This is significantly more complex and may be addressed in a future phase
+
+For now, the reference system falls back to heuristic matching (fingerprints) when OCCT history is unavailable.
+
 ---
 
 ## Deliverable Summary
 
-| Phase | Deliverable       | Key Files                                                     |
-| ----- | ----------------- | ------------------------------------------------------------- |
-| 0     | Regression tests  | `tests/integration/commands-invariants.test.ts`               |
-| 1     | Commands layer    | `editor/commands/*.ts`                                        |
-| 2     | PersistentRef V1  | `editor/naming/persistentRef.ts`                              |
-| 3     | ReferenceIndex    | `editor/kernel/referenceIndex.ts`, `worker/types.ts`          |
-| 4     | KernelEngine      | `editor/kernel/KernelEngine.ts`                               |
-| 5     | AI geometry tools | `lib/ai/tools/modeling-impl.ts`, `kernel/snapshotRenderer.ts` |
-| 6     | Resolver + repair | `editor/naming/resolvePersistentRef.ts`, `commands/repair.ts` |
-| 7     | Solver feedback   | `editor/sketch/solveSketch.ts`, `lib/ai/tools/sketch-impl.ts` |
-| 8     | OCCT history      | `core/src/api/SolidSession.ts`                                |
+| Phase | Deliverable       | Key Files                                                                                          |
+| ----- | ----------------- | -------------------------------------------------------------------------------------------------- |
+| 0     | Regression tests  | `tests/integration/commands-invariants.test.ts`                                                    |
+| 1     | Commands layer    | `editor/commands/*.ts`                                                                             |
+| 2     | PersistentRef V1  | `editor/naming/persistentRef.ts`                                                                   |
+| 3     | ReferenceIndex    | `editor/kernel/referenceIndex.ts`, `worker/types.ts`                                               |
+| 4     | KernelEngine      | `editor/kernel/KernelEngine.ts`                                                                    |
+| 5     | AI geometry tools | `lib/ai/tools/modeling-impl.ts`, `kernel/snapshotRenderer.ts`                                      |
+| 6     | Resolver + repair | `editor/naming/resolvePersistentRef.ts`, `commands/repair.ts`                                      |
+| 7     | Solver feedback   | `editor/sketch/solveSketch.ts`, `lib/ai/tools/sketch-impl.ts`                                      |
+| 8     | OCCT history      | `core/src/kernel/operations.ts`, `core/src/api/SolidSession.ts`, `editor/kernel/referenceIndex.ts` |
 
 ---
 
