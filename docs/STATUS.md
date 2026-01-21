@@ -1,6 +1,6 @@
 # SolidType Status
 
-**Last Updated:** 2026-01-20
+**Last Updated:** 2026-01-21
 
 This document tracks the current implementation status of SolidType.
 
@@ -14,35 +14,36 @@ This document tracks the current implementation status of SolidType.
 
 ## Phase Summary
 
-| Phase | Name                      | Status             | Notes                        |
-| ----- | ------------------------- | ------------------ | ---------------------------- |
-| 01    | Document Model (Yjs)      | ✅ Complete        |                              |
-| 02    | Kernel-Viewer Wiring      | ✅ Complete        |                              |
-| 03    | Sketch with Lines         | ✅ Complete        |                              |
-| 04    | Extrude Add               | ✅ Complete        |                              |
-| 05    | Extrude Cut               | ✅ Complete        |                              |
-| 06    | Revolve                   | ✅ Complete        |                              |
-| 07    | Basic Constraints         | ✅ Complete        |                              |
-| 08    | Dimension Constraints     | ✅ Complete        |                              |
-| 09    | Sketch Arcs               | ✅ Complete        |                              |
-| 10    | Curves in Features        | ✅ Complete        |                              |
-| 11    | 3D Selection              | ⚠️ Mostly Complete | Edge selection missing       |
-| 12    | Rebuild Gate              | ✅ Complete        |                              |
-| 13    | Properties Panel          | ✅ Complete        |                              |
-| 14    | Extrude Extents           | ⚠️ Mostly Complete | toVertex/toFace stubbed      |
-| 15    | Sketch on Face            | ✅ Complete        |                              |
-| 16    | Sketch to Geometry        | ✅ Complete        |                              |
-| 17    | Booleans                  | ✅ Complete        |                              |
-| 18    | STL/STEP Export           | ✅ Complete        |                              |
-| 19    | Advanced Constraints      | ⏳ Planned         |                              |
-| 20    | Fillet/Chamfer            | ⏳ Planned         | Kernel ready, no UI          |
-| 21    | Sweep/Loft                | ⏳ Planned         |                              |
-| 22    | Patterns                  | ⏳ Planned         |                              |
-| 23    | AI Core Infrastructure    | ✅ Complete        | Durable Streams architecture |
-| 24    | AI Dashboard              | ✅ Complete        | Dashboard tools working      |
-| 25    | AI Sketch                 | ⚠️ In Progress     | Tool defs & impls complete   |
-| 26    | AI Modeling               | ⏳ Planned         |                              |
-| 27    | User System & Persistence | ✅ Complete        |                              |
+| Phase | Name                      | Status             | Notes                              |
+| ----- | ------------------------- | ------------------ | ---------------------------------- |
+| 01    | Document Model (Yjs)      | ✅ Complete        |                                    |
+| 02    | Kernel-Viewer Wiring      | ✅ Complete        |                                    |
+| 03    | Sketch with Lines         | ✅ Complete        |                                    |
+| 04    | Extrude Add               | ✅ Complete        |                                    |
+| 05    | Extrude Cut               | ✅ Complete        |                                    |
+| 06    | Revolve                   | ✅ Complete        |                                    |
+| 07    | Basic Constraints         | ✅ Complete        |                                    |
+| 08    | Dimension Constraints     | ✅ Complete        |                                    |
+| 09    | Sketch Arcs               | ✅ Complete        |                                    |
+| 10    | Curves in Features        | ✅ Complete        |                                    |
+| 11    | 3D Selection              | ✅ Complete        | Face & edge selection working      |
+| 12    | Rebuild Gate              | ✅ Complete        |                                    |
+| 13    | Properties Panel          | ✅ Complete        |                                    |
+| 14    | Extrude Extents           | ⚠️ Mostly Complete | toVertex/toFace stubbed            |
+| 15    | Sketch on Face            | ❌ Broken          | **Button does nothing**            |
+| 16    | Sketch to Geometry        | ✅ Complete        |                                    |
+| 17    | Booleans                  | ✅ Complete        |                                    |
+| 18    | STL/STEP Export           | ✅ Complete        |                                    |
+| 19    | Advanced Constraints      | ⏳ Planned         |                                    |
+| 20    | Fillet/Chamfer            | ⏳ Planned         | Kernel ready, blocked by edge sel  |
+| 21    | Sweep/Loft                | ⏳ Planned         |                                    |
+| 22    | Patterns                  | ⏳ Planned         |                                    |
+| 23    | AI Core Infrastructure    | ✅ Complete        | Durable Streams architecture       |
+| 24    | AI Dashboard              | ✅ Complete        | Dashboard tools working            |
+| 25    | AI Sketch                 | ⚠️ In Progress     | Tool defs & impls complete         |
+| 26    | AI Modeling               | ⏳ Planned         |                                    |
+| 27    | User System & Persistence | ✅ Complete        |                                    |
+| 28    | Ref Geom & Sketch Tooling | ⏳ Planned         | See `plan/28-*` - full sketch UX   |
 
 ---
 
@@ -203,18 +204,28 @@ Phase 27 delivered the complete user system and persistence infrastructure:
 
 ## Next Up
 
-### Short Term
+### Immediate (Critical Fixes)
 
-1. Edge selection system (unblocks Fillet/Chamfer)
-2. Fillet/Chamfer UI
-3. AI Sketch integration (Phase 25)
+1. **Fix Face Selection Feedback** - users can't see what's selected
+2. **Fix Sketch on Face** - button does nothing
+3. **Fix Edge Selection Feedback** - code exists but not visually working
+
+### Short Term (Phase 28)
+
+1. Reference Geometry completion (planes, axes)
+2. Sketch entity tools (arc, circle, rectangle improvements)
+3. Sketch modify tools (trim, extend, offset)
+4. Inference system (H/V preview lines)
+
+See `plan/28-reference-geometry-sketch-tooling.md` for full plan.
 
 ### Medium Term
 
-1. Advanced constraints (Phase 19)
-2. Sweep/Loft (Phase 21)
-3. Patterns (Phase 22)
-4. AI Modeling integration (Phase 26)
+1. Fillet/Chamfer UI (blocked on edge selection)
+2. Advanced constraints (Phase 19)
+3. Sweep/Loft (Phase 21)
+4. Patterns (Phase 22)
+5. AI Modeling integration (Phase 26)
 
 ### Future
 

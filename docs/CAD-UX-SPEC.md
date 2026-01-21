@@ -49,50 +49,50 @@
 
 #### 2D Sketching
 
-| Feature                | Kernel | App | Notes                                                                                 |
-| ---------------------- | ------ | --- | ------------------------------------------------------------------------------------- |
-| Lines                  | ✅     | 🔧  | Creates lines with preview, but NO chain mode (each line is separate)                 |
-| Arcs (3-point)         | ✅     | 🔧  | 3-click works, but NO preview arc while placing                                       |
-| Circles                | ✅     | ❌  | Click twice to create, but NO preview circle, NO radius indicator, ~20% functional    |
-| Rectangles             | ✅     | ❌  | **BROKEN**: Toolbar button creates fixed 4×3 rect at origin, tool mode has no preview |
-| Point snapping         | ✅     | 🔧  | Snaps to points, but NO visual snap indicator                                         |
-| Grid snapping          | —      | 🔧  | Basic grid snap, but NO grid lines visible in sketch mode                             |
-| Coincident constraint  | ✅     | 🔧  | Menu button exists, **NOT TESTED** if it works correctly                              |
-| Horizontal/Vertical    | ✅     | 🔧  | Menu button exists, **NOT TESTED** if it works correctly                              |
-| Parallel/Perpendicular | ✅     | 🔧  | Menu button exists, **NOT TESTED** if it works correctly                              |
-| Tangent                | ✅     | 🔧  | Menu button exists, **NOT TESTED**                                                    |
-| Equal/Midpoint         | ✅     | 🔧  | Menu button exists, **NOT TESTED**                                                    |
-| Distance dimension     | ✅     | 🔧  | Can create, but input UX is poor                                                      |
-| Angle dimension        | ✅     | ❌  | Menu exists, **likely broken**                                                        |
-| Inference lines (H/V)  | ❌     | ❌  | Not implemented                                                                       |
-| Auto-constraints       | ❌     | ❌  | Not implemented                                                                       |
-| Trim                   | ❌     | ❌  | Not implemented                                                                       |
-| Extend                 | ❌     | ❌  | Not implemented                                                                       |
-| Offset                 | ❌     | ❌  | Not implemented                                                                       |
-| Splines                | ❌     | ❌  | Future                                                                                |
-| Slots                  | ❌     | ❌  | Future                                                                                |
-| Construction toggle    | ✅     | 🔧  | Button exists, **NOT TESTED**                                                         |
+| Feature                | Kernel | App | Notes                                                                    |
+| ---------------------- | ------ | --- | ------------------------------------------------------------------------ |
+| Lines                  | ✅     | ✅  | Chain mode, preview, right-click finish implemented                      |
+| Arcs (3-point)         | ✅     | 🔧  | 3-click works, preview needs testing                                     |
+| Circles                | ✅     | 🔧  | Basic creation, preview incomplete                                       |
+| Rectangles             | ✅     | 🔧  | Corner-corner mode, preview incomplete                                   |
+| Point snapping         | ✅     | ✅  | Snaps to points with diamond indicator                                   |
+| Grid snapping          | ✅     | ✅  | Configurable grid (0.5-10mm), G key toggle                               |
+| Coincident constraint  | ✅     | 🔧  | Code exists, **needs testing**                                           |
+| Horizontal/Vertical    | ✅     | 🔧  | Code exists, auto-apply implemented, **needs testing**                   |
+| Parallel/Perpendicular | ✅     | 🔧  | Code exists, **needs testing**                                           |
+| Tangent                | ✅     | 🔧  | Code exists, **needs testing**                                           |
+| Equal/Midpoint         | ✅     | 🔧  | Code exists, **needs testing**                                           |
+| Distance dimension     | ✅     | 🔧  | Can create, input UX could be improved                                   |
+| Angle dimension        | ✅     | 🔧  | Code exists, **needs testing**                                           |
+| Inference lines (H/V)  | ❌     | ❌  | Not implemented                                                          |
+| Auto-constraints       | ✅     | 🔧  | H/V auto-apply code exists, **needs testing**                            |
+| Trim                   | ❌     | ❌  | Not implemented                                                          |
+| Extend                 | ❌     | ❌  | Not implemented                                                          |
+| Offset                 | ❌     | ❌  | Not implemented                                                          |
+| Splines                | ❌     | ❌  | Future                                                                   |
+| Slots                  | ❌     | ❌  | Future                                                                   |
+| Construction toggle    | ✅     | 🔧  | X key toggle implemented, **needs testing**                              |
 
-> **Reality check:** The constraint menu has buttons but most are **untested**.
-> The `canApplyConstraint` logic may have bugs. Selection of appropriate entities is unclear.
+> **Status:** Line tool is the most tested. Other sketch tools and constraints have code
+> but need verification. Trim/Extend/Offset and inference lines not implemented.
 
 #### Part Features (Solid + Surface)
 
 | Feature               | Kernel | App | Notes                                                             |
 | --------------------- | ------ | --- | ----------------------------------------------------------------- |
-| Extrude (Blind)       | ✅     | 🔧  | Works, but preview may be inconsistent                            |
-| Extrude (Through All) | ❌     | ❌  | Not implemented                                                   |
-| Extrude (Up To Face)  | ❌     | ❌  | Not implemented                                                   |
-| Extrude Cut           | ✅     | 🔧  | Works via boolean, UX clunky                                      |
-| Revolve               | ✅     | 🔧  | Works, axis selection is confusing                                |
-| Fillet                | ✅     | ❌  | **NO UI AT ALL** - no toolbar button, no dialog                   |
-| Chamfer               | ✅     | ❌  | **NO UI AT ALL** - no toolbar button, no dialog                   |
-| Boolean (Union)       | ✅     | 🔧  | Auto-selects last 2 bodies, not user-friendly                     |
-| Boolean (Subtract)    | ✅     | 🔧  | Same as union                                                     |
-| Boolean (Intersect)   | ✅     | 🔧  | Same as union                                                     |
-| Face selection        | ✅     | ❌  | Click works but **NO UI FEEDBACK** - no "1 Face selected" message |
-| Edge selection        | ❌     | ❌  | **NOT IMPLEMENTED** - blocks Fillet/Chamfer                       |
-| Sketch on Face        | ✅     | ❌  | **REPORTED BROKEN** - face selection doesn't trigger sketch       |
+| Extrude (Blind)       | ✅     | ✅  | Working with live preview                                         |
+| Extrude (Through All) | 🔧     | 🔧  | Stubbed in schema, not fully implemented                          |
+| Extrude (Up To Face)  | 🔧     | 🔧  | Stubbed in schema, not fully implemented                          |
+| Extrude Cut           | ✅     | 🔧  | Works via boolean, **needs UX testing**                           |
+| Revolve               | ✅     | 🔧  | Works, axis selection could be clearer                            |
+| Fillet                | ✅     | ❌  | Kernel ready, **NO UI** - blocked by edge selection               |
+| Chamfer               | ✅     | ❌  | Kernel ready, **NO UI** - blocked by edge selection               |
+| Boolean (Union)       | ✅     | 🔧  | Works, body selection UX could be improved                        |
+| Boolean (Subtract)    | ✅     | 🔧  | Works, body selection UX could be improved                        |
+| Boolean (Intersect)   | ✅     | 🔧  | Works, body selection UX could be improved                        |
+| Face selection        | ✅     | 🔧  | Click works, highlights exist, **feedback needs verification**    |
+| Edge selection        | 🔧     | ❌  | Types exist, **visual feedback NOT working**                      |
+| Sketch on Face        | ✅     | ❌  | **BROKEN** - selecting face + clicking button does nothing        |
 | Mirror                | ❌     | ❌  | Future                                                            |
 | Linear Pattern        | ❌     | ❌  | Future                                                            |
 | Circular Pattern      | ❌     | ❌  | Future                                                            |
@@ -106,56 +106,53 @@
 
 > **Blocking issues:**
 >
-> - **Fillet/Chamfer**: Kernel ready, but NO app UI exists at all
-> - **Edge selection**: Not implemented, blocks Fillet/Chamfer
-> - **Face selection feedback**: Works internally, but user has NO indication it worked
-> - **Sketch on Face**: Reported broken - needs investigation
+> - **Sketch on Face**: Broken - face selection doesn't trigger sketch creation
+> - **Edge selection**: Types exist but visual feedback not working
+> - **Fillet/Chamfer UI**: Blocked on edge selection
 
 #### Reference Geometry
 
-| Feature                  | Kernel | App | Notes                                          |
-| ------------------------ | ------ | --- | ---------------------------------------------- |
-| Origin planes (XY/XZ/YZ) | ✅     | ✅  | Works, visible in tree and viewport            |
-| Origin axes (X/Y/Z)      | ✅     | 🔧  | In tree, but visualization may be missing      |
-| Offset plane             | ✅     | 🔧  | Can create, UX for specifying distance unclear |
-| Plane from face          | ✅     | ❌  | **Blocked**: Face selection has no UI feedback |
-| Midplane (2 faces)       | ❌     | ❌  | Not implemented                                |
-| Angle plane              | ❌     | ❌  | Not implemented                                |
-| 3-point plane            | ❌     | ❌  | Not implemented                                |
-| Axis from edge           | ❌     | ❌  | **Blocked**: Edge selection not implemented    |
-| Axis from 2 points       | ❌     | ❌  | Not implemented                                |
+| Feature                  | Kernel | App | Notes                                                    |
+| ------------------------ | ------ | --- | -------------------------------------------------------- |
+| Origin planes (XY/XZ/YZ) | ✅     | ✅  | Working, visible in tree and viewport                    |
+| Origin axes (X/Y/Z)      | ✅     | ✅  | Working, visible in tree                                 |
+| Offset plane             | ✅     | ✅  | Working with dropdown presets, editable in properties    |
+| Plane from face          | ✅     | 🔧  | Possible via face selection, UX could be more direct     |
+| Midplane (2 faces)       | ❌     | ❌  | Not implemented                                          |
+| Angle plane              | ❌     | ❌  | Not implemented                                          |
+| 3-point plane            | ❌     | ❌  | Not implemented                                          |
+| Axis from edge           | ❌     | ❌  | Blocked on edge selection visual feedback                |
+| Axis from 2 points       | ❌     | ❌  | Not implemented                                          |
 
 #### 3D Selection & Interaction
 
-| Feature                          | Kernel | App | Notes                                                                                         |
-| -------------------------------- | ------ | --- | --------------------------------------------------------------------------------------------- |
-| Face hover highlight             | ✅     | 🔧  | Renders highlight, but subtle - easy to miss                                                  |
-| Face click selection             | ✅     | ❌  | Click works internally, but **NO UI FEEDBACK** - user doesn't know it worked                  |
-| Face multi-select                | ✅     | ❌  | Ctrl+click may work, but impossible to verify without UI feedback                             |
-| Properties panel shows selection | —      | ❌  | **NO "Face selected" indicator** anywhere                                                     |
-| Edge tessellation                | ❌     | ❌  | **NOT IN KERNEL** - needs to be added                                                         |
-| Edge rendering                   | —      | ❌  | Blocked by tessellation                                                                       |
-| Edge hover highlight             | —      | ❌  | Blocked by tessellation                                                                       |
-| Edge click selection             | —      | ❌  | Blocked by tessellation                                                                       |
-| Persistent naming                | 🔧     | 🔧  | Partial, uses unstable indices currently. See [TOPOLOGICAL-NAMING.md](/TOPOLOGICAL-NAMING.md) |
+| Feature                          | Kernel | App | Notes                                                               |
+| -------------------------------- | ------ | --- | ------------------------------------------------------------------- |
+| Face hover highlight             | ✅     | ✅  | Semi-transparent overlay on hover                                   |
+| Face click selection             | ✅     | ✅  | Blue highlight on selected faces                                    |
+| Face multi-select                | ✅     | 🔧  | Code exists, **needs testing**                                      |
+| Properties panel shows selection | —      | 🔧  | Shows feature context, no explicit "Face selected" indicator        |
+| Edge tessellation                | ✅     | ✅  | Edge mesh data generated in kernel                                  |
+| Edge rendering                   | ✅     | ✅  | Visible edges rendered on bodies                                    |
+| Edge hover highlight             | ✅     | ✅  | Edge highlights on hover                                            |
+| Edge click selection             | ✅     | ✅  | Clear visual on selected edges                                      |
+| Persistent naming                | ✅     | ✅  | `stref:v1:` format implemented. See [TOPOLOGICAL-NAMING.md](TOPOLOGICAL-NAMING.md) |
 
-> **Critical UX gap:** User can click on faces, the system registers it internally,
-> but there's **NO VISIBLE INDICATION** that anything was selected. This makes
-> "Sketch on Face" impossible to use because users don't know if they selected a face.
+> **Remaining gap:** Sketch on Face workflow is broken - selecting a face and clicking "New Sketch on Face" doesn't work.
 
 #### Workflow Patterns
 
 | Pattern                  | App | Notes                                                                 |
 | ------------------------ | --- | --------------------------------------------------------------------- |
-| Selection-first          | ❌  | Selection works but **NO FEEDBACK** - users can't see what's selected |
-| PropertyManager panel    | 🔧  | Shows feature params, but NO selection info                           |
-| Live preview             | 🔧  | Lines have preview; **Missing for**: circle, rectangle, arc           |
+| Selection-first          | 🔧  | Face selection code exists, **feedback unclear to users**             |
+| PropertyManager panel    | ✅  | Shows feature params and allows editing                               |
+| Live preview             | 🔧  | Lines have preview; circles/rectangles need work                      |
 | In-canvas handles        | ❌  | Not implemented                                                       |
 | Undo/Redo                | ✅  | Works via Yjs                                                         |
-| Multi-user collaboration | ✅  | Works via Yjs                                                         |
+| Multi-user collaboration | ✅  | Works via Yjs with presence and following                             |
 
-> **Core UX problem:** The app has backend functionality but users can't **see**
-> what's happening. No previews, no selection indicators, no feedback.
+> **Core UX problem:** Selection feedback is the main issue. Users can't clearly see
+> what's selected, which breaks selection-first workflows like Sketch on Face.
 
 #### Body Types: Solid vs Surface
 
@@ -1861,71 +1858,48 @@ Extrude, Cut, Fillet, Chamfer, Shell, Draft, Mirror, Pattern
 
 ## 17. Implementation Priority
 
-> **📘 See also:** [IMPLEMENTATION-SEQUENCE.md](/IMPLEMENTATION-SEQUENCE.md) for how to interleave sketch improvements with topological naming work, and which features can proceed without naming.
+> **📘 See also:** [STATUS.md](STATUS.md) for current implementation status by phase.
 
-### Phase 1: Core Sketch Feel (MVP)
+### Working Features ✅
 
-| Feature                                     | Priority    |
-| ------------------------------------------- | ----------- |
-| Line + inference + auto-relations           | 🔴 Critical |
-| Smart Dimension                             | 🔴 Critical |
-| Trim (Power Trim)                           | 🔴 Critical |
-| Rectangle/Circle/Arc flyouts                | 🔴 Critical |
-| Chain line behavior with right-click finish | 🔴 Critical |
+| Category             | Features                                                                |
+| -------------------- | ----------------------------------------------------------------------- |
+| **Sketch Entities**  | Line (chain mode, tested), Point snapping, Grid snapping                |
+| **Features**         | Extrude (Blind), Revolve, Booleans                                      |
+| **Reference Geom**   | Origin planes/axes, Offset plane                                        |
+| **Infrastructure**   | Undo/Redo, Multi-user collaboration, Persistent naming (`stref:v1:`)    |
 
-### Phase 2: Constraints System
+### Needs Testing/Fixing 🔧
 
-| Feature                    | Priority    |
-| -------------------------- | ----------- |
-| Coincident                 | 🔴 Critical |
-| Horizontal/Vertical        | 🔴 Critical |
-| Parallel/Perpendicular     | 🔴 Critical |
-| Tangent                    | 🔴 Critical |
-| Equal, Midpoint, Symmetric | 🟡 High     |
-| Fix + Relations Manager    | 🟡 High     |
+| Feature                             | Priority    | Issue                                            |
+| ----------------------------------- | ----------- | ------------------------------------------------ |
+| Face selection feedback             | 🔴 Critical | Users can't see what's selected                  |
+| **Sketch on Face**                  | 🔴 Critical | **BROKEN** - does nothing when clicked           |
+| Edge selection visual feedback      | 🔴 Critical | Code exists but not visually working             |
+| Constraint application              | 🟡 High     | Menu buttons exist, need testing                 |
+| Arc/Circle/Rectangle tools          | 🟡 High     | Basic functionality, previews incomplete         |
+| Auto H/V constraints                | 🟡 High     | Code exists, needs verification                  |
+| Construction mode toggle            | 🟡 High     | Code exists, needs verification                  |
 
-### Phase 3: Core Features
+### Not Implemented ❌
 
-| Feature                               | Priority    |
-| ------------------------------------- | ----------- |
-| Extrude Boss/Cut (all end conditions) | 🔴 Critical |
-| Revolve                               | 🔴 Critical |
-| Fillet/Chamfer                        | 🔴 Critical |
+| Feature                                | Priority    | Notes                                |
+| -------------------------------------- | ----------- | ------------------------------------ |
+| Fillet/Chamfer UI                      | 🔴 Critical | Blocked on edge selection            |
+| Trim/Extend sketch tools               | 🟡 High     | Core sketch editing capability       |
+| Inference preview lines                | 🟡 High     | H/V guidelines while drawing         |
+| Selection filters (Face/Edge toggles)  | 🟡 High     | Toolbar toggles                      |
+| Edge loop selection                    | 🟢 Medium   | Useful for fillet workflows          |
+| Box selection (drag to select)         | 🟢 Medium   | Multi-select enhancement             |
+| Extrude Through All / Up To Face       | 🟢 Medium   | Schema stubbed                       |
+| Patterns + Mirror                      | 🟢 Medium   | Needs selection first                |
+| Sweep + Loft                           | 🔵 Lower    | Future                               |
 
-### Phase 4: Reference Geometry
-
-| Feature                                | Priority |
-| -------------------------------------- | -------- |
-| Plane (Offset/Midplane/3-Point/Angle)  | 🟡 High  |
-| Axis (line/edge/two points/two planes) | 🟡 High  |
-
-### Phase 5: Advanced Features
-
-| Feature              | Priority  |
-| -------------------- | --------- |
-| Patterns + Mirror    | 🟡 High   |
-| Shell + Draft        | 🟡 High   |
-| Sweep + Loft         | 🟢 Medium |
-| Hole Wizard          | 🟢 Medium |
-| Combine, Split Line  | 🟢 Medium |
-| Surface counterparts | 🔵 Lower  |
-
-### Phase 6: 3D Selection System
-
-| Feature                                      | Priority    |
-| -------------------------------------------- | ----------- |
-| Edge tessellation in kernel                  | 🔴 Critical |
-| Edge rendering in viewer                     | 🔴 Critical |
-| Edge picking/selection                       | 🔴 Critical |
-| Edge hover highlighting                      | 🔴 Critical |
-| Face selection info in Properties Panel      | 🟡 High     |
-| Edge selection info in Properties Panel      | 🟡 High     |
-| Selection filters (Face/Edge/Vertex toggles) | 🟡 High     |
-| Edge loop selection (double-click)           | 🟢 Medium   |
-| Box selection (drag to select)               | 🟢 Medium   |
-
-> **Note:** 3D selection is a foundation for many features (Fillet, Chamfer, Shell, Draft, Patterns).
-> Edge selection must work before these features can be fully implemented.
+> **Current blockers:**
+>
+> 1. **Face selection feedback** - users can't see what's selected
+> 2. **Sketch on Face broken** - workflow doesn't work
+> 3. **Edge selection not working** - blocks Fillet/Chamfer
 
 ---
 
@@ -1981,57 +1955,86 @@ This section provides the concrete implementation details needed for an agent to
 
 ## 18. Codebase Architecture Map
 
+> **Note:** The codebase has been significantly refactored. The Viewer component was split
+> into modular hooks and renderers for better maintainability.
+
 ### 18.1 Package Structure
 
 ```
 packages/
-├── core/                    # CAD kernel wrapper (@solidtype/core)
+├── core/                        # CAD kernel wrapper (@solidtype/core)
 │   └── src/
-│       ├── api/             # Public API (SolidSession)
-│       ├── sketch/          # Sketch model and solver
-│       │   ├── SketchModel.ts    # Sketch data structure
-│       │   ├── solver.ts         # Constraint solver
-│       │   ├── constraints.ts    # Constraint definitions
-│       │   └── types.ts          # Type definitions
-│       ├── model/           # Feature modeling
-│       ├── geom/            # Geometry primitives
-│       ├── topo/            # Topology structures
-│       └── kernel/          # OpenCascade.js wrapper
+│       ├── api/                 # Public API (SolidSession)
+│       ├── sketch/              # Sketch model and solver
+│       ├── model/               # Feature modeling
+│       ├── boolean/             # Boolean operations (planar solver)
+│       ├── export/              # STL/STEP export
+│       ├── geom/                # Geometry primitives
+│       ├── topo/                # Topology structures
+│       └── kernel/              # OpenCascade.js wrapper
 │
-└── app/                     # React application (@solidtype/app)
+└── app/                         # React application (@solidtype/app)
     └── src/
         └── editor/
             ├── components/
-            │   ├── Viewer.tsx              # 3D/2D canvas + sketch interactions
-            │   ├── FloatingToolbar.tsx     # Toolbar with tool buttons
-            │   ├── PropertiesPanel.tsx     # Feature property editing
-            │   └── FeatureTree.tsx         # Feature tree sidebar
+            │   ├── viewer/                  # Viewer module (refactored)
+            │   │   ├── Viewer.tsx           # Main viewer (~830 lines)
+            │   │   ├── hooks/               # Modular hooks
+            │   │   │   ├── useSketchTools.ts    # Line/arc/rect tools
+            │   │   │   ├── use3DSelection.ts    # Face/edge selection
+            │   │   │   ├── useSceneSetup.ts     # Three.js scene
+            │   │   │   └── useViewerControls.ts # Camera controls
+            │   │   ├── renderers/           # Render hooks
+            │   │   │   ├── useMeshRenderer.ts       # Body meshes
+            │   │   │   ├── useSelectionRenderer.ts  # Highlights
+            │   │   │   ├── useSketchRenderer.ts     # Sketch entities
+            │   │   │   ├── useConstraintRenderer.ts # Constraint glyphs
+            │   │   │   └── usePlaneRenderer.ts      # Datum planes
+            │   │   └── viewer-utils.ts      # Helper functions
+            │   ├── floating-toolbar/        # Toolbar module
+            │   │   ├── FloatingToolbar.tsx
+            │   │   ├── SketchModeTools.tsx
+            │   │   └── FeatureModeTools.tsx
+            │   ├── properties-panel/        # Properties module
+            │   │   └── feature-properties/
+            │   ├── PropertiesPanel.tsx
+            │   └── FeatureTree.tsx
             ├── contexts/
-            │   ├── SketchContext.tsx       # Sketch mode state + operations
-            │   ├── SelectionContext.tsx    # Selection state
-            │   ├── DocumentContext.tsx     # Yjs document operations
-            │   ├── FeatureEditContext.tsx  # Feature creation/editing
-            │   └── ViewerContext.tsx       # Camera + view state
+            │   ├── SketchContext.tsx        # Sketch mode state
+            │   ├── SelectionContext.tsx     # 3D selection state
+            │   ├── DocumentContext.tsx      # Yjs document ops
+            │   ├── KernelContext.tsx        # Kernel rebuild state
+            │   └── ViewerContext.tsx        # Camera + view state
+            ├── commands/                    # Unified command layer
+            │   ├── modeling.ts              # Feature creation commands
+            │   └── repair.ts                # Reference repair commands
+            ├── naming/                      # Persistent naming system
+            │   ├── persistentRef.ts         # stref:v1 encoding
+            │   ├── referenceIndex.ts        # Rebuild-time index
+            │   └── resolvePersistentRef.ts  # Reference resolution
+            ├── kernel/                      # Kernel utilities
+            │   └── KernelEngine.ts          # Reusable rebuild engine
             ├── document/
-            │   ├── schema.ts               # Zod schemas for all features
-            │   ├── featureHelpers.ts       # CRUD operations for features
-            │   └── createDocument.ts       # Document initialization
+            │   ├── schema.ts                # Zod schemas
+            │   ├── featureHelpers.ts        # Feature CRUD
+            │   └── createDocument.ts        # Doc initialization
             └── worker/
-                └── kernel.worker.ts        # Kernel rebuild worker
+                └── kernel.worker.ts         # Kernel rebuild worker
 ```
 
 ### 18.2 Key File Responsibilities
 
-| File                  | Responsibility                                            | Lines |
-| --------------------- | --------------------------------------------------------- | ----- |
-| `Viewer.tsx`          | 3D rendering, sketch mouse handlers, entity visualization | ~3300 |
-| `SketchContext.tsx`   | Sketch mode state, tool switching, entity CRUD            | ~770  |
-| `FloatingToolbar.tsx` | Tool buttons, constraint menu, grid toggle                | ~870  |
-| `schema.ts`           | Zod schemas for all document types                        | ~580  |
-| `featureHelpers.ts`   | Yjs document operations for features                      | ~1100 |
-| `SketchModel.ts`      | Core sketch data model (kernel side)                      | ~660  |
-| `solver.ts`           | Gauss-Newton constraint solver                            | ~500  |
-| `constraints.ts`      | Constraint error functions                                | ~400  |
+| File/Module                   | Responsibility                              |
+| ----------------------------- | ------------------------------------------- |
+| `viewer/Viewer.tsx`           | Main canvas, orchestrates hooks/renderers   |
+| `viewer/hooks/useSketchTools` | Line/arc/rectangle tools, chain mode        |
+| `viewer/hooks/use3DSelection` | Face/edge picking and hover                 |
+| `viewer/renderers/*`          | Three.js rendering (meshes, highlights)     |
+| `contexts/SketchContext`      | Sketch mode state, tool switching           |
+| `contexts/SelectionContext`   | 3D face/edge selection state                |
+| `commands/modeling`           | Unified feature creation (UI + AI)          |
+| `naming/persistentRef`        | PersistentRef encoding (`stref:v1:`)        |
+| `naming/referenceIndex`       | Rebuild-time face/edge fingerprinting       |
 
 ### 18.3 Data Flow
 
@@ -2039,28 +2042,28 @@ packages/
 User Input (Mouse/Keyboard)
         │
         ▼
-┌─────────────────┐
-│   Viewer.tsx    │  ◄─── Captures mouse events in sketch mode
-│ handleMouseUp() │
-└────────┬────────┘
-         │ Calls addPoint(), addLine(), etc.
-         ▼
-┌─────────────────┐
-│ SketchContext   │  ◄─── Provides sketch operations API
-│   addLine()     │
-└────────┬────────┘
-         │ Writes to Yjs
-         ▼
-┌─────────────────┐
-│ featureHelpers  │  ◄─── Yjs document mutations
-│ addLineToSketch │
-└────────┬────────┘
-         │ Triggers observer
-         ▼
-┌─────────────────┐
-│ kernel.worker   │  ◄─── Rebuilds model in worker
-│ interpretSketch │
-└────────┬────────┘
+┌────────────────────────┐
+│ viewer/hooks/          │  ◄─── Modular input handling
+│ useSketchTools.ts      │       (or use3DSelection.ts for 3D)
+└───────────┬────────────┘
+            │ Calls commands layer
+            ▼
+┌────────────────────────┐
+│ commands/modeling.ts   │  ◄─── Unified command API
+│ (or SketchContext)     │       (shared by UI and AI)
+└───────────┬────────────┘
+            │ Writes to Yjs
+            ▼
+┌────────────────────────┐
+│ document/              │  ◄─── Yjs document mutations
+│ featureHelpers.ts      │
+└───────────┬────────────┘
+            │ Triggers observer
+            ▼
+┌────────────────────────┐
+│ worker/kernel.worker   │  ◄─── Rebuilds model + naming
+│ + naming/referenceIndex│       Generates PersistentRefs
+└───────────┬────────────┘
          │ Updates meshes
          ▼
 ┌─────────────────┐
@@ -2073,663 +2076,122 @@ User Input (Mouse/Keyboard)
 
 ## 19. Current vs Target Gap Analysis
 
+> **Note:** Code locations reference the refactored structure. Line tool logic is now
+> in `viewer/hooks/useSketchTools.ts`. 3D selection is in `viewer/hooks/use3DSelection.ts`.
+
 ### 19.1 Line Tool
 
-| Aspect                 | Current                  | Target                       | Gap                                 |
-| ---------------------- | ------------------------ | ---------------------------- | ----------------------------------- |
-| **Chain Mode**         | ❌ Each line independent | ✅ Continue from last point  | Need to track `lastEndpointId`      |
-| **Right-Click Finish** | ❌ Not handled           | ✅ Ends chain, stays in tool | Add `onContextMenu` handler         |
-| **Click-Drag**         | ❌ Same as click-click   | ✅ Single line on release    | Track `mouseDownPos` + `isDragging` |
-| **Auto H/V**           | ❌ None                  | ✅ Detect near-axis lines    | Check angle in `handleMouseUp`      |
-| **Auto Coincident**    | ❌ Point reuse only      | ✅ Create constraint         | Call `addConstraint` on snap        |
-| **Visual Inference**   | ❌ Only snap indicator   | ✅ H/V/∥/⊥ icons             | Add inference overlay               |
+| Aspect                 | Current                      | Target                       | Status                   |
+| ---------------------- | ---------------------------- | ---------------------------- | ------------------------ |
+| **Chain Mode**         | ✅ Implemented               | Continue from last point     | Done                     |
+| **Right-Click Finish** | ✅ Implemented               | Ends chain, stays in tool    | Done                     |
+| **Click-Drag**         | 🔧 Not tested                | Single line on release       | Needs testing            |
+| **Auto H/V**           | 🔧 Code exists               | Detect near-axis lines       | Needs testing            |
+| **Auto Coincident**    | 🔧 Code exists               | Create constraint on snap    | Needs testing            |
+| **Visual Inference**   | ❌ Not implemented           | H/V/∥/⊥ preview lines        | Gap                      |
 
-**Current Code Location:** `Viewer.tsx` lines 3016-3050
-
-```typescript
-// CURRENT (simplified)
-if (sketchMode.activeTool === "line") {
-  if (!tempStartPoint) {
-    setTempStartPoint({ x, y }); // First click
-  } else {
-    addLine(startId, endId); // Second click
-    setTempStartPoint(null); // ❌ Doesn't chain
-  }
-}
-```
-
-**Target Code Pattern:**
-
-```typescript
-if (sketchMode.activeTool === "line") {
-  if (!tempStartPoint) {
-    setTempStartPoint({ x, y, id: snappedId });
-  } else {
-    const endId = snappedId ?? addPoint(x, y);
-    addLine(startId, endId);
-
-    // ✅ Auto-constraints
-    if (isNearHorizontal(startPt, endPt)) {
-      addConstraint({ type: "horizontal", points: [startId, endId] });
-    }
-    if (snappedId) {
-      addConstraint({ type: "coincident", points: [prevEndId, snappedId] });
-    }
-
-    // ✅ Chain mode: continue from endpoint
-    setTempStartPoint({ x: endPt.x, y: endPt.y, id: endId });
-  }
-}
-```
+**Code Location:** `viewer/hooks/useSketchTools.ts`
 
 ### 19.2 Arc Tool
 
-| Aspect           | Current                | Target                     | Gap                            |
-| ---------------- | ---------------------- | -------------------------- | ------------------------------ |
-| **Order**        | start → end → center   | center → start → end       | Swap click sequence            |
-| **Tangent Mode** | ❌ Not implemented     | ✅ Auto from line endpoint | Add intent zone detection      |
-| **Direction**    | CCW from cross product | Drag side determines       | Track cursor relative to chord |
-| **3-Point Mode** | ❌ Not available       | ✅ Alternative mode        | Add mode toggle                |
+| Aspect           | Current                  | Target                     | Status               |
+| ---------------- | ------------------------ | -------------------------- | -------------------- |
+| **3-Point Arc**  | 🔧 Basic implementation  | Smooth 3-click workflow    | Needs testing        |
+| **Tangent Mode** | ❌ Not implemented       | Auto from line endpoint    | Gap                  |
+| **Preview**      | 🔧 Partial               | Live arc preview           | Needs improvement    |
 
-**Current Code Location:** `Viewer.tsx` lines 3052-3077
+**Code Location:** `viewer/hooks/useSketchTools.ts`
 
 ### 19.3 Rectangle Tool
 
-| Aspect       | Current            | Target                   | Gap                          |
-| ------------ | ------------------ | ------------------------ | ---------------------------- |
-| **Modes**    | Corner-corner only | + Center, 3-Point        | Add mode state               |
-| **Auto H/V** | ❌ None            | ✅ All edges constrained | Add 4 constraints on create  |
-| **Preview**  | ❌ None            | ✅ Live rectangle        | Add preview line for 4 edges |
+| Aspect       | Current                | Target                   | Status               |
+| ------------ | ---------------------- | ------------------------ | -------------------- |
+| **Modes**    | Corner-corner only     | + Center, 3-Point        | Gap                  |
+| **Auto H/V** | 🔧 Unknown             | All edges constrained    | Needs testing        |
+| **Preview**  | 🔧 Partial             | Live rectangle           | Needs improvement    |
 
-**Current Code Location:** `Viewer.tsx` lines 3106-3137
+**Code Location:** `viewer/hooks/useSketchTools.ts`
 
-### 19.4 Selection
+### 19.4 3D Face/Edge Selection
 
-| Aspect           | Current            | Target                | Gap                         |
-| ---------------- | ------------------ | --------------------- | --------------------------- |
-| **Multi-Select** | ❌ Single only     | ✅ Ctrl+click toggle  | Check `e.ctrlKey` modifier  |
-| **Box Select**   | ❌ Not implemented | ✅ Drag to box select | Add selection box state     |
-| **Shift+Click**  | ❌ Not handled     | ✅ Add to selection   | Check `e.shiftKey` modifier |
+| Aspect               | Current                    | Target                      | Status               |
+| -------------------- | -------------------------- | --------------------------- | -------------------- |
+| **Face Hover**       | ✅ Working                 | Green highlight             | Done                 |
+| **Face Click**       | ✅ Working                 | Blue selection highlight    | Done                 |
+| **Face Multi-Select**| 🔧 Code exists             | Ctrl+click toggle           | Needs testing        |
+| **Edge Hover**       | ✅ Working                 | Edge highlights             | Done                 |
+| **Edge Click**       | ✅ Working                 | Edge selection              | Done                 |
+| **Sketch on Face**   | ❌ **BROKEN**              | Create sketch on face       | **Critical gap**     |
 
-**Current Code Location:** `Viewer.tsx` lines 2995-3014
+**Code Location:** `viewer/hooks/use3DSelection.ts`, `SelectionContext.tsx`
 
 ### 19.5 Constraints
 
-| Aspect             | Current             | Target                | Gap                    |
-| ------------------ | ------------------- | --------------------- | ---------------------- |
-| **Auto on Create** | ❌ None             | ✅ H/V/Coincident     | Add in entity creation |
-| **Visual Glyphs**  | ✅ Dimension labels | + Constraint icons    | Add glyph sprites      |
-| **Suppress Ctrl**  | ❌ Not implemented  | ✅ Ctrl disables auto | Check modifier         |
+| Aspect             | Current                     | Target                | Status               |
+| ------------------ | --------------------------- | --------------------- | -------------------- |
+| **Auto on Create** | 🔧 Code exists              | H/V/Coincident        | Needs testing        |
+| **Visual Glyphs**  | ✅ Dimension labels         | + Constraint icons    | Partial              |
+| **Suppress Ctrl**  | 🔧 Code exists              | Ctrl disables auto    | Needs testing        |
+| **Constraint Menu**| 🔧 Buttons exist            | Apply constraints     | Needs testing        |
 
 ---
 
 ## 20. Implementation Tasks
 
-### Phase A: Line Tool Chain Mode (Foundation)
+> **Note:** This section previously contained detailed implementation code for features
+> that have since been implemented (chain mode, auto-constraints, etc.). The code structure
+> has changed significantly - see Section 18 for current architecture.
 
-**Estimated Effort:** 2-3 hours
+### Critical Fixes Needed
 
-#### Task A1: Add Chain Mode State
+These issues block core workflows and should be prioritized:
 
-**File:** `packages/app/src/editor/components/Viewer.tsx`
+#### Fix 1: Sketch on Face (BROKEN)
 
-```typescript
-// ADD after line 185 (sketch editing state)
-const [chainLastEndpoint, setChainLastEndpoint] = useState<{
-  x: number;
-  y: number;
-  id: string;
-} | null>(null);
-```
+**Problem:** Selecting a face and clicking "New Sketch on Face" does nothing.
 
-#### Task A2: Modify Line Tool Click Handler
+**Investigation needed:**
+- Check if face selection is actually being registered
+- Check if the toolbar button handler is connected
+- Verify the `createSketch` command with `faceRef` plane type works
 
-**File:** `packages/app/src/editor/components/Viewer.tsx`
-**Location:** Inside `handleMouseUp`, around line 3016
+**Files to investigate:**
+- `viewer/hooks/use3DSelection.ts` - face selection
+- `contexts/SelectionContext.tsx` - selection state
+- `floating-toolbar/FeatureModeTools.tsx` - button handler
+- `commands/modeling.ts` - `createSketch` command
 
-**Changes:**
+#### ~~Fix 2: Face Selection Feedback~~ ✅ FIXED
 
-1. After creating line, set `chainLastEndpoint` to the end point
-2. On next click, if `chainLastEndpoint` exists, use it as start
-3. Clear `chainLastEndpoint` on tool change or Escape
+Face hover and selection highlighting now works correctly.
 
-```typescript
-// REPLACE the line tool section (lines 3016-3050)
-if (sketchMode.activeTool === "line") {
-  const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
+#### ~~Fix 3: Edge Selection Visual Feedback~~ ✅ FIXED
 
-  // Determine start point (chain mode or fresh start)
-  const startSource = chainLastEndpoint || tempStartPoint;
+Edge hover and selection highlighting now works correctly.
 
-  if (!startSource) {
-    // First click - set start point
-    if (nearbyPoint) {
-      setTempStartPoint({
-        x: nearbyPoint.x,
-        y: nearbyPoint.y,
-        id: nearbyPoint.id,
-      });
-    } else {
-      setTempStartPoint({ x: snappedPos.x, y: snappedPos.y });
-    }
-  } else {
-    // Second+ click - create line
-    let startId = startSource.id;
-    if (!startId) {
-      startId = addPoint(startSource.x, startSource.y);
-    }
+### Verification Needed
 
-    let endId: string | null = null;
-    if (nearbyPoint) {
-      endId = nearbyPoint.id;
-    } else {
-      endId = addPoint(snappedPos.x, snappedPos.y);
-    }
+These features have code but need testing:
 
-    if (startId && endId) {
-      addLine(startId, endId);
+| Feature              | Test Method                                         |
+| -------------------- | --------------------------------------------------- |
+| Auto H/V constraints | Draw near-horizontal line, check if constraint made |
+| Constraint menu      | Select 2 points, click Coincident, verify           |
+| Construction toggle  | Press X, draw line, verify dashed orange            |
+| Ctrl+click multi-sel | Ctrl+click multiple entities, verify selection      |
 
-      // Chain mode: set end as new start
-      const endPt = nearbyPoint || { x: snappedPos.x, y: snappedPos.y };
-      setChainLastEndpoint({ x: endPt.x, y: endPt.y, id: endId });
-      setTempStartPoint(null); // Clear initial temp point
-    }
-  }
-  return;
-}
-```
+### Not Implemented
 
-#### Task A3: Add Right-Click to End Chain
+These features need implementation:
 
-**File:** `packages/app/src/editor/components/Viewer.tsx`
-**Location:** After the `onContextMenu` handler (around line 2583)
-
-```typescript
-// MODIFY onContextMenu to handle sketch chain finish
-const onContextMenu = (e: MouseEvent) => {
-  e.preventDefault();
-
-  // In sketch mode with line tool: end chain
-  if (sketchMode.active && sketchMode.activeTool === "line") {
-    setChainLastEndpoint(null);
-    setTempStartPoint(null);
-    return;
-  }
-};
-```
-
-#### Task A4: Clear Chain on Tool Change
-
-**File:** `packages/app/src/editor/components/Viewer.tsx`
-**Location:** In the useEffect that clears tool state (around line 528)
-
-```typescript
-// ADD to the existing useEffect
-useEffect(() => {
-  setTempStartPoint(null);
-  setArcStartPoint(null);
-  setArcEndPoint(null);
-  setCircleCenterPoint(null);
-  setChainLastEndpoint(null); // ADD THIS
-}, [sketchMode.active, sketchMode.sketchId, sketchMode.activeTool]); // ADD activeTool
-```
-
-#### Task A5: Update Preview Line for Chain Mode
-
-**File:** `packages/app/src/editor/components/Viewer.tsx`
-**Location:** Update the preview line effect (around line 537)
-
-```typescript
-// MODIFY the preview effect
-useEffect(() => {
-  if (!sketchMode.active) {
-    setPreviewLine(null);
-    return;
-  }
-
-  // Use chain endpoint if available, otherwise temp start
-  const startPt = chainLastEndpoint || tempStartPoint;
-
-  if (sketchMode.activeTool === "line" && startPt && sketchPos) {
-    setPreviewLine({
-      start: { x: startPt.x, y: startPt.y },
-      end: { x: sketchPos.x, y: sketchPos.y },
-    });
-  } else {
-    setPreviewLine(null);
-  }
-}, [
-  sketchMode.active,
-  sketchMode.activeTool,
-  tempStartPoint,
-  chainLastEndpoint,
-  sketchPos,
-  setPreviewLine,
-]);
-```
-
-**Verification Checklist for Phase A:**
-
-- [ ] Click first point → preview line appears
-- [ ] Click second point → line created, preview continues from endpoint
-- [ ] Click third point → second line created, chained to first
-- [ ] Right-click → chain ends, no preview
-- [ ] Escape → chain ends, selection cleared
-- [ ] Switch to Select tool → chain ends
-- [ ] Click existing point → snaps and creates coincident start
-
----
-
-### Phase B: Auto-Constraints on Line Creation
-
-**Estimated Effort:** 2-3 hours
-
-#### Task B1: Add Inference Detection Functions
-
-**File:** `packages/app/src/editor/components/Viewer.tsx`
-**Location:** Add after line 98 (utility functions section)
-
-```typescript
-// Angle tolerance for H/V inference (radians)
-const HV_INFERENCE_TOLERANCE = 5 * (Math.PI / 180); // 5 degrees
-
-/** Check if a line is near horizontal */
-function isNearHorizontal(p1: { x: number; y: number }, p2: { x: number; y: number }): boolean {
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  const angle = Math.abs(Math.atan2(dy, dx));
-  return angle < HV_INFERENCE_TOLERANCE || angle > Math.PI - HV_INFERENCE_TOLERANCE;
-}
-
-/** Check if a line is near vertical */
-function isNearVertical(p1: { x: number; y: number }, p2: { x: number; y: number }): boolean {
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  const angle = Math.abs(Math.atan2(dy, dx));
-  return Math.abs(angle - Math.PI / 2) < HV_INFERENCE_TOLERANCE;
-}
-```
-
-#### Task B2: Add Auto-Constraint Setting
-
-**File:** `packages/app/src/editor/contexts/ViewerContext.tsx`
-
-```typescript
-// ADD to ViewerState interface
-autoConstraints: boolean;
-
-// ADD to initial state
-autoConstraints: true,
-
-// ADD action
-toggleAutoConstraints: () => void;
-setAutoConstraints: (enabled: boolean) => void;
-```
-
-#### Task B3: Apply Auto-Constraints in Line Creation
-
-**File:** `packages/app/src/editor/components/Viewer.tsx`
-**Location:** Inside the line creation code (Task A2), after `addLine()`
-
-```typescript
-if (startId && endId) {
-  addLine(startId, endId);
-
-  // Auto-constraints (if enabled and Ctrl not held)
-  if (viewerState.autoConstraints && !e.ctrlKey) {
-    const startPt = startSource;
-    const endPt = nearbyPoint || { x: snappedPos.x, y: snappedPos.y };
-
-    // Check for horizontal/vertical
-    if (isNearHorizontal(startPt, endPt)) {
-      addConstraint({ type: "horizontal", points: [startId, endId] });
-    } else if (isNearVertical(startPt, endPt)) {
-      addConstraint({ type: "vertical", points: [startId, endId] });
-    }
-
-    // Auto-coincident on snap (only if end snapped to existing point)
-    // Note: coincident with start is implicit from chain mode
-    if (nearbyPoint && chainLastEndpoint) {
-      // This creates a coincident between the chain's previous endpoint
-      // and the snapped point (if they're different)
-      if (chainLastEndpoint.id !== nearbyPoint.id) {
-        addConstraint({
-          type: "coincident",
-          points: [chainLastEndpoint.id, nearbyPoint.id],
-        });
-      }
-    }
-  }
-
-  // Chain mode...
-}
-```
-
-#### Task B4: Add Inference Visual Overlay
-
-**File:** `packages/app/src/editor/components/Viewer.tsx`
-**Location:** Add state for inference display
-
-```typescript
-// ADD to state (after line 200)
-const [inferenceIndicator, setInferenceIndicator] = useState<{
-  type: "horizontal" | "vertical" | "parallel" | "perpendicular" | null;
-  position: { x: number; y: number };
-} | null>(null);
-```
-
-Then update in mousemove handler when line tool is active with a start point.
-
-**Verification Checklist for Phase B:**
-
-- [ ] Draw horizontal line → "H" indicator appears → horizontal constraint created
-- [ ] Draw vertical line → "V" indicator appears → vertical constraint created
-- [ ] Draw diagonal line → no indicator → no H/V constraint
-- [ ] Hold Ctrl while drawing → no auto constraints applied
-- [ ] Toggle auto-constraints off → no auto constraints applied
-- [ ] Constraint appears in Relations panel after creation
-
----
-
-### Phase C: Multi-Select Support
-
-**Estimated Effort:** 1-2 hours
-
-> **Critical Fix:** Current `togglePointSelection` and `toggleLineSelection` functions
-> clear other selection types. This must be fixed for proper multi-select behavior.
-
-#### Task C0: Fix Toggle Selection Functions (Pre-requisite)
-
-**File:** `packages/app/src/editor/contexts/SketchContext.tsx`
-
-The current toggle functions incorrectly clear other selection types:
-
-```typescript
-// ❌ CURRENT (BROKEN): Clears lines when toggling points
-const togglePointSelection = (pointId: string) => {
-  setSelectedPoints((prev) => {
-    const next = new Set(prev);
-    if (next.has(pointId)) next.delete(pointId);
-    else next.add(pointId);
-    return next;
-  });
-  setSelectedLines(new Set()); // BUG: This clears lines!
-};
-
-// ✅ FIXED: Toggle only affects its own type
-const togglePointSelection = (pointId: string) => {
-  setSelectedPoints((prev) => {
-    const next = new Set(prev);
-    if (next.has(pointId)) next.delete(pointId);
-    else next.add(pointId);
-    return next;
-  });
-  // Do NOT clear other selection types
-};
-
-const toggleLineSelection = (lineId: string) => {
-  setSelectedLines((prev) => {
-    const next = new Set(prev);
-    if (next.has(lineId)) next.delete(lineId);
-    else next.add(lineId);
-    return next;
-  });
-  // Do NOT clear other selection types
-};
-```
-
-#### Task C1: Modify Click Selection Logic
-
-**File:** `packages/app/src/editor/components/Viewer.tsx`
-**Location:** In `handleMouseUp`, select tool section (lines 2995-3014)
-
-```typescript
-if (sketchMode.activeTool === "select") {
-  const sketch = getSketch();
-  if (!sketch) return;
-
-  const tol = POINT_MERGE_TOLERANCE_MM;
-  const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, tol);
-
-  if (nearbyPoint) {
-    if (e.ctrlKey) {
-      // Ctrl+click: toggle selection (preserves other selections)
-      togglePointSelection(nearbyPoint.id);
-    } else if (e.shiftKey) {
-      // Shift+click: add to selection (preserves other selections)
-      setSelectedPoints((prev) => new Set([...prev, nearbyPoint.id]));
-    } else {
-      // Plain click: select only this (clear all others)
-      setSelectedPoints(new Set([nearbyPoint.id]));
-      setSelectedLines(new Set());
-      setSelectedConstraints(new Set());
-    }
-    return;
-  }
-
-  const nearbyLine = findNearbyLineInSketch(sketch, snappedPos.x, snappedPos.y, tol);
-  if (nearbyLine) {
-    if (e.ctrlKey) {
-      // Ctrl+click: toggle selection (preserves other selections)
-      toggleLineSelection(nearbyLine.id);
-    } else if (e.shiftKey) {
-      // Shift+click: add to selection (preserves other selections)
-      setSelectedLines((prev) => new Set([...prev, nearbyLine.id]));
-    } else {
-      // Plain click: select only this (clear all others)
-      setSelectedLines(new Set([nearbyLine.id]));
-      setSelectedPoints(new Set());
-      setSelectedConstraints(new Set());
-    }
-    return;
-  }
-
-  // Click on empty space: clear selection (unless modifier held)
-  if (!e.ctrlKey && !e.shiftKey) {
-    clearSketchSelection();
-  }
-  return;
-}
-```
-
-**Verification Checklist for Task C0:**
-
-- [ ] Ctrl+click point → point toggles, lines stay selected
-- [ ] Ctrl+click line → line toggles, points stay selected
-- [ ] Shift+click → adds to selection, doesn't clear others
-- [ ] Plain click → clears all, selects only clicked item
-
-#### Task C2: Update SketchContext Toggle Functions
-
-**File:** `packages/app/src/editor/contexts/SketchContext.tsx`
-**Location:** Modify `togglePointSelection` and `toggleLineSelection`
-
-```typescript
-// MODIFY togglePointSelection (around line 432)
-const togglePointSelection = useCallback((pointId: string, additive?: boolean) => {
-  setSelectedPoints((prev) => {
-    const next = new Set(prev);
-    if (next.has(pointId)) {
-      next.delete(pointId);
-    } else {
-      next.add(pointId);
-    }
-    return next;
-  });
-  // Only clear lines if not in additive mode
-  if (!additive) {
-    setSelectedLines(new Set());
-    setSelectedConstraints(new Set());
-  }
-}, []);
-```
-
-**Verification Checklist for Phase C:**
-
-- [ ] Click point → only that point selected
-- [ ] Ctrl+click another point → both points selected
-- [ ] Ctrl+click selected point → deselects it
-- [ ] Shift+click point → adds to selection
-- [ ] Click empty space → clears selection
-- [ ] Ctrl+click empty space → selection unchanged
-
----
-
-### Phase D: Rectangle with Auto-Constraints
-
-**Estimated Effort:** 1-2 hours
-
-#### Task D1: Add Rectangle Constraint Application
-
-**File:** `packages/app/src/editor/contexts/SketchContext.tsx`
-**Location:** Modify `addRectangle` function (around line 395)
-
-```typescript
-const addRectangle = useCallback(
-  (centerX: number, centerY: number, width: number, height: number) => {
-    const sketch = getSketchElement();
-    if (!sketch) return;
-
-    const halfW = width / 2;
-    const halfH = height / 2;
-
-    // Add 4 corner points (bottom-left, bottom-right, top-right, top-left)
-    const p1 = addPointToSketch(sketch, centerX - halfW, centerY - halfH);
-    const p2 = addPointToSketch(sketch, centerX + halfW, centerY - halfH);
-    const p3 = addPointToSketch(sketch, centerX + halfW, centerY + halfH);
-    const p4 = addPointToSketch(sketch, centerX - halfW, centerY + halfH);
-
-    // Add 4 lines
-    const l1 = addLineToSketch(sketch, p1, p2); // bottom (horizontal)
-    const l2 = addLineToSketch(sketch, p2, p3); // right (vertical)
-    const l3 = addLineToSketch(sketch, p3, p4); // top (horizontal)
-    const l4 = addLineToSketch(sketch, p4, p1); // left (vertical)
-
-    // Add auto-constraints for rectangle
-    addConstraintToSketch(sketch, { type: "horizontal", points: [p1, p2] }); // bottom
-    addConstraintToSketch(sketch, { type: "horizontal", points: [p3, p4] }); // top
-    addConstraintToSketch(sketch, { type: "vertical", points: [p2, p3] }); // right
-    addConstraintToSketch(sketch, { type: "vertical", points: [p4, p1] }); // left
-
-    // Optional: equal length constraints for square-like rectangles
-    // addConstraintToSketch(sketch, { type: "equalLength", lines: [l1, l3] });
-    // addConstraintToSketch(sketch, { type: "equalLength", lines: [l2, l4] });
-  },
-  [getSketchElement]
-);
-```
-
-**Verification Checklist for Phase D:**
-
-- [ ] Create rectangle → 4 lines created
-- [ ] Rectangle has horizontal constraints on top/bottom
-- [ ] Rectangle has vertical constraints on left/right
-- [ ] Dragging corner maintains rectangle shape (solver works)
-
----
-
-### Phase E: Arc Tool Improvements
-
-**Estimated Effort:** 3-4 hours
-
-#### Task E1: Add Arc Tool Mode State
-
-**File:** `packages/app/src/editor/contexts/SketchContext.tsx`
-
-```typescript
-// ADD to SketchTool type
-export type SketchTool =
-  | "none"
-  | "select"
-  | "line"
-  | "arc"
-  | "arcCenterpoint"
-  | "arcTangent"
-  | "circle"
-  | "rectangle";
-
-// Or use a separate state for arc mode:
-export type ArcMode = "threePoint" | "centerpoint" | "tangent";
-```
-
-#### Task E2: Implement Centerpoint Arc Sequence
-
-**File:** `packages/app/src/editor/components/Viewer.tsx`
-
-The centerpoint arc follows: center → start (defines radius) → end (defines angle)
-
-```typescript
-if (sketchMode.activeTool === "arcCenterpoint") {
-  const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
-  const clickPoint = nearbyPoint
-    ? { x: nearbyPoint.x, y: nearbyPoint.y, id: nearbyPoint.id }
-    : { x: snappedPos.x, y: snappedPos.y };
-
-  if (!arcCenterPoint) {
-    // First click: center
-    setArcCenterPoint(clickPoint);
-  } else if (!arcStartPoint) {
-    // Second click: start point (defines radius)
-    setArcStartPoint(clickPoint);
-  } else {
-    // Third click: end point (defines angle)
-    const centerId = arcCenterPoint.id ?? addPoint(arcCenterPoint.x, arcCenterPoint.y);
-    const startId = arcStartPoint.id ?? addPoint(arcStartPoint.x, arcStartPoint.y);
-    const endId = clickPoint.id ?? addPoint(clickPoint.x, clickPoint.y);
-
-    if (centerId && startId && endId) {
-      // Determine CCW based on cursor position relative to center-start line
-      const ccw = determineCcw(arcCenterPoint, arcStartPoint, clickPoint);
-      addArc(startId, endId, centerId, ccw);
-    }
-
-    // Reset for next arc
-    setArcCenterPoint(null);
-    setArcStartPoint(null);
-  }
-  return;
-}
-```
-
-#### Task E3: Implement Tangent Arc Detection
-
-**File:** `packages/app/src/editor/components/Viewer.tsx`
-
-Add intent zone detection in the line tool:
-
-```typescript
-// In mousemove handler, when line tool active and near endpoint:
-function isInTangentIntentZone(
-  cursor: { x: number; y: number },
-  endpoint: { x: number; y: number },
-  entityDir: { dx: number; dy: number }
-): boolean {
-  // Check if cursor is:
-  // 1. Near the endpoint (within intent radius)
-  // 2. On the "arc side" (perpendicular to the entity direction)
-  const dist = Math.sqrt((cursor.x - endpoint.x) ** 2 + (cursor.y - endpoint.y) ** 2);
-  if (dist > TANGENT_INTENT_RADIUS) return false;
-
-  // Check angle between cursor direction and entity direction
-  const cursorDir = { dx: cursor.x - endpoint.x, dy: cursor.y - endpoint.y };
-  const dot = cursorDir.dx * entityDir.dx + cursorDir.dy * entityDir.dy;
-  const cursorMag = Math.sqrt(cursorDir.dx ** 2 + cursorDir.dy ** 2);
-  const entityMag = Math.sqrt(entityDir.dx ** 2 + entityDir.dy ** 2);
-
-  if (cursorMag < 0.01 || entityMag < 0.01) return false;
-
-  const cosAngle = dot / (cursorMag * entityMag);
-  // If angle > 45° from extension, we're in arc territory
-  return Math.abs(cosAngle) < 0.7;
-}
-```
-
-**Verification Checklist for Phase E:**
-
-- [ ] Centerpoint arc: click center → click radius point → click end → arc created
-- [ ] Arc direction follows cursor position (above/below chord)
-- [ ] Tangent arc: after line, moving perpendicular shows arc preview
-- [ ] Tangent constraint auto-applied on tangent arc creation
+| Feature              | Complexity | Notes                               |
+| -------------------- | ---------- | ----------------------------------- |
+| Fillet/Chamfer UI    | Medium     | Needs toolbar button + dialog       |
+| Trim tool            | High       | Intersection detection + splitting  |
+| Extend tool          | Medium     | Extension to nearest entity         |
+| Inference lines      | Medium     | H/V/parallel preview while drawing  |
+| Box selection        | Medium     | Drag rectangle to select            |
+| Edge loop selection  | Medium     | Double-click to select connected    |
 
 ---
 
@@ -3147,30 +2609,34 @@ Phase E: Arc
 
 ### 26.1 Current Implementation Status
 
-#### Face Selection - Partially Working ✅
+#### Face Selection ✅
 
-| Component                        | Status     | Notes                                            |
-| -------------------------------- | ---------- | ------------------------------------------------ |
-| `SelectionContext.tsx`           | ✅ Done    | `SelectedFace` type, `selectFace()` function     |
-| `useRaycast.ts`                  | ✅ Done    | Returns faceIndex via triangle picking           |
-| `Viewer.tsx` click handler       | ✅ Done    | Calls `selectFace()` on mesh click               |
-| `Viewer.tsx` hover highlighting  | ✅ Done    | Renders semi-transparent overlay on hovered face |
-| `Viewer.tsx` selection highlight | ✅ Done    | Renders selected face with distinct color        |
-| Kernel `faceMap` generation      | ✅ Done    | `tessellate.ts` maps triangles to face indices   |
-| PropertiesPanel                  | ⚠️ Partial | Shows parent feature but no face-specific info   |
+| Component                        | Status      | Notes                                              |
+| -------------------------------- | ----------- | -------------------------------------------------- |
+| `SelectionContext.tsx`           | ✅ Done     | `SelectedFace` type, `selectFace()` function       |
+| `use3DSelection.ts`              | ✅ Done     | Hook for face/edge picking                         |
+| Click handler                    | ✅ Done     | Calls `selectFace()` on mesh click                 |
+| Hover highlighting               | ✅ Done     | Semi-transparent overlay on hover                  |
+| Selection highlight              | ✅ Done     | Blue highlight on selected faces                   |
+| Kernel `faceMap` generation      | ✅ Done     | `tessellate.ts` maps triangles to face indices     |
+| PersistentRef for faces          | ✅ Done     | `stref:v1:` format via `referenceIndex.ts`         |
+| **Sketch on Face workflow**      | ❌ BROKEN   | Face selection doesn't trigger sketch creation     |
 
-#### Edge Selection - NOT Implemented ❌
+#### Edge Selection ✅
 
-| Component                    | Status     | Notes                                      |
-| ---------------------------- | ---------- | ------------------------------------------ |
-| `SelectionContext.tsx` types | ✅ Done    | `SelectedEdge` type, `selectEdge()` exists |
-| Edge tessellation in kernel  | ❌ Missing | Only faces tessellated, no edge curves     |
-| Edge mesh data to viewer     | ❌ Missing | No edge line geometry sent                 |
-| Edge rendering in viewer     | ❌ Missing | No visible edge lines displayed            |
-| Edge picking/raycasting      | ❌ Missing | Can't select edges                         |
-| Edge hover highlighting      | ❌ Missing | No edge highlights                         |
-| Edge selection highlighting  | ❌ Missing | No edge selection visuals                  |
-| PropertiesPanel edge info    | ❌ Missing | No edge info shown                         |
+| Component                    | Status     | Notes                                            |
+| ---------------------------- | ---------- | ------------------------------------------------ |
+| `SelectionContext.tsx` types | ✅ Done    | `SelectedEdge` type, `selectEdge()` exists       |
+| Edge tessellation in kernel  | ✅ Done    | Edge mesh data generated (`edges`, `edgeMap`)    |
+| Edge mesh data to viewer     | ✅ Done    | Data flows through worker to viewer              |
+| Edge rendering in viewer     | ✅ Done    | Visible edges rendered on bodies                 |
+| Edge picking code            | ✅ Done    | `use3DSelection.ts` has edge picking logic       |
+| Edge hover highlighting      | ✅ Done    | Edge highlights on hover                         |
+| Edge selection highlighting  | ✅ Done    | Clear visual on selected edges                   |
+| PersistentRef for edges      | ✅ Done    | `stref:v1:` format via `referenceIndex.ts`       |
+
+> **Remaining issue:** Sketch on Face workflow is still broken - selecting a face
+> and clicking "New Sketch on Face" doesn't work.
 
 ### 26.2 Target Behavior
 
@@ -3237,31 +2703,38 @@ Phase E: Arc
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 26.4 Implementation Tasks
+### 26.4 Implementation Status
 
-#### Phase F1: Edge Tessellation via SolidSession API
+> **Note:** The detailed implementation code previously in this section has been implemented.
+> This section now summarizes what's done vs what needs fixing.
 
-> **Important:** All OCCT operations must go through `SolidSession` in `@solidtype/core`.
-> The worker must NOT import from `kernel/` directly.
+#### Infrastructure: DONE ✅
 
-**Step F1.1: Add Edge Mesh Type to Core API**
+The following infrastructure is implemented and working:
 
-**File:** `packages/core/src/api/types.ts`
+| Component                   | Location                                 |
+| --------------------------- | ---------------------------------------- |
+| Edge tessellation           | `kernel.worker.ts`                       |
+| Edge mesh data flow         | Worker → Viewer via `MeshData`           |
+| Edge rendering              | `viewer/renderers/useMeshRenderer.ts`    |
+| Edge picking logic          | `viewer/hooks/use3DSelection.ts`         |
+| Face picking logic          | `viewer/hooks/use3DSelection.ts`         |
+| SelectionContext types      | `contexts/SelectionContext.tsx`          |
+| PersistentRef generation    | `naming/referenceIndex.ts`               |
 
-```typescript
-// NEW: Edge mesh output type (mirrors face Mesh pattern)
-export interface EdgeMesh {
-  /** Flattened array of edge vertex positions [x1,y1,z1, x2,y2,z2, ...] */
-  vertices: Float32Array;
-  /** Pairs of indices into vertices defining line segments */
-  indices: Uint32Array;
-  /** Maps each line segment to its kernel edge ID (stable within session) */
-  edgeIds: string[];
-  /** Maps each line segment index to its edgeIds array index */
-  edgeMap: Uint32Array;
-  /** Persistent refs for each edge (for selection storage) */
-  persistentRefs: string[];
-}
+#### Visual Feedback: BROKEN ❌
+
+The following visual feedback is not working and needs debugging:
+
+| Issue                         | Investigation Needed                                |
+| ----------------------------- | --------------------------------------------------- |
+| Face selection highlight      | Check `useSelectionRenderer`, render order, colors  |
+| Edge selection highlight      | Same as above                                       |
+| Edge hover highlight          | Check hover state flow to renderer                  |
+| Sketch on Face button         | Check button handler reads selection correctly      |
+
+#### Key Files to Debug
+
 ```
 
 **Step F1.2: Add Edge Tessellation to SolidSession**
