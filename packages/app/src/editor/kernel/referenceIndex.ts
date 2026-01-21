@@ -59,6 +59,18 @@ export interface SketchInfo {
 }
 
 /**
+ * Origin information for a face, tracking which sketch entity created it.
+ */
+export interface FaceOriginInfo {
+  /** The feature that created this face */
+  sourceFeatureId: string;
+  /** The sketch entity UUID that created this face (for side faces) */
+  entityId?: string;
+  /** The type of face (topCap, bottomCap, side) */
+  faceType: "topCap" | "bottomCap" | "side" | "unknown";
+}
+
+/**
  * OCCT operation history for Phase 8 persistent naming.
  * Maps profile edges to generated faces using OCCT's Generated() API.
  *
@@ -77,6 +89,12 @@ export interface OCCTHistory {
     profileEdgeIndex: number;
     generatedFaceHash: number;
   }>;
+  /**
+   * Mapping from current face hash to its origin.
+   * Updated when faces are modified through boolean operations.
+   * This enables tracking faces through multiple booleans.
+   */
+  faceHashToOrigin?: Map<number, FaceOriginInfo>;
 }
 
 /**
@@ -358,6 +376,43 @@ export function generateFaceRef(
   profileEdgeToEntityId?: Map<number, string>
 ): string {
   let localSelector: { kind: string; data: Record<string, string | number> };
+
+  // First check faceHashToOrigin map (for faces that have been through boolean operations)
+  if (occtHistory?.faceHashToOrigin && faceHash !== undefined) {
+    const origin = occtHistory.faceHashToOrigin.get(faceHash);
+    if (origin) {
+      const loopId = sketchInfo?.profileLoops?.[0]?.loopId ?? "loop:unknown";
+
+      // Use the tracked origin to generate the selector
+      if (origin.faceType === "topCap") {
+        localSelector = { kind: "extrude.topCap", data: { loopId } };
+      } else if (origin.faceType === "bottomCap") {
+        localSelector = { kind: "extrude.bottomCap", data: { loopId } };
+      } else if (origin.faceType === "side" && origin.entityId) {
+        localSelector = { kind: "extrude.side", data: { loopId, segmentId: origin.entityId } };
+      } else if (origin.faceType === "side") {
+        localSelector = { kind: "extrude.side", data: { loopId, faceIndex: faceIdx } };
+      } else {
+        localSelector = { kind: "face.unknown", data: { faceIndex: faceIdx } };
+      }
+
+      // Note: originFeatureId might differ from the body's sourceFeatureId
+      // because the face may have come from a different feature before the boolean
+      const persistentRef: PersistentRefV1 = {
+        v: 1,
+        expectedType: "face",
+        originFeatureId: origin.sourceFeatureId,
+        localSelector,
+        fingerprint: {
+          centroid: fingerprint.centroid,
+          size: fingerprint.size,
+          normal: fingerprint.normal,
+        },
+      };
+
+      return encodePersistentRef(persistentRef);
+    }
+  }
 
   if (featureType === "extrude") {
     const loopId = sketchInfo?.profileLoops?.[0]?.loopId ?? "loop:unknown";

@@ -25,6 +25,7 @@ import {
   makeCylinder,
   makeSphere,
   booleanOp,
+  booleanOpWithHistory,
   extrudeSymmetric,
   extrudeWithHistory,
   revolveWithHistory,
@@ -41,6 +42,7 @@ import {
   type TessellationQuality,
   type TessellatedMeshWithHashes,
   type FacePlaneData,
+  type FaceHistoryMapping,
 } from "../kernel/index.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,6 +136,28 @@ export interface OperationHistory {
   /** Mappings from profile edges to generated side faces */
   sideFaceMappings: ProfileEdgeMapping[];
 }
+
+/**
+ * Result of a boolean operation with history tracking.
+ * Includes mappings showing what happened to each input face.
+ */
+export interface BooleanHistoryResult {
+  /** The resulting body ID (if successful) */
+  bodyId: BodyId;
+  /**
+   * Face history from the base shape.
+   * Maps input face hashes to output face hashes.
+   */
+  baseFaceHistory: FaceHistoryMapping[];
+  /**
+   * Face history from the tool shape.
+   * Maps input face hashes to output face hashes.
+   */
+  toolFaceHistory: FaceHistoryMapping[];
+}
+
+// Re-export FaceHistoryMapping for consumers
+export type { FaceHistoryMapping };
 
 export interface FilletOptions {
   radius: number;
@@ -622,6 +646,83 @@ export class SolidSession {
     const id = this.allocateBodyId();
     this.bodies.set(id, result.shape);
     return { success: true, value: id };
+  }
+
+  /**
+   * Union two bodies with history tracking.
+   * Returns face mappings showing what happened to each input face.
+   *
+   * @param bodyA - The base body
+   * @param bodyB - The tool body
+   * @returns Result with body ID and face history mappings
+   */
+  unionWithHistory(bodyA: BodyId, bodyB: BodyId): OperationResult<BooleanHistoryResult> {
+    this.ensureInitialized();
+    return this.performBooleanWithHistory(bodyA, bodyB, `union`);
+  }
+
+  /**
+   * Subtract bodyB from bodyA with history tracking.
+   * Returns face mappings showing what happened to each input face.
+   *
+   * @param bodyA - The base body (to cut from)
+   * @param bodyB - The tool body (the cutter)
+   * @returns Result with body ID and face history mappings
+   */
+  subtractWithHistory(bodyA: BodyId, bodyB: BodyId): OperationResult<BooleanHistoryResult> {
+    this.ensureInitialized();
+    return this.performBooleanWithHistory(bodyA, bodyB, `subtract`);
+  }
+
+  /**
+   * Intersect two bodies with history tracking.
+   * Returns face mappings showing what happened to each input face.
+   *
+   * @param bodyA - The base body
+   * @param bodyB - The tool body
+   * @returns Result with body ID and face history mappings
+   */
+  intersectWithHistory(bodyA: BodyId, bodyB: BodyId): OperationResult<BooleanHistoryResult> {
+    this.ensureInitialized();
+    return this.performBooleanWithHistory(bodyA, bodyB, `intersect`);
+  }
+
+  private performBooleanWithHistory(
+    bodyA: BodyId,
+    bodyB: BodyId,
+    op: `union` | `subtract` | `intersect`
+  ): OperationResult<BooleanHistoryResult> {
+    const shapeA = this.bodies.get(bodyA);
+    const shapeB = this.bodies.get(bodyB);
+
+    if (!shapeA) {
+      return { success: false, error: { code: `UNKNOWN`, message: `Body ${bodyA} not found` } };
+    }
+    if (!shapeB) {
+      return { success: false, error: { code: `UNKNOWN`, message: `Body ${bodyB} not found` } };
+    }
+
+    const result = booleanOpWithHistory(shapeA, shapeB, op);
+
+    if (!result.success || !result.shape) {
+      return {
+        success: false,
+        error: { code: `BOOLEAN_FAILED`, message: result.error ?? `Boolean ${op} failed` },
+      };
+    }
+
+    // Create new body with result (original bodies are preserved)
+    const id = this.allocateBodyId();
+    this.bodies.set(id, result.shape);
+
+    return {
+      success: true,
+      value: {
+        bodyId: id,
+        baseFaceHistory: result.baseFaceMap ?? [],
+        toolFaceHistory: result.toolFaceMap ?? [],
+      },
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

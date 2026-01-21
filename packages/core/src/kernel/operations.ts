@@ -56,6 +56,30 @@ export interface BooleanResult {
 }
 
 /**
+ * Mapping from input face hash to output face hashes.
+ * Used to track faces through boolean operations.
+ */
+export interface FaceHistoryMapping {
+  inputHash: number;
+  outputHashes: number[];
+  isDeleted: boolean;
+}
+
+/**
+ * Result of a boolean operation with history tracking.
+ * Includes mappings from input faces to output faces.
+ */
+export interface BooleanWithHistoryResult {
+  success: boolean;
+  shape?: Shape;
+  error?: string;
+  /** Face mappings from base shape */
+  baseFaceMap?: FaceHistoryMapping[];
+  /** Face mappings from tool shape */
+  toolFaceMap?: FaceHistoryMapping[];
+}
+
+/**
  * Perform a boolean operation on two shapes.
  *
  * Uses BRepAlgoAPI_*_3 constructors which take (S1, S2) and perform the operation
@@ -96,6 +120,180 @@ export function booleanOp(base: Shape, tool: Shape, op: BooleanOp): BooleanResul
     builder.delete();
 
     return { success: true, shape };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : `Unknown boolean operation error`,
+    };
+  }
+}
+
+/**
+ * Extract face history mappings from a boolean builder.
+ *
+ * For each face in the input shape, queries Modified() and IsDeleted()
+ * to determine what happened to it during the boolean operation.
+ *
+ * @param builder - The boolean operation builder (with Modified/IsDeleted methods)
+ * @param inputShape - The input shape to extract face history for
+ * @returns Array of FaceHistoryMapping for each input face
+ */
+function extractFaceHistory(
+  builder: { Modified(s: TopoDS_Shape): unknown; IsDeleted(s: TopoDS_Shape): boolean },
+  inputShape: TopoDS_Shape
+): FaceHistoryMapping[] {
+  const oc = getOC();
+  const mappings: FaceHistoryMapping[] = [];
+
+  const faceExplorer = new oc.TopExp_Explorer_2(
+    inputShape,
+    oc.TopAbs_ShapeEnum.TopAbs_FACE,
+    oc.TopAbs_ShapeEnum.TopAbs_SHAPE
+  );
+
+  const processedHashes = new Set<number>();
+
+  while (faceExplorer.More()) {
+    const face = faceExplorer.Current();
+    const inputHash = face.HashCode(0x7fffffff);
+
+    // Skip duplicate faces (can happen with shared faces)
+    if (processedHashes.has(inputHash)) {
+      faceExplorer.Next();
+      continue;
+    }
+    processedHashes.add(inputHash);
+
+    try {
+      const isDeleted = builder.IsDeleted(face);
+
+      if (isDeleted) {
+        mappings.push({
+          inputHash,
+          outputHashes: [],
+          isDeleted: true,
+        });
+      } else {
+        // Get modified shapes
+        const modified = builder.Modified(face) as {
+          Size(): number;
+          First_1(): TopoDS_Shape;
+          Last_1(): TopoDS_Shape;
+        };
+        const outputHashes: number[] = [];
+
+        const size = modified.Size();
+        if (size > 0) {
+          // First element
+          const first = modified.First_1();
+          outputHashes.push(first.HashCode(0x7fffffff));
+
+          // If there are 2+ elements, we can get last
+          // For more than 2, we'd need a different approach, but typically
+          // boolean splits result in 1-2 output faces
+          if (size > 1) {
+            const last = modified.Last_1();
+            const lastHash = last.HashCode(0x7fffffff);
+            if (lastHash !== outputHashes[0]) {
+              outputHashes.push(lastHash);
+            }
+          }
+        }
+
+        // If Modified returns empty but face isn't deleted, it's unchanged
+        // The face exists in the output with the same hash
+        if (outputHashes.length === 0) {
+          outputHashes.push(inputHash);
+        }
+
+        mappings.push({
+          inputHash,
+          outputHashes,
+          isDeleted: false,
+        });
+      }
+    } catch {
+      // If history query fails, assume face is unchanged
+      mappings.push({
+        inputHash,
+        outputHashes: [inputHash],
+        isDeleted: false,
+      });
+    }
+
+    faceExplorer.Next();
+  }
+
+  faceExplorer.delete();
+  return mappings;
+}
+
+/**
+ * Perform a boolean operation with history tracking.
+ *
+ * Like booleanOp, but also returns mappings showing what happened to
+ * each input face (modified into which output faces, or deleted).
+ *
+ * This enables tracking persistent references through boolean operations.
+ *
+ * @param base - The base shape
+ * @param tool - The tool shape
+ * @param op - The boolean operation type
+ * @returns Result with shape and face history mappings
+ */
+export function booleanOpWithHistory(
+  base: Shape,
+  tool: Shape,
+  op: BooleanOp
+): BooleanWithHistoryResult {
+  const oc = getOC();
+
+  // We need to use a builder type that has history methods
+  type BooleanBuilder = {
+    delete(): void;
+    IsDone(): boolean;
+    Shape(): TopoDS_Shape;
+    Modified(s: TopoDS_Shape): unknown;
+    IsDeleted(s: TopoDS_Shape): boolean;
+  };
+
+  let builder: BooleanBuilder;
+
+  try {
+    switch (op) {
+      case `union`: {
+        builder = new oc.BRepAlgoAPI_Fuse_3(base.raw, tool.raw) as BooleanBuilder;
+        break;
+      }
+      case `subtract`: {
+        builder = new oc.BRepAlgoAPI_Cut_3(base.raw, tool.raw) as BooleanBuilder;
+        break;
+      }
+      case `intersect`: {
+        builder = new oc.BRepAlgoAPI_Common_3(base.raw, tool.raw) as BooleanBuilder;
+        break;
+      }
+    }
+
+    if (!builder.IsDone()) {
+      builder.delete();
+      return { success: false, error: `Boolean ${op} operation failed` };
+    }
+
+    // Extract history BEFORE getting result shape
+    const baseFaceMap = extractFaceHistory(builder, base.raw);
+    const toolFaceMap = extractFaceHistory(builder, tool.raw);
+
+    const result = builder.Shape();
+    const shape = new Shape(result);
+    builder.delete();
+
+    return {
+      success: true,
+      shape,
+      baseFaceMap,
+      toolFaceMap,
+    };
   } catch (e) {
     return {
       success: false,

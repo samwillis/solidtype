@@ -95,6 +95,18 @@ export interface RebuildResult {
 }
 
 /**
+ * Origin information for a face, tracking which sketch entity created it.
+ */
+interface FaceOrigin {
+  /** The feature that created this face */
+  sourceFeatureId: string;
+  /** The sketch entity UUID that created this face (for side faces) */
+  entityId?: string;
+  /** The type of face (topCap, bottomCap, side) */
+  faceType: "topCap" | "bottomCap" | "side" | "unknown";
+}
+
+/**
  * OCCT operation history stored per body for Phase 8 persistent naming.
  */
 interface StoredOCCTHistory {
@@ -106,6 +118,105 @@ interface StoredOCCTHistory {
   }>;
   /** Mapping from profile edge index to sketch entity UUID */
   profileEdgeToEntityId: Map<number, string>;
+  /**
+   * Mapping from current face hash to its origin.
+   * Updated when faces are modified through boolean operations.
+   * This enables tracking faces through multiple booleans.
+   */
+  faceHashToOrigin?: Map<number, FaceOrigin>;
+}
+
+/**
+ * Build initial faceHashToOrigin map from extrude/revolve history.
+ * This creates the base mapping that will be updated through booleans.
+ */
+function buildInitialFaceOrigins(
+  history: StoredOCCTHistory,
+  sourceFeatureId: string
+): Map<number, FaceOrigin> {
+  const origins = new Map<number, FaceOrigin>();
+
+  // Top cap
+  if (history.topCapHash !== undefined) {
+    origins.set(history.topCapHash, {
+      sourceFeatureId,
+      faceType: "topCap",
+    });
+  }
+
+  // Bottom cap
+  if (history.bottomCapHash !== undefined) {
+    origins.set(history.bottomCapHash, {
+      sourceFeatureId,
+      faceType: "bottomCap",
+    });
+  }
+
+  // Side faces
+  for (const mapping of history.sideFaceMappings) {
+    const entityId = history.profileEdgeToEntityId.get(mapping.profileEdgeIndex);
+    origins.set(mapping.generatedFaceHash, {
+      sourceFeatureId,
+      entityId,
+      faceType: "side",
+    });
+  }
+
+  return origins;
+}
+
+/**
+ * Merge face origins through a boolean operation.
+ *
+ * For each face in the output:
+ * - If it came from the base shape, find its original origin
+ * - If it came from the tool shape, find its original origin
+ * - If a face was modified (split), each output face inherits the original origin
+ *
+ * @param baseOrigins - Origins from the base shape
+ * @param toolOrigins - Origins from the tool shape
+ * @param baseFaceHistory - History mapping from base shape
+ * @param toolFaceHistory - History mapping from tool shape
+ * @returns Merged origins for the result shape
+ */
+function mergeFaceOrigins(
+  baseOrigins: Map<number, FaceOrigin> | undefined,
+  toolOrigins: Map<number, FaceOrigin> | undefined,
+  baseFaceHistory: Array<{ inputHash: number; outputHashes: number[]; isDeleted: boolean }>,
+  toolFaceHistory: Array<{ inputHash: number; outputHashes: number[]; isDeleted: boolean }>
+): Map<number, FaceOrigin> {
+  const merged = new Map<number, FaceOrigin>();
+
+  // Process base face history
+  for (const mapping of baseFaceHistory) {
+    if (mapping.isDeleted) continue;
+
+    const origin = baseOrigins?.get(mapping.inputHash);
+    if (origin) {
+      // Each output face inherits the origin
+      for (const outputHash of mapping.outputHashes) {
+        merged.set(outputHash, origin);
+      }
+    }
+  }
+
+  // Process tool face history
+  for (const mapping of toolFaceHistory) {
+    if (mapping.isDeleted) continue;
+
+    const origin = toolOrigins?.get(mapping.inputHash);
+    if (origin) {
+      // Each output face inherits the origin
+      for (const outputHash of mapping.outputHashes) {
+        // Only set if not already set by base (base takes precedence)
+        if (!merged.has(outputHash)) {
+          merged.set(outputHash, origin);
+        }
+      }
+    }
+  }
+
+  return merged;
 }
 
 /** Body entry in the bodyMap - stores body ID with metadata */
@@ -377,12 +488,13 @@ export class KernelEngine {
           const featureType = (featureMap?.get("type") as string) || "unknown";
           const sketchInfo = this.featureToSketchInfo.get(entry.sourceFeatureId);
 
-          // Extract OCCT history if available
+          // Extract OCCT history if available (including faceHashToOrigin for boolean tracking)
           const occtHistory = entry.occtHistory
             ? {
                 bottomCapHash: entry.occtHistory.bottomCapHash,
                 topCapHash: entry.occtHistory.topCapHash,
                 sideFaceMappings: entry.occtHistory.sideFaceMappings,
+                faceHashToOrigin: entry.occtHistory.faceHashToOrigin,
               }
             : undefined;
 
@@ -996,6 +1108,11 @@ export class KernelEngine {
         }
       : undefined;
 
+    // Build initial face origins for tracking through booleans
+    if (storedHistory) {
+      storedHistory.faceHashToOrigin = buildInitialFaceOrigins(storedHistory, featureId);
+    }
+
     // Store sketch info for reference index generation
     if (sketchInfo.referenceInfo) {
       this.featureToSketchInfo.set(featureId, sketchInfo.referenceInfo);
@@ -1038,14 +1155,15 @@ export class KernelEngine {
     }
 
     // Handle specific merge targets or auto merge
-    // Note: OCCT history is lost when merging (boolean operations change topology)
+    // Pass storedHistory so face origins can be tracked through the boolean
     return this.handleMerge(
       extrudedBodyId,
       featureId,
       mergeScope,
       targetBodies,
       finalBodyName,
-      finalBodyColor
+      finalBodyColor,
+      storedHistory
     );
   }
 
@@ -1171,6 +1289,11 @@ export class KernelEngine {
         }
       : undefined;
 
+    // Build initial face origins for tracking through booleans
+    if (storedHistory) {
+      storedHistory.faceHashToOrigin = buildInitialFaceOrigins(storedHistory, featureId);
+    }
+
     // Store sketch info for reference index generation
     if (sketchInfo.referenceInfo) {
       this.featureToSketchInfo.set(featureId, sketchInfo.referenceInfo);
@@ -1202,14 +1325,15 @@ export class KernelEngine {
       };
     }
 
-    // Note: OCCT history is lost when merging (boolean operations change topology)
+    // Pass storedHistory so face origins can be tracked through the boolean
     return this.handleMerge(
       revolvedBodyId,
       featureId,
       mergeScope,
       targetBodies,
       finalBodyName,
-      finalBodyColor
+      finalBodyColor,
+      storedHistory
     );
   }
 
@@ -1219,25 +1343,39 @@ export class KernelEngine {
     mergeScope: string,
     targetBodies: string[],
     finalBodyName: string,
-    finalBodyColor: string
+    finalBodyColor: string,
+    newBodyHistory?: StoredOCCTHistory
   ): FeatureInterpretResult {
     if (mergeScope === "specific" && targetBodies.length > 0) {
       let currentBodyId = newBodyId;
       let mergedIntoId: string | null = null;
       let mergedEntry: BodyEntry | null = null;
+      let currentOrigins = newBodyHistory?.faceHashToOrigin;
 
       for (const targetId of targetBodies) {
         const targetEntry = this.bodyMap.get(targetId);
         if (targetEntry) {
-          const unionResult = this.session!.union(targetEntry.bodyId, currentBodyId);
+          // Use unionWithHistory to track faces through the boolean
+          const unionResult = this.session!.unionWithHistory(targetEntry.bodyId, currentBodyId);
           if (unionResult.success) {
-            if (currentBodyId !== unionResult.value) {
+            const result = unionResult.value;
+
+            // Merge face origins from both bodies
+            const targetOrigins = targetEntry.occtHistory?.faceHashToOrigin;
+            currentOrigins = mergeFaceOrigins(
+              targetOrigins,
+              currentOrigins,
+              result.baseFaceHistory,
+              result.toolFaceHistory
+            );
+
+            if (currentBodyId !== result.bodyId) {
               this.session!.deleteBody(currentBodyId);
             }
-            if (targetEntry.bodyId !== unionResult.value) {
+            if (targetEntry.bodyId !== result.bodyId) {
               this.session!.deleteBody(targetEntry.bodyId);
             }
-            currentBodyId = unionResult.value;
+            currentBodyId = result.bodyId;
             if (!mergedIntoId) {
               mergedIntoId = targetId;
               mergedEntry = targetEntry;
@@ -1247,7 +1385,22 @@ export class KernelEngine {
       }
 
       if (mergedIntoId && mergedEntry) {
-        this.bodyMap.set(mergedIntoId, { ...mergedEntry, bodyId: currentBodyId });
+        // Preserve merged history
+        const updatedHistory: StoredOCCTHistory | undefined = mergedEntry.occtHistory
+          ? { ...mergedEntry.occtHistory, faceHashToOrigin: currentOrigins }
+          : currentOrigins
+            ? {
+                sideFaceMappings: [],
+                profileEdgeToEntityId: new Map(),
+                faceHashToOrigin: currentOrigins,
+              }
+            : undefined;
+
+        this.bodyMap.set(mergedIntoId, {
+          ...mergedEntry,
+          bodyId: currentBodyId,
+          occtHistory: updatedHistory,
+        });
         return {
           bodyId: null,
           bodyEntryId: mergedIntoId,
@@ -1268,17 +1421,30 @@ export class KernelEngine {
     let currentBodyId = newBodyId;
     let mergedIntoId: string | null = null;
     let mergedEntry: BodyEntry | null = null;
+    let currentOrigins = newBodyHistory?.faceHashToOrigin;
 
     for (const [existingId, entry] of this.bodyMap) {
-      const unionResult = this.session!.union(entry.bodyId, currentBodyId);
+      // Use unionWithHistory to track faces through the boolean
+      const unionResult = this.session!.unionWithHistory(entry.bodyId, currentBodyId);
       if (unionResult.success) {
-        if (currentBodyId !== unionResult.value) {
+        const result = unionResult.value;
+
+        // Merge face origins from both bodies
+        const entryOrigins = entry.occtHistory?.faceHashToOrigin;
+        currentOrigins = mergeFaceOrigins(
+          entryOrigins,
+          currentOrigins,
+          result.baseFaceHistory,
+          result.toolFaceHistory
+        );
+
+        if (currentBodyId !== result.bodyId) {
           this.session!.deleteBody(currentBodyId);
         }
-        if (entry.bodyId !== unionResult.value) {
+        if (entry.bodyId !== result.bodyId) {
           this.session!.deleteBody(entry.bodyId);
         }
-        currentBodyId = unionResult.value;
+        currentBodyId = result.bodyId;
         if (!mergedIntoId) {
           mergedIntoId = existingId;
           mergedEntry = entry;
@@ -1287,7 +1453,22 @@ export class KernelEngine {
     }
 
     if (mergedIntoId && mergedEntry) {
-      this.bodyMap.set(mergedIntoId, { ...mergedEntry, bodyId: currentBodyId });
+      // Preserve merged history
+      const updatedHistory: StoredOCCTHistory | undefined = mergedEntry.occtHistory
+        ? { ...mergedEntry.occtHistory, faceHashToOrigin: currentOrigins }
+        : currentOrigins
+          ? {
+              sideFaceMappings: [],
+              profileEdgeToEntityId: new Map(),
+              faceHashToOrigin: currentOrigins,
+            }
+          : undefined;
+
+      this.bodyMap.set(mergedIntoId, {
+        ...mergedEntry,
+        bodyId: currentBodyId,
+        occtHistory: updatedHistory,
+      });
       return {
         bodyId: null,
         bodyEntryId: mergedIntoId,
@@ -1323,16 +1504,23 @@ export class KernelEngine {
       throw new Error(`Tool body not found: ${toolId}`);
     }
 
-    let result: OperationResult<BodyId>;
+    // Use history-tracking versions for all boolean operations
+    type BooleanHistoryResult = {
+      bodyId: BodyId;
+      baseFaceHistory: Array<{ inputHash: number; outputHashes: number[]; isDeleted: boolean }>;
+      toolFaceHistory: Array<{ inputHash: number; outputHashes: number[]; isDeleted: boolean }>;
+    };
+
+    let result: OperationResult<BooleanHistoryResult>;
     switch (operation) {
       case "union":
-        result = this.session!.union(targetEntry.bodyId, toolEntry.bodyId);
+        result = this.session!.unionWithHistory(targetEntry.bodyId, toolEntry.bodyId);
         break;
       case "subtract":
-        result = this.session!.subtract(targetEntry.bodyId, toolEntry.bodyId);
+        result = this.session!.subtractWithHistory(targetEntry.bodyId, toolEntry.bodyId);
         break;
       case "intersect":
-        result = this.session!.intersect(targetEntry.bodyId, toolEntry.bodyId);
+        result = this.session!.intersectWithHistory(targetEntry.bodyId, toolEntry.bodyId);
         break;
       default:
         throw new Error(`Unknown boolean operation: ${operation}`);
@@ -1342,10 +1530,38 @@ export class KernelEngine {
       throw new Error(result.error?.message || "Boolean operation failed");
     }
 
+    const historyResult = result.value;
+
+    // Merge face origins from both input bodies
+    const targetOrigins = targetEntry.occtHistory?.faceHashToOrigin;
+    const toolOrigins = toolEntry.occtHistory?.faceHashToOrigin;
+    const mergedOrigins = mergeFaceOrigins(
+      targetOrigins,
+      toolOrigins,
+      historyResult.baseFaceHistory,
+      historyResult.toolFaceHistory
+    );
+
+    // Build updated history for the result
+    const updatedHistory: StoredOCCTHistory | undefined =
+      targetEntry.occtHistory || mergedOrigins.size > 0
+        ? {
+            ...(targetEntry.occtHistory ?? {
+              sideFaceMappings: [],
+              profileEdgeToEntityId: new Map(),
+            }),
+            faceHashToOrigin: mergedOrigins,
+          }
+        : undefined;
+
     this.session!.deleteBody(targetEntry.bodyId);
     this.session!.deleteBody(toolEntry.bodyId);
     this.bodyMap.delete(toolId);
-    this.bodyMap.set(targetId, { ...targetEntry, bodyId: result.value });
+    this.bodyMap.set(targetId, {
+      ...targetEntry,
+      bodyId: historyResult.bodyId,
+      occtHistory: updatedHistory,
+    });
 
     return {
       bodyId: null,

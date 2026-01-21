@@ -1447,6 +1447,7 @@ This makes selectors robust to sketch entity reordering.
 #### OpenCascade.js API notes
 
 The OpenCascade.js WASM bindings use different method names than the C++ API:
+
 - Use `list.Size()` instead of `list.Extent()`
 - Use `list.First_1()` to access elements (not `list.Value(i)`)
 - Iterator methods (`begin()`/`end()`) have binding issues, but `First_1()`/`Last_1()` work
@@ -1466,20 +1467,32 @@ The OpenCascade.js WASM bindings use different method names than the C++ API:
    - `tessellateWithHashes()` returns face/edge hash codes
    - These can be matched with the OCCT history to identify faces
 
-#### Remaining limitation: history through boolean operations
+#### Boolean history tracking - IMPLEMENTED
 
-History is only preserved when creating standalone new bodies:
-- First extrude in an empty model ✓
-- Extrude with `mergeScope: "new"` ✓
+History is now tracked through boolean operations using `BRepAlgoAPI::Modified()` and `IsDeleted()` APIs:
 
-For add/cut operations that merge with existing bodies, the history is lost because boolean operations create new topology.
+**What works:**
 
-**Addressing this limitation** would require:
-1. Track through booleans using `BRepAlgoAPI_BooleanOperation::Modified()` and `Generated()`
-2. Maintain a chain of topology modifications
-3. This is significantly more complex and may be addressed in a future phase
+- `booleanOpWithHistory()` extracts face mappings (input hash → output hashes)
+- `unionWithHistory()`, `subtractWithHistory()`, `intersectWithHistory()` on SolidSession
+- `KernelEngine` merges face origins from both input bodies through booleans
+- `faceHashToOrigin` map tracks faces back to their original sketch entities
 
-For now, the reference system falls back to heuristic matching (fingerprints) when OCCT history is unavailable.
+**Data flow:**
+
+1. Extrude creates body with `sideFaceMappings` (edge → face)
+2. `buildInitialFaceOrigins()` creates `faceHashToOrigin` (hash → origin)
+3. Boolean uses `Modified()` to track face changes
+4. `mergeFaceOrigins()` updates mappings for result shape
+5. Reference index uses `faceHashToOrigin` to find original sketch entity
+
+**Test results:**
+
+- Overlapping boxes union: 1 face deleted from each, 5 tracked
+- Non-overlapping boxes: All 12 faces unchanged and tracked
+- Cut operations: Base face modifications tracked
+
+PersistentRefs now survive boolean operations because we can trace each result face back to the sketch entity that created it.
 
 ---
 

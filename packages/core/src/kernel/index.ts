@@ -22,6 +22,7 @@ export { makeBox, makeCylinder, makeSphere, makeCone, makeTorus } from "./primit
 // Operations
 export {
   booleanOp,
+  booleanOpWithHistory,
   extrude,
   extrudeSymmetric,
   revolve,
@@ -35,6 +36,8 @@ export {
   revolveWithHistory,
   type BooleanOp,
   type BooleanResult,
+  type BooleanWithHistoryResult,
+  type FaceHistoryMapping,
   type ExtrudeWithHistoryResult,
   type RevolveWithHistoryResult,
   type ProfileEdgeToFaceMapping,
