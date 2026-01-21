@@ -73,29 +73,30 @@ interface ToolApprovalRequest {
  */
 export function useAIChatSessions(options: { context?: "dashboard" | "editor" }) {
   // Query sessions from TanStack DB collection (synced via Electric)
-  // Uses live query with orderBy for sorting and select for field transformation
+  // Uses live query with orderBy for sorting
   const sessionsQuery = useLiveQuery((q) =>
     q
       .from({ s: aiChatSessionsCollection as any })
       .orderBy(({ s }) => s.updated_at, "desc")
-      .select(({ s }) => ({
-        id: s.id,
-        userId: s.user_id,
-        context: s.context,
-        documentId: s.document_id,
-        projectId: s.project_id,
-        status: s.status,
-        title: s.title,
-        messageCount: s.message_count,
-        lastMessageAt: s.last_message_at,
-        durableStreamId: s.durable_stream_id,
-        createdAt: s.created_at,
-        updatedAt: s.updated_at,
-      }))
   );
 
-  // Sessions are now sorted and transformed by the live query
-  const sessions: CamelCaseSession[] = (sessionsQuery.data || []) as CamelCaseSession[];
+  // Transform to camelCase for compatibility
+  // Note: select() with field transformation in useLiveQuery is not yet stable,
+  // so we do the transformation after the query
+  const sessions: CamelCaseSession[] = (sessionsQuery.data || []).map((row: any) => ({
+    id: row.id,
+    userId: row.user_id,
+    context: row.context,
+    documentId: row.document_id,
+    projectId: row.project_id,
+    status: row.status,
+    title: row.title,
+    messageCount: row.message_count,
+    lastMessageAt: row.last_message_at,
+    durableStreamId: row.durable_stream_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
 
   const createSession = useCallback(
     async (data: { title?: string; documentId?: string; projectId?: string }) => {
