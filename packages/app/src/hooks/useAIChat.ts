@@ -76,7 +76,7 @@ export function useAIChatSessions(options: { context?: "dashboard" | "editor" })
   // Uses live query with orderBy for sorting
   const sessionsQuery = useLiveQuery((q) =>
     q
-      .from({ s: aiChatSessionsCollection as any })
+      .from({ s: aiChatSessionsCollection })
       .orderBy(({ s }) => s.updated_at, "desc")
   );
 
@@ -227,15 +227,15 @@ export function useAIChat(options: UseAIChatOptions) {
   //    .select(({ m, c }) => ({ ...m, content: stringAgg(c.delta, orderBy(c.seq)) }))
   //
   const { data: rawMessagesData } = useLiveQuery(
-    (_q) => (streamDb ? streamDb.collections.messages : null),
+    (q) => (streamDb ? q.from({ messages: streamDb.collections.messages }) : null),
     [streamDb]
   );
   const { data: rawChunksData } = useLiveQuery(
-    (_q) => (streamDb ? streamDb.collections.chunks : null),
+    (q) => (streamDb ? q.from({ chunks: streamDb.collections.chunks }) : null),
     [streamDb]
   );
   const { data: rawRunsData } = useLiveQuery(
-    (_q) => (streamDb ? streamDb.collections.runs : null),
+    (q) => (streamDb ? q.from({ runs: streamDb.collections.runs }) : null),
     [streamDb]
   );
 
