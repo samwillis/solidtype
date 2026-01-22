@@ -11,7 +11,7 @@ interface StatusOverlayProps {
 const StatusOverlay: React.FC<StatusOverlayProps> = ({ status }) => {
   const { units, syncStatus, isCloudDocument } = useDocument();
   const { mode: sketchMode, sketchMousePos } = useSketch();
-  const { isRebuilding, errors } = useKernel();
+  const { isRebuilding, errors, sketchSolveInfo } = useKernel();
 
   // Format coordinates
   const getCoordinates = () => {
@@ -22,6 +22,28 @@ const StatusOverlay: React.FC<StatusOverlayProps> = ({ status }) => {
   };
 
   const coordinates = getCoordinates();
+  const solveInfo =
+    sketchMode.active && sketchMode.sketchId ? sketchSolveInfo[sketchMode.sketchId] : undefined;
+  const dofInfo = solveInfo?.dof;
+
+  const getSketchStatus = () => {
+    if (!sketchMode.active || !dofInfo) return null;
+    if (dofInfo.isOverConstrained) {
+      return {
+        text: `Over-constrained (DOF ${dofInfo.remainingDOF})`,
+        className: "status-sketch status-sketch-over",
+      };
+    }
+    if (dofInfo.isFullyConstrained) {
+      return { text: "Fully constrained (DOF 0)", className: "status-sketch status-sketch-full" };
+    }
+    return {
+      text: `Under-constrained (DOF ${dofInfo.remainingDOF})`,
+      className: "status-sketch status-sketch-under",
+    };
+  };
+
+  const sketchStatus = getSketchStatus();
 
   // Determine what to show
   const showConnectionIcon = isCloudDocument;
@@ -29,6 +51,7 @@ const StatusOverlay: React.FC<StatusOverlayProps> = ({ status }) => {
   const showRebuilding = isRebuilding;
   const showCoordinates = !!coordinates;
   const showCustomStatus = !!status;
+  const showSketchStatus = !!sketchStatus;
 
   // Don't render if nothing to show
   if (
@@ -36,7 +59,8 @@ const StatusOverlay: React.FC<StatusOverlayProps> = ({ status }) => {
     !showErrors &&
     !showRebuilding &&
     !showCoordinates &&
-    !showCustomStatus
+    !showCustomStatus &&
+    !showSketchStatus
   ) {
     return null;
   }
@@ -81,6 +105,11 @@ const StatusOverlay: React.FC<StatusOverlayProps> = ({ status }) => {
       {/* Custom status */}
       {showCustomStatus && !showRebuilding && !showErrors && (
         <span className="status-text">{status}</span>
+      )}
+
+      {/* Sketch status */}
+      {showSketchStatus && !showRebuilding && !showErrors && sketchStatus && (
+        <span className={sketchStatus.className}>{sketchStatus.text}</span>
       )}
 
       {/* Coordinates when sketching */}

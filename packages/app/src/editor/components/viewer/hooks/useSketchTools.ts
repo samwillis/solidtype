@@ -9,6 +9,9 @@ import { useState, useEffect, useRef } from "react";
 import { useKeyboardShortcut, ShortcutPriority } from "../../../contexts/KeyboardShortcutContext";
 import {
   POINT_MERGE_TOLERANCE_MM,
+  INFERENCE_ALIGN_TOLERANCE_MM,
+  computeHVInferenceLines,
+  type InferenceLine,
   isNearHorizontal,
   isNearVertical,
   calculateCircumcircleCenter,
@@ -37,6 +40,7 @@ export interface PreviewShapes {
   arc: { start: SketchPoint; end: SketchPoint; bulge: SketchPoint } | null;
   rect: { corner1: SketchPoint; corner2: SketchPoint } | null;
   polygon: SketchPoint[] | null;
+  inferenceLines: InferenceLine[] | null;
 }
 
 /** Snap target for visual indicator */
@@ -193,6 +197,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     corner2: SketchPoint;
   } | null>(null);
   const [previewPolygon, setPreviewPolygon] = useState<SketchPoint[] | null>(null);
+  const [previewInferenceLines, setPreviewInferenceLines] = useState<InferenceLine[] | null>(null);
 
   // Snap and drag state
   const [snapTarget, setSnapTarget] = useState<SnapTarget | null>(null);
@@ -223,6 +228,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     setPreviewArc(null);
     setPreviewRect(null);
     setPreviewPolygon(null);
+    setPreviewInferenceLines(null);
     setBoxSelection(null);
   }, [sketchMode.active, sketchMode.sketchId, sketchMode.activeTool]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -236,6 +242,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
       setPreviewArc(null);
       setPreviewRect(null);
       setPreviewPolygon(null);
+      setPreviewInferenceLines(null);
       return;
     }
 
@@ -245,6 +252,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     setPreviewArc(null);
     setPreviewRect(null);
     setPreviewPolygon(null);
+    setPreviewInferenceLines(null);
 
     if (sketchMode.activeTool === "line") {
       const startPt = chainLastEndpoint || tempStartPoint;
@@ -253,6 +261,16 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
           start: { x: startPt.x, y: startPt.y },
           end: { x: sketchPos.x, y: sketchPos.y },
         });
+
+        const sketch = getSketch();
+        if (sketch) {
+          const points = sketch.points.map((point) => ({ x: point.x, y: point.y }));
+          if (!startPt.id) {
+            points.push({ x: startPt.x, y: startPt.y });
+          }
+          const inference = computeHVInferenceLines(points, sketchPos, INFERENCE_ALIGN_TOLERANCE_MM);
+          setPreviewInferenceLines(inference.length > 0 ? inference : null);
+        }
       }
     } else if (sketchMode.activeTool === "rectangle" && tempStartPoint) {
       setPreviewRect({
@@ -396,6 +414,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     arcEndPoint,
     arcCenterPoint,
     tangentSource,
+    getSketch,
     setPreviewLine,
   ]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -1460,6 +1479,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
       arc: previewArc,
       rect: previewRect,
       polygon: previewPolygon,
+      inferenceLines: previewInferenceLines,
     },
     snapTarget,
     boxSelection,

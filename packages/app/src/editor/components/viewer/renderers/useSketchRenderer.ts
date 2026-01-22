@@ -10,6 +10,7 @@ import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { getPlaneTransform, createToWorldFn, type PlaneTransformData } from "../plane-transform";
+import { type InferenceLine } from "../viewer-utils";
 import type { SketchFeature, SketchArc, SketchCircle } from "../../../types/document";
 import type { SketchDataArrays } from "../sketch-helpers";
 
@@ -24,6 +25,7 @@ export interface PreviewShapes {
   } | null;
   rect: { corner1: { x: number; y: number }; corner2: { x: number; y: number } } | null;
   polygon: { x: number; y: number }[] | null;
+  inferenceLines: InferenceLine[] | null;
 }
 
 /** Options for useSketchRenderer */
@@ -318,6 +320,38 @@ export function useSketchRenderer(options: SketchRendererOptions): void {
           line.computeLineDistances();
           line.renderOrder = 3;
           sketchGroup.add(line);
+        }
+
+        // Render inference lines (horizontal/vertical guides)
+        if (previewShapes.inferenceLines && previewShapes.inferenceLines.length > 0) {
+          for (const inference of previewShapes.inferenceLines) {
+            const startWorld = toWorld(inference.start.x, inference.start.y);
+            const endWorld = toWorld(inference.end.x, inference.end.y);
+
+            const geometry = new LineGeometry();
+            geometry.setPositions([
+              startWorld.x,
+              startWorld.y,
+              startWorld.z,
+              endWorld.x,
+              endWorld.y,
+              endWorld.z,
+            ]);
+            const material = new LineMaterial({
+              color: inference.kind === "horizontal" ? 0x66ccff : 0x66ffaa,
+              linewidth: 1,
+              resolution: rendererSize || new THREE.Vector2(800, 600),
+              depthTest: false,
+              dashed: true,
+              dashScale: 8,
+              dashSize: 2,
+              gapSize: 2,
+            });
+            const line = new Line2(geometry, material);
+            line.computeLineDistances();
+            line.renderOrder = 2;
+            sketchGroup.add(line);
+          }
         }
 
         // Render preview circle

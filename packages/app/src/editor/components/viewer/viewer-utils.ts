@@ -13,6 +13,15 @@ export const POINT_MERGE_TOLERANCE_MM = 5;
 /** Angle tolerance for H/V inference (radians) - 5 degrees */
 export const HV_INFERENCE_TOLERANCE = 5 * (Math.PI / 180);
 
+/** Alignment tolerance for inference lines (mm) */
+export const INFERENCE_ALIGN_TOLERANCE_MM = 5;
+
+export type InferenceLine = {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  kind: "horizontal" | "vertical";
+};
+
 /** Check if a line is near horizontal */
 export function isNearHorizontal(
   p1: { x: number; y: number },
@@ -33,6 +42,48 @@ export function isNearVertical(
   const dy = p2.y - p1.y;
   const angle = Math.abs(Math.atan2(dy, dx));
   return Math.abs(angle - Math.PI / 2) < HV_INFERENCE_TOLERANCE;
+}
+
+/**
+ * Compute horizontal/vertical inference lines based on existing points.
+ */
+export function computeHVInferenceLines(
+  points: Array<{ x: number; y: number }>,
+  cursor: { x: number; y: number },
+  tolerance: number = INFERENCE_ALIGN_TOLERANCE_MM
+): InferenceLine[] {
+  let closestVertical: { point: { x: number; y: number }; delta: number } | null = null;
+  let closestHorizontal: { point: { x: number; y: number }; delta: number } | null = null;
+
+  for (const point of points) {
+    const dx = Math.abs(point.x - cursor.x);
+    if (dx <= tolerance && (!closestVertical || dx < closestVertical.delta)) {
+      closestVertical = { point, delta: dx };
+    }
+
+    const dy = Math.abs(point.y - cursor.y);
+    if (dy <= tolerance && (!closestHorizontal || dy < closestHorizontal.delta)) {
+      closestHorizontal = { point, delta: dy };
+    }
+  }
+
+  const lines: InferenceLine[] = [];
+  if (closestVertical) {
+    lines.push({
+      kind: "vertical",
+      start: { x: closestVertical.point.x, y: closestVertical.point.y },
+      end: { x: closestVertical.point.x, y: cursor.y },
+    });
+  }
+  if (closestHorizontal) {
+    lines.push({
+      kind: "horizontal",
+      start: { x: closestHorizontal.point.x, y: closestHorizontal.point.y },
+      end: { x: cursor.x, y: closestHorizontal.point.y },
+    });
+  }
+
+  return lines;
 }
 
 /**
