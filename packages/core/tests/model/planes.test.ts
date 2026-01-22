@@ -12,6 +12,9 @@ import {
   FRONT_PLANE,
   createDatumPlaneFromNormal,
   createOffsetPlane,
+  createMidplane,
+  create3PointPlane,
+  createAnglePlane,
   getPlaneOrigin,
   getPlaneNormal,
   getPlaneXDir,
@@ -149,5 +152,44 @@ describe("worldToPlane", () => {
     const back = worldToPlane(XY_PLANE, world);
     expect(back[0]).toBeCloseTo(x);
     expect(back[1]).toBeCloseTo(y);
+  });
+});
+
+describe("createMidplane", () => {
+  it("creates a plane between two parallel planes", () => {
+    const plane1 = createOffsetPlane(XY_PLANE, 0);
+    const plane2 = createOffsetPlane(XY_PLANE, 10);
+    const mid = createMidplane(plane1, plane2);
+
+    expect(getPlaneOrigin(mid)[2]).toBeCloseTo(5);
+    expect(getPlaneNormal(mid)).toEqual([0, 0, 1]);
+  });
+
+  it("throws for non-parallel planes", () => {
+    expect(() => createMidplane(XY_PLANE, YZ_PLANE)).toThrow(/parallel/i);
+  });
+});
+
+describe("create3PointPlane", () => {
+  it("creates plane through three points", () => {
+    const plane = create3PointPlane(vec3(0, 0, 0), vec3(10, 0, 0), vec3(0, 10, 0));
+    const normal = getPlaneNormal(plane);
+    expect(normal[2]).toBeCloseTo(1);
+  });
+
+  it("throws for collinear points", () => {
+    expect(() =>
+      create3PointPlane(vec3(0, 0, 0), vec3(5, 0, 0), vec3(10, 0, 0))
+    ).toThrow(/collinear/i);
+  });
+});
+
+describe("createAnglePlane", () => {
+  it("rotates plane around axis by angle", () => {
+    const axis = { origin: vec3(0, 0, 0), direction: vec3(1, 0, 0) };
+    const plane = createAnglePlane(XY_PLANE, axis, 90);
+    const normal = getPlaneNormal(plane);
+    expect(normal[1]).toBeCloseTo(1);
+    expect(normal[2]).toBeCloseTo(0, 6);
   });
 });

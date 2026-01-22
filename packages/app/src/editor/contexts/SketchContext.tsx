@@ -34,6 +34,9 @@ export type ConstraintType =
   | "parallel"
   | "perpendicular"
   | "equalLength"
+  | "equalRadius"
+  | "concentric"
+  | "midpoint"
   | "tangent"
   | "symmetric";
 
@@ -54,7 +57,14 @@ export type SketchTool =
   | "rectangle" // Corner-corner rectangle
   | "rectangleCenter" // Center rectangle
   | "rectangle3Point" // 3-point angled rectangle (corner A → corner B → width)
-  | "rectangleCenter"; // Center-corner rectangle
+  | "rectangleCenter" // Center-corner rectangle
+  // Modify tools (Phase 28)
+  | "trim"
+  | "extend"
+  | "offset"
+  | "mirror"
+  | "fillet"
+  | "chamfer";
 
 export interface SketchModeState {
   active: boolean;
@@ -708,6 +718,10 @@ export function SketchProvider({ children }: SketchProviderProps) {
           ) {
             allLinesToDelete.add(entity.id);
           }
+        } else if (entity.type === "circle") {
+          if (pointsToDelete.has(entity.center)) {
+            allLinesToDelete.add(entity.id);
+          }
         }
       }
       return allLinesToDelete;
@@ -741,8 +755,20 @@ export function SketchProvider({ children }: SketchProviderProps) {
       if (c.type === "tangent") {
         if (actualLinesToDelete.has(c.line) || actualLinesToDelete.has(c.arc)) return false;
       }
+      if (c.type === "equalRadius" || c.type === "concentric") {
+        if (c.arcs?.some((arcId) => actualLinesToDelete.has(arcId))) return false;
+      }
+      if (c.type === "midpoint") {
+        if (pointsToDelete.has(c.point) || actualLinesToDelete.has(c.line)) return false;
+      }
       if (c.type === "symmetric") {
         if (actualLinesToDelete.has(c.axis)) return false;
+      }
+      if (c.type === "pointOnLine") {
+        if (pointsToDelete.has(c.point) || actualLinesToDelete.has(c.line)) return false;
+      }
+      if (c.type === "pointOnArc") {
+        if (pointsToDelete.has(c.point) || actualLinesToDelete.has(c.arc)) return false;
       }
 
       return true;
@@ -760,6 +786,8 @@ export function SketchProvider({ children }: SketchProviderProps) {
       } else if (entity.type === "arc") {
         usedPoints.add(entity.start);
         usedPoints.add(entity.end);
+        usedPoints.add(entity.center);
+      } else if (entity.type === "circle") {
         usedPoints.add(entity.center);
       }
     }
@@ -787,30 +815,44 @@ export function SketchProvider({ children }: SketchProviderProps) {
       if (!sketch) return false;
       const pointCount = selectedPoints.size;
       const lineCount = selectedLines.size;
+      const selectedEntities = Array.from(selectedLines)
+        .map((id) => sketch.entitiesById[id])
+        .filter(Boolean);
+      const selectedLineEntities = selectedEntities.filter((entity) => entity.type === "line");
+      const selectedArcEntities = selectedEntities.filter(
+        (entity) => entity.type === "arc" || entity.type === "circle"
+      );
 
       switch (type) {
         case "horizontal":
         case "vertical":
-          return pointCount === 2 || lineCount === 1;
+          return pointCount === 2 || (lineCount === 1 && selectedLineEntities.length === 1);
         case "coincident":
           return pointCount === 2;
         case "fixed":
           return pointCount === 1;
         case "distance":
-          return pointCount === 2 || lineCount === 1;
+          return pointCount === 2 || (lineCount === 1 && selectedLineEntities.length === 1);
         case "angle":
-          return lineCount === 2;
+          return lineCount === 2 && selectedLineEntities.length === 2;
         // Advanced constraints (Phase 19)
         case "parallel":
         case "perpendicular":
         case "equalLength":
-          return lineCount === 2;
+          return lineCount === 2 && selectedLineEntities.length === 2;
+        case "equalRadius":
+        case "concentric": {
+          return lineCount === 2 && selectedArcEntities.length === 2;
+        }
         case "tangent":
-          // Need 1 line and 1 arc, but we're simplifying to lines.length >= 1
-          return lineCount === 2;
+          return (
+            lineCount === 2 && selectedLineEntities.length === 1 && selectedArcEntities.length === 1
+          );
         case "symmetric":
           // Need 2 points and 1 line (axis)
-          return pointCount === 2 && lineCount === 1;
+          return pointCount === 2 && lineCount === 1 && selectedLineEntities.length === 1;
+        case "midpoint":
+          return pointCount === 1 && lineCount === 1 && selectedLineEntities.length === 1;
         default:
           return false;
       }
@@ -826,6 +868,13 @@ export function SketchProvider({ children }: SketchProviderProps) {
 
       const pointIds = Array.from(selectedPoints);
       const lineIds = Array.from(selectedLines);
+      const selectedEntities = lineIds
+        .map((id) => sketch.entitiesById[id])
+        .filter(Boolean);
+      const selectedLineEntities = selectedEntities.filter((entity) => entity.type === "line");
+      const selectedArcEntities = selectedEntities.filter(
+        (entity) => entity.type === "arc" || entity.type === "circle"
+      );
       let constraint: NewSketchConstraint | null = null;
 
       if (type === "fixed") {
@@ -838,9 +887,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
         if (pointIds.length === 2) {
           constraint = { type, points: [pointIds[0], pointIds[1]] };
         } else if (lineIds.length === 1) {
-          const line = Object.values(sketch.entitiesById).find(
-            (e) => e.type === "line" && e.id === lineIds[0]
-          ) as SketchLine | undefined;
+          const line = selectedLineEntities[0] as SketchLine | undefined;
           if (!line) return;
           constraint = { type, points: [line.start, line.end] };
         }
@@ -855,9 +902,7 @@ export function SketchProvider({ children }: SketchProviderProps) {
           const dist = Math.sqrt(dx * dx + dy * dy);
           constraint = { type: "distance", points: [pointIds[0], pointIds[1]], value: dist };
         } else if (lineIds.length === 1) {
-          const line = Object.values(sketch.entitiesById).find(
-            (e) => e.type === "line" && e.id === lineIds[0]
-          ) as SketchLine | undefined;
+          const line = selectedLineEntities[0] as SketchLine | undefined;
           if (!line) return;
           const p1 = sketch.pointsById[line.start];
           const p2 = sketch.pointsById[line.end];
@@ -868,27 +913,67 @@ export function SketchProvider({ children }: SketchProviderProps) {
           constraint = { type: "distance", points: [line.start, line.end], value: dist };
         }
       } else if (type === "angle") {
-        if (lineIds.length !== 2) return;
+        if (selectedLineEntities.length !== 2) return;
         // Default to 90 degrees
-        constraint = { type: "angle", lines: [lineIds[0], lineIds[1]], value: 90 };
+        constraint = {
+          type: "angle",
+          lines: [selectedLineEntities[0].id, selectedLineEntities[1].id],
+          value: 90,
+        };
       }
       // Advanced constraints (Phase 19)
       else if (type === "parallel") {
-        if (lineIds.length !== 2) return;
-        constraint = { type: "parallel", lines: [lineIds[0], lineIds[1]] };
+        if (selectedLineEntities.length !== 2) return;
+        constraint = {
+          type: "parallel",
+          lines: [selectedLineEntities[0].id, selectedLineEntities[1].id],
+        };
       } else if (type === "perpendicular") {
-        if (lineIds.length !== 2) return;
-        constraint = { type: "perpendicular", lines: [lineIds[0], lineIds[1]] };
+        if (selectedLineEntities.length !== 2) return;
+        constraint = {
+          type: "perpendicular",
+          lines: [selectedLineEntities[0].id, selectedLineEntities[1].id],
+        };
       } else if (type === "equalLength") {
-        if (lineIds.length !== 2) return;
-        constraint = { type: "equalLength", lines: [lineIds[0], lineIds[1]] };
+        if (selectedLineEntities.length !== 2) return;
+        constraint = {
+          type: "equalLength",
+          lines: [selectedLineEntities[0].id, selectedLineEntities[1].id],
+        };
       } else if (type === "tangent") {
-        // Simplified: treat as two-line constraint (full would need line+arc)
-        if (lineIds.length !== 2) return;
-        constraint = { type: "tangent", line: lineIds[0], arc: lineIds[1], connectionPoint: "" };
+        if (selectedLineEntities.length !== 1 || selectedArcEntities.length !== 1) return;
+        const line = selectedLineEntities[0] as SketchLine;
+        const arc = selectedArcEntities[0];
+        let connectionPoint = line.start;
+        if (arc.type === "arc") {
+          if (line.start === arc.start || line.start === arc.end) {
+            connectionPoint = line.start;
+          } else if (line.end === arc.start || line.end === arc.end) {
+            connectionPoint = line.end;
+          }
+        }
+        constraint = {
+          type: "tangent",
+          line: line.id,
+          arc: arc.id,
+          connectionPoint,
+        };
+      } else if (type === "equalRadius" || type === "concentric") {
+        if (selectedArcEntities.length !== 2) return;
+        constraint = {
+          type,
+          arcs: [selectedArcEntities[0].id, selectedArcEntities[1].id],
+        };
       } else if (type === "symmetric") {
-        if (pointIds.length !== 2 || lineIds.length !== 1) return;
-        constraint = { type: "symmetric", points: [pointIds[0], pointIds[1]], axis: lineIds[0] };
+        if (pointIds.length !== 2 || selectedLineEntities.length !== 1) return;
+        constraint = {
+          type: "symmetric",
+          points: [pointIds[0], pointIds[1]],
+          axis: selectedLineEntities[0].id,
+        };
+      } else if (type === "midpoint") {
+        if (pointIds.length !== 1 || selectedLineEntities.length !== 1) return;
+        constraint = { type: "midpoint", point: pointIds[0], line: selectedLineEntities[0].id };
       }
 
       if (constraint) {

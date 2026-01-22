@@ -8,7 +8,12 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from "react";
 import { useDocument } from "./DocumentContext";
 import { useKernel } from "./KernelContext";
-import type { ExtrudeFormData, RevolveFormData } from "../types/featureSchemas";
+import type {
+  ExtrudeFormData,
+  RevolveFormData,
+  PlaneToolFormData,
+  AxisToolFormData,
+} from "../types/featureSchemas";
 
 // ============================================================================
 // Types
@@ -17,7 +22,9 @@ import type { ExtrudeFormData, RevolveFormData } from "../types/featureSchemas";
 export type FeatureEditMode =
   | { type: "none" }
   | { type: "extrude"; sketchId: string; data: ExtrudeFormData }
-  | { type: "revolve"; sketchId: string; data: RevolveFormData };
+  | { type: "revolve"; sketchId: string; data: RevolveFormData }
+  | { type: "plane"; data: PlaneToolFormData }
+  | { type: "axis"; data: AxisToolFormData };
 
 interface FeatureEditContextValue {
   editMode: FeatureEditMode;
@@ -28,8 +35,20 @@ interface FeatureEditContextValue {
   /** Start creating a new revolve feature */
   startRevolveEdit: (sketchId: string) => void;
 
+  /** Start creating a new reference plane */
+  startPlaneEdit: (data: PlaneToolFormData) => void;
+
+  /** Start creating a new reference axis */
+  startAxisEdit: (data: AxisToolFormData) => void;
+
   /** Update the form data while editing */
-  updateFormData: (data: Partial<ExtrudeFormData> | Partial<RevolveFormData>) => void;
+  updateFormData: (
+    data:
+      | Partial<ExtrudeFormData>
+      | Partial<RevolveFormData>
+      | Partial<PlaneToolFormData>
+      | Partial<AxisToolFormData>
+  ) => void;
 
   /** Accept the current edit and create the feature */
   acceptEdit: () => void;
@@ -162,6 +181,14 @@ export function FeatureEditProvider({ children }: FeatureEditProviderProps) {
     [getFeatureById, getNextName, schedulePreview]
   );
 
+  const startPlaneEdit = useCallback((data: PlaneToolFormData) => {
+    setEditMode({ type: "plane", data });
+  }, []);
+
+  const startAxisEdit = useCallback((data: AxisToolFormData) => {
+    setEditMode({ type: "axis", data });
+  }, []);
+
   const updateFormData = useCallback(
     (data: Partial<ExtrudeFormData> | Partial<RevolveFormData>) => {
       setEditMode((prev) => {
@@ -186,7 +213,7 @@ export function FeatureEditProvider({ children }: FeatureEditProviderProps) {
       previewTimerRef.current = null;
     }
 
-    if (editMode.type === "extrude") {
+      if (editMode.type === "extrude") {
       const { data, sketchId } = editMode;
       addExtrude(sketchId, data.distance ?? 10, data.op, data.direction);
     } else if (editMode.type === "revolve") {
@@ -213,6 +240,8 @@ export function FeatureEditProvider({ children }: FeatureEditProviderProps) {
     editMode,
     startExtrudeEdit,
     startRevolveEdit,
+    startPlaneEdit,
+    startAxisEdit,
     updateFormData,
     acceptEdit,
     cancelEdit,

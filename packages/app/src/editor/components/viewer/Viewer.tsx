@@ -443,6 +443,7 @@ const Viewer: React.FC = () => {
     addAngledRectangle,
     addConstraint: addConstraintWrapper,
     updatePointPosition,
+    selectedLines,
     setSelectedPoints,
     setSelectedLines,
     setSelectedConstraints,

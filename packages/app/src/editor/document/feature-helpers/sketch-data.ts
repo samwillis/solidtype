@@ -259,6 +259,9 @@ export function addConstraintToSketch(
   if ("arc" in constraint) {
     constraintMap.set("arc", constraint.arc);
   }
+  if ("arcs" in constraint) {
+    constraintMap.set("arcs", constraint.arcs);
+  }
   if ("connectionPoint" in constraint) {
     constraintMap.set("connectionPoint", constraint.connectionPoint);
   }
@@ -363,6 +366,12 @@ export function setSketchData(
       entityMap.set("end", entity.end);
       entityMap.set("center", entity.center);
       entityMap.set("ccw", entity.ccw);
+    } else if (entity.type === "circle") {
+      entityMap.set("center", entity.center);
+      entityMap.set("radius", entity.radius);
+    }
+    if (entity.construction !== undefined) {
+      entityMap.set("construction", entity.construction);
     }
   }
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useState, useEffect } from "react";
 import { Tooltip } from "@base-ui/react";
 import { useSketch } from "../../contexts/SketchContext";
 import { useDocument } from "../../contexts/DocumentContext";
@@ -12,6 +12,7 @@ import { SketchModeTools } from "./SketchModeTools";
 import { FeatureModeTools } from "./FeatureModeTools";
 import { ExportMenu } from "./ExportMenu";
 import "./FloatingToolbar.css";
+import { defaultAxisToolFormData, defaultPlaneToolFormData } from "../../types/featureSchemas";
 
 /**
  * FloatingToolbar - Main toolbar for the CAD editor
@@ -39,11 +40,17 @@ const FloatingToolbar: React.FC = () => {
     toggleConstruction,
     hasSelectedEntities,
   } = useSketch();
-  const { undo, redo, canUndo, canRedo, features, addBoolean, addOffsetPlane, addAxis } =
-    useDocument();
-  const { selectedFeatureId, selectFeature, clearSelection } = useSelection();
+  const { undo, redo, canUndo, canRedo, features, addBoolean, addAxis } = useDocument();
+  const {
+    selectedFeatureId,
+    selectFeature,
+    clearSelection,
+    setSelectionMode,
+    setOnFaceSelected,
+  } = useSelection();
   const { exportStl, exportStep, bodies, sketchPlaneTransforms } = useKernel();
-  const { startExtrudeEdit, startRevolveEdit, isEditing } = useFeatureEdit();
+  const { startExtrudeEdit, startRevolveEdit, startPlaneEdit, startAxisEdit, isEditing } =
+    useFeatureEdit();
   const { actions: viewerActions, state: viewerState } = useViewer();
 
   // Derived state
@@ -60,7 +67,8 @@ const FloatingToolbar: React.FC = () => {
     return null;
   }, [selectedFeatureId, features]);
 
-  const { selectedFaces } = useSelection();
+  const { selectedFaces, selectedEdges } = useSelection();
+  const [isPickingSketchFace, setIsPickingSketchFace] = useState(false);
   const selectedFaceRef = useMemo(() => {
     if (selectedFaces.length !== 1) return null;
     const face = selectedFaces[0];
@@ -78,21 +86,14 @@ const FloatingToolbar: React.FC = () => {
     return null;
   }, [selectedFeatureId, features]);
 
-  const selectedDatumPlane = useMemo(() => {
-    if (!selectedFeatureId) return null;
-    const feature = features.find((f) => f.id === selectedFeatureId);
-    if (feature?.type === "plane") {
-      return feature;
-    }
-    return null;
-  }, [selectedFeatureId, features]);
-
   const bodyFeatures = useMemo(() => {
     return features.filter((f) => f.type === "extrude" || f.type === "revolve");
   }, [features]);
 
   // Capability flags
   const canStartSketch = sketchPlaneRef !== null;
+  const canCreatePlane = !isEditing;
+  const canCreateAxis = !isEditing;
   const canExtrude = !isEditing && (selectedSketch !== null || sketches.length === 1);
   const canRevolve = !isEditing && (selectedSketch !== null || sketches.length === 1);
   const canBoolean = !isEditing && bodyFeatures.length >= 2;
@@ -100,14 +101,42 @@ const FloatingToolbar: React.FC = () => {
 
   // Handlers
   const handleNewSketch = useCallback(() => {
-    if (!sketchPlaneRef) return;
-    startSketch(sketchPlaneRef);
-  }, [sketchPlaneRef, startSketch]);
+    if (sketchPlaneRef) {
+      startSketch(sketchPlaneRef);
+      return;
+    }
 
-  const handleCreateOffsetPlane = useCallback(() => {
-    if (!selectedDatumPlane) return;
-    addOffsetPlane(selectedDatumPlane.id, 10);
-  }, [selectedDatumPlane, addOffsetPlane]);
+    // No plane/face selected yet: enter face-pick mode (Sketch on Face)
+    setIsPickingSketchFace(true);
+    setSelectionMode("selectFace");
+    setOnFaceSelected((face) => {
+      const faceRef = `face:${face.featureId}:${face.faceIndex}`;
+      startSketch(faceRef);
+      setIsPickingSketchFace(false);
+      setSelectionMode("default");
+      setOnFaceSelected(undefined);
+    });
+  }, [sketchPlaneRef, startSketch, setSelectionMode, setOnFaceSelected]);
+
+  const handleCreatePlane = useCallback(() => {
+    const base = { ...defaultPlaneToolFormData };
+    if (selectedFaceRef && selectedFaces.length === 1) {
+      base.ref1 = selectedFaceRef;
+      base.mode = "offset";
+    } else if (selectedFaces.length === 2) {
+      base.ref1 = `face:${selectedFaces[0].featureId}:${selectedFaces[0].faceIndex}`;
+      base.ref2 = `face:${selectedFaces[1].featureId}:${selectedFaces[1].faceIndex}`;
+      base.mode = "midplane";
+    } else if (selectedPlane && selectedEdges.length === 1) {
+      base.ref1 = selectedPlane;
+      base.ref2 = `edge:${selectedEdges[0].featureId}:${selectedEdges[0].edgeIndex}`;
+      base.mode = "angle";
+    } else if (selectedPlane) {
+      base.ref1 = selectedPlane;
+      base.mode = "offset";
+    }
+    startPlaneEdit(base);
+  }, [selectedFaceRef, selectedFaces, selectedPlane, selectedEdges, startPlaneEdit]);
 
   const handleExtrude = useCallback(() => {
     const sketchId = selectedSketch?.id || (sketches.length === 1 ? sketches[0].id : null);
@@ -139,6 +168,19 @@ const FloatingToolbar: React.FC = () => {
     },
     [addAxis]
   );
+
+  const handleCreateAxis = useCallback(() => {
+    const base = { ...defaultAxisToolFormData };
+    if (selectedEdges.length === 1) {
+      base.ref1 = `edge:${selectedEdges[0].featureId}:${selectedEdges[0].edgeIndex}`;
+      base.mode = "linear";
+    } else if (selectedFaces.length === 2) {
+      base.ref1 = `face:${selectedFaces[0].featureId}:${selectedFaces[0].faceIndex}`;
+      base.ref2 = `face:${selectedFaces[1].featureId}:${selectedFaces[1].faceIndex}`;
+      base.mode = "twoPlanes";
+    }
+    startAxisEdit(base);
+  }, [selectedEdges, selectedFaces, startAxisEdit]);
 
   const handleNormalView = useCallback(() => {
     if (mode.sketchId) {
@@ -181,6 +223,12 @@ const FloatingToolbar: React.FC = () => {
     priority: ShortcutPriority.GLOBAL,
     condition: () => !mode.active,
     handler: () => {
+      if (isPickingSketchFace) {
+        setIsPickingSketchFace(false);
+        setSelectionMode("default");
+        setOnFaceSelected(undefined);
+        return true;
+      }
       selectFeature(null);
       clearSelection();
       clearSketchSelection();
@@ -189,6 +237,15 @@ const FloatingToolbar: React.FC = () => {
     description: "Clear selection",
     category: "General",
   });
+
+  // Cleanup face-pick mode if component unmounts or sketch starts
+  useEffect(() => {
+    if (mode.active && isPickingSketchFace) {
+      setIsPickingSketchFace(false);
+      setSelectionMode("default");
+      setOnFaceSelected(undefined);
+    }
+  }, [mode.active, isPickingSketchFace, setSelectionMode, setOnFaceSelected]);
 
   // Keyboard shortcut: G to toggle snap-to-grid
   useKeyboardShortcut({
@@ -209,11 +266,13 @@ const FloatingToolbar: React.FC = () => {
     ? selectedFaceRef
       ? "New Sketch on Face"
       : `New Sketch on ${(selectedPlane || "").toUpperCase()}`
-    : "New Sketch (select a plane or face first)";
+    : isPickingSketchFace
+      ? "Click a face to start sketch"
+      : "New Sketch (select a plane or face first)";
 
-  const planeTooltip = selectedDatumPlane
-    ? "Add Offset Plane (edit distance in Properties)"
-    : "Add Offset Plane (select a plane first)";
+  const planeTooltip = selectedFaceRef || selectedPlane
+    ? "Create Plane (use current selection)"
+    : "Create Plane (select references in viewport/tree)";
 
   const extrudeTooltip = selectedSketch
     ? `Extrude ${selectedSketch.name || selectedSketch.id}`
@@ -251,9 +310,11 @@ const FloatingToolbar: React.FC = () => {
             canStartSketch={canStartSketch}
             onNewSketch={handleNewSketch}
             sketchTooltip={sketchTooltip}
-            canCreatePlane={!!selectedDatumPlane}
-            onCreateOffsetPlane={handleCreateOffsetPlane}
+            canCreatePlane={canCreatePlane}
+            onCreatePlane={handleCreatePlane}
             planeTooltip={planeTooltip}
+            canCreateAxis={canCreateAxis}
+            onCreateAxis={handleCreateAxis}
             onAddAxis={handleAddAxis}
             canExtrude={canExtrude}
             onExtrude={handleExtrude}

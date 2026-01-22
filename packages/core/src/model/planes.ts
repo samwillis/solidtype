@@ -7,7 +7,7 @@
  */
 
 import type { Vec3 } from "../num/vec3.js";
-import { vec3, normalize3 } from "../num/vec3.js";
+import { vec3, normalize3, add3, sub3, mul3, dot3, cross3, length3 } from "../num/vec3.js";
 import type { PlaneSurface } from "../geom/surface.js";
 import { createPlaneSurface } from "../geom/surface.js";
 
@@ -105,6 +105,104 @@ export function createOffsetPlane(
 
   const surface = createPlaneSurface(newOrigin, base.normal, base.xDir);
   return createDatumPlane(name ?? `${basePlane.name}_offset_${distance}`, surface);
+}
+
+// ============================================================================
+// Derived plane construction (Phase 28)
+// ============================================================================
+
+const PLANE_EPS = 1e-9;
+
+type PlaneSurfaceLike = PlaneSurface | DatumPlane;
+
+function toPlaneSurface(plane: PlaneSurfaceLike): PlaneSurface {
+  return "surface" in plane ? plane.surface : plane;
+}
+
+function rotateVectorAroundAxis(vec: Vec3, axisDir: Vec3, angleRad: number): Vec3 {
+  const k = normalize3(axisDir);
+  const cos = Math.cos(angleRad);
+  const sin = Math.sin(angleRad);
+  const term1 = mul3(vec, cos);
+  const term2 = mul3(cross3(k, vec), sin);
+  const term3 = mul3(k, dot3(k, vec) * (1 - cos));
+  return add3(add3(term1, term2), term3);
+}
+
+function rotatePointAroundAxis(point: Vec3, axisOrigin: Vec3, axisDir: Vec3, angleRad: number): Vec3 {
+  const relative = sub3(point, axisOrigin);
+  const rotated = rotateVectorAroundAxis(relative, axisDir, angleRad);
+  return add3(axisOrigin, rotated);
+}
+
+/**
+ * Create a plane through three points.
+ * Throws if points are collinear.
+ */
+export function create3PointPlane(
+  p1: Vec3,
+  p2: Vec3,
+  p3: Vec3,
+  name: string = "3-Point Plane"
+): DatumPlane {
+  const v1 = sub3(p2, p1);
+  const v2 = sub3(p3, p1);
+  const normal = cross3(v1, v2);
+  if (length3(normal) < PLANE_EPS) {
+    throw new Error("Points are collinear - cannot define plane");
+  }
+  const xDir = normalize3(v1);
+  const surface = createPlaneSurface(p1, normal, xDir);
+  return createDatumPlane(name, surface);
+}
+
+/**
+ * Create a midplane between two parallel planes.
+ * Throws if planes are not parallel.
+ */
+export function createMidplane(
+  planeA: PlaneSurfaceLike,
+  planeB: PlaneSurfaceLike,
+  name: string = "Midplane"
+): DatumPlane {
+  const a = toPlaneSurface(planeA);
+  const b = toPlaneSurface(planeB);
+  let n1 = normalize3(a.normal);
+  let n2 = normalize3(b.normal);
+
+  // Align normals for stable midplane computation.
+  if (dot3(n1, n2) < 0) {
+    n2 = mul3(n2, -1);
+  }
+
+  const cross = cross3(n1, n2);
+  if (length3(cross) > PLANE_EPS) {
+    throw new Error("Planes are not parallel - cannot define midplane");
+  }
+
+  const delta = sub3(b.origin, a.origin);
+  const distance = dot3(delta, n1);
+  const midOrigin = add3(a.origin, mul3(n1, distance * 0.5));
+  const surface = createPlaneSurface(midOrigin, n1, a.xDir);
+  return createDatumPlane(name, surface);
+}
+
+/**
+ * Create a plane by rotating a base plane around an axis.
+ */
+export function createAnglePlane(
+  basePlane: PlaneSurfaceLike,
+  axis: { origin: Vec3; direction: Vec3 },
+  angleDegrees: number,
+  name: string = "Angle Plane"
+): DatumPlane {
+  const base = toPlaneSurface(basePlane);
+  const angleRad = (angleDegrees * Math.PI) / 180;
+  const newNormal = rotateVectorAroundAxis(base.normal, axis.direction, angleRad);
+  const newXDir = rotateVectorAroundAxis(base.xDir, axis.direction, angleRad);
+  const newOrigin = rotatePointAroundAxis(base.origin, axis.origin, axis.direction, angleRad);
+  const surface = createPlaneSurface(newOrigin, newNormal, newXDir);
+  return createDatumPlane(name, surface);
 }
 
 // ============================================================================

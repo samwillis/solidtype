@@ -63,3 +63,20 @@
   font-size: 10px;
   color: var(--color-text-muted);
 }
+
+.status-sketch {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.status-sketch-full {
+  color: #22c55e;
+}
+
+.status-sketch-under {
+  color: #60a5fa;
+}
+
+.status-sketch-over {
+  color: #f87171;
+}

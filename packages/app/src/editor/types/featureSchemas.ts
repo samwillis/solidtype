@@ -108,6 +108,59 @@ export const planeFormSchema = z.object({
 export type PlaneFormData = z.infer<typeof planeFormSchema>;
 
 // ============================================================================
+// Reference Plane Tool Schema (Phase 28)
+// ============================================================================
+
+export const planeToolModeSchema = z.enum(["auto", "offset", "midplane", "angle", "threePoint"]);
+
+export const planeToolFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  mode: planeToolModeSchema,
+  ref1: z.string().optional(),
+  ref2: z.string().optional(),
+  ref3: z.string().optional(),
+  offset: z.number(),
+  angle: z.number(),
+  flipNormal: z.boolean(),
+  width: z.number().min(1),
+  height: z.number().min(1),
+});
+
+export type PlaneToolFormData = z.infer<typeof planeToolFormSchema>;
+
+export const defaultPlaneToolFormData: PlaneToolFormData = {
+  name: "Plane",
+  mode: "auto",
+  offset: 0,
+  angle: 0,
+  flipNormal: false,
+  width: 100,
+  height: 100,
+};
+
+// ============================================================================
+// Reference Axis Tool Schema (Phase 28)
+// ============================================================================
+
+export const axisToolModeSchema = z.enum(["auto", "linear", "twoPoints", "twoPlanes"]);
+
+export const axisToolFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  mode: axisToolModeSchema,
+  ref1: z.string().optional(),
+  ref2: z.string().optional(),
+  length: z.number().min(1),
+});
+
+export type AxisToolFormData = z.infer<typeof axisToolFormSchema>;
+
+export const defaultAxisToolFormData: AxisToolFormData = {
+  name: "Axis",
+  mode: "auto",
+  length: 100,
+};
+
+// ============================================================================
 // Boolean Feature Schema (Phase 17)
 // ============================================================================
 

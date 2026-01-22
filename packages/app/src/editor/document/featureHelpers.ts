@@ -22,6 +22,7 @@ import type {
   AxisFeature,
   SketchPlaneRef,
   DatumPlaneRole,
+  PlaneDefinition,
 } from "./schema";
 
 // Import sketch data functions for internal use (also re-exported below)
@@ -367,6 +368,55 @@ export interface OffsetPlaneOptions {
 }
 
 /**
+ * Options for creating a plane feature from an explicit definition.
+ */
+export interface PlaneFeatureOptions {
+  definition: PlaneDefinition;
+  name?: string;
+  width?: number;
+  height?: number;
+  origin?: [number, number, number];
+  normal?: [number, number, number];
+  xDir?: [number, number, number];
+  visible?: boolean;
+}
+
+/**
+ * Create a plane feature from a definition and computed geometry.
+ */
+export function addPlaneFeature(doc: SolidTypeDoc, options: PlaneFeatureOptions): string {
+  const id = uuid();
+  const DEFAULT_WIDTH = 100;
+  const DEFAULT_HEIGHT = 100;
+
+  const origin: [number, number, number] = options.origin ?? [0, 0, 0];
+  const normal: [number, number, number] = options.normal ?? [0, 0, 1];
+  const xDir: [number, number, number] = options.xDir ?? [1, 0, 0];
+
+  doc.ydoc.transact(() => {
+    const plane = createFeatureMap();
+    doc.featuresById.set(id, plane);
+
+    setMapProperties(plane, {
+      id,
+      type: "plane",
+      name: options.name ?? `Plane ${doc.featureOrder.length}`,
+      definition: options.definition,
+      normal,
+      origin,
+      xDir,
+      visible: options.visible ?? true,
+      width: options.width ?? DEFAULT_WIDTH,
+      height: options.height ?? DEFAULT_HEIGHT,
+    });
+
+    insertFeatureAtGate(doc, id);
+  });
+
+  return id;
+}
+
+/**
  * Create a new offset plane from a datum plane or face
  */
 export function addOffsetPlane(doc: SolidTypeDoc, options: OffsetPlaneOptions): string {
@@ -468,6 +518,11 @@ export interface AxisFeatureOptions {
         point2Ref: string;
       }
     | {
+        kind: "twoPlanes";
+        plane1Ref: string;
+        plane2Ref: string;
+      }
+    | {
         kind: "sketchLine";
         sketchId: string;
         lineId: string;
@@ -487,6 +542,10 @@ export interface AxisFeatureOptions {
   length?: number;
   /** Display offset (position along axis direction) */
   displayOffset?: number;
+  /** Optional computed origin */
+  origin?: [number, number, number];
+  /** Optional computed direction (unit vector preferred) */
+  direction?: [number, number, number];
 }
 
 const DEFAULT_AXIS_LENGTH = 100;
@@ -515,8 +574,11 @@ export function addAxisFeature(doc: SolidTypeDoc, options: AxisFeatureOptions): 
         direction = [0, 0, 1];
         break;
     }
+  } else if (options.origin && options.direction) {
+    origin = options.origin;
+    direction = options.direction;
   }
-  // For other definition types, the kernel will compute origin/direction
+  // For other definition types without explicit geometry, the kernel will compute origin/direction
 
   doc.ydoc.transact(() => {
     const axis = createFeatureMap();
