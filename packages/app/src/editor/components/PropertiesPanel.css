@@ -549,6 +549,34 @@
   cursor: pointer;
 }
 
+/* Reference geometry selection rows */
+.reference-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reference-pick {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.reference-pick:hover {
+  background: var(--color-bg-hover);
+}
+
+.reference-error {
+  margin: 8px;
+  font-size: 11px;
+  color: #e11d48;
+}
+
 .face-selector-btn:hover {
   background: var(--color-bg-hover);
 }

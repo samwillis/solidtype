@@ -38,6 +38,11 @@ export function AxisProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           type: "Two Points",
           details: null,
         };
+      case "twoPlanes":
+        return {
+          type: "Two Planes",
+          details: `Planes: ${definition.plane1Ref} / ${definition.plane2Ref}`,
+        };
       case "sketchLine":
         return {
           type: "Sketch Line",

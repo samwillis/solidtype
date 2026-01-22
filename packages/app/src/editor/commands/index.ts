@@ -29,6 +29,15 @@ export {
   // Offset Plane
   createOffsetPlane,
   type CreateOffsetPlaneArgs,
+  // Plane
+  createPlane,
+  type CreatePlaneArgs,
+  createMidplane,
+  type CreateMidplaneArgs,
+  create3PointPlane,
+  type Create3PointPlaneArgs,
+  createAnglePlane,
+  type CreateAnglePlaneArgs,
   // Axis
   createAxis,
   type CreateAxisArgs,

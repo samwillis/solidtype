@@ -12,7 +12,12 @@ import React, { useState, useCallback, useMemo } from "react";
 import { useDocument } from "../contexts/DocumentContext";
 import { useSelection } from "../contexts/SelectionContext";
 import { useFeatureEdit } from "../contexts/FeatureEditContext";
-import type { ExtrudeFormData, RevolveFormData } from "../types/featureSchemas";
+import type {
+  ExtrudeFormData,
+  RevolveFormData,
+  PlaneToolFormData,
+  AxisToolFormData,
+} from "../types/featureSchemas";
 import type { SketchLine } from "../types/document";
 import AIPanel from "./AIPanel";
 import { UserProfileDialog } from "../../components/dialogs/UserProfileDialog";
@@ -30,6 +35,8 @@ import {
   GenericProperties,
 } from "./properties-panel/feature-properties";
 import { ExtrudeEditForm, RevolveEditForm } from "./properties-panel/edit-forms";
+import { PlaneToolPanel } from "./tools/PlaneToolPanel";
+import { AxisToolPanel } from "./tools/AxisToolPanel";
 
 // ============================================================================
 // Main Component
@@ -114,6 +121,20 @@ const PropertiesPanel: React.FC = () => {
               axisCandidates={axisCandidates}
               onUpdate={updateFormData}
               onAccept={acceptEdit}
+              onCancel={cancelEdit}
+            />
+          )}
+          {editMode.type === "plane" && (
+            <PlaneToolPanel
+              data={editMode.data as PlaneToolFormData}
+              onUpdate={updateFormData}
+              onCancel={cancelEdit}
+            />
+          )}
+          {editMode.type === "axis" && (
+            <AxisToolPanel
+              data={editMode.data as AxisToolFormData}
+              onUpdate={updateFormData}
               onCancel={cancelEdit}
             />
           )}

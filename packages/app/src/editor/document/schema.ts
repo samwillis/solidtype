@@ -212,12 +212,37 @@ export const TangentConstraintSchema = z
   })
   .strict();
 
+export const EqualRadiusConstraintSchema = z
+  .object({
+    id: UUID,
+    type: z.literal("equalRadius"),
+    arcs: z.tuple([UUID, UUID]),
+  })
+  .strict();
+
+export const ConcentricConstraintSchema = z
+  .object({
+    id: UUID,
+    type: z.literal("concentric"),
+    arcs: z.tuple([UUID, UUID]),
+  })
+  .strict();
+
 export const SymmetricConstraintSchema = z
   .object({
     id: UUID,
     type: z.literal("symmetric"),
     points: z.tuple([UUID, UUID]),
     axis: UUID,
+  })
+  .strict();
+
+export const MidpointConstraintSchema = z
+  .object({
+    id: UUID,
+    type: z.literal("midpoint"),
+    point: UUID,
+    line: UUID,
   })
   .strict();
 
@@ -251,7 +276,10 @@ export const SketchConstraintSchema = z.union([
   PerpendicularConstraintSchema,
   EqualLengthConstraintSchema,
   TangentConstraintSchema,
+  EqualRadiusConstraintSchema,
+  ConcentricConstraintSchema,
   SymmetricConstraintSchema,
+  MidpointConstraintSchema,
   PointOnLineConstraintSchema,
   PointOnArcConstraintSchema,
 ]);
@@ -312,6 +340,17 @@ export const OffsetPlaneDefinitionSchema = z
     basePlaneId: z.string(),
     /** Offset distance in mm (positive = along normal, negative = opposite) */
     distance: z.number(),
+  })
+  .strict();
+
+/** Midplane between two planes/faces */
+export const MidplaneDefinitionSchema = z
+  .object({
+    kind: z.literal("midplane"),
+    /** Reference to first plane/face */
+    plane1Ref: z.string(),
+    /** Reference to second plane/face */
+    plane2Ref: z.string(),
   })
   .strict();
 
@@ -398,6 +437,7 @@ export const SketchLinePointDefinitionSchema = z
 export const PlaneDefinitionSchema = z.discriminatedUnion("kind", [
   DatumPlaneDefinitionSchema,
   OffsetPlaneDefinitionSchema,
+  MidplaneDefinitionSchema,
   OffsetFaceDefinitionSchema,
   OnFaceDefinitionSchema,
   ThreePointsDefinitionSchema,
@@ -444,6 +484,15 @@ export const TwoPointsAxisDefinitionSchema = z
   })
   .strict();
 
+/** Intersection of two planes */
+export const TwoPlanesAxisDefinitionSchema = z
+  .object({
+    kind: z.literal("twoPlanes"),
+    plane1Ref: z.string(),
+    plane2Ref: z.string(),
+  })
+  .strict();
+
 /** Along a sketch line */
 export const SketchLineAxisDefinitionSchema = z
   .object({
@@ -469,6 +518,7 @@ export const AxisDefinitionSchema = z.discriminatedUnion("kind", [
   DatumAxisDefinitionSchema,
   SurfaceNormalDefinitionSchema,
   TwoPointsAxisDefinitionSchema,
+  TwoPlanesAxisDefinitionSchema,
   SketchLineAxisDefinitionSchema,
   EdgeAxisDefinitionSchema,
 ]);

@@ -37,6 +37,9 @@ import {
   perpendicular,
   equalLength,
   tangent,
+  equalRadius,
+  concentric,
+  midpoint,
   symmetric,
   pointOnLine,
   pointOnArc,
@@ -948,6 +951,32 @@ export class KernelEngine {
           const arcId = entityIdMap.get(c.arc);
           if (lineId !== undefined && arcId !== undefined) {
             sketch.addConstraint(tangent(lineId, arcId, "end", "start"));
+          }
+          break;
+        }
+        case "equalRadius": {
+          const [a, b] = c.arcs ?? [];
+          const e1 = entityIdMap.get(a);
+          const e2 = entityIdMap.get(b);
+          if (e1 !== undefined && e2 !== undefined) {
+            sketch.addConstraint(equalRadius(e1, e2));
+          }
+          break;
+        }
+        case "concentric": {
+          const [a, b] = c.arcs ?? [];
+          const e1 = entityIdMap.get(a);
+          const e2 = entityIdMap.get(b);
+          if (e1 !== undefined && e2 !== undefined) {
+            sketch.addConstraint(concentric(e1, e2));
+          }
+          break;
+        }
+        case "midpoint": {
+          const pid = pointIdMap.get(c.point);
+          const lineId = entityIdMap.get(c.line);
+          if (pid !== undefined && lineId !== undefined) {
+            sketch.addConstraint(midpoint(pid, lineId));
           }
           break;
         }

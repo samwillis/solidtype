@@ -56,6 +56,11 @@ export function PlaneProperties({ feature, onUpdate }: FeaturePropertiesProps) {
           details: `Face: ${definition.faceRef}`,
           distance: definition.distance as number,
         };
+      case "midplane":
+        return {
+          type: "Midplane",
+          details: `Between: ${definition.plane1Ref} / ${definition.plane2Ref}`,
+        };
       case "onFace":
         return {
           type: "On Face",

@@ -25,12 +25,13 @@ import {
   addRevolveFeature,
   addBooleanFeature,
   addOffsetPlane as addOffsetPlaneFeature,
+  addPlaneFeature,
   addAxisFeature,
   deleteFeature,
   renameFeature,
   toggleFeatureVisibility,
 } from "../document/featureHelpers";
-import type { AxisFeatureOptions } from "../document/featureHelpers";
+import type { AxisFeatureOptions, PlaneFeatureOptions } from "../document/featureHelpers";
 import type { Feature } from "../document/schema";
 import { createDocumentSync, type DocumentSync } from "../../lib/yjs-sync";
 import { SolidTypeAwareness } from "../../lib/awareness-provider";
@@ -81,6 +82,8 @@ interface DocumentContextValue {
   ) => string;
   /** Add an offset plane from a datum plane or face */
   addOffsetPlane: (basePlaneId: string, offset: number, name?: string) => string;
+  /** Add a plane from a definition */
+  addPlane: (options: PlaneFeatureOptions) => string;
   /** Add an axis feature */
   addAxis: (options: AxisFeatureOptions) => string;
   getFeatureById: (id: string) => Feature | null;
@@ -498,6 +501,14 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
     [doc]
   );
 
+  const addPlane = useCallback(
+    (options: PlaneFeatureOptions) => {
+      if (!doc) return "";
+      return addPlaneFeature(doc, options);
+    },
+    [doc]
+  );
+
   const addAxis = useCallback(
     (options: AxisFeatureOptions) => {
       if (!doc) return "";
@@ -565,6 +576,7 @@ export function DocumentProvider({ children, documentId }: DocumentProviderProps
     addRevolve,
     addBoolean,
     addOffsetPlane,
+    addPlane,
     addAxis,
     getFeatureById,
     deleteFeature: handleDeleteFeature,

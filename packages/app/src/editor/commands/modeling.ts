@@ -17,6 +17,7 @@ import {
   addRevolveFeature as addRevolveFeatureHelper,
   addBooleanFeature as addBooleanFeatureHelper,
   addOffsetPlane as addOffsetPlaneHelper,
+  addPlaneFeature as addPlaneFeatureHelper,
   addAxisFeature as addAxisFeatureHelper,
   deleteFeature as deleteFeatureHelper,
   renameFeature as renameFeatureHelper,
@@ -26,9 +27,17 @@ import {
   type RevolveFeatureOptions,
   type BooleanFeatureOptions,
   type OffsetPlaneOptions,
+  type PlaneFeatureOptions,
   type AxisFeatureOptions,
 } from "../document/featureHelpers";
 import type { SketchPlaneRef } from "../document/schema";
+import { findDatumPlaneByRole } from "../document/createDocument";
+import {
+  createMidplane as computeMidplane,
+  create3PointPlane as compute3PointPlane,
+  createAnglePlane as computeAnglePlane,
+} from "@solidtype/core";
+import { cross, normalize } from "../lib/reference-geometry";
 
 // ============================================================================
 // Sketch Commands
@@ -277,6 +286,166 @@ export function createOffsetPlane(
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
   }
+}
+
+// ============================================================================
+// Plane Commands (Phase 28)
+// ============================================================================
+
+export interface CreatePlaneArgs extends PlaneFeatureOptions {}
+
+export function createPlane(
+  doc: SolidTypeDoc,
+  args: CreatePlaneArgs
+): CommandResult<{ featureId: string }> {
+  try {
+    const featureId = addPlaneFeatureHelper(doc, args);
+    return ok({ featureId });
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+export interface CreateMidplaneArgs {
+  plane1Ref: string;
+  plane2Ref: string;
+  name?: string;
+  width?: number;
+  height?: number;
+}
+
+export function createMidplane(
+  doc: SolidTypeDoc,
+  args: CreateMidplaneArgs
+): CommandResult<{ featureId: string }> {
+  const plane1 = resolvePlaneSurface(doc, args.plane1Ref);
+  const plane2 = resolvePlaneSurface(doc, args.plane2Ref);
+  if (!plane1 || !plane2) {
+    return err("Midplane references must be valid plane features or datum planes.");
+  }
+  try {
+    const mid = computeMidplane(plane1, plane2, args.name ?? "Midplane");
+    const featureId = addPlaneFeatureHelper(doc, {
+      name: args.name,
+      definition: {
+        kind: "midplane",
+        plane1Ref: args.plane1Ref,
+        plane2Ref: args.plane2Ref,
+      },
+      origin: mid.surface.origin,
+      normal: mid.surface.normal,
+      xDir: mid.surface.xDir,
+      width: args.width,
+      height: args.height,
+    });
+    return ok({ featureId });
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+export interface Create3PointPlaneArgs {
+  p1: [number, number, number];
+  p2: [number, number, number];
+  p3: [number, number, number];
+  name?: string;
+  width?: number;
+  height?: number;
+}
+
+export function create3PointPlane(
+  doc: SolidTypeDoc,
+  args: Create3PointPlaneArgs
+): CommandResult<{ featureId: string }> {
+  try {
+    const plane = compute3PointPlane(args.p1, args.p2, args.p3, args.name ?? "3-Point Plane");
+    const pointRef = (p: [number, number, number]) => `point:${p[0]},${p[1]},${p[2]}`;
+    const featureId = addPlaneFeatureHelper(doc, {
+      name: args.name,
+      definition: {
+        kind: "threePoints",
+        point1Ref: pointRef(args.p1),
+        point2Ref: pointRef(args.p2),
+        point3Ref: pointRef(args.p3),
+      },
+      origin: plane.surface.origin,
+      normal: plane.surface.normal,
+      xDir: plane.surface.xDir,
+      width: args.width,
+      height: args.height,
+    });
+    return ok({ featureId });
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+export interface CreateAnglePlaneArgs {
+  basePlaneRef: string;
+  axisRef: string;
+  angle: number;
+  name?: string;
+  width?: number;
+  height?: number;
+}
+
+export function createAnglePlane(
+  doc: SolidTypeDoc,
+  args: CreateAnglePlaneArgs
+): CommandResult<{ featureId: string }> {
+  const base = resolvePlaneSurface(doc, args.basePlaneRef);
+  const axisFeature = doc.featuresById.get(args.axisRef);
+  if (!base || !axisFeature || axisFeature.get("type") !== "axis") {
+    return err("Angle plane requires a base plane and axis feature.");
+  }
+  const axisOrigin = axisFeature.get("origin") as [number, number, number];
+  const axisDirection = axisFeature.get("direction") as [number, number, number];
+  try {
+    const plane = computeAnglePlane(base, { origin: axisOrigin, direction: axisDirection }, args.angle);
+    const featureId = addPlaneFeatureHelper(doc, {
+      name: args.name,
+      definition: {
+        kind: "axisAngle",
+        axisRef: args.axisRef,
+        angle: args.angle,
+        basePlaneRef: args.basePlaneRef,
+      },
+      origin: plane.surface.origin,
+      normal: plane.surface.normal,
+      xDir: plane.surface.xDir,
+      width: args.width,
+      height: args.height,
+    });
+    return ok({ featureId });
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+function resolvePlaneSurface(
+  doc: SolidTypeDoc,
+  ref: string
+): {
+  kind: "plane";
+  origin: [number, number, number];
+  normal: [number, number, number];
+  xDir: [number, number, number];
+} | null {
+  if (ref === "xy" || ref === "xz" || ref === "yz") {
+    const planeId = findDatumPlaneByRole(doc, ref);
+    if (!planeId) return null;
+    ref = planeId;
+  }
+  const plane = doc.featuresById.get(ref);
+  if (!plane || plane.get("type") !== "plane") return null;
+  const origin = plane.get("origin") as [number, number, number];
+  const normal = plane.get("normal") as [number, number, number];
+  let xDir = plane.get("xDir") as [number, number, number] | undefined;
+  if (!xDir) {
+    const crossX = cross(normal, [0, 0, 1]);
+    xDir = normalize(crossX[0] === 0 && crossX[1] === 0 && crossX[2] === 0 ? [1, 0, 0] : crossX);
+  }
+  return { kind: "plane", origin, normal, xDir };
 }
 
 // ============================================================================

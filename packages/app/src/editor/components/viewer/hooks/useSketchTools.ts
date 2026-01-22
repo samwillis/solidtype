@@ -64,7 +64,8 @@ export interface BoxSelection {
 
 /** Tangent source for tangent arc */
 export interface TangentSource {
-  lineId: string;
+  entityId: string;
+  entityType: "line" | "arc" | "circle";
   pointId: string;
   direction: { x: number; y: number };
   point: { x: number; y: number };
@@ -106,6 +107,7 @@ export interface SketchToolsOptions {
   addConstraint: (constraint: { type: string; [key: string]: unknown }) => void;
   updatePointPosition: (id: string, x: number, y: number) => void;
   /** Selection functions */
+  selectedLines: Set<string>;
   setSelectedPoints: React.Dispatch<React.SetStateAction<Set<string>>>;
   setSelectedLines: React.Dispatch<React.SetStateAction<Set<string>>>;
   setSelectedConstraints: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -151,6 +153,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     addAngledRectangle,
     addConstraint,
     updatePointPosition,
+    selectedLines,
     setSelectedPoints,
     setSelectedLines,
     setSelectedConstraints,
@@ -346,10 +349,22 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
           const s = (dx * -perpPE.y - dy * -perpPE.x) / det;
           const center = { x: P.x + s * N.x, y: P.y + s * N.y };
 
+          const radius = Math.hypot(P.x - center.x, P.y - center.y);
+          const startAngle = Math.atan2(P.y - center.y, P.x - center.x);
+          const endAngle = Math.atan2(E.y - center.y, E.x - center.x);
+          const tangentCCW = { x: -(P.y - center.y), y: P.x - center.x };
+          const ccw = tangentCCW.x * T.x + tangentCCW.y * T.y > 0;
+
+          let angleDiff = endAngle - startAngle;
+          if (ccw && angleDiff < 0) angleDiff += Math.PI * 2;
+          if (!ccw && angleDiff > 0) angleDiff -= Math.PI * 2;
+          const midAngle = startAngle + angleDiff * 0.5;
+          const bulge = { x: center.x + radius * Math.cos(midAngle), y: center.y + radius * Math.sin(midAngle) };
+
           setPreviewArc({
             start: P,
             end: E,
-            bulge: center,
+            bulge,
           });
         }
       }
@@ -749,6 +764,227 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
         return;
       }
 
+      // Handle modify tools
+      if (
+        ["trim", "extend", "offset", "mirror", "fillet", "chamfer"].includes(sketchMode.activeTool)
+      ) {
+        const sketch = getSketch();
+        if (!sketch) return;
+        const tol = POINT_MERGE_TOLERANCE_MM;
+
+        const getLinePoints = (lineId: string) => {
+          const line = sketch.entities.find((e) => e.id === lineId && e.type === "line");
+          if (!line || line.type !== "line") return null;
+          const start = sketch.points.find((p) => p.id === line.start);
+          const end = sketch.points.find((p) => p.id === line.end);
+          if (!start || !end) return null;
+          return { line, start, end };
+        };
+
+        if (sketchMode.activeTool === "trim") {
+          const hit = findNearestEntityInSketch(sketch, snappedPos.x, snappedPos.y, tol);
+          if (!hit) return;
+          setSelectedLines(new Set([hit.entity.id]));
+          deleteSelectedItems();
+          return;
+        }
+
+        if (sketchMode.activeTool === "extend") {
+          const hitLine = findNearbyLineInSketch(sketch, snappedPos.x, snappedPos.y, tol);
+          if (!hitLine) return;
+          const lineInfo = getLinePoints(hitLine.id);
+          if (!lineInfo) return;
+
+          const { start, end } = lineInfo;
+          const distStart = Math.hypot(snappedPos.x - start.x, snappedPos.y - start.y);
+          const distEnd = Math.hypot(snappedPos.x - end.x, snappedPos.y - end.y);
+          const extendStart = distStart < distEnd;
+
+          const dir = extendStart
+            ? { x: start.x - end.x, y: start.y - end.y }
+            : { x: end.x - start.x, y: end.y - start.y };
+          const dirLen = Math.hypot(dir.x, dir.y);
+          if (dirLen < 1e-6) return;
+          const dirNorm = { x: dir.x / dirLen, y: dir.y / dirLen };
+
+          let best: { x: number; y: number; dist: number } | null = null;
+          for (const entity of sketch.entities) {
+            if (entity.type !== "line" || entity.id === hitLine.id) continue;
+            const other = getLinePoints(entity.id);
+            if (!other) continue;
+
+            const p = { x: extendStart ? start.x : end.x, y: extendStart ? start.y : end.y };
+            const r = dirNorm;
+            const q = { x: other.start.x, y: other.start.y };
+            const s = { x: other.end.x - other.start.x, y: other.end.y - other.start.y };
+            const denom = r.x * s.y - r.y * s.x;
+            if (Math.abs(denom) < 1e-10) continue;
+
+            const t = ((q.x - p.x) * s.y - (q.y - p.y) * s.x) / denom;
+            const u = ((q.x - p.x) * r.y - (q.y - p.y) * r.x) / denom;
+            if (u < 0 || u > 1) continue;
+            if (t <= 0) continue;
+
+            const ix = p.x + t * r.x;
+            const iy = p.y + t * r.y;
+            const dist = Math.hypot(ix - p.x, iy - p.y);
+            if (!best || dist < best.dist) best = { x: ix, y: iy, dist };
+          }
+
+          if (best) {
+            const targetId = extendStart ? hitLine.start : hitLine.end;
+            updatePointPosition(targetId, best.x, best.y);
+          }
+          return;
+        }
+
+        if (sketchMode.activeTool === "offset") {
+          const hitLine = findNearbyLineInSketch(sketch, snappedPos.x, snappedPos.y, tol);
+          if (!hitLine) return;
+          const lineInfo = getLinePoints(hitLine.id);
+          if (!lineInfo) return;
+
+          const { start, end } = lineInfo;
+          const dx = end.x - start.x;
+          const dy = end.y - start.y;
+          const len = Math.hypot(dx, dy);
+          if (len < 1e-6) return;
+          const dir = { x: dx / len, y: dy / len };
+          const normal = { x: -dir.y, y: dir.x };
+          const side =
+            (snappedPos.x - start.x) * normal.x + (snappedPos.y - start.y) * normal.y >= 0 ? 1 : -1;
+          const offset = 10 * side;
+
+          const s1 = { x: start.x + normal.x * offset, y: start.y + normal.y * offset };
+          const s2 = { x: end.x + normal.x * offset, y: end.y + normal.y * offset };
+
+          const p1 = addPoint(s1.x, s1.y);
+          const p2 = addPoint(s2.x, s2.y);
+          if (p1 && p2) addLine(p1, p2);
+          return;
+        }
+
+        if (sketchMode.activeTool === "mirror") {
+          const axisLine = findNearbyLineInSketch(sketch, snappedPos.x, snappedPos.y, tol);
+          if (!axisLine) return;
+          const axisInfo = getLinePoints(axisLine.id);
+          if (!axisInfo) return;
+
+          const ax = axisInfo.start;
+          const bx = axisInfo.end;
+          const abx = bx.x - ax.x;
+          const aby = bx.y - ax.y;
+          const abLen2 = abx * abx + aby * aby;
+          if (abLen2 < 1e-6) return;
+
+          const reflectPoint = (p: { x: number; y: number }) => {
+            const apx = p.x - ax.x;
+            const apy = p.y - ax.y;
+            const t = (apx * abx + apy * aby) / abLen2;
+            const proj = { x: ax.x + t * abx, y: ax.y + t * aby };
+            return { x: 2 * proj.x - p.x, y: 2 * proj.y - p.y };
+          };
+
+          for (const lineId of Array.from(selectedLines)) {
+            if (lineId === axisLine.id) continue;
+            const lineInfo = getLinePoints(lineId);
+            if (!lineInfo) continue;
+            const rStart = reflectPoint(lineInfo.start);
+            const rEnd = reflectPoint(lineInfo.end);
+            const p1 = addPoint(rStart.x, rStart.y);
+            const p2 = addPoint(rEnd.x, rEnd.y);
+            if (p1 && p2) addLine(p1, p2);
+          }
+          return;
+        }
+
+        if (sketchMode.activeTool === "fillet" || sketchMode.activeTool === "chamfer") {
+          const selected = Array.from(selectedLines);
+          if (selected.length !== 2) {
+            return;
+          }
+          const lineA = getLinePoints(selected[0]);
+          const lineB = getLinePoints(selected[1]);
+          if (!lineA || !lineB) return;
+
+          const a0 = lineA.start;
+          const a1 = lineA.end;
+          const b0 = lineB.start;
+          const b1 = lineB.end;
+          const denom = (a0.x - a1.x) * (b0.y - b1.y) - (a0.y - a1.y) * (b0.x - b1.x);
+          if (Math.abs(denom) < 1e-8) return;
+
+          const px =
+            ((a0.x * a1.y - a0.y * a1.x) * (b0.x - b1.x) -
+              (a0.x - a1.x) * (b0.x * b1.y - b0.y * b1.x)) /
+            denom;
+          const py =
+            ((a0.x * a1.y - a0.y * a1.x) * (b0.y - b1.y) -
+              (a0.y - a1.y) * (b0.x * b1.y - b0.y * b1.x)) /
+            denom;
+          const intersection = { x: px, y: py };
+
+          const dirA =
+            Math.hypot(a0.x - px, a0.y - py) < Math.hypot(a1.x - px, a1.y - py)
+              ? { x: a1.x - px, y: a1.y - py }
+              : { x: a0.x - px, y: a0.y - py };
+          const dirB =
+            Math.hypot(b0.x - px, b0.y - py) < Math.hypot(b1.x - px, b1.y - py)
+              ? { x: b1.x - px, y: b1.y - py }
+              : { x: b0.x - px, y: b0.y - py };
+          const lenA = Math.hypot(dirA.x, dirA.y);
+          const lenB = Math.hypot(dirB.x, dirB.y);
+          if (lenA < 1e-6 || lenB < 1e-6) return;
+          const dA = { x: dirA.x / lenA, y: dirA.y / lenA };
+          const dB = { x: dirB.x / lenB, y: dirB.y / lenB };
+
+          const radius = 5;
+          const angle = Math.acos(Math.max(-1, Math.min(1, dA.x * dB.x + dA.y * dB.y)));
+          if (angle < 1e-3) return;
+          const trimDist = radius / Math.tan(angle / 2);
+
+          const pA = { x: intersection.x + dA.x * trimDist, y: intersection.y + dA.y * trimDist };
+          const pB = { x: intersection.x + dB.x * trimDist, y: intersection.y + dB.y * trimDist };
+
+          const bis = { x: dA.x + dB.x, y: dA.y + dB.y };
+          const bisLen = Math.hypot(bis.x, bis.y);
+          if (bisLen < 1e-6) return;
+          const bisDir = { x: bis.x / bisLen, y: bis.y / bisLen };
+          const centerDist = radius / Math.sin(angle / 2);
+          const center = {
+            x: intersection.x + bisDir.x * centerDist,
+            y: intersection.y + bisDir.y * centerDist,
+          };
+
+          // Update line endpoints to trimmed points
+          const lineATrimId =
+            Math.hypot(a0.x - px, a0.y - py) < Math.hypot(a1.x - px, a1.y - py)
+              ? lineA.start.id
+              : lineA.end.id;
+          const lineBTrimId =
+            Math.hypot(b0.x - px, b0.y - py) < Math.hypot(b1.x - px, b1.y - py)
+              ? lineB.start.id
+              : lineB.end.id;
+
+          updatePointPosition(lineATrimId, pA.x, pA.y);
+          updatePointPosition(lineBTrimId, pB.x, pB.y);
+
+          if (sketchMode.activeTool === "fillet") {
+            const centerId = addPoint(center.x, center.y);
+            if (centerId) {
+              const ccw =
+                (pA.x - center.x) * (pB.y - center.y) -
+                  (pA.y - center.y) * (pB.x - center.x) >
+                0;
+              addArc(lineATrimId, lineBTrimId, centerId, ccw);
+            }
+          } else {
+            addLine(lineATrimId, lineBTrimId);
+          }
+          return;
+        }
+      }
+
       // Handle point tool
       if (sketchMode.activeTool === "point") {
         const nearbyPoint = findNearbyPoint(snappedPos.x, snappedPos.y, POINT_MERGE_TOLERANCE_MM);
@@ -885,6 +1121,127 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
           setArcCenterPoint(null);
           setArcStartPoint(null);
         }
+        return;
+      }
+
+      // Handle tangent arc
+      if (sketchMode.activeTool === "arcTangent") {
+        const sketch = getSketch();
+        if (!sketch) return;
+
+        const tol = POINT_MERGE_TOLERANCE_MM;
+
+        const findTangentSource = (): TangentSource | null => {
+          for (const entity of sketch.entities) {
+            if (entity.type === "line") {
+              const start = sketch.points.find((p) => p.id === entity.start);
+              const end = sketch.points.find((p) => p.id === entity.end);
+              if (!start || !end) continue;
+
+              const dStart = Math.hypot(snappedPos.x - start.x, snappedPos.y - start.y);
+              const dEnd = Math.hypot(snappedPos.x - end.x, snappedPos.y - end.y);
+              if (dStart <= tol || dEnd <= tol) {
+                const point = dStart <= dEnd ? start : end;
+                const other = dStart <= dEnd ? end : start;
+                const dir = { x: other.x - point.x, y: other.y - point.y };
+                const len = Math.hypot(dir.x, dir.y);
+                if (len < 1e-6) continue;
+                return {
+                  entityId: entity.id,
+                  entityType: "line",
+                  pointId: point.id,
+                  direction: { x: dir.x / len, y: dir.y / len },
+                  point: { x: point.x, y: point.y },
+                };
+              }
+            }
+
+            if (entity.type === "arc") {
+              const arc = entity as SketchArc;
+              const center = sketch.points.find((p) => p.id === arc.center);
+              const start = sketch.points.find((p) => p.id === arc.start);
+              const end = sketch.points.find((p) => p.id === arc.end);
+              if (!center || !start || !end) continue;
+
+              const dStart = Math.hypot(snappedPos.x - start.x, snappedPos.y - start.y);
+              const dEnd = Math.hypot(snappedPos.x - end.x, snappedPos.y - end.y);
+              if (dStart <= tol || dEnd <= tol) {
+                const point = dStart <= dEnd ? start : end;
+                const radius = { x: point.x - center.x, y: point.y - center.y };
+                const tangent = arc.ccw
+                  ? { x: -radius.y, y: radius.x }
+                  : { x: radius.y, y: -radius.x };
+                const len = Math.hypot(tangent.x, tangent.y);
+                if (len < 1e-6) continue;
+                return {
+                  entityId: arc.id,
+                  entityType: "arc",
+                  pointId: point.id,
+                  direction: { x: tangent.x / len, y: tangent.y / len },
+                  point: { x: point.x, y: point.y },
+                };
+              }
+            }
+          }
+          return null;
+        };
+
+        if (!tangentSource) {
+          const source = findTangentSource();
+          if (source) {
+            setTangentSource(source);
+          }
+          return;
+        }
+
+        const startPoint = tangentSource.point;
+        const dir = tangentSource.direction;
+        const endPoint = snapTarget ? { x: snapTarget.x, y: snapTarget.y } : snappedPos;
+
+        const N = { x: -dir.y, y: dir.x };
+        const M = { x: (startPoint.x + endPoint.x) / 2, y: (startPoint.y + endPoint.y) / 2 };
+        const PE = { x: endPoint.x - startPoint.x, y: endPoint.y - startPoint.y };
+        const PElen = Math.hypot(PE.x, PE.y);
+        if (PElen < 1e-6) {
+          setTangentSource(null);
+          return;
+        }
+        const perpPE = { x: -PE.y / PElen, y: PE.x / PElen };
+        const det = N.x * -perpPE.y - N.y * -perpPE.x;
+        if (Math.abs(det) < 1e-10) {
+          setTangentSource(null);
+          return;
+        }
+        const dx = M.x - startPoint.x;
+        const dy = M.y - startPoint.y;
+        const s = (dx * -perpPE.y - dy * -perpPE.x) / det;
+        const center = { x: startPoint.x + s * N.x, y: startPoint.y + s * N.y };
+
+        const startId = tangentSource.pointId;
+        const endId =
+          snapTarget?.type === "point" || snapTarget?.type === "endpoint"
+            ? findNearbyPoint(endPoint.x, endPoint.y, tol)?.id ?? null
+            : null;
+        const actualEndId = endId ?? addPoint(endPoint.x, endPoint.y);
+        const centerId = addPoint(center.x, center.y);
+        if (!startId || !actualEndId || !centerId) {
+          setTangentSource(null);
+          return;
+        }
+
+        const radiusVec = { x: startPoint.x - center.x, y: startPoint.y - center.y };
+        const tangentCCW = { x: -radiusVec.y, y: radiusVec.x };
+        const ccw = tangentCCW.x * dir.x + tangentCCW.y * dir.y > 0;
+        const arcId = addArc(startId, actualEndId, centerId, ccw);
+        if (arcId && tangentSource.entityType === "line") {
+          addConstraint({
+            type: "tangent",
+            line: tangentSource.entityId,
+            arc: arcId,
+            connectionPoint: startId,
+          });
+        }
+        setTangentSource(null);
         return;
       }
 
@@ -1074,6 +1431,7 @@ export function useSketchTools(options: SketchToolsOptions): SketchToolsResult {
     addAngledRectangle,
     addConstraint,
     updatePointPosition,
+    selectedLines,
     setSelectedPoints,
     setSelectedLines,
     setSelectedConstraints,

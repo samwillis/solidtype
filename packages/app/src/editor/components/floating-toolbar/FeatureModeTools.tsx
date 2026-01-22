@@ -23,10 +23,12 @@ export interface FeatureModeToolsProps {
 
   // Plane creation
   canCreatePlane: boolean;
-  onCreateOffsetPlane: () => void;
+  onCreatePlane: () => void;
   planeTooltip: string;
 
   // Axis creation
+  canCreateAxis: boolean;
+  onCreateAxis: () => void;
   onAddAxis: (definition: { kind: "datum"; role: "x" | "y" | "z" }) => void;
 
   // Extrude
@@ -57,8 +59,10 @@ export const FeatureModeTools: React.FC<FeatureModeToolsProps> = ({
   onNewSketch,
   sketchTooltip,
   canCreatePlane,
-  onCreateOffsetPlane,
+  onCreatePlane,
   planeTooltip,
+  onCreateAxis,
+  canCreateAxis,
   onAddAxis,
   canExtrude,
   onExtrude,
@@ -82,17 +86,20 @@ export const FeatureModeTools: React.FC<FeatureModeToolsProps> = ({
         />
         <ToolbarButton
           icon={<PlaneIcon />}
-          label="Add Offset Plane"
+          label="Plane"
           tooltip={planeTooltip}
-          onClick={onCreateOffsetPlane}
+          onClick={onCreatePlane}
           disabled={!canCreatePlane}
         />
 
         {/* Axis Creation Dropdown */}
         <Menu.Root>
           <Menu.Trigger
-            className="floating-toolbar-button floating-toolbar-dropdown-button"
+            className={`floating-toolbar-button floating-toolbar-dropdown-button ${
+              !canCreateAxis ? "disabled" : ""
+            }`}
             aria-label="Add Axis"
+            disabled={!canCreateAxis}
           >
             <AxisIcon />
             <ChevronDownIcon />
@@ -102,19 +109,30 @@ export const FeatureModeTools: React.FC<FeatureModeToolsProps> = ({
               <Menu.Popup className="floating-toolbar-dropdown-menu">
                 <Menu.Item
                   className="floating-toolbar-dropdown-item"
+                  onClick={onCreateAxis}
+                  disabled={!canCreateAxis}
+                >
+                  Axis Tool...
+                </Menu.Item>
+                <Menu.Separator className="floating-toolbar-dropdown-separator" />
+                <Menu.Item
+                  className="floating-toolbar-dropdown-item"
                   onClick={() => onAddAxis({ kind: "datum", role: "x" })}
+                  disabled={!canCreateAxis}
                 >
                   X Axis (datum)
                 </Menu.Item>
                 <Menu.Item
                   className="floating-toolbar-dropdown-item"
                   onClick={() => onAddAxis({ kind: "datum", role: "y" })}
+                  disabled={!canCreateAxis}
                 >
                   Y Axis (datum)
                 </Menu.Item>
                 <Menu.Item
                   className="floating-toolbar-dropdown-item"
                   onClick={() => onAddAxis({ kind: "datum", role: "z" })}
+                  disabled={!canCreateAxis}
                 >
                   Z Axis (datum)
                 </Menu.Item>

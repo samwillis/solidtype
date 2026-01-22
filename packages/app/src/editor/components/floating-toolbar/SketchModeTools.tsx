@@ -89,6 +89,14 @@ export const SketchModeTools: React.FC<SketchModeToolsProps> = ({
     activeTool === "rectangle" ||
     activeTool === "rectangleCenter" ||
     activeTool === "rectangle3Point";
+  const isModifyActive = [
+    "trim",
+    "extend",
+    "offset",
+    "mirror",
+    "fillet",
+    "chamfer",
+  ].includes(activeTool);
 
   return (
     <div className="floating-toolbar-group">
@@ -276,6 +284,57 @@ export const SketchModeTools: React.FC<SketchModeToolsProps> = ({
                   onClick={() => setTool("rectangle3Point")}
                 >
                   3-Point Rectangle (Edge + Width, any angle)
+                </Menu.Item>
+              </Menu.Popup>
+            </Menu.Positioner>
+          </Menu.Portal>
+        </Menu.Root>
+      </div>
+
+      {/* Modify Tools Menu */}
+      <div className="floating-toolbar-button-group">
+        <Tooltip.Root>
+          <Tooltip.Trigger
+            delay={300}
+            className={`floating-toolbar-button ${isModifyActive ? "active" : ""}`}
+            onClick={() => toggleTool("trim")}
+            render={<button aria-label="Modify tools" />}
+          >
+            <OptionsIcon />
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Positioner side="top" sideOffset={6}>
+              <Tooltip.Popup className="floating-toolbar-tooltip">Modify</Tooltip.Popup>
+            </Tooltip.Positioner>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+        <Menu.Root>
+          <Menu.Trigger
+            className="floating-toolbar-flyout-trigger"
+            render={<button aria-label="Modify options" />}
+          >
+            <ChevronDownIcon />
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Positioner sideOffset={4}>
+              <Menu.Popup className="floating-toolbar-menu">
+                <Menu.Item className="floating-toolbar-menu-item" onClick={() => setTool("trim")}>
+                  Trim
+                </Menu.Item>
+                <Menu.Item className="floating-toolbar-menu-item" onClick={() => setTool("extend")}>
+                  Extend
+                </Menu.Item>
+                <Menu.Item className="floating-toolbar-menu-item" onClick={() => setTool("offset")}>
+                  Offset
+                </Menu.Item>
+                <Menu.Item className="floating-toolbar-menu-item" onClick={() => setTool("mirror")}>
+                  Mirror
+                </Menu.Item>
+                <Menu.Item className="floating-toolbar-menu-item" onClick={() => setTool("fillet")}>
+                  Fillet
+                </Menu.Item>
+                <Menu.Item className="floating-toolbar-menu-item" onClick={() => setTool("chamfer")}>
+                  Chamfer
                 </Menu.Item>
               </Menu.Popup>
             </Menu.Positioner>
