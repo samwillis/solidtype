@@ -46,7 +46,7 @@ describe("computeHVInferenceLines", () => {
       { x: 9, y: 0 },
       { x: 12, y: 1 },
     ];
-    const cursor = { x: 10, y: 4 };
+    const cursor = { x: 10, y: 10 };
     const lines = computeHVInferenceLines(points, cursor, 3);
 
     expect(lines).toHaveLength(1);
